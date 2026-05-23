@@ -83,13 +83,12 @@ if (staticFileProvider is not null) {
     app.UseStaticFiles();
 }
 
-if (Directory.Exists(cacheDir)) {
-    app.UseStaticFiles(new StaticFileOptions {
-        FileProvider = new PhysicalFileProvider(cacheDir),
-        RequestPath = "/assets",
-        ServeUnknownFileTypes = false,
-    });
-}
+Directory.CreateDirectory(cacheDir);
+app.UseStaticFiles(new StaticFileOptions {
+    FileProvider = new PhysicalFileProvider(cacheDir),
+    RequestPath = "/assets",
+    ServeUnknownFileTypes = false,
+});
 
 app.MapPrismediaEndpoints();
 

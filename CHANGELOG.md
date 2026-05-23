@@ -6,12 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 ### What's New
+- Fresh instances now serve generated thumbnails as soon as the API starts, so newly scanned media no longer shows broken cover links when the cache directory did not exist yet.
 
 ### Added
 
 ### Changed
 
 ### Fixed
+- Fixed generated thumbnail and preview asset serving on fresh startup by creating and mounting the media cache directory before assets are requested.
 
 ### Removed
 
