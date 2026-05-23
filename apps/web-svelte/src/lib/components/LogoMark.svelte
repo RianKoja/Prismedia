@@ -11,7 +11,7 @@
   const nsfw = useNsfw();
 
   const src = $derived(
-    nsfw.mode === "show" ? "/brand/prismedia-logo-nsfw.png" : "/brand/prismedia-logo-mark.png",
+    nsfw.mode === "show" ? "/brand/prismedia-logo-nsfw.png" : "/brand/prismedia-logo.png",
   );
   const dimensions = $derived(`width: ${size}px; height: ${size}px; object-fit: contain; display: block;`);
 </script>

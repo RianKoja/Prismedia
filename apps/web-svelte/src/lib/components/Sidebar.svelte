@@ -18,6 +18,7 @@
   let hovered = $state(false);
   let releaseStatus = $state<ReleaseUpdateStatus | null>(null);
   const isExpanded = $derived(!collapsed || hovered);
+  const brandLogoSize = $derived(isExpanded ? 40 : 34);
   const updateAvailable = $derived(releaseStatus?.updateAvailable === true);
   const pathname = $derived(page.url.pathname);
   const docsHref = "https://pauljoda.github.io/Prismedia/docs/users/quick-start";
@@ -43,22 +44,40 @@
   style:transition-timing-function="var(--ease-mechanical)"
 >
   <!-- Logo + collapse toggle -->
-  <div class="flex h-14 items-center justify-between px-3 border-b border-border-subtle shrink-0">
+  <div
+    class={cn(
+      "flex h-16 items-center justify-between border-b border-border-subtle shrink-0 transition-[padding] duration-moderate",
+      isExpanded ? "px-3" : "px-2",
+    )}
+  >
     <a
       href={resolve("/")}
       aria-label="Dashboard"
-      class="shrink-0 flex items-center h-full"
+      class={cn(
+        "flex h-full min-w-0 shrink-0 items-center transition-[gap] duration-moderate",
+        isExpanded ? "flex-1 gap-2" : "w-full justify-center gap-0",
+      )}
     >
-      <div class="w-8 flex items-center justify-center shrink-0">
-        <LogoMark size={24} />
+      <div
+        class={cn(
+          "flex shrink-0 items-center justify-center transition-[width,height] duration-moderate",
+          isExpanded ? "h-11 w-11" : "h-9 w-9",
+        )}
+      >
+        <LogoMark
+          size={brandLogoSize}
+          class="drop-shadow-[0_0_18px_rgba(196,154,90,0.35)]"
+        />
       </div>
       <div
         class={cn(
-          "overflow-hidden transition-[max-width,opacity] duration-moderate flex items-center",
-          isExpanded ? "max-w-[160px] opacity-100 ml-2" : "max-w-0 opacity-0 ml-0",
+          "overflow-hidden transition-[max-width,opacity] duration-moderate",
+          isExpanded ? "max-w-[160px] opacity-100" : "max-w-0 opacity-0",
         )}
       >
-        <span class="font-heading font-bold tracking-[0.18em] text-text-primary text-lg">PRISMEDIA</span>
+        <span class="block font-heading font-bold tracking-[0.18em] text-text-primary text-lg leading-none">
+          PRISMEDIA
+        </span>
       </div>
     </a>
     <div
