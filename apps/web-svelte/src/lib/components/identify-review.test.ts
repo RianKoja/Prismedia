@@ -103,15 +103,17 @@ describe("identify review helpers", () => {
   it("uses related selections to exclude relationship-backed patch values", () => {
     const actor = proposal("actor-1", "person", { title: "Series Actor" });
     const studio = proposal("studio-1", "studio", { title: "HBO" });
+    const tag = proposal("tag-1", "tag", { title: "Comedy" });
     const root = proposal("series", "video-series", {
       studio: "HBO",
+      tags: ["Comedy", "Mystery"],
       credits: [{ name: "Series Actor", role: "actor", character: "Host", sortOrder: 0 }],
-      relationships: [actor, studio],
+      relationships: [actor, studio, tag],
     });
 
     const payload = buildProposalForApply(root, {
       selectedFieldsByProposal: {
-        series: { credits: true, studio: true },
+        series: { credits: true, studio: true, tags: true },
       },
       selectedImagesByProposal: {},
       selectedCreditsByProposal: {
@@ -121,11 +123,13 @@ describe("identify review helpers", () => {
       selectedCascade: {
         "actor-1": false,
         "studio-1": false,
+        "tag-1": false,
       },
     });
 
     expect(payload.patch.credits).toEqual([]);
     expect(payload.patch.studio).toBeNull();
+    expect(payload.patch.tags).toEqual(["Mystery"]);
     expect(payload.relationships).toEqual([]);
   });
 
@@ -156,10 +160,12 @@ describe("identify review helpers", () => {
       imageKind: "poster",
       imageUrl: "https://example.test/tim.jpg",
     });
+    const studio = proposal("studio-1", "studio", { title: "HBO" });
     const root = proposal("series", "video-series", {
       title: "The Chair Company",
+      studio: "HBO",
       credits: [{ name: "Tim Robinson", role: "cast", character: "Ron Trosper", sortOrder: 0 }],
-      relationships: [actor],
+      relationships: [actor, studio],
     });
     root.patch.tags = ["Comedy", "Drama", "Mystery"];
     root.images = [
@@ -195,11 +201,18 @@ describe("identify review helpers", () => {
         Drama: false,
         Mystery: true,
       },
+      selectedCascade: {
+        "actor-1": false,
+        "studio-1": false,
+      },
     });
 
     expect(payload.selectedFields).toContain("images");
     expect(payload.selectedImages).toEqual({ poster: "https://example.test/poster.jpg" });
     expect(payload.proposal.patch.tags).toEqual(["Comedy", "Mystery"]);
+    expect(payload.proposal.patch.credits).toEqual([]);
+    expect(payload.proposal.patch.studio).toBeNull();
+    expect(payload.proposal.relationships).toEqual([]);
     expect(payload.proposal.images.map((image) => image.kind)).toEqual(["poster"]);
   });
 });
@@ -212,6 +225,7 @@ function proposal(
     imageKind?: string;
     imageUrl?: string;
     studio?: string;
+    tags?: string[];
     credits?: EntityMetadataProposal["patch"]["credits"];
     children?: EntityMetadataProposal[];
     relationships?: EntityMetadataProposal[];
@@ -228,7 +242,7 @@ function proposal(
       description: null,
       externalIds: {},
       urls: [],
-      tags: [],
+      tags: options.tags ?? [],
       studio: options.studio ?? null,
       credits: options.credits ?? [],
       dates: {},

@@ -192,7 +192,9 @@ export function buildProposalForApply(
   const credits = result.patch.credits
     .filter((credit, index) => selectedResultCredits[creditKey(credit, index)] !== false)
     .filter((credit) => !isDeselectedRelationshipTitle(result, "person", credit.name, selections.selectedCascade));
-  const tags = result.patch.tags.filter((tag) => selectedResultTags[tag] !== false);
+  const tags = result.patch.tags
+    .filter((tag) => selectedResultTags[tag] !== false)
+    .filter((tag) => !isDeselectedRelationshipTitle(result, "tag", tag, selections.selectedCascade));
   const patch = patchForSelectedFields(result, fields, credits, tags, selections.selectedCascade);
 
   return {

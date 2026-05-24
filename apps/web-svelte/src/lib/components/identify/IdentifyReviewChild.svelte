@@ -26,6 +26,7 @@
     ImageCandidate,
   } from "$lib/api/identify";
   import type { EntityCard } from "$lib/api/prismedia";
+  import type { EntityThumbnailCard, EntityThumbnailMetaIcon } from "$lib/entities/entity-thumbnail";
   import { useIdentifyStore } from "./identify-store.svelte";
 
   interface Props {
@@ -61,7 +62,9 @@
   let reviewStateProposalId = $state<string | null>(null);
 
   const children = $derived(structuralChildProposals(proposal));
-  const credits = $derived(relationshipProposals(proposal).filter((r) => r.targetKind === "person"));
+  const relationships = $derived(relationshipProposals(proposal));
+  const credits = $derived(relationships.filter((r) => r.targetKind === "person"));
+  const nonCreditRelationships = $derived(relationships.filter((r) => r.targetKind !== "person"));
   const imageGroups = $derived(groupImages(reviewableImages(proposal.images ?? [])));
   const artworkCandidateCount = $derived(imageGroups.reduce((count, group) => count + group.images.length, 0));
 
@@ -115,10 +118,50 @@
       null;
   }
 
+  function preferredRelationshipImage(result: EntityMetadataProposal): ImageCandidate | null {
+    return result.images.find((image) => image.kind === "poster") ??
+      result.images.find((image) => image.kind === "thumbnail") ??
+      result.images.find((image) => image.kind === "logo") ??
+      result.images[0] ??
+      null;
+  }
+
   function roleLabel(credit: CreditPatch | null | undefined): string {
     const role = credit?.role?.trim();
     if (!role) return "Cast";
     return role.replaceAll("-", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+  }
+
+  function proposalTitle(result: EntityMetadataProposal): string {
+    return result.patch?.title?.trim() || result.targetKind;
+  }
+
+  function relationshipKindLabel(kind: string): string {
+    return kind.replaceAll("-", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+  }
+
+  function relationshipIcon(kind: string): EntityThumbnailMetaIcon {
+    if (kind === "studio") return "studio";
+    if (kind === "tag") return "tag";
+    if (kind === "person") return "person";
+    return "collection";
+  }
+
+  function relationshipCard(result: EntityMetadataProposal): EntityThumbnailCard {
+    const image = preferredRelationshipImage(result);
+    const title = proposalTitle(result);
+    return {
+      entity: { id: result.proposalId, kind: result.targetKind, title, parentEntityId: null, sortOrder: null, capabilities: [], childrenByKind: [], relationships: [] },
+      aspectRatio: result.targetKind === "studio" ? "wide" : result.targetKind === "person" ? { width: 4, height: 5 } : "square",
+      cover: image ? { src: image.url, alt: title } : null,
+      hover: { kind: "none" },
+      subtitle: relationshipKindLabel(result.targetKind),
+      meta: [{ icon: relationshipIcon(result.targetKind), label: relationshipKindLabel(result.targetKind) }],
+    };
+  }
+
+  function setRelationshipSelected(result: EntityMetadataProposal, selected: boolean) {
+    store.setReviewProposalSelected(result.proposalId, selected);
   }
 
   function goBackToParent() {
@@ -263,7 +306,9 @@
       <header class="flex items-center gap-2.5 border-b border-border-subtle bg-surface-2 px-3.5 py-2.5">
         <Users class="h-3.5 w-3.5 text-text-accent" />
         <span class="text-kicker text-text-accent">Credits</span>
-        <span class="font-mono text-[0.7rem] text-text-muted">inherited · {credits.length}</span>
+        <span class="font-mono text-[0.7rem] text-text-muted">
+          inherited · {credits.filter((credit) => store.isReviewProposalSelected(credit.proposalId)).length} of {credits.length} selected
+        </span>
       </header>
       <div class="flex flex-col gap-2 p-3.5">
         {#each credits as credit (credit.proposalId)}
@@ -277,7 +322,43 @@
             subtitle: scopedCredit?.character ? `as ${scopedCredit.character}` : roleLabel(scopedCredit),
             meta: [{ icon: "person" as const, label: roleLabel(scopedCredit) }],
           }}
-          <EntityThumbnail {card} layout="list" linkable={false} onActivate={() => goToChild(credit)} />
+          <EntityThumbnail
+            {card}
+            layout="list"
+            linkable={false}
+            onActivate={() => goToChild(credit)}
+            selectable
+            selectMode
+            selected={store.isReviewProposalSelected(credit.proposalId)}
+            onSelectedChange={(selected) => setRelationshipSelected(credit, selected)}
+          />
+        {/each}
+      </div>
+    </section>
+  {/if}
+
+  <!-- Relationships -->
+  {#if nonCreditRelationships.length > 0}
+    <section class="surface-panel overflow-hidden">
+      <header class="flex items-center gap-2.5 border-b border-border-subtle bg-surface-2 px-3.5 py-2.5">
+        <Layers class="h-3.5 w-3.5 text-text-accent" />
+        <span class="text-kicker text-text-accent">Relationships</span>
+        <span class="font-mono text-[0.7rem] text-text-muted">
+          {nonCreditRelationships.filter((relationship) => store.isReviewProposalSelected(relationship.proposalId)).length} of {nonCreditRelationships.length} selected
+        </span>
+      </header>
+      <div class="flex flex-col gap-2 p-3.5">
+        {#each nonCreditRelationships as relationship (relationship.proposalId)}
+          <EntityThumbnail
+            card={relationshipCard(relationship)}
+            layout="list"
+            linkable={false}
+            onActivate={() => goToChild(relationship)}
+            selectable
+            selectMode
+            selected={store.isReviewProposalSelected(relationship.proposalId)}
+            onSelectedChange={(selected) => setRelationshipSelected(relationship, selected)}
+          />
         {/each}
       </div>
     </section>

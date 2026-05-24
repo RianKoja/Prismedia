@@ -32,6 +32,7 @@
     ImageCandidate,
   } from "$lib/api/identify";
   import type { EntityCard, EntityDetailCard } from "$lib/api/prismedia";
+  import type { EntityThumbnailCard, EntityThumbnailMetaIcon } from "$lib/entities/entity-thumbnail";
   import { useIdentifyStore } from "./identify-store.svelte";
 
   interface Props {
@@ -71,16 +72,24 @@
   const credits = $derived(
     relationships.filter((r) => r.targetKind === "person"),
   );
+  const nonCreditRelationships = $derived(
+    relationships.filter((r) => r.targetKind !== "person"),
+  );
   const tags = $derived(proposal.patch?.tags ?? []);
   const existingTagTitles = $derived(relationshipTitles("tag"));
+  const looseTags = $derived(tags.filter((tag) => !tagRelationshipForTitle(tag)));
   const imageGroups = $derived(groupImages(reviewableImages(proposal.images ?? [])));
   const artworkCandidateCount = $derived(imageGroups.reduce((count, group) => count + group.images.length, 0));
   const selectedTagCount = $derived(Object.values(selectedTags).filter(Boolean).length);
+  const selectedRelationshipCount = $derived(
+    relationships.filter((relationship) => store.isReviewProposalSelected(relationship.proposalId)).length,
+  );
   const contextPosterUrl = $derived(entity.coverUrl ?? proposalImageUrl(["poster", "thumbnail", "cover"]));
 
   $effect(() => {
     if (reviewStateProposalId === proposal.proposalId) return;
     reviewStateProposalId = proposal.proposalId;
+    store.beginProposalReview(proposal);
     selectedFields = Object.fromEntries(FIELD_KEYS.map((k) => [k, hasField(k)]));
     selectedImages = defaultImageSelectionForReview(proposal);
     selectedTags = defaultTagSelection();
@@ -188,10 +197,76 @@
       null;
   }
 
+  function preferredRelationshipImage(result: EntityMetadataProposal): ImageCandidate | null {
+    return result.images.find((image) => image.kind === "poster") ??
+      result.images.find((image) => image.kind === "thumbnail") ??
+      result.images.find((image) => image.kind === "logo") ??
+      result.images[0] ??
+      null;
+  }
+
   function roleLabel(credit: CreditPatch | null | undefined): string {
     const role = credit?.role?.trim();
     if (!role) return "Cast";
     return role.replaceAll("-", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+  }
+
+  function proposalTitle(result: EntityMetadataProposal): string {
+    return result.patch?.title?.trim() || result.targetKind;
+  }
+
+  function relationshipKindLabel(kind: string): string {
+    return kind.replaceAll("-", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+  }
+
+  function relationshipIcon(kind: string): EntityThumbnailMetaIcon {
+    if (kind === "studio") return "studio";
+    if (kind === "tag") return "tag";
+    if (kind === "person") return "person";
+    return "collection";
+  }
+
+  function relationshipStatusLabel(result: EntityMetadataProposal): string {
+    if (result.targetKind === "tag") {
+      return isNewRelationshipTitle(proposalTitle(result), existingTagTitles) ? "New" : "Existing";
+    }
+
+    return relationshipKindLabel(result.targetKind);
+  }
+
+  function relationshipCard(result: EntityMetadataProposal): EntityThumbnailCard {
+    const image = preferredRelationshipImage(result);
+    const title = proposalTitle(result);
+    return {
+      entity: { id: result.proposalId, kind: result.targetKind, title, parentEntityId: null, sortOrder: null, capabilities: [], childrenByKind: [], relationships: [] },
+      aspectRatio: result.targetKind === "studio" ? "wide" : result.targetKind === "person" ? { width: 4, height: 5 } : "square",
+      cover: image ? { src: image.url, alt: title } : null,
+      hover: { kind: "none" },
+      subtitle: relationshipKindLabel(result.targetKind),
+      meta: [{ icon: relationshipIcon(result.targetKind), label: relationshipStatusLabel(result) }],
+    };
+  }
+
+  function tagRelationshipForTitle(tag: string): EntityMetadataProposal | null {
+    return relationships.find((relationship) =>
+      relationship.targetKind === "tag" &&
+      proposalTitle(relationship).localeCompare(tag, undefined, { sensitivity: "accent" }) === 0,
+    ) ?? null;
+  }
+
+  function setRelationshipSelected(result: EntityMetadataProposal, selected: boolean) {
+    store.setReviewProposalSelected(result.proposalId, selected);
+    if (result.targetKind === "tag") {
+      selectedTags[proposalTitle(result)] = selected;
+    }
+  }
+
+  function setTagSelected(tag: string, selected: boolean) {
+    selectedTags[tag] = selected;
+    const relationship = tagRelationshipForTitle(tag);
+    if (relationship) {
+      store.setReviewProposalSelected(relationship.proposalId, selected);
+    }
   }
 
   function handleApply() {
@@ -199,6 +274,7 @@
       selectedFields,
       selectedImages,
       selectedTags,
+      selectedCascade: store.reviewCascadeSelections,
     });
     void store.applyProposal(entity, payload.proposal, payload.selectedFields, payload.selectedImages);
   }
@@ -346,7 +422,9 @@
       <header class="flex items-center gap-2.5 border-b border-border-subtle bg-surface-2 px-3.5 py-2.5">
         <Users class="h-3.5 w-3.5 text-text-accent" />
         <span class="text-kicker text-text-accent">Credits</span>
-        <span class="font-mono text-[0.7rem] text-text-muted">{credits.length} people</span>
+        <span class="font-mono text-[0.7rem] text-text-muted">
+          {credits.filter((credit) => store.isReviewProposalSelected(credit.proposalId)).length} of {credits.length} selected
+        </span>
       </header>
       <div class="grid grid-cols-1 gap-2 p-3.5 sm:grid-cols-2">
         {#each credits as credit (credit.proposalId)}
@@ -365,6 +443,37 @@
             layout="list"
             linkable={false}
             onActivate={() => walkChild(credit)}
+            selectable
+            selectMode
+            selected={store.isReviewProposalSelected(credit.proposalId)}
+            onSelectedChange={(selected) => setRelationshipSelected(credit, selected)}
+          />
+        {/each}
+      </div>
+    </section>
+  {/if}
+
+  <!-- Relationships -->
+  {#if nonCreditRelationships.length > 0}
+    <section class="surface-panel overflow-hidden">
+      <header class="flex items-center gap-2.5 border-b border-border-subtle bg-surface-2 px-3.5 py-2.5">
+        <Layers class="h-3.5 w-3.5 text-text-accent" />
+        <span class="text-kicker text-text-accent">Relationships</span>
+        <span class="font-mono text-[0.7rem] text-text-muted">
+          {nonCreditRelationships.filter((relationship) => store.isReviewProposalSelected(relationship.proposalId)).length} of {nonCreditRelationships.length} selected
+        </span>
+      </header>
+      <div class="grid grid-cols-1 gap-2 p-3.5 sm:grid-cols-2">
+        {#each nonCreditRelationships as relationship (relationship.proposalId)}
+          <EntityThumbnail
+            card={relationshipCard(relationship)}
+            layout="list"
+            linkable={false}
+            onActivate={() => walkChild(relationship)}
+            selectable
+            selectMode
+            selected={store.isReviewProposalSelected(relationship.proposalId)}
+            onSelectedChange={(selected) => setRelationshipSelected(relationship, selected)}
           />
         {/each}
       </div>
@@ -423,7 +532,7 @@
   {/if}
 
   <!-- Tags -->
-  {#if tags.length > 0}
+  {#if looseTags.length > 0}
     <section class="surface-panel overflow-hidden">
       <header class="flex items-center gap-2.5 border-b border-border-subtle bg-surface-2 px-3.5 py-2.5">
         <Tag class="h-3.5 w-3.5 text-text-accent" />
@@ -431,7 +540,7 @@
         <span class="font-mono text-[0.7rem] text-text-muted">{selectedTagCount} of {tags.length} selected</span>
       </header>
       <div class="flex flex-wrap items-center gap-2 p-3.5">
-        {#each tags as tag (tag)}
+        {#each looseTags as tag (tag)}
           {@const isExisting = !isNewRelationshipTitle(tag, existingTagTitles)}
           <button
             type="button"
@@ -442,7 +551,7 @@
                 : "border-border-default bg-surface-2 text-text-muted hover:bg-surface-3",
             )}
             aria-pressed={selectedTags[tag]}
-            onclick={() => (selectedTags[tag] = !selectedTags[tag])}
+            onclick={() => setTagSelected(tag, !selectedTags[tag])}
           >
             {#if selectedTags[tag]}
               <Check class="h-3 w-3 text-text-accent" />
@@ -518,7 +627,7 @@
     <span class="font-mono text-[0.7rem] text-text-muted">
       {Object.values(selectedFields).filter(Boolean).length} fields
       · {Object.values(selectedImages).filter(Boolean).length} imgs
-      · {credits.length} credits
+      · {selectedRelationshipCount} rels
       · {selectedTagCount} tags
     </span>
     <div class="flex-1"></div>

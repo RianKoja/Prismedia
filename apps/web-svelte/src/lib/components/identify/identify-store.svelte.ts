@@ -80,6 +80,8 @@ export class IdentifyStore {
   bulkSession = $state<IdentifyBulkSession | null>(null);
   bulkStarting = $state(false);
   returnEntityId = $state<string | null>(null);
+  reviewRootProposalId = $state<string | null>(null);
+  reviewCascadeSelections = $state<Record<string, boolean>>({});
 
   supportedKinds = $derived.by((): IdentifyKindInfo[] => {
     const kindMap = new Map<string, IdentifyKindInfo>();
@@ -325,10 +327,35 @@ export class IdentifyStore {
 
   reviewResolvedQueueItem(item: IdentifyQueueItem) {
     if (item.state === "proposal" && item.proposal) {
+      this.beginProposalReview(item.proposal);
       this.navigateTo({ kind: "review-parent", entity: item.entity, proposal: item.proposal, detail: item.detail });
     } else if (item.state === "search" && item.candidates.length > 0) {
       this.navigateTo({ kind: "review-choice", entity: item.entity, candidates: item.candidates });
     }
+  }
+
+  beginProposalReview(proposal: EntityMetadataProposal) {
+    if (this.reviewRootProposalId === proposal.proposalId) return;
+    this.reviewRootProposalId = proposal.proposalId;
+    this.reviewCascadeSelections = {};
+  }
+
+  isReviewProposalSelected(proposalId: string): boolean {
+    return this.reviewCascadeSelections[proposalId] !== false;
+  }
+
+  setReviewProposalSelected(proposalId: string, selected: boolean) {
+    if (selected) {
+      const next = { ...this.reviewCascadeSelections };
+      delete next[proposalId];
+      this.reviewCascadeSelections = next;
+      return;
+    }
+
+    this.reviewCascadeSelections = {
+      ...this.reviewCascadeSelections,
+      [proposalId]: false,
+    };
   }
 
   destroy() {
