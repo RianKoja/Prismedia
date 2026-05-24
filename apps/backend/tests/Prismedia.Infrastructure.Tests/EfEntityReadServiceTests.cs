@@ -154,6 +154,7 @@ public sealed class EfEntityReadServiceTests {
             DurationSeconds = 596,
             Width = 1920,
             Height = 1080,
+            BitRate = 8_000_000,
             Codec = "h264",
             Container = "matroska",
             UpdatedAt = now
@@ -171,6 +172,7 @@ public sealed class EfEntityReadServiceTests {
                 new EntityThumbnailMeta("duration", "09:56"),
                 new EntityThumbnailMeta("video", "1080p"),
                 new EntityThumbnailMeta("video", "H264"),
+                new EntityThumbnailMeta("video", "8 Mbps"),
                 new EntityThumbnailMeta("video", "MATROSKA")
             ],
             item.Meta);

@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Prismedia.Application.Entities;
@@ -22,6 +23,7 @@ public sealed class EfEntityReadService : IEntityReadService {
     private const int MaxPageSize = 1000;
     private const int MaxHoverImages = 5;
     private const int MaxHoverImageSearchDepth = 3;
+    private const int MaxThumbnailMeta = 5;
 
     private readonly PrismediaDbContext _db;
     private readonly EfEntityRepository _repository;
@@ -245,6 +247,9 @@ public sealed class EfEntityReadService : IEntityReadService {
             .GroupBy(file => file.EntityId)
             .ToDictionary(group => group.Key, group => group.First().Path);
         var hoverImagesByEntity = await ProjectHoverImagesAsync(rows, hideNsfw, cancellationToken);
+        var technicalByEntity = await _db.EntityTechnical.AsNoTracking()
+            .Where(technical => ids.Contains(technical.EntityId))
+            .ToDictionaryAsync(technical => technical.EntityId, cancellationToken);
 
         return rows.Select(row => {
             flags.TryGetValue(row.Id, out var flag);
@@ -265,7 +270,7 @@ public sealed class EfEntityReadService : IEntityReadService {
                 hoverUrl is null ? "none" : "sprite",
                 hoverUrl,
                 hoverImages,
-                [],
+                ProjectThumbnailMeta(row, technicalByEntity.GetValueOrDefault(row.Id)),
                 ratings.GetValueOrDefault(row.Id),
                 flag?.IsFavorite ?? false,
                 flag?.IsNsfw ?? false,
@@ -296,6 +301,80 @@ public sealed class EfEntityReadService : IEntityReadService {
             .GroupBy(file => file.EntityId)
             .ToDictionary(group => group.Key, group => group.First().Path);
     }
+
+    private static IReadOnlyList<EntityThumbnailMeta> ProjectThumbnailMeta(
+        EntityRow row,
+        EntityTechnicalRow? technical) {
+        if (technical is null) {
+            return [];
+        }
+
+        var meta = new List<EntityThumbnailMeta>(MaxThumbnailMeta);
+        Add(meta, "duration", FormatDuration(technical.DurationSeconds));
+        if (technical.Width is { } width && technical.Height is { } height) {
+            Add(meta, row.KindCode == EntityKindRegistry.Video.Code ? "video" : "image", FormatResolution(width, height));
+        }
+
+        if (row.KindCode == EntityKindRegistry.Video.Code) {
+            Add(meta, "video", technical.Codec?.ToUpperInvariant());
+            Add(meta, "video", FormatBitRate(technical.BitRate));
+            Add(meta, "video", technical.Container?.ToUpperInvariant());
+        } else if (row.KindCode == EntityKindRegistry.AudioTrack.Code) {
+            Add(meta, "audio", technical.Codec?.ToUpperInvariant());
+            Add(meta, "audio", FormatBitRate(technical.BitRate));
+        }
+
+        return meta.Take(MaxThumbnailMeta).ToArray();
+    }
+
+    private static void Add(List<EntityThumbnailMeta> meta, string icon, string? label) {
+        if (!string.IsNullOrWhiteSpace(label)) {
+            meta.Add(new EntityThumbnailMeta(icon, label));
+        }
+    }
+
+    private static string? FormatDuration(double? seconds) {
+        if (seconds is not { } value || !double.IsFinite(value) || value <= 0) {
+            return null;
+        }
+
+        var duration = TimeSpan.FromSeconds(Math.Round(value));
+        if (duration.TotalHours >= 1) {
+            return $"{(int)duration.TotalHours:00}:{duration.Minutes:00}";
+        }
+
+        return $"{duration.Minutes:00}:{duration.Seconds:00}";
+    }
+
+    private static string FormatResolution(int width, int height) {
+        if (height >= 2160) return "4K";
+        if (height >= 1440) return "1440p";
+        if (height >= 1080) return "1080p";
+        if (height >= 720) return "720p";
+        if (height >= 480) return "480p";
+        return $"{width}x{height}";
+    }
+
+    private static string? FormatBitRate(int? bitRate) {
+        if (bitRate is not { } value || value <= 0) {
+            return null;
+        }
+
+        if (value >= 1_000_000) {
+            return $"{FormatCompactNumber(value / 1_000_000d)} Mbps";
+        }
+
+        if (value >= 1_000) {
+            return $"{FormatCompactNumber(value / 1_000d)} Kbps";
+        }
+
+        return $"{value} bps";
+    }
+
+    private static string FormatCompactNumber(double value) =>
+        Math.Abs(value % 1) < 0.05
+            ? Math.Round(value).ToString(CultureInfo.InvariantCulture)
+            : value.ToString("0.#", CultureInfo.InvariantCulture);
 
     private async Task<IReadOnlyDictionary<Guid, IReadOnlyList<EntityThumbnailHoverImage>>> ProjectHoverImagesAsync(
         IReadOnlyList<EntityRow> rows,
