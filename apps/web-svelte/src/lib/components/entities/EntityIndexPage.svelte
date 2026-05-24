@@ -33,6 +33,7 @@
     enableLightbox?: boolean;
     errorMessage?: string;
     icon: Component;
+    initialMediaWall?: boolean;
     kind: string;
     lightboxTitle?: string;
     prefsKey: string;
@@ -53,6 +54,7 @@
     enableLightbox = false,
     errorMessage,
     icon: Icon,
+    initialMediaWall = false,
     kind,
     prefsKey,
     resolveHref,
@@ -244,6 +246,7 @@
       {prefsKey}
       {emptyTitle}
       {emptyMessage}
+      {initialMediaWall}
       initialPageSize={page.pageSize}
       hasMore={page.nextCursor !== null}
       loadingMore={page.loadingMore}

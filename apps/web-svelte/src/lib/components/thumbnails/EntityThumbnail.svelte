@@ -31,7 +31,6 @@
     type EntityThumbnailCard,
     type EntityThumbnailMetaIcon,
   } from "$lib/entities/entity-thumbnail";
-  import { ENTITY_KIND } from "$lib/entities/entity-codes";
   import { loadTrickplayFrames, type TrickplayFrame } from "@prismedia/ui-svelte";
 
   type EntityThumbnailTitleAlign = "left" | "center" | "right";
@@ -90,7 +89,7 @@
   const sequenceAssets = $derived(card.hover.kind === "image-sequence" ? card.hover.assets : []);
   const asset = $derived(getThumbnailAsset(card, hoverBroken || isSpriteHover ? null : pointerRatio));
   const aspectRatio = $derived(toAspectRatioValue(card.aspectRatio));
-  const imageOnly = $derived(mediaOnly || card.entity.kind === ENTITY_KIND.bookPage);
+  const imageOnly = $derived(mediaOnly);
   const imageFit = $derived(card.fit ?? "cover");
   const placeholderIcon = $derived(iconForKind(card.entity.kind));
   const sequenceRestCover = $derived(

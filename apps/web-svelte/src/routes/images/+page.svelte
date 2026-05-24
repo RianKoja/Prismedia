@@ -12,6 +12,7 @@
   emptyTitle="No images"
   emptyMessage="No images in your library yet. Add a library root and scan to get started."
   errorMessage="Failed to load images."
+  initialMediaWall
   enableLightbox
   lightboxTitle="Images"
 />

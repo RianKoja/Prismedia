@@ -267,6 +267,7 @@
         cards={pageCards}
         prefsKey={`book-${book.id}-chapter-${chapter.id}-pages`}
         initialSortBy="position"
+        initialMediaWall
         emptyTitle="No pages"
         emptyMessage="No pages found in this chapter."
         onCardActivate={(card, visibleCards) => {

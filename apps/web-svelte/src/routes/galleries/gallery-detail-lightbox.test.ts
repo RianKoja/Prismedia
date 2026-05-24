@@ -11,5 +11,7 @@ describe("gallery detail lightbox wiring", () => {
     expect(source).toContain("visibleCards: EntityThumbnailCard[]");
     expect(source).toContain("lightboxCards = nextCards");
     expect(source).toContain("{#snippet detailsContent(entity)}");
+    expect(source).toContain("prefsKey={`gallery-${gallery?.id}-images`}");
+    expect(source).toContain("initialMediaWall");
   });
 });

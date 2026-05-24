@@ -5,6 +5,10 @@ import EntityGrid from "./EntityGrid.test-harness.svelte";
 
 describe("EntityGrid pagination", () => {
   beforeEach(() => {
+    Object.defineProperty(window, "localStorage", {
+      configurable: true,
+      value: createLocalStorageStub(),
+    });
     vi.stubGlobal("requestAnimationFrame", vi.fn((callback: FrameRequestCallback) => {
       callback(0);
       return 1;
@@ -143,6 +147,69 @@ describe("EntityGrid pagination", () => {
     });
   });
 
+  it("uses the media wall default when no saved preference exists", async () => {
+    const cards = Array.from({ length: 6 }, (_, index) => card(index));
+    const { container } = render(EntityGrid, {
+      props: {
+        cards,
+        initialMediaWall: true,
+        prefsKey: "media-wall-default-test",
+      },
+    });
+
+    await waitFor(() => {
+      expect(container.querySelector(".cards")?.classList.contains("is-media-wall")).toBe(true);
+      expect(container.querySelector(".glass-info")).toBeNull();
+    });
+  });
+
+  it("persists the media wall preference by grid key", async () => {
+    const cards = Array.from({ length: 6 }, (_, index) => card(index));
+    const { container, unmount } = render(EntityGrid, {
+      props: {
+        cards,
+        prefsKey: "media-wall-persist-test",
+      },
+    });
+
+    await fireEvent.click(screen.getByRole("button", { name: "Media wall" }));
+
+    await waitFor(() => {
+      expect(window.localStorage.getItem("prismedia:entity-grid-media-wall:media-wall-persist-test")).toBe("true");
+      expect(container.querySelector(".cards")?.classList.contains("is-media-wall")).toBe(true);
+    });
+
+    unmount();
+
+    const next = render(EntityGrid, {
+      props: {
+        cards,
+        prefsKey: "media-wall-persist-test",
+      },
+    });
+
+    await waitFor(() => {
+      expect(next.container.querySelector(".cards")?.classList.contains("is-media-wall")).toBe(true);
+    });
+  });
+
+  it("lets a saved media wall preference override the default", async () => {
+    window.localStorage.setItem("prismedia:entity-grid-media-wall:media-wall-override-test", "false");
+    const cards = Array.from({ length: 6 }, (_, index) => card(index));
+    const { container } = render(EntityGrid, {
+      props: {
+        cards,
+        initialMediaWall: true,
+        prefsKey: "media-wall-override-test",
+      },
+    });
+
+    await waitFor(() => {
+      expect(container.querySelector(".cards")?.classList.contains("is-media-wall")).toBe(false);
+      expect(container.querySelector(".glass-info")).not.toBeNull();
+    });
+  });
+
   it("can render embedded grids without docked controls or pagination chrome", () => {
     const cards = Array.from({ length: 6 }, (_, index) => card(index));
     const { container } = render(EntityGrid, {
@@ -176,6 +243,24 @@ function card(index: number): EntityThumbnailCard {
     cover: null,
     hover: {
       kind: "none",
+    },
+  };
+}
+
+function createLocalStorageStub(): Storage {
+  const store = new Map<string, string>();
+  return {
+    get length() {
+      return store.size;
+    },
+    clear: () => store.clear(),
+    getItem: (key: string) => store.get(key) ?? null,
+    key: (index: number) => [...store.keys()][index] ?? null,
+    removeItem: (key: string) => {
+      store.delete(key);
+    },
+    setItem: (key: string, value: string) => {
+      store.set(key, String(value));
     },
   };
 }

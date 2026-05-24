@@ -24,6 +24,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - Updated web app manifest and mobile browser metadata for home-screen installation and browser UI theme colors.
 
 ### Fixed
+- Saved entity grid media-wall mode per grid, defaulted image/page grids to that view, and let book page cards show metadata again when media-wall mode is turned off.
 - Kept the library toolbar reset action on the active filter row so the main toolbar buttons no longer shift when reset becomes available.
 - Recovered stale running jobs from previous worker processes so the queue no longer appears stuck after a worker restart.
 - Restored richer running and queued job rows with job-kind grouping, target details, and live status messages.

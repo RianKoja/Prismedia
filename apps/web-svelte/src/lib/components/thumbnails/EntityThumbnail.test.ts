@@ -333,6 +333,17 @@ describe("EntityThumbnail", () => {
     expect(container.querySelector(".chips")?.textContent).not.toContain("S1 E2");
     expect(container.querySelector(".chips")?.textContent).not.toContain("4");
   });
+
+  it("shows book page metadata when media-only mode is not requested", () => {
+    const { container } = render(EntityThumbnail, {
+      props: {
+        card: bookPageCard(),
+      },
+    });
+
+    expect(container.querySelector(".glass-info")).not.toBeNull();
+    expect(container.querySelector(".chips")?.textContent).toContain("Page 12");
+  });
 });
 
 function spriteCard(): EntityThumbnailCard {
@@ -429,6 +440,30 @@ function episodeCard(): EntityThumbnailCard {
       ],
     },
     meta: [{ icon: "video", label: "1080p" }],
+  };
+}
+
+function bookPageCard(): EntityThumbnailCard {
+  return {
+    entity: {
+      id: "page-12",
+      kind: "book-page",
+      title: "Page 12",
+      parentEntityId: "chapter-1",
+      sortOrder: 12,
+      relationships: [],
+      capabilities: [],
+      childrenByKind: [],
+    },
+    aspectRatio: "poster",
+    cover: {
+      alt: "Page 12",
+      src: "/assets/pages/page-12.jpg",
+    },
+    hover: {
+      kind: "none",
+    },
+    meta: [{ icon: "book", label: "Page 12" }],
   };
 }
 

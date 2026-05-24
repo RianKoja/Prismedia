@@ -8,8 +8,11 @@ describe("images index lightbox wiring", () => {
 
     expect(source).toContain("enableLightbox");
     expect(source).toContain("lightboxTitle=\"Images\"");
+    expect(source).toContain("initialMediaWall");
+    expect(componentSource).toContain("initialMediaWall?: boolean");
+    expect(componentSource).toContain("{initialMediaWall}");
     expect(componentSource).toContain("ImageLightboxDetails");
-    expect(componentSource).toContain("{#snippet detailsContent(entity)}");
+    expect(componentSource).toContain("{#snippet detailsContent(entity");
     expect(componentSource).toContain("fetchImage");
     expect(componentSource).toContain("hydrateLightboxEntity");
   });

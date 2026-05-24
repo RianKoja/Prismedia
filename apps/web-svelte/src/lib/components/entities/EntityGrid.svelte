@@ -53,6 +53,7 @@
     emptyTitle?: string;
     hasMore?: boolean;
     initialPageSize?: number;
+    initialMediaWall?: boolean;
     initialSortBy?: EntityGridSort;
     initialSortDir?: EntityGridSortDir;
     dockControls?: boolean;
@@ -91,6 +92,7 @@
     emptyTitle = "Nothing present",
     hasMore = false,
     initialPageSize = DEFAULT_PAGE_SIZE,
+    initialMediaWall = false,
     initialSortBy = "title",
     initialSortDir = "asc",
     dockControls = true,
@@ -128,6 +130,10 @@
     return prefsKey ? `prismedia:entity-grid-page-size:${prefsKey}` : null;
   }
 
+  function mediaWallStorageKey(): string | null {
+    return prefsKey ? `prismedia:entity-grid-media-wall:${prefsKey}` : null;
+  }
+
   function loadScale(): number {
     const fallbackScale = 5;
     if (!browser) return fallbackScale;
@@ -154,6 +160,16 @@
     return normalizePageSize(Number(raw));
   }
 
+  function loadMediaWall(): boolean {
+    if (!browser) return initialMediaWall;
+    const key = mediaWallStorageKey();
+    if (!key) return initialMediaWall;
+    const raw = window.localStorage.getItem(key);
+    if (raw === "true") return true;
+    if (raw === "false") return false;
+    return initialMediaWall;
+  }
+
   let actionsMenuOpen = $state(false);
   let capabilityOverrides = $state(new Map<string, EntityCapability[]>());
   let activeKind = $state(ENTITY_GRID_ALL_KINDS);
@@ -168,7 +184,8 @@
   let pageSizeOpen = $state(false);
   let pendingAdvanceAfterLoad = $state(false);
   let scale = $state(5);
-  let mediaWall = $state(false);
+  // svelte-ignore state_referenced_locally
+  let mediaWall = $state(initialMediaWall);
   let selectedIds = $state<string[]>([]);
   let viewportEl: HTMLDivElement | undefined = $state();
   let sectionEl: HTMLElement | undefined = $state();
@@ -288,6 +305,8 @@
   onMount(() => {
     scale = loadScale();
     pageSize = loadPageSize();
+    mediaWall = loadMediaWall();
+    if (mediaWall) viewMode = "grid";
     onPageSizeChange?.(pageSize);
     const key = presetStorageKey();
     if (key) presets = createFilterPresets(key).load();
@@ -316,7 +335,8 @@
         sortBy = snapshot.sortBy;
         sortDir = snapshot.sortDir;
         viewMode = snapshot.viewMode;
-        mediaWall = snapshot.mediaWall ?? false;
+        mediaWall = snapshot.mediaWall ?? loadMediaWall();
+        if (mediaWall) viewMode = "grid";
         selectedIds = snapshot.selectedIds;
         scale = snapshot.scale;
         pageSize = normalizePageSize(snapshot.pageSize ?? pageSize);
@@ -448,6 +468,11 @@
     if (browser && key) window.localStorage.setItem(key, String(scale));
   }
 
+  function persistMediaWall(next: boolean) {
+    const key = mediaWallStorageKey();
+    if (browser && key) window.localStorage.setItem(key, String(next));
+  }
+
   function setActiveKind(kind: string) {
     activeKind = kind;
     activePresetId = null;
@@ -488,12 +513,16 @@
 
   function setViewMode(value: EntityGridViewMode) {
     viewMode = value;
-    if (value === "list") mediaWall = false;
+    if (value === "list") {
+      mediaWall = false;
+      persistMediaWall(mediaWall);
+    }
   }
 
   function setMediaWall(value: boolean) {
     mediaWall = value;
     if (value) viewMode = "grid";
+    persistMediaWall(mediaWall);
   }
 
   function savePresets(next: FilterPreset[]) {
@@ -561,7 +590,8 @@
     sortBy = initialSortBy;
     sortDir = initialSortDir;
     viewMode = "grid";
-    mediaWall = false;
+    mediaWall = initialMediaWall;
+    persistMediaWall(mediaWall);
     pageIndex = 0;
     onSelectionChange?.(selectedIds);
   }
@@ -681,7 +711,7 @@
         query ||
         sortBy !== initialSortBy ||
         sortDir !== initialSortDir ||
-        mediaWall ||
+        mediaWall !== initialMediaWall ||
         selectedIds.length > 0,
     )}
     {drawerOpen}
