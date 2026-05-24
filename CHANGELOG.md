@@ -30,6 +30,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - Fixed chapter comic reader close behavior so readers opened from resume/start-over links do not immediately reopen.
 - Fixed comic reader flicker by moving book, volume, and chapter reading into a dedicated full-page reader route.
 - Removed the comic reader mobile bottom bar and let the routed reader extend behind mobile browser toolbar space.
+- Kept the comic reader toolbar hidden while touch-scrolling in webtoon mode so it only appears on intentional center taps.
 - Kept entity thumbnail preview lists on user-controlled scrubbing instead of auto-cycling, while preserving first-tap navigation.
 - Fixed video thumbnail grids so scan/probe metadata like duration, resolution, codec, bitrate, and container is shown on video cards.
 - Fixed touch drag scrubbing for trickplay sprites and segmented thumbnail previews.

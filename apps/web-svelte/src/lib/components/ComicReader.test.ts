@@ -171,6 +171,40 @@ describe("ComicReader", () => {
     expect(topLayer?.classList.contains("reader-layer-visible")).toBe(true);
   });
 
+  it("keeps controls hidden while touch scrolling in webtoon mode", async () => {
+    const { container } = render(ComicReader, {
+      props: {
+        images,
+        initialIndex: 0,
+        initialMode: "webtoon",
+        title: "Comic",
+        onClose: vi.fn(),
+      },
+    });
+
+    const root = readerRoot(container);
+    const topLayer = root.querySelector(".reader-top-layer");
+    const stage = root.querySelector(".reader-stage");
+    expect(topLayer).not.toBeNull();
+    expect(stage).not.toBeNull();
+
+    await tick();
+    vi.advanceTimersByTime(2_800);
+    await tick();
+    expect(topLayer?.classList.contains("reader-layer-hidden")).toBe(true);
+
+    vi.spyOn(stage!, "getBoundingClientRect").mockReturnValue({
+      left: 0,
+      width: 300,
+    } as DOMRect);
+
+    await fireEvent(stage!, readerPointerEvent("pointerdown", 150, 100, "touch", 9));
+    await fireEvent(stage!, readerPointerEvent("pointermove", 150, 180, "touch", 9));
+    await fireEvent(stage!, readerPointerEvent("pointerup", 150, 180, "touch", 9));
+
+    expect(topLayer?.classList.contains("reader-layer-hidden")).toBe(true);
+  });
+
   it("shows hidden controls when hovering over the top or bottom control edges", async () => {
     const { container } = render(ComicReader, {
       props: {
@@ -312,3 +346,21 @@ describe("ComicReader", () => {
     expect(onIndexChange).toHaveBeenCalledWith(1);
   });
 });
+
+function readerPointerEvent(
+  type: string,
+  clientX: number,
+  clientY: number,
+  pointerType: string,
+  pointerId: number,
+) {
+  const event = new MouseEvent(type, {
+    bubbles: true,
+    cancelable: true,
+    clientX,
+    clientY,
+  });
+  Object.defineProperty(event, "pointerId", { value: pointerId });
+  Object.defineProperty(event, "pointerType", { value: pointerType });
+  return event;
+}

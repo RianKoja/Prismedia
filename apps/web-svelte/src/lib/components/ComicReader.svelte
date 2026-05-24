@@ -27,6 +27,13 @@
 
   type ReaderMode = "paged" | "webtoon";
 
+  interface ReaderPointerGesture {
+    pointerId: number;
+    startX: number;
+    startY: number;
+    moved: boolean;
+  }
+
   interface Props {
     images: ImageListItemDto[];
     initialIndex: number;
@@ -64,6 +71,7 @@
   let webtoonStage: HTMLElement | undefined = $state();
   let programmaticWebtoonScroll = false;
   let nextChapterBusy = $state(false);
+  let readerPointerGesture: ReaderPointerGesture | null = null;
 
   const hasNextChapter = $derived(Boolean(onNextChapter));
   const closeLabel = $derived(closeIcon === "back" ? "Back" : "Close");
@@ -205,9 +213,35 @@
     }
   }
 
+  function handleReaderPointerDown(event: PointerEvent) {
+    if ((event.target as HTMLElement).closest("[data-reader-control]")) return;
+    readerPointerGesture = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      moved: false,
+    };
+  }
+
+  function handleReaderPointerMove(event: PointerEvent) {
+    if (!readerPointerGesture || readerPointerGesture.pointerId !== event.pointerId) return;
+    const deltaX = event.clientX - readerPointerGesture.startX;
+    const deltaY = event.clientY - readerPointerGesture.startY;
+    if (Math.hypot(deltaX, deltaY) > 10) {
+      readerPointerGesture.moved = true;
+    }
+  }
+
+  function clearReaderPointerGesture() {
+    readerPointerGesture = null;
+  }
+
   function handleReaderTap(event: PointerEvent) {
     const target = event.target as HTMLElement;
     if (target.closest("[data-reader-control]")) return;
+    const gesture = readerPointerGesture;
+    clearReaderPointerGesture();
+    if (gesture && gesture.pointerId === event.pointerId && gesture.moved) return;
     const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
     const zone = comicTapZone(event.clientX - rect.left, rect.width);
     if (event.pointerType === "mouse") {
@@ -410,7 +444,10 @@
     <div
       bind:this={webtoonStage}
       class="reader-stage overflow-y-auto bg-black"
+      onpointerdown={handleReaderPointerDown}
+      onpointermove={handleReaderPointerMove}
       onpointerup={handleReaderTap}
+      onpointercancel={clearReaderPointerGesture}
       onscroll={handleWebtoonScroll}
     >
       <div class="mx-auto flex min-h-full w-full max-w-4xl flex-col items-center">
@@ -453,7 +490,13 @@
     </div>
   {:else}
     <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div class="reader-stage items-center justify-center overflow-hidden bg-black p-0 sm:px-14 sm:py-3" onpointerup={handleReaderTap}>
+    <div
+      class="reader-stage items-center justify-center overflow-hidden bg-black p-0 sm:px-14 sm:py-3"
+      onpointerdown={handleReaderPointerDown}
+      onpointermove={handleReaderPointerMove}
+      onpointerup={handleReaderTap}
+      onpointercancel={clearReaderPointerGesture}
+    >
       {#if images.length > 1 || hasEndAction}
         <button
           type="button"
