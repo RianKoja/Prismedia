@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { goto } from "$app/navigation";
   import { page } from "$app/state";
   import { ArrowLeft, BookOpen, Check, Images, Info, Play, RotateCcw, SlidersHorizontal } from "@lucide/svelte";
   import {
@@ -17,6 +18,10 @@
     orderedBookChildren,
     type BookReaderChapter,
   } from "$lib/entities/book-entity-reader";
+  import {
+    bookReaderCommand,
+    hrefWithoutBookReaderCommand,
+  } from "$lib/entities/book-reader-route";
   import { thumbnailsToCards } from "$lib/entities/entity-relationship-thumbnails";
   import { ENTITY_KIND } from "$lib/entities/entity-codes";
   import type { EntityThumbnailCard } from "$lib/entities/entity-thumbnail";
@@ -108,7 +113,7 @@
       pageCards = thumbnailsToCards(orderedBookChildren(nextChapter, ENTITY_KIND.bookPage));
 
       const nextProgress = bookEntityProgressDisplay(nextBook, chapterSummaries);
-      const readerCommand = page.url.searchParams.get("reader");
+      const readerCommand = bookReaderCommand(page.url);
       if (readerCommand === "start-over") {
         readerIndex = 0;
         readerMode = nextProgress?.readerMode ?? "paged";
@@ -232,6 +237,12 @@
     location.href = `/books/${book.id}/chapters/${nextChapter.id}?reader=resume`;
   }
 
+  async function clearReaderCommandFromUrl() {
+    const nextHref = hrefWithoutBookReaderCommand(page.url);
+    if (!nextHref) return;
+    await goto(nextHref, { replaceState: true, noScroll: true, keepFocus: true });
+  }
+
   async function markChapterRead() {
     if (readerPages.length === 0) return;
     readerIndex = Math.max(0, readerPages.length - 1);
@@ -243,6 +254,7 @@
     readerOpen = false;
     const reachedEnd = readerPages.length > 0 && readerIndex >= readerPages.length - 1;
     await saveProgress(readerIndex, reachedEnd);
+    await clearReaderCommandFromUrl();
     await loadChapter();
   }
 </script>
