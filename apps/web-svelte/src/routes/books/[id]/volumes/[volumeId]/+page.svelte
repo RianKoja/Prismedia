@@ -18,10 +18,10 @@
     orderedBookChildren,
     type BookReaderChapter,
   } from "$lib/entities/book-entity-reader";
+  import { bookReaderHref } from "$lib/entities/book-reader-route";
   import { thumbnailsToCards } from "$lib/entities/entity-relationship-thumbnails";
   import { ENTITY_KIND } from "$lib/entities/entity-codes";
   import type { EntityThumbnailCard } from "$lib/entities/entity-thumbnail";
-  import ComicReader from "$lib/components/ComicReader.svelte";
   import EntityDetail, {
     type EntityDetailTab,
     type EntityMetadataUpdateRequest,
@@ -33,7 +33,6 @@
   type LoadState = "loading" | "ready" | "error";
 
   const nsfw = useNsfw();
-  type ReaderMode = "paged" | "webtoon";
 
   let loadState: LoadState = $state("loading");
   let book = $state<BookDetail | null>(null);
@@ -42,9 +41,6 @@
   let chapterCards = $state<EntityThumbnailCard[]>([]);
   let errorMessage: string | null = $state(null);
   let lastNsfwMode = $state(nsfw.mode);
-  let readerOpen = $state(false);
-  let readerIndex = $state(0);
-  let readerMode: ReaderMode = $state("paged");
 
   const bookId = $derived(page.params.id ?? "");
   const volumeId = $derived(page.params.volumeId ?? "");
@@ -65,9 +61,6 @@
     progressDisplay ? chapterDetails.findIndex((chapter) => chapter.id === progressDisplay.chapterId) : -1,
   );
   const volumeProgress = $derived(progressChapterIndex >= 0 ? progressDisplay : null);
-  const nextChapter = $derived(
-    chapterDetails.length > 0 ? chapterDetails[progressChapterIndex + 1] ?? null : null,
-  );
   const primaryReadLabel = $derived(
     volumeProgress ? (volumeProgress.isComplete ? "Re-read volume" : "Resume volume") : "Read volume",
   );
@@ -127,10 +120,6 @@
         sortOrder: Number(detail.sortOrder ?? index),
         pageCount: orderedBookChildren(detail, ENTITY_KIND.bookPage).length,
       })));
-      readerIndex = nextProgress && details.some((detail) => detail.id === nextProgress.chapterId) && !nextProgress.isComplete
-        ? pageOffsetForChapter(nextProgress.chapterId) + nextProgress.currentPage - 1
-        : 0;
-      readerMode = nextProgress?.readerMode ?? "paged";
       loadState = "ready";
     } catch (err) {
       if (redirectHiddenEntityNotFound(err, nsfw.mode)) return;
@@ -143,15 +132,6 @@
     if (!volume) return;
     await updateEntityMetadata(volume.id, request, { kind: volume.kind });
     await loadVolume();
-  }
-
-  function pageOffsetForChapter(chapterId: string) {
-    let offset = 0;
-    for (const chapter of chapterDetails) {
-      if (chapter.id === chapterId) return offset;
-      offset += orderedBookChildren(chapter, ENTITY_KIND.bookPage).length;
-    }
-    return 0;
   }
 
   function positionForReaderIndex(index: number) {
@@ -172,12 +152,19 @@
     };
   }
 
-  function openReaderAt(index: number) {
-    readerIndex = Math.max(0, Math.min(index, Math.max(0, readerPages.length - 1)));
-    readerOpen = true;
+  function openReaderAt(index?: number) {
+    if (!book || !volume) return;
+    void goto(bookReaderHref({
+      bookId: book.id,
+      kind: "volume",
+      id: volume.id,
+      returnId: volume.id,
+      command: index == null && volumeProgress && !volumeProgress.isComplete ? "resume" : undefined,
+      pageIndex: index == null ? undefined : Math.max(0, Math.min(index, Math.max(0, readerPages.length - 1))),
+    }));
   }
 
-  async function saveProgress(index = readerIndex, completed = false) {
+  async function saveProgress(index: number, completed = false) {
     if (!book || readerPages.length === 0) return;
     const position = positionForReaderIndex(index);
     if (!position.chapter) return;
@@ -186,39 +173,14 @@
       unit: "page",
       index: position.pageIndex,
       total: position.pageCount,
-      mode: readerMode,
+      mode: volumeProgress?.readerMode ?? "paged",
       completed,
     });
   }
 
-  function handleIndexChange(index: number) {
-    readerIndex = index;
-    const reachedEnd = readerPages.length > 0 && index >= readerPages.length - 1;
-    void saveProgress(index, reachedEnd);
-  }
-
-  function handleModeChange(mode: ReaderMode) {
-    readerMode = mode;
-    void saveProgress(readerIndex, false);
-  }
-
-  async function handleNextChapter() {
-    if (!book || !nextChapter) return;
-    await saveProgress(readerIndex, true);
-    await goto(`/books/${book.id}/chapters/${nextChapter.id}`);
-  }
-
   async function markVolumeRead() {
     if (readerPages.length === 0) return;
-    readerIndex = Math.max(0, readerPages.length - 1);
-    await saveProgress(readerIndex, true);
-    await loadVolume();
-  }
-
-  async function closeReader() {
-    readerOpen = false;
-    const reachedEnd = readerPages.length > 0 && readerIndex >= readerPages.length - 1;
-    await saveProgress(readerIndex, reachedEnd);
+    await saveProgress(Math.max(0, readerPages.length - 1), true);
     await loadVolume();
   }
 </script>
@@ -257,7 +219,7 @@
 
       {#snippet extraActions()}
         {#if readerPages.length > 0}
-          <button type="button" class="reader-action" onclick={() => openReaderAt(readerIndex)}>
+          <button type="button" class="reader-action" onclick={() => openReaderAt()}>
             <Play class="h-3.5 w-3.5" />
             {primaryReadLabel}
           </button>
@@ -293,20 +255,6 @@
     </section>
   {/if}
 </div>
-
-{#if readerOpen}
-  <ComicReader
-    images={readerPages}
-    initialIndex={readerIndex}
-    initialMode={readerMode}
-    nextChapterLabel={nextChapter?.title ?? null}
-    title={`${book?.title ?? "Book"}${volume ? ` · ${volume.title}` : ""}`}
-    onIndexChange={handleIndexChange}
-    onModeChange={handleModeChange}
-    onNextChapter={nextChapter ? handleNextChapter : undefined}
-    onClose={() => void closeReader()}
-  />
-{/if}
 
 <style>
   .volume-page {

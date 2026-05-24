@@ -14,18 +14,13 @@
   import { entityCardToDetailCard, type EntityDetailCardFull } from "$lib/entities/entity-detail";
   import {
     bookEntityProgressDisplay,
-    entityPageToReaderImage,
     orderedBookChildren,
     type BookReaderChapter,
   } from "$lib/entities/book-entity-reader";
-  import {
-    bookReaderCommand,
-    hrefWithoutBookReaderCommand,
-  } from "$lib/entities/book-reader-route";
+  import { bookReaderHref } from "$lib/entities/book-reader-route";
   import { thumbnailsToCards } from "$lib/entities/entity-relationship-thumbnails";
   import { ENTITY_KIND } from "$lib/entities/entity-codes";
   import type { EntityThumbnailCard } from "$lib/entities/entity-thumbnail";
-  import ComicReader from "$lib/components/ComicReader.svelte";
   import EntityDetail, {
     type EntityDetailTab,
     type EntityMetadataUpdateRequest,
@@ -37,7 +32,6 @@
   type LoadState = "loading" | "ready" | "error";
 
   const nsfw = useNsfw();
-  type ReaderMode = "paged" | "webtoon";
 
   let loadState: LoadState = $state("loading");
   let book = $state<BookDetail | null>(null);
@@ -46,22 +40,15 @@
   let lastNsfwMode = $state(nsfw.mode);
   let pageCards = $state<EntityThumbnailCard[]>([]);
   let chapterSummaries = $state.raw<BookReaderChapter[]>([]);
-  let readerOpen = $state(false);
-  let readerIndex = $state(0);
-  let readerMode: ReaderMode = $state("paged");
 
   const bookId = $derived(page.params.id ?? "");
   const chapterId = $derived(page.params.chapterId ?? "");
   const bookTitle = $derived(book?.title ?? "Book");
   const card = $derived(chapter ? entityCardToDetailCard(chapter) as EntityDetailCardFull : null);
   const chapterPages = $derived(chapter ? orderedBookChildren(chapter, ENTITY_KIND.bookPage) : []);
-  const readerPages = $derived(chapterPages.map(entityPageToReaderImage));
+  const readerPageCount = $derived(chapterPages.length);
   const progressDisplay = $derived(bookEntityProgressDisplay(book, chapterSummaries));
   const chapterProgress = $derived(progressDisplay?.chapterId === chapterId ? progressDisplay : null);
-  const chapterIndex = $derived(chapterSummaries.findIndex((item) => item.id === chapterId));
-  const nextChapter = $derived(
-    chapterIndex >= 0 ? chapterSummaries[chapterIndex + 1] ?? null : null,
-  );
   const primaryReadLabel = $derived(
     chapterProgress ? (chapterProgress.isComplete ? "Re-read chapter" : "Resume chapter") : "Read chapter",
   );
@@ -112,25 +99,6 @@
       chapterSummaries = await loadChapterSummaries(nextBook, nextChapter);
       pageCards = thumbnailsToCards(orderedBookChildren(nextChapter, ENTITY_KIND.bookPage));
 
-      const nextProgress = bookEntityProgressDisplay(nextBook, chapterSummaries);
-      const readerCommand = bookReaderCommand(page.url);
-      if (readerCommand === "start-over") {
-        readerIndex = 0;
-        readerMode = nextProgress?.readerMode ?? "paged";
-        readerOpen = true;
-      } else if (readerCommand === "resume") {
-        readerIndex = nextProgress?.chapterId === nextChapter.id && !nextProgress.isComplete
-          ? nextProgress.currentPage - 1
-          : 0;
-        readerMode = nextProgress?.readerMode ?? "paged";
-        readerOpen = true;
-      } else if (nextProgress?.chapterId === nextChapter.id && !nextProgress.isComplete) {
-        readerIndex = nextProgress.currentPage - 1;
-        readerMode = nextProgress.readerMode;
-      } else {
-        readerIndex = 0;
-        readerMode = nextProgress?.readerMode ?? "paged";
-      }
       loadState = "ready";
     } catch (err) {
       if (redirectHiddenEntityNotFound(err, nsfw.mode)) return;
@@ -200,61 +168,37 @@
   }
 
   function openReaderAt(index: number) {
-    readerIndex = Math.max(0, Math.min(index, Math.max(0, readerPages.length - 1)));
-    readerOpen = true;
+    if (!book || !chapter) return;
+    void goto(bookReaderHref({
+      bookId: book.id,
+      kind: "chapter",
+      id: chapter.id,
+      returnId: chapter.id,
+      pageIndex: Math.max(0, Math.min(index, Math.max(0, readerPageCount - 1))),
+    }));
   }
 
   function openPrimaryReader() {
-    openReaderAt(chapterProgress && !chapterProgress.isComplete ? chapterProgress.currentPage - 1 : 0);
-  }
-
-  async function saveProgress(index = readerIndex, completed = false) {
-    if (!book || !chapter || readerPages.length === 0) return;
-    await updateEntityProgress(book.id, {
-      currentEntityId: chapter.id,
-      unit: "page",
-      index: Math.max(0, Math.min(index, readerPages.length - 1)),
-      total: readerPages.length,
-      mode: readerMode,
-      completed,
-    });
-  }
-
-  function handleIndexChange(index: number) {
-    readerIndex = index;
-    const reachedEnd = readerPages.length > 0 && index >= readerPages.length - 1;
-    void saveProgress(index, reachedEnd);
-  }
-
-  function handleModeChange(mode: ReaderMode) {
-    readerMode = mode;
-    void saveProgress(readerIndex, false);
-  }
-
-  async function handleNextChapter() {
-    if (!book || !nextChapter) return;
-    await saveProgress(Math.max(0, readerPages.length - 1), true);
-    location.href = `/books/${book.id}/chapters/${nextChapter.id}?reader=resume`;
-  }
-
-  async function clearReaderCommandFromUrl() {
-    const nextHref = hrefWithoutBookReaderCommand(page.url);
-    if (!nextHref) return;
-    await goto(nextHref, { replaceState: true, noScroll: true, keepFocus: true });
+    if (!book || !chapter) return;
+    void goto(bookReaderHref({
+      bookId: book.id,
+      kind: "chapter",
+      id: chapter.id,
+      returnId: chapter.id,
+      command: chapterProgress && !chapterProgress.isComplete ? "resume" : undefined,
+    }));
   }
 
   async function markChapterRead() {
-    if (readerPages.length === 0) return;
-    readerIndex = Math.max(0, readerPages.length - 1);
-    await saveProgress(readerIndex, true);
-    await loadChapter();
-  }
-
-  async function closeReader() {
-    readerOpen = false;
-    const reachedEnd = readerPages.length > 0 && readerIndex >= readerPages.length - 1;
-    await saveProgress(readerIndex, reachedEnd);
-    await clearReaderCommandFromUrl();
+    if (!book || !chapter || readerPageCount === 0) return;
+    await updateEntityProgress(book.id, {
+      currentEntityId: chapter.id,
+      unit: "page",
+      index: readerPageCount - 1,
+      total: readerPageCount,
+      mode: chapterProgress?.readerMode ?? "paged",
+      completed: true,
+    });
     await loadChapter();
   }
 </script>
@@ -287,12 +231,12 @@
         <span class="meta-item">{bookTitle}</span>
         <span class="meta-sep"></span>
         <span class="meta-item">
-          {readerPages.length} page{readerPages.length === 1 ? "" : "s"}
+          {readerPageCount} page{readerPageCount === 1 ? "" : "s"}
         </span>
       {/snippet}
 
       {#snippet extraActions()}
-        {#if readerPages.length > 0}
+        {#if readerPageCount > 0}
           <button type="button" class="reader-action" onclick={openPrimaryReader}>
             <Play class="h-3.5 w-3.5" />
             {primaryReadLabel}
@@ -333,20 +277,6 @@
     </section>
   {/if}
 </div>
-
-{#if readerOpen}
-  <ComicReader
-    images={readerPages}
-    initialIndex={readerIndex}
-    initialMode={readerMode}
-    nextChapterLabel={nextChapter?.title ?? null}
-    title={`${book?.title ?? "Book"}${chapter ? ` · ${chapter.title}` : ""}`}
-    onIndexChange={handleIndexChange}
-    onModeChange={handleModeChange}
-    onNextChapter={nextChapter ? handleNextChapter : undefined}
-    onClose={() => void closeReader()}
-  />
-{/if}
 
 <style>
   .chapter-page {

@@ -27,6 +27,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - Fixed Prismedia logo PNG transparency so the app brand mark no longer carries a black square background.
 - Reduced thumbnail grid scroll jank by deferring hover previews during scroll and avoiding unnecessary player/lightbox loading on non-lightbox library pages.
 - Fixed chapter comic reader close behavior so readers opened from resume/start-over links do not immediately reopen.
+- Fixed comic reader flicker by moving book, volume, and chapter reading into a dedicated full-page reader route.
 - Fixed video thumbnail grids so scan/probe metadata like duration, resolution, codec, bitrate, and container is shown on video cards.
 - Fixed touch drag scrubbing for trickplay sprites and segmented thumbnail previews.
 

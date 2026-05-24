@@ -1,0 +1,423 @@
+<script lang="ts">
+  import { onMount } from "svelte";
+  import { goto } from "$app/navigation";
+  import { page } from "$app/state";
+  import { AlertTriangle } from "@lucide/svelte";
+  import { getCapability } from "$lib/api/capabilities";
+  import {
+    fetchBook,
+    fetchEntity,
+    updateEntityProgress,
+    type BookDetail,
+    type EntityCardFull,
+  } from "$lib/api/prismedia";
+  import {
+    bookEntityProgressDisplay,
+    entityPageToReaderImage,
+    orderedBookChildren,
+    type BookReaderChapter,
+  } from "$lib/entities/book-entity-reader";
+  import {
+    bookReaderContextFromUrl,
+    bookReaderHref,
+    bookReaderReturnHref,
+    type BookReaderRouteContext,
+  } from "$lib/entities/book-reader-route";
+  import { resolveEntityHrefById } from "$lib/entities/entity-route-resolver";
+  import { ENTITY_KIND } from "$lib/entities/entity-codes";
+  import type { EntityThumbnail } from "$lib/api/generated/model";
+  import ComicReader from "$lib/components/ComicReader.svelte";
+  import { redirectHiddenEntityNotFound } from "$lib/nsfw/hidden-entity";
+  import { useNsfw } from "$lib/nsfw/store.svelte";
+
+  type LoadState = "loading" | "ready" | "error";
+  type ReaderMode = "paged" | "webtoon";
+
+  interface ReaderChapter {
+    detail: EntityCardFull;
+    pages: EntityThumbnail[];
+    summary: BookReaderChapter;
+  }
+
+  const nsfw = useNsfw();
+
+  let loadState: LoadState = $state("loading");
+  let book = $state<BookDetail | null>(null);
+  let context = $state.raw<BookReaderRouteContext | null>(null);
+  let readerChapters = $state.raw<ReaderChapter[]>([]);
+  let nextChapter = $state.raw<BookReaderChapter | null>(null);
+  let readerIndex = $state(0);
+  let readerMode: ReaderMode = $state("paged");
+  let readerTitle = $state("Reader");
+  let returnHref = $state("/books");
+  let errorMessage: string | null = $state(null);
+
+  const bookId = $derived(page.params.id ?? "");
+  const readerPages = $derived(
+    readerChapters.flatMap((chapter) => chapter.pages.map(entityPageToReaderImage)),
+  );
+
+  onMount(() => {
+    void loadReader();
+  });
+
+  async function loadReader() {
+    loadState = "loading";
+    errorMessage = null;
+
+    const nextContext = bookReaderContextFromUrl(page.url);
+    if (!nextContext) {
+      context = null;
+      errorMessage = "Reader link is missing a valid context.";
+      loadState = "error";
+      return;
+    }
+
+    try {
+      const nextBook = await fetchBook(bookId);
+      const resolved = await resolveReader(nextBook, nextContext);
+      book = nextBook;
+      context = nextContext;
+      readerChapters = resolved.chapters;
+      nextChapter = resolved.nextChapter;
+      readerMode = nextContext.mode ?? resolved.readerMode;
+      readerIndex = clampIndex(nextContext.pageIndex ?? resolved.initialIndex, resolved.pageCount);
+      readerTitle = resolved.title;
+      returnHref = await resolveReaderReturnHref(nextBook.id, nextContext);
+      loadState = "ready";
+    } catch (err) {
+      if (redirectHiddenEntityNotFound(err, nsfw.mode)) return;
+      errorMessage = err instanceof Error ? err.message : String(err);
+      loadState = "error";
+    }
+  }
+
+  async function resolveReader(nextBook: BookDetail, nextContext: BookReaderRouteContext) {
+    if (nextContext.kind === "volume") {
+      return resolveVolumeReader(nextBook, nextContext.id);
+    }
+    if (nextContext.kind === "book") {
+      return resolveBookReader(nextBook, nextContext);
+    }
+    return resolveChapterReader(nextBook, nextContext);
+  }
+
+  async function resolveChapterReader(nextBook: BookDetail, nextContext: BookReaderRouteContext) {
+    const chapter = await fetchEntity(nextContext.id);
+    const summaries = await loadChapterSummaries(nextBook, chapter);
+    const progress = bookEntityProgressDisplay(nextBook, summaries);
+    const chapterIndex = summaries.findIndex((item) => item.id === chapter.id);
+    const pages = orderedBookChildren(chapter, ENTITY_KIND.bookPage);
+    const initialIndex = initialChapterIndex(nextContext, progress, chapter.id);
+
+    return {
+      title: `${nextBook.title} · ${chapter.title}`,
+      chapters: [readerChapter(chapter, pages, chapterIndex >= 0 ? chapterIndex : 0)],
+      nextChapter: chapterIndex >= 0 ? summaries[chapterIndex + 1] ?? null : null,
+      initialIndex,
+      readerMode: progress?.readerMode ?? "paged",
+      pageCount: pages.length,
+    };
+  }
+
+  async function resolveVolumeReader(nextBook: BookDetail, volumeId: string) {
+    const volume = await fetchEntity(volumeId);
+    const chapterDetails = await Promise.all(
+      orderedBookChildren(volume, ENTITY_KIND.bookChapter).map((chapter) => fetchEntity(chapter.id)),
+    );
+    const chapters = chapterDetails.map((chapter, index) =>
+      readerChapter(chapter, orderedBookChildren(chapter, ENTITY_KIND.bookPage), index),
+    );
+    const summaries = chapters.map((chapter) => chapter.summary);
+    const progress = bookEntityProgressDisplay(nextBook, summaries);
+    const initialIndex = progress && !progress.isComplete
+      ? pageOffsetForChapter(chapters, progress.chapterId) + progress.currentPage - 1
+      : 0;
+
+    return {
+      title: `${nextBook.title} · ${volume.title}`,
+      chapters,
+      nextChapter: null,
+      initialIndex,
+      readerMode: progress?.readerMode ?? "paged",
+      pageCount: chapters.reduce((total, chapter) => total + chapter.pages.length, 0),
+    };
+  }
+
+  async function resolveBookReader(nextBook: BookDetail, nextContext: BookReaderRouteContext) {
+    const bookChapterDetails = await loadBookChapterDetails(nextBook);
+    let chapters = bookChapterDetails.map((chapter, index) =>
+      readerChapter(chapter, orderedBookChildren(chapter, ENTITY_KIND.bookPage), index),
+    );
+    let summaries = chapters.map((chapter) => chapter.summary);
+    let progress = bookEntityProgressDisplay(nextBook, summaries);
+
+    const progressChapterId = getCapability(nextBook.capabilities, "progress")?.currentEntityId ?? null;
+    if (nextContext.command === "resume" && progressChapterId && !progress) {
+      const progressChapter = await fetchEntity(progressChapterId);
+      if (progressChapter.kind === ENTITY_KIND.bookChapter) {
+        chapters = [
+          readerChapter(progressChapter, orderedBookChildren(progressChapter, ENTITY_KIND.bookPage), 0),
+        ];
+        summaries = chapters.map((chapter) => chapter.summary);
+        progress = bookEntityProgressDisplay(nextBook, summaries);
+      }
+    }
+
+    const selectedChapterId = nextContext.command === "resume" && progress
+      ? progress.chapterId
+      : chapters[0]?.detail.id ?? null;
+    const selectedIndex = Math.max(
+      0,
+      chapters.findIndex((chapter) => chapter.detail.id === selectedChapterId),
+    );
+    const selectedChapter = chapters[selectedIndex];
+    const initialIndex = selectedChapter && progress?.chapterId === selectedChapter.detail.id && !progress.isComplete
+      ? progress.currentPage - 1
+      : 0;
+
+    return {
+      title: `${nextBook.title}${selectedChapter ? ` · ${selectedChapter.detail.title}` : ""}`,
+      chapters: selectedChapter ? [selectedChapter] : [],
+      nextChapter: selectedIndex >= 0 ? summaries[selectedIndex + 1] ?? null : null,
+      initialIndex,
+      readerMode: progress?.readerMode ?? "paged",
+      pageCount: selectedChapter?.pages.length ?? 0,
+    };
+  }
+
+  async function loadBookChapterDetails(nextBook: BookDetail): Promise<EntityCardFull[]> {
+    const directChapters = orderedBookChildren(nextBook, ENTITY_KIND.bookChapter);
+    if (directChapters.length > 0) {
+      return Promise.all(directChapters.map((chapter) => fetchEntity(chapter.id)));
+    }
+
+    const volumeDetails = await Promise.all(
+      orderedBookChildren(nextBook, ENTITY_KIND.bookVolume).map((volume) => fetchEntity(volume.id)),
+    );
+    const volumeChapterIds = volumeDetails.flatMap((volume) =>
+      orderedBookChildren(volume, ENTITY_KIND.bookChapter).map((chapter) => chapter.id),
+    );
+    return Promise.all(volumeChapterIds.map((chapterId) => fetchEntity(chapterId)));
+  }
+
+  async function loadChapterSummaries(
+    nextBook: BookDetail,
+    currentChapter: EntityCardFull,
+  ): Promise<BookReaderChapter[]> {
+    const currentPageCount = orderedBookChildren(currentChapter, ENTITY_KIND.bookPage).length;
+    const volumeThumbnails = orderedBookChildren(nextBook, ENTITY_KIND.bookVolume);
+    let parentVolumeIndex = volumeThumbnails.findIndex((volume) => volume.id === currentChapter.parentEntityId);
+    let currentVolume: EntityCardFull | null = null;
+
+    if (parentVolumeIndex >= 0) {
+      currentVolume = await fetchEntity(volumeThumbnails[parentVolumeIndex].id);
+    } else {
+      for (const [index, volumeThumbnail] of volumeThumbnails.entries()) {
+        const volume = await fetchEntity(volumeThumbnail.id);
+        if (orderedBookChildren(volume, ENTITY_KIND.bookChapter).some((child) => child.id === currentChapter.id)) {
+          parentVolumeIndex = index;
+          currentVolume = volume;
+          break;
+        }
+      }
+    }
+
+    if (parentVolumeIndex >= 0 && currentVolume) {
+      let chapterThumbnails = orderedBookChildren(currentVolume, ENTITY_KIND.bookChapter);
+      const currentIndex = chapterThumbnails.findIndex((chapter) => chapter.id === currentChapter.id);
+
+      if (currentIndex === chapterThumbnails.length - 1) {
+        const nextVolume = volumeThumbnails[parentVolumeIndex + 1];
+        if (nextVolume) {
+          const nextVolumeDetail = await fetchEntity(nextVolume.id);
+          chapterThumbnails = [
+            ...chapterThumbnails,
+            ...orderedBookChildren(nextVolumeDetail, ENTITY_KIND.bookChapter),
+          ];
+        }
+      }
+
+      return chapterThumbnails.map((thumbnail, index) => ({
+        id: thumbnail.id,
+        title: thumbnail.title,
+        sortOrder: index,
+        pageCount: thumbnail.id === currentChapter.id ? currentPageCount : 0,
+      }));
+    }
+
+    return orderedBookChildren(nextBook, ENTITY_KIND.bookChapter).map((thumbnail, index) => ({
+      id: thumbnail.id,
+      title: thumbnail.title,
+      sortOrder: index,
+      pageCount: thumbnail.id === currentChapter.id ? currentPageCount : 0,
+    }));
+  }
+
+  function readerChapter(detail: EntityCardFull, pages: EntityThumbnail[], index: number): ReaderChapter {
+    return {
+      detail,
+      pages,
+      summary: {
+        id: detail.id,
+        title: detail.title,
+        sortOrder: index,
+        pageCount: pages.length,
+      },
+    };
+  }
+
+  function initialChapterIndex(
+    nextContext: BookReaderRouteContext,
+    progress: ReturnType<typeof bookEntityProgressDisplay>,
+    chapterId: string,
+  ) {
+    if (nextContext.command === "start-over") return 0;
+    if (progress?.chapterId === chapterId && !progress.isComplete) return progress.currentPage - 1;
+    return 0;
+  }
+
+  function pageOffsetForChapter(chapters: ReaderChapter[], chapterId: string) {
+    let offset = 0;
+    for (const chapter of chapters) {
+      if (chapter.detail.id === chapterId) return offset;
+      offset += chapter.pages.length;
+    }
+    return 0;
+  }
+
+  function positionForReaderIndex(index: number) {
+    let offset = 0;
+    for (const chapter of readerChapters) {
+      const nextOffset = offset + chapter.pages.length;
+      if (index < nextOffset) {
+        return { chapter, pageIndex: index - offset, pageCount: chapter.pages.length };
+      }
+      offset = nextOffset;
+    }
+
+    const chapter = readerChapters.at(-1) ?? null;
+    return {
+      chapter,
+      pageIndex: Math.max(0, (chapter?.pages.length ?? 1) - 1),
+      pageCount: chapter?.pages.length ?? 0,
+    };
+  }
+
+  async function saveProgress(index = readerIndex, completed = false) {
+    if (!book || readerPages.length === 0) return;
+    const position = positionForReaderIndex(index);
+    if (!position.chapter) return;
+    await updateEntityProgress(book.id, {
+      currentEntityId: position.chapter.detail.id,
+      unit: "page",
+      index: Math.max(0, Math.min(position.pageIndex, Math.max(0, position.pageCount - 1))),
+      total: position.pageCount,
+      mode: readerMode,
+      completed,
+    });
+  }
+
+  function handleIndexChange(index: number) {
+    readerIndex = index;
+    const reachedEnd = readerPages.length > 0 && index >= readerPages.length - 1;
+    void saveProgress(index, reachedEnd);
+  }
+
+  function handleModeChange(mode: ReaderMode) {
+    readerMode = mode;
+    void saveProgress(readerIndex, false);
+  }
+
+  async function handleNextChapter() {
+    if (!book || !context || !nextChapter) return;
+    await saveProgress(readerIndex, true);
+    await goto(bookReaderHref({
+      bookId: book.id,
+      kind: "chapter",
+      id: nextChapter.id,
+      returnId: context.returnId ?? context.id,
+      command: "resume",
+      mode: readerMode,
+    }));
+  }
+
+  async function closeReader() {
+    const reachedEnd = readerPages.length > 0 && readerIndex >= readerPages.length - 1;
+    await saveProgress(readerIndex, reachedEnd);
+    await goto(returnHref);
+  }
+
+  function clampIndex(index: number, pageCount: number) {
+    return Math.max(0, Math.min(index, Math.max(0, pageCount - 1)));
+  }
+
+  async function resolveReaderReturnHref(bookId: string, nextContext: BookReaderRouteContext) {
+    if (nextContext.returnId) {
+      const href = await resolveEntityHrefById(nextContext.returnId).catch(() => null);
+      if (href) return href;
+    }
+
+    return bookReaderReturnHref(bookId, nextContext);
+  }
+</script>
+
+<svelte:head>
+  <title>{readerTitle} · Prismedia</title>
+</svelte:head>
+
+{#if loadState === "ready"}
+  <ComicReader
+    images={readerPages}
+    initialIndex={readerIndex}
+    initialMode={readerMode}
+    nextChapterLabel={nextChapter?.title ?? null}
+    title={readerTitle}
+    presentation="page"
+    closeIcon="back"
+    onIndexChange={handleIndexChange}
+    onModeChange={handleModeChange}
+    onNextChapter={nextChapter ? handleNextChapter : undefined}
+    onClose={() => void closeReader()}
+  />
+{:else}
+  <main class="reader-route-shell">
+    {#if loadState === "error"}
+      <section class="reader-route-error">
+        <AlertTriangle class="h-5 w-5" />
+        <p>{errorMessage ?? "Unable to open reader."}</p>
+        <button type="button" onclick={() => void goto(returnHref)}>Back</button>
+      </section>
+    {/if}
+  </main>
+{/if}
+
+<style>
+  .reader-route-shell {
+    position: fixed;
+    inset: 0;
+    z-index: 90;
+    display: grid;
+    place-items: center;
+    background: #000;
+    color: var(--color-text-primary);
+  }
+
+  .reader-route-error {
+    display: grid;
+    justify-items: center;
+    gap: 0.75rem;
+    max-width: 28rem;
+    padding: 1.25rem;
+    text-align: center;
+    color: var(--color-text-secondary);
+  }
+
+  .reader-route-error button {
+    border: 1px solid var(--color-border-default);
+    border-radius: var(--radius-sm);
+    background: var(--color-overlay-heavy);
+    padding: 0.55rem 0.85rem;
+    color: var(--color-text-primary);
+  }
+</style>

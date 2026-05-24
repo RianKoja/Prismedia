@@ -45,7 +45,8 @@ export function bookReaderContextFromUrl(url: URL): BookReaderRouteContext | nul
   return {
     kind,
     id,
-    ...(returnKind && returnId ? { returnKind, returnId } : {}),
+    ...(returnKind ? { returnKind } : {}),
+    ...(returnId ? { returnId } : {}),
     ...(command ? { command } : {}),
     ...(mode ? { mode } : {}),
     ...(pageIndex !== null ? { pageIndex } : {}),
@@ -58,10 +59,7 @@ export function bookReaderHref(options: BookReaderHrefOptions): string {
     id: options.id,
   });
 
-  if (options.returnKind && options.returnId) {
-    params.set("returnKind", options.returnKind);
-    params.set("returnId", options.returnId);
-  }
+  if (options.returnId) params.set("returnId", options.returnId);
   if (options.command) params.set("command", options.command);
   if (options.mode) params.set("mode", options.mode);
   if (typeof options.pageIndex === "number") {

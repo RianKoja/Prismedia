@@ -9,7 +9,6 @@
     fetchEntity,
     updateEntityFlags,
     updateEntityMetadata,
-    updateEntityProgress,
     updateEntityRating,
     type BookDetail,
     type EntityCardFull,
@@ -21,18 +20,17 @@
   import { entityCardToDetailCard, type EntityDetailCardFull, type EntityDetailTag } from "$lib/entities/entity-detail";
   import {
     bookEntityProgressDisplay,
-    entityPageToReaderImage,
     orderedBookChildren,
     type BookEntityProgressDisplay,
     type BookReaderChapter,
   } from "$lib/entities/book-entity-reader";
+  import { bookReaderHref } from "$lib/entities/book-reader-route";
   import {
     hydrateStandardRelationshipCards,
     thumbnailsToCards,
   } from "$lib/entities/entity-relationship-thumbnails";
   import { ENTITY_KIND } from "$lib/entities/entity-codes";
   import type { EntityThumbnailCard } from "$lib/entities/entity-thumbnail";
-  import ComicReader from "$lib/components/ComicReader.svelte";
   import EntityCastAndCrewSection from "$lib/components/entities/EntityCastAndCrewSection.svelte";
   import EntityDetail, {
     type EntityDetailSection,
@@ -50,7 +48,6 @@
   type LoadState = "loading" | "ready" | "error";
 
   const nsfw = useNsfw();
-  type ReaderMode = "paged" | "webtoon";
 
   interface ChapterDetail {
     detail: EntityCardFull;
@@ -71,9 +68,6 @@
   let creditCards = $state<EntityThumbnailCard[]>([]);
   let relationshipTags = $state<EntityDetailTag[]>([]);
   let selectedChapterId: string | null = $state(null);
-  let readerOpen = $state(false);
-  let readerIndex = $state(0);
-  let readerMode: ReaderMode = $state("paged");
 
   const bookId = $derived(page.params.id ?? "");
   const bookType = $derived(book?.bookType ?? null);
@@ -83,16 +77,10 @@
   const selectedChapter = $derived(
     chapterDetails.find((chapter) => chapter.detail.id === selectedChapterId) ?? chapterDetails[0] ?? null,
   );
-  const selectedChapterIndex = $derived(
-    selectedChapter ? chapterDetails.findIndex((chapter) => chapter.detail.id === selectedChapter.detail.id) : -1,
-  );
-  const nextChapter = $derived(
-    selectedChapterIndex >= 0 ? chapterDetails[selectedChapterIndex + 1] ?? null : null,
-  );
   const selectedProgress = $derived(
     progressDisplay?.chapterId === selectedChapter?.detail.id ? progressDisplay : null,
   );
-  const readerPages = $derived(selectedChapter ? selectedChapter.pages.map(entityPageToReaderImage) : []);
+  const readerPageCount = $derived(selectedChapter?.pages.length ?? 0);
   const primaryReadLabel = $derived(
     selectedProgress ? (selectedProgress.isComplete ? "Re-read" : "Resume") : "Read",
   );
@@ -172,8 +160,6 @@
 
       const nextProgress = bookEntityProgressDisplay(nextBook, combineChapterSummaries(chapters, progressSummary));
       selectedChapterId = nextProgress?.chapterId ?? chapters[0]?.detail.id ?? null;
-      readerIndex = nextProgress && !nextProgress.isComplete ? nextProgress.currentPage - 1 : 0;
-      readerMode = nextProgress?.readerMode ?? "paged";
       loadState = "ready";
     } catch (err) {
       if (redirectHiddenEntityNotFound(err, nsfw.mode)) return;
@@ -278,68 +264,39 @@
     await loadBook();
   }
 
-  function openReaderAt(index: number) {
-    readerIndex = Math.max(0, Math.min(index, Math.max(0, readerPages.length - 1)));
-    readerOpen = true;
-  }
-
   function openSelectedReader() {
-    openReaderAt(selectedProgress && !selectedProgress.isComplete ? selectedProgress.currentPage - 1 : 0);
+    if (!book || !selectedChapter) return;
+    void goto(bookReaderHref({
+      bookId: book.id,
+      kind: "chapter",
+      id: selectedChapter.detail.id,
+      returnId: book.id,
+      command: selectedProgress && !selectedProgress.isComplete ? "resume" : undefined,
+    }));
   }
 
   function resumeProgress() {
     if (!book || !progressDisplay) return;
-    void goto(`/books/${book.id}/chapters/${progressDisplay.chapterId}?reader=resume`);
+    void goto(bookReaderHref({
+      bookId: book.id,
+      kind: "book",
+      id: book.id,
+      returnId: book.id,
+      command: "resume",
+    }));
   }
 
   function startProgressOver() {
     if (!book || !progressDisplay) return;
-    void goto(`/books/${book.id}/chapters/${progressDisplay.chapterId}?reader=start-over`);
+    void goto(bookReaderHref({
+      bookId: book.id,
+      kind: "book",
+      id: book.id,
+      returnId: book.id,
+      command: "start-over",
+    }));
   }
 
-  async function saveProgress(index = readerIndex, completed = false) {
-    if (!book || !selectedChapter || readerPages.length === 0) return;
-    await updateEntityProgress(book.id, {
-      currentEntityId: selectedChapter.detail.id,
-      unit: "page",
-      index: Math.max(0, Math.min(index, readerPages.length - 1)),
-      total: readerPages.length,
-      mode: readerMode,
-      completed,
-    });
-  }
-
-  function handleIndexChange(index: number) {
-    readerIndex = index;
-    const reachedEnd = readerPages.length > 0 && index >= readerPages.length - 1;
-    void saveProgress(index, reachedEnd);
-  }
-
-  function handleModeChange(mode: ReaderMode) {
-    readerMode = mode;
-    void saveProgress(readerIndex, false);
-  }
-
-  async function handleNextChapter() {
-    if (!nextChapter) return;
-    await saveProgress(Math.max(0, readerPages.length - 1), true);
-    selectedChapterId = nextChapter.detail.id;
-    readerIndex = 0;
-  }
-
-  async function markSelectedChapterRead() {
-    if (readerPages.length === 0) return;
-    readerIndex = Math.max(0, readerPages.length - 1);
-    await saveProgress(readerIndex, true);
-    await loadBook();
-  }
-
-  async function closeReader() {
-    readerOpen = false;
-    const reachedEnd = readerPages.length > 0 && readerIndex >= readerPages.length - 1;
-    await saveProgress(readerIndex, reachedEnd);
-    await loadBook();
-  }
 </script>
 
 <svelte:head>
@@ -404,7 +361,7 @@
           label="Identify"
           onApplied={loadBook}
         />
-        {#if readerPages.length > 0}
+        {#if readerPageCount > 0}
           <button type="button" class="reader-action" onclick={openSelectedReader}>
             <Play class="h-3.5 w-3.5" />
             {primaryReadLabel}
@@ -498,20 +455,6 @@
     {/if}
   {/if}
 </div>
-
-{#if readerOpen}
-  <ComicReader
-    images={readerPages}
-    initialIndex={readerIndex}
-    initialMode={readerMode}
-    nextChapterLabel={nextChapter?.detail.title ?? null}
-    title={`${book?.title ?? "Book"}${selectedChapter ? ` · ${selectedChapter.detail.title}` : ""}`}
-    onIndexChange={handleIndexChange}
-    onModeChange={handleModeChange}
-    onNextChapter={nextChapter ? handleNextChapter : undefined}
-    onClose={() => void closeReader()}
-  />
-{/if}
 
 <style>
   .book-page {

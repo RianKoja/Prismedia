@@ -67,8 +67,8 @@ describe("ComicReader", () => {
     expect(container.querySelector('[role="dialog"]')).toBeNull();
   });
 
-  it("can render as a route page with a back control instead of a portaled overlay", () => {
-    const { container, getByLabelText } = render(ComicReader, {
+  it("can render as a route page with a back control", () => {
+    const { getByLabelText } = render(ComicReader, {
       props: {
         images,
         initialIndex: 0,
@@ -79,7 +79,8 @@ describe("ComicReader", () => {
       },
     });
 
-    expect(container.querySelector('[role="dialog"]')).toBeInTheDocument();
+    const overlay = document.body.querySelector('[role="dialog"]');
+    expect(overlay).toHaveClass("reader-page-presentation");
     expect(getByLabelText("Back")).toBeInTheDocument();
   });
 

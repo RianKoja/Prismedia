@@ -232,11 +232,6 @@
     setReaderIndex(nextIndex);
   }
 
-  function readerPortal(node: HTMLElement, enabled: boolean) {
-    if (!enabled) return { destroy: () => {} };
-    return portal(node);
-  }
-
   async function scrollWebtoonToIndex(targetIndex: number) {
     await tick();
     if (!webtoonStage) return;
@@ -312,7 +307,7 @@
 </svelte:head>
 
 <div
-  use:readerPortal={presentation === "overlay"}
+  use:portal
   class={`reader-overlay fixed inset-0 flex flex-col bg-black backdrop-blur-sm ${presentation === "page" ? "reader-page-presentation" : ""}`}
   role="dialog"
   aria-modal="true"
@@ -584,10 +579,6 @@
     z-index: 2147483000;
   }
 
-  .reader-page-presentation {
-    z-index: 90;
-  }
-
   .reader-stage {
     position: absolute;
     inset: 0;
@@ -795,7 +786,7 @@
 
   @media (min-width: 640px) {
     .reader-stage {
-      inset: 3.65rem 0 0;
+      inset: 0;
     }
 
     .reader-top-layer {
