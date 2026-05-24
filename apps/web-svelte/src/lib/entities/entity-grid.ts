@@ -230,7 +230,7 @@ function metaForEntity(entity: EntityGridSourceEntity): EntityThumbnailCard["met
     return entity.meta.map((item) => ({
       icon: (item.icon as EntityThumbnailMetaIcon) ?? iconForKind(entity.kind),
       label: item.label,
-    })).slice(0, 3);
+    })).slice(0, 5);
   }
 
   const meta: EntityThumbnailCard["meta"] = [];
@@ -244,6 +244,12 @@ function metaForEntity(entity: EntityGridSourceEntity): EntityThumbnailCard["met
 
   if (duration) meta.push({ icon: "duration", label: duration });
   if (width && height) meta.push({ icon: entity.kind === ENTITY_KIND.video ? "video" : "image", label: formatResolutionLabel(width, height) });
+  if (entity.kind === ENTITY_KIND.video && technical?.codec) {
+    meta.push({ icon: "video", label: technical.codec.toUpperCase() });
+  }
+  if (entity.kind === ENTITY_KIND.video && technical?.container) {
+    meta.push({ icon: "video", label: technical.container.toUpperCase() });
+  }
   for (const stat of stats.slice(0, 2)) {
     meta.push({ icon: statIcon(stat.code), label: statLabel(stat.code, stat.value) });
   }
@@ -253,7 +259,7 @@ function metaForEntity(entity: EntityGridSourceEntity): EntityThumbnailCard["met
     }
   }
 
-  return meta.slice(0, 3);
+  return meta.slice(0, 5);
 }
 
 function positionValue(entity: EntityGridSourceEntity, code: string): number | null {

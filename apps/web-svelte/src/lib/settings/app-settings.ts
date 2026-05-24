@@ -51,8 +51,8 @@ export const defaultLibrarySettings: LibrarySettings = {
   metadataStorageDedicated: true,
   trickplayIntervalSeconds: 10,
   previewClipDurationSeconds: 8,
-  thumbnailQuality: 2,
-  trickplayQuality: 2,
+  thumbnailQuality: "2",
+  trickplayQuality: "2",
   backgroundWorkerConcurrency: 1,
   defaultPlaybackMode: "direct",
   showCastControls: true,
@@ -208,11 +208,11 @@ export function valuesToLibrarySettings(
       values[settingKeys.generationPreviewClipDurationSeconds],
       fallback.previewClipDurationSeconds,
     ),
-    thumbnailQuality: valueAsNumber(
+    thumbnailQuality: valueAsString(
       values[settingKeys.generationThumbnailQuality],
       fallback.thumbnailQuality,
     ),
-    trickplayQuality: valueAsNumber(
+    trickplayQuality: valueAsString(
       values[settingKeys.generationTrickplayQuality],
       fallback.trickplayQuality,
     ),

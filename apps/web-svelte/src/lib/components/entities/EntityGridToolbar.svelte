@@ -364,10 +364,7 @@
   .toolbar-shell::before {
     content: "";
     position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 0.5rem;
+    inset: 0;
     background: var(--color-bg, #07080b);
     z-index: -1;
     pointer-events: auto;

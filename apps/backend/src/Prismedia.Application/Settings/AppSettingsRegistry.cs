@@ -171,7 +171,7 @@ public static class AppSettingsRegistry {
                 min: 2,
                 max: 60,
                 step: 1),
-            Integer(
+            Select(
                 AppSettingKeys.GenerationThumbnailQuality,
                 Generation,
                 "Generation Pipeline",
@@ -179,12 +179,10 @@ public static class AppSettingsRegistry {
                 30,
                 "Thumbnail quality",
                 "JPEG quality preset for generated thumbnails.",
-                2,
+                "2",
                 90,
-                min: 1,
-                max: 5,
-                step: 1),
-            Integer(
+                QualityPresetOptions()),
+            Select(
                 AppSettingKeys.GenerationTrickplayQuality,
                 Generation,
                 "Generation Pipeline",
@@ -192,11 +190,9 @@ public static class AppSettingsRegistry {
                 30,
                 "Trickplay quality",
                 "JPEG quality preset for sprite sheets.",
-                2,
+                "2",
                 100,
-                min: 1,
-                max: 5,
-                step: 1),
+                QualityPresetOptions()),
 
             Integer(
                 AppSettingKeys.JobsBackgroundConcurrency,
@@ -498,6 +494,14 @@ public static class AppSettingsRegistry {
             SettingValueType.StringList,
             JsonSerializer.SerializeToElement(defaultValue),
             order);
+
+    private static IReadOnlyList<SettingOption> QualityPresetOptions() => [
+        new SettingOption("1", "Best", "Highest resolution, largest files."),
+        new SettingOption("2", "High", "Good balance of quality and size."),
+        new SettingOption("3", "Medium", "Moderate quality, smaller files."),
+        new SettingOption("4", "Low", "Lower quality, space efficient."),
+        new SettingOption("5", "Lowest", "Smallest files, lowest quality."),
+    ];
 
     private static SettingDefinition Select(
         string key,

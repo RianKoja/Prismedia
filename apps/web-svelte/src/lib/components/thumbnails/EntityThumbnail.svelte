@@ -27,6 +27,7 @@
     iconForKind,
     placeholderGradient,
     resolveEntityThumbnailHref,
+    toAspectRatioNumeric,
     toAspectRatioValue,
     type EntityThumbnailCard,
     type EntityThumbnailMetaIcon,
@@ -81,6 +82,8 @@
   const sequenceAssets = $derived(card.hover.kind === "image-sequence" ? card.hover.assets : []);
   const asset = $derived(getThumbnailAsset(card, hoverBroken || isSpriteHover ? null : pointerRatio));
   const aspectRatio = $derived(toAspectRatioValue(card.aspectRatio));
+  const aspectRatioNumeric = $derived(toAspectRatioNumeric(card.aspectRatio));
+  const containerAspectRatio = $derived(imageOnly ? undefined : `${aspectRatioNumeric * 3} / 4`);
   const imageFit = $derived(card.fit ?? "cover");
   const placeholderIcon = $derived(iconForKind(card.entity.kind));
   const sequenceRestCover = $derived(
@@ -250,6 +253,7 @@
   class:is-list={layout === "list"}
   class:is-selected={selected}
   class:is-select-mode={inSelectMode}
+  style:aspect-ratio={layout === "list" ? undefined : containerAspectRatio ?? aspectRatio}
   aria-label={card.entity.title}
   aria-checked={!onActivate && (inSelectMode || (!href && selectable)) ? selected : undefined}
   onblur={clearHover}
@@ -261,7 +265,6 @@
     class="media"
     class:has-placeholder={showPlaceholder}
     role="presentation"
-    style:aspect-ratio={layout === "list" ? undefined : aspectRatio}
     style:background={showPlaceholder ? gradient : undefined}
     onpointerenter={handlePointerEnter}
     onpointermove={handlePointerMove}
@@ -466,69 +469,21 @@
 <style>
   .entity-thumbnail {
     position: relative;
-    display: grid;
-    grid-template-rows: 1fr;
-    overflow: hidden;
+    display: flex;
+    flex-direction: column;
     container-type: inline-size;
-    border: 1px solid rgb(255 255 255 / 0.08);
-    border-radius: var(--radius-sm, 6px);
-    background:
-      linear-gradient(180deg, rgb(255 255 255 / 0.04), rgb(255 255 255 / 0.012)),
-      rgb(12 12 13 / 0.92);
     color: var(--color-text, #f4efe6);
     text-decoration: none;
     min-width: 0;
-    box-shadow:
-      inset 0 0 0 1px rgb(0 0 0 / 0.5),
-      0 2px 6px rgb(0 0 0 / 0.32);
     transition:
-      border-color 200ms var(--ease-default, cubic-bezier(0.4, 0, 0.2, 1)),
-      box-shadow 200ms var(--ease-default, cubic-bezier(0.4, 0, 0.2, 1)),
       transform 200ms var(--ease-default, cubic-bezier(0.4, 0, 0.2, 1));
   }
 
-  .entity-thumbnail::after {
-    content: "";
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    height: 1px;
-    background: linear-gradient(
-      to right,
-      transparent,
-      rgb(242 194 106 / 0.6) 50%,
-      transparent
-    );
-    opacity: 0.35;
-    transform: scaleX(0.6);
-    transform-origin: center;
-    transition:
-      opacity 200ms var(--ease-default, cubic-bezier(0.4, 0, 0.2, 1)),
-      transform 280ms var(--ease-mechanical, cubic-bezier(0.25, 0, 0.25, 1)),
-      height 200ms var(--ease-default, cubic-bezier(0.4, 0, 0.2, 1));
-    pointer-events: none;
-    z-index: 3;
-  }
-
   .entity-thumbnail:is(:hover, :focus-visible) {
-    border-color: rgb(242 194 106 / 0.32);
-    box-shadow:
-      inset 0 0 0 1px rgb(0 0 0 / 0.5),
-      0 0 0 1px rgb(242 194 106 / 0.18),
-      0 10px 22px rgb(0 0 0 / 0.42),
-      0 0 24px rgb(242 194 106 / 0.07);
     transform: translateY(-1px);
   }
 
-  .entity-thumbnail:is(:hover, :focus-visible)::after {
-    height: 2px;
-    opacity: 0.85;
-    transform: scaleX(1);
-    box-shadow: 0 0 12px rgb(242 194 106 / 0.55);
-  }
-
-  .entity-thumbnail.is-selected {
+  .entity-thumbnail.is-selected .media {
     border-color: rgb(242 194 106 / 0.6);
     box-shadow:
       inset 0 0 0 1px rgb(242 194 106 / 0.28),
@@ -537,14 +492,8 @@
       0 10px 22px rgb(0 0 0 / 0.4);
   }
 
-  .entity-thumbnail.is-selected::after {
-    opacity: 1;
-    transform: scaleX(1);
-  }
-
   @media (prefers-reduced-motion: reduce) {
-    .entity-thumbnail,
-    .entity-thumbnail::after {
+    .entity-thumbnail {
       transition: none;
     }
 
@@ -554,25 +503,51 @@
   }
 
   .entity-thumbnail.is-list {
-    grid-template-columns: minmax(5.5rem, 7.5rem) minmax(0, 1fr);
-    grid-template-rows: none;
+    flex-direction: row;
     inline-size: 100%;
     min-block-size: 5.25rem;
+    border: 1px solid rgb(255 255 255 / 0.08);
+    background: rgb(12 12 13 / 0.92);
+    box-shadow:
+      inset 0 0 0 1px rgb(0 0 0 / 0.5),
+      0 2px 6px rgb(0 0 0 / 0.32);
+  }
+
+  .entity-thumbnail.is-list .media {
+    flex: 0 0 auto;
+    width: clamp(5.5rem, 30%, 7.5rem);
+    border: none;
+    box-shadow: none;
+    border-right: 1px solid rgb(255 255 255 / 0.1);
   }
 
   .media {
     position: relative;
+    z-index: 2;
+    flex: 3;
+    min-height: 0;
     overflow: hidden;
+    border: 1px solid rgb(255 255 255 / 0.08);
+    border-radius: 6px;
     background:
       radial-gradient(circle at 50% 45%, rgb(255 255 255 / 0.08), transparent 34%),
       linear-gradient(135deg, rgb(15 16 18 / 0.96), rgb(28 25 20 / 0.92)),
       #111;
-    box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.03);
+    box-shadow:
+      inset 0 0 0 1px rgb(0 0 0 / 0.5),
+      0 2px 6px rgb(0 0 0 / 0.32);
+    transition:
+      border-color 200ms var(--ease-default, cubic-bezier(0.4, 0, 0.2, 1)),
+      box-shadow 200ms var(--ease-default, cubic-bezier(0.4, 0, 0.2, 1));
   }
 
-  .entity-thumbnail.is-list .media {
-    min-block-size: 5.25rem;
-    border-right: 1px solid rgb(255 255 255 / 0.1);
+  .entity-thumbnail:is(:hover, :focus-visible) .media {
+    border-color: rgb(242 194 106 / 0.32);
+    box-shadow:
+      inset 0 0 0 1px rgb(0 0 0 / 0.5),
+      0 0 0 1px rgb(242 194 106 / 0.18),
+      0 10px 22px rgb(0 0 0 / 0.42),
+      0 0 24px rgb(242 194 106 / 0.07);
   }
 
   .entity-thumbnail.is-list .media img {
@@ -719,31 +694,35 @@
   }
 
   .glass-info {
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    z-index: 2;
+    position: relative;
+    z-index: 1;
+    flex: 1;
     display: flex;
     flex-direction: column;
-    gap: 0.35rem;
+    justify-content: center;
+    gap: 0.2em;
     min-width: 0;
-    padding: 1.2rem 0.62rem 0.5rem;
-    background: linear-gradient(
-      to bottom,
-      rgb(0 0 0 / 0) 0%,
-      rgb(7 8 11 / 0.45) 30%,
-      rgb(7 8 11 / 0.72) 100%
-    );
-    backdrop-filter: blur(6px);
-    -webkit-backdrop-filter: blur(6px);
-    mask-image: linear-gradient(to bottom, transparent 0%, black 25%);
-    -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 25%);
+    min-height: 0;
+    margin-top: -0.5rem;
+    padding: 0 0.65rem;
+    border: 1px solid rgb(255 255 255 / 0.07);
+    border-top: none;
+    border-radius: 0 0 6px 6px;
+    background:
+      linear-gradient(
+        180deg,
+        rgb(20 22 26 / 0.95) 0%,
+        rgb(13 14 17) 100%
+      );
+    box-shadow:
+      0 4px 12px rgb(0 0 0 / 0.4),
+      inset 0 1px 0 rgb(255 255 255 / 0.04);
+    overflow: hidden;
     pointer-events: none;
   }
 
   .glass-info.has-subtitle {
-    gap: 0.25rem;
+    gap: 0.15em;
   }
 
   .badges {
@@ -870,15 +849,14 @@
     display: flex;
     flex-direction: column;
     min-width: 0;
-    flex: 1 1 auto;
   }
 
   .subtitle {
     overflow: hidden;
-    margin: 0.25rem 0 0;
+    margin: 0.1rem 0 0;
     color: rgb(196 201 212 / 0.82);
     font-family: var(--font-mono, "JetBrains Mono", monospace);
-    font-size: 0.64rem;
+    font-size: 0.62rem;
     line-height: 1.25;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -903,16 +881,19 @@
   }
 
   .entity-thumbnail.is-list .glass-info {
-    position: relative;
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: auto;
     justify-content: center;
     min-block-size: 5.25rem;
+    margin-top: 0;
     padding: 0.72rem 0.9rem;
+    border-radius: 0;
     background:
       linear-gradient(180deg, rgb(10 12 15 / 0.94), rgb(9 10 12 / 0.98)),
       #0a0b0d;
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
-    border-top: 0;
+    border: none;
+    box-shadow: none;
   }
 
   .entity-thumbnail.is-list .selection {
@@ -934,19 +915,19 @@
     min-width: 0;
     overflow: hidden;
     font-family: var(--font-heading, Geist, sans-serif);
-    font-size: 0.88rem;
-    font-weight: 680;
+    font-size: 0.82rem;
+    font-weight: 620;
     line-height: 1.25;
-    letter-spacing: 0;
+    letter-spacing: -0.01em;
     white-space: normal;
     text-overflow: ellipsis;
-    text-shadow: 0 1px 4px rgb(0 0 0 / 0.7);
+    color: rgb(244 239 230 / 0.95);
   }
 
   .title-size-compact {
     font-size: 0.66rem;
     font-weight: 620;
-    line-height: 1.12;
+    line-height: 1.15;
   }
 
   .title-align-left {
@@ -964,8 +945,7 @@
   .chips {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.28rem;
-    margin: 0.15rem 0 0;
+    gap: 0.2rem;
     max-block-size: 1.3rem;
     overflow: hidden;
   }
@@ -973,7 +953,7 @@
   .chip {
     display: inline-flex;
     align-items: center;
-    gap: 0.22rem;
+    gap: 0.2rem;
     min-width: 0;
     max-width: 100%;
     border: 1px solid rgb(255 255 255 / 0.1);
@@ -981,10 +961,10 @@
     background: rgb(255 255 255 / 0.06);
     color: rgb(244 239 230 / 0.72);
     font-family: var(--font-mono, "JetBrains Mono", monospace);
-    font-size: 0.6rem;
+    font-size: 0.58rem;
     line-height: 1;
-    min-height: 1.25rem;
-    padding: 0.2rem 0.35rem;
+    min-height: 1.15rem;
+    padding: 0.14rem 0.28rem;
     text-shadow: 0 1px 2px rgb(0 0 0 / 0.5);
     white-space: nowrap;
     overflow: hidden;
@@ -1018,24 +998,17 @@
 
   @container (max-width: 120px) {
     .glass-info {
-      padding: 0.6rem 0.4rem 0.3rem;
+      padding: 0 0.3rem;
     }
 
     h3 {
       -webkit-line-clamp: 1;
       line-clamp: 1;
-      font-size: 0.68rem;
-      font-weight: 640;
+      font-size: 0.6rem;
     }
 
-    .subtitle {
-      display: none;
-    }
-
-    .custom-above {
-      display: none;
-    }
-
+    .subtitle,
+    .custom-above,
     .chips {
       display: none;
     }
@@ -1043,27 +1016,21 @@
 
   @container (max-width: 200px) and (min-width: 121px) {
     .glass-info {
-      padding: 0.8rem 0.5rem 0.38rem;
+      padding: 0 0.4rem;
     }
 
     h3 {
-      -webkit-line-clamp: 1;
-      line-clamp: 1;
-      font-size: 0.76rem;
+      font-size: 0.72rem;
     }
 
     .subtitle {
-      font-size: 0.58rem;
+      display: none;
     }
 
     .chip {
-      font-size: 0.52rem;
-      min-height: 1.05rem;
-      padding: 0.14rem 0.28rem;
-    }
-
-    .chips {
-      max-block-size: 1.1rem;
+      font-size: 0.5rem;
+      min-height: 1rem;
+      padding: 0.1rem 0.22rem;
     }
   }
 

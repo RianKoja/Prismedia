@@ -201,8 +201,8 @@ export interface LibrarySettings {
   metadataStorageDedicated: boolean;
   trickplayIntervalSeconds: number;
   previewClipDurationSeconds: number;
-  thumbnailQuality: number;
-  trickplayQuality: number;
+  thumbnailQuality: string;
+  trickplayQuality: string;
   backgroundWorkerConcurrency: number;
   defaultPlaybackMode: "direct" | "hls";
   showCastControls: boolean;

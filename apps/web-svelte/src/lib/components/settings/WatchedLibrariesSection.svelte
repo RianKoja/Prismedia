@@ -15,7 +15,7 @@
     ToggleRight,
     Trash2,
   } from "@lucide/svelte";
-  import { Button, StatusLed, cn } from "@prismedia/ui-svelte";
+  import { Button, Panel, StatusLed, cn } from "@prismedia/ui-svelte";
   import {
     browseLibraryPath,
     createJob,
@@ -156,14 +156,13 @@
   }
 </script>
 
-<section class="space-y-3">
-  <div class="flex flex-wrap items-center justify-between gap-3 px-1">
+<Panel>
+  <div class="p-5 space-y-5">
+  <div class="flex flex-wrap items-center justify-between gap-3">
     <div class="flex items-center gap-2.5">
       <FolderOpen class="h-4 w-4 text-text-accent" />
       <div>
-        <h2 class="text-sm font-semibold tracking-wide font-heading text-text-primary uppercase">
-          Watched Libraries
-        </h2>
+        <h2 class="text-kicker text-text-primary">Watched Libraries</h2>
         <p class="text-[0.68rem] text-text-muted">
           Add mounted folders to scan for media files
         </p>
@@ -189,13 +188,13 @@
             type="button"
             onclick={() => void openBrowser(browser?.parentPath ?? browser?.path)}
             disabled={!browser?.parentPath}
-            class="flex items-center gap-1 flex-shrink-0 border border-border-subtle px-2.5 py-1.5 text-xs font-medium text-text-muted transition-all hover:bg-surface-3 hover:text-text-primary disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/25"
+            class="flex items-center gap-1 flex-shrink-0 rounded-xs border border-border-subtle px-2.5 py-1.5 text-xs font-medium text-text-muted transition-all hover:bg-surface-3 hover:text-text-primary disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/25"
           >
             <ChevronLeft class="h-3.5 w-3.5" />
             Up
           </button>
           <div
-            class="flex-1 overflow-x-auto scrollbar-hidden border border-border-subtle bg-surface-1 px-3 py-1.5 shadow-well"
+            class="flex-1 overflow-x-auto scrollbar-hidden rounded-xs border border-border-subtle bg-surface-1 px-3 py-1.5 shadow-well"
           >
             <span class="whitespace-nowrap text-mono-sm text-text-accent">
               {browser?.path ?? "Loading..."}
@@ -366,7 +365,7 @@
                   {root.label}
                 </h3>
                 <p
-                  class="mt-1.5 truncate text-mono-sm text-text-disabled bg-surface-1/50 border border-border-subtle px-2 py-0.5 inline-block max-w-full shadow-sm"
+                  class="mt-1.5 truncate text-mono-sm text-text-disabled bg-surface-1/50 rounded-xs border border-border-subtle px-2 py-0.5 inline-block max-w-full shadow-sm"
                 >
                   {root.path}
                 </p>
@@ -376,7 +375,7 @@
               <button
                 type="button"
                 onclick={() => void handleToggleRoot(root)}
-                class="p-1.5 text-text-muted hover:text-text-primary hover:bg-surface-2 transition-colors"
+                class="rounded-xs p-1.5 text-text-muted hover:text-text-primary hover:bg-surface-2 transition-colors"
                 title={root.enabled ? "Disable Library" : "Enable Library"}
               >
                 {#if root.enabled}
@@ -388,7 +387,7 @@
               <button
                 type="button"
                 onclick={() => void handleDeleteRoot(root)}
-                class="p-1.5 text-text-muted transition-colors hover:bg-error-muted/30 hover:text-error-text"
+                class="rounded-xs p-1.5 text-text-muted transition-colors hover:bg-error-muted/30 hover:text-error-text"
                 title="Remove Library"
               >
                 <Trash2 class="h-4 w-4" />
@@ -411,7 +410,7 @@
                 onclick={() => void handleToggleMediaType(root, "scanVideos")}
                 title={root.scanVideos ? "Videos: scanning" : "Videos: skipped"}
                 class={cn(
-                  "flex items-center gap-1.5 px-2 py-1 text-[0.68rem] font-medium border transition-all duration-fast",
+                  "flex items-center gap-1.5 rounded-xs px-2 py-1 text-[0.68rem] font-medium border transition-all duration-fast",
                   root.scanVideos
                     ? "bg-accent-950/30 border-border-accent text-text-accent shadow-[var(--shadow-glow-accent)]"
                     : "bg-surface-1 border-border-subtle text-text-disabled hover:text-text-muted hover:border-border-default",
@@ -426,7 +425,7 @@
                 onclick={() => void handleToggleMediaType(root, "scanImages")}
                 title={root.scanImages ? "Images: scanning" : "Images: skipped"}
                 class={cn(
-                  "flex items-center gap-1.5 px-2 py-1 text-[0.68rem] font-medium border transition-all duration-fast",
+                  "flex items-center gap-1.5 rounded-xs px-2 py-1 text-[0.68rem] font-medium border transition-all duration-fast",
                   root.scanImages
                     ? "bg-accent-950/30 border-border-accent text-text-accent shadow-[var(--shadow-glow-accent)]"
                     : "bg-surface-1 border-border-subtle text-text-disabled hover:text-text-muted hover:border-border-default",
@@ -441,7 +440,7 @@
                 onclick={() => void handleToggleMediaType(root, "scanAudio")}
                 title={root.scanAudio ? "Audio: scanning" : "Audio: skipped"}
                 class={cn(
-                  "flex items-center gap-1.5 px-2 py-1 text-[0.68rem] font-medium border transition-all duration-fast",
+                  "flex items-center gap-1.5 rounded-xs px-2 py-1 text-[0.68rem] font-medium border transition-all duration-fast",
                   root.scanAudio
                     ? "bg-accent-950/30 border-border-accent text-text-accent shadow-[var(--shadow-glow-accent)]"
                     : "bg-surface-1 border-border-subtle text-text-disabled hover:text-text-muted hover:border-border-default",
@@ -462,7 +461,7 @@
                       : "Books: skipped"
                 }
                 class={cn(
-                  "flex items-center gap-1.5 px-2 py-1 text-[0.68rem] font-medium border transition-all duration-fast",
+                  "flex items-center gap-1.5 rounded-xs px-2 py-1 text-[0.68rem] font-medium border transition-all duration-fast",
                   root.scanBooks
                     ? "bg-accent-950/30 border-border-accent text-text-accent shadow-[var(--shadow-glow-accent)]"
                     : "bg-surface-1 border-border-subtle text-text-disabled hover:text-text-muted hover:border-border-default",
@@ -479,7 +478,7 @@
                 onclick={() => void handleToggleNsfw(root)}
                 title={root.isNsfw ? "NSFW library: on" : "NSFW library: off"}
                 class={cn(
-                  "flex items-center gap-1.5 px-2 py-1 text-[0.68rem] font-medium border transition-all duration-fast",
+                  "flex items-center gap-1.5 rounded-xs px-2 py-1 text-[0.68rem] font-medium border transition-all duration-fast",
                   root.isNsfw
                     ? "bg-accent-950/30 border-border-accent text-text-accent shadow-[var(--shadow-glow-accent)]"
                     : "bg-surface-1 border-border-subtle text-text-disabled hover:text-text-muted hover:border-border-default",
@@ -501,4 +500,5 @@
       {/each}
     </div>
   {/if}
-</section>
+  </div>
+</Panel>

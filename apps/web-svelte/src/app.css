@@ -477,19 +477,20 @@
      Three visual variants the user can switch between. All respect the
      Dark Room sharp-corner rule — no border-radius anywhere. */
 
-  /* Stylized: Dark Room brass-accented plate. */
+  /* Stylized: Prism Noir glass plate with accent glow. */
   .video-caption-stylized {
-    background: rgba(8, 9, 12, 0.82);
-    padding: 0.4rem 0.9rem;
-    border-left: 2px solid rgba(242, 194, 106, 0.6);
-    border-right: 2px solid rgba(242, 194, 106, 0.6);
+    background: rgba(8, 9, 12, 0.78);
+    padding: 0.4rem 1rem;
+    border: 1px solid rgba(242, 194, 106, 0.25);
+    border-radius: var(--radius-sm, 6px);
     box-shadow:
-      0 0 20px rgba(0, 0, 0, 0.55),
+      0 0 16px rgba(0, 0, 0, 0.5),
+      0 0 24px rgba(242, 194, 106, 0.08),
       inset 0 1px 0 rgba(255, 255, 255, 0.06);
     color: #ffffff;
     text-shadow:
       0 1px 2px rgba(0, 0, 0, 0.85),
-      0 0 10px rgba(242, 194, 106, 0.18);
+      0 0 8px rgba(242, 194, 106, 0.12);
   }
 
   /* Classic: flat translucent-black box with plain white text — the
@@ -497,6 +498,7 @@
   .video-caption-classic {
     background: rgba(0, 0, 0, 0.78);
     padding: 0.3rem 0.75rem;
+    border-radius: var(--radius-xs, 4px);
     color: #f2f2f2;
     text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
   }

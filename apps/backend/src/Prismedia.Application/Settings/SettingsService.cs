@@ -186,8 +186,8 @@ public sealed class SettingsService {
             GetBoolean(values, AppSettingKeys.GenerationGenerateTrickplay),
             GetInt(values, AppSettingKeys.GenerationTrickplayIntervalSeconds),
             GetInt(values, AppSettingKeys.GenerationPreviewClipDurationSeconds),
-            GetInt(values, AppSettingKeys.GenerationThumbnailQuality),
-            GetInt(values, AppSettingKeys.GenerationTrickplayQuality),
+            GetSelectInt(values, AppSettingKeys.GenerationThumbnailQuality, 2),
+            GetSelectInt(values, AppSettingKeys.GenerationTrickplayQuality, 2),
             GetBoolean(values, AppSettingKeys.GenerationMetadataStorageDedicated));
     }
 
@@ -438,6 +438,17 @@ public sealed class SettingsService {
     private static bool GetBoolean(IReadOnlyDictionary<string, JsonElement> values, string key) => values[key].GetBoolean();
 
     private static int GetInt(IReadOnlyDictionary<string, JsonElement> values, string key) => values[key].GetInt32();
+
+    /// <summary>
+    /// Reads a Select-type setting whose option values are numeric strings.
+    /// </summary>
+    private static int GetSelectInt(IReadOnlyDictionary<string, JsonElement> values, string key, int fallback) {
+        var element = values[key];
+        if (element.ValueKind == JsonValueKind.Number)
+            return element.GetInt32();
+        var raw = element.GetString();
+        return int.TryParse(raw, out var result) ? result : fallback;
+    }
 
     private static float GetFloat(IReadOnlyDictionary<string, JsonElement> values, string key) =>
         (float)values[key].GetDouble();

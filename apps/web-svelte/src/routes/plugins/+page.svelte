@@ -677,7 +677,7 @@
 </script>
 
 <svelte:head>
-  <title>Prismedia</title>
+  <title>Plugins · Prismedia</title>
 </svelte:head>
 
 <div class="space-y-4">
@@ -965,7 +965,7 @@
                             };
                           }}
                           placeholder={plugin.missingAuthKeys.includes(field.key) ? "Required" : "Saved - enter a new value to replace"}
-                          class="w-full bg-surface-1 border border-border-subtle px-2.5 py-1.5 text-[0.78rem] text-text-primary placeholder:text-text-disabled focus:outline-none focus:border-border-accent transition-colors font-mono"
+                          class="control-input py-1.5 font-mono"
                         />
                       </div>
                     {/each}
@@ -1137,7 +1137,7 @@
                             };
                           }}
                           placeholder={authPlaceholder(plugin, field)}
-                          class="w-full bg-surface-1 border border-border-subtle px-2.5 py-1.5 text-[0.78rem] text-text-primary placeholder:text-text-disabled focus:outline-none focus:border-border-accent transition-colors font-mono"
+                          class="control-input py-1.5 font-mono"
                         />
                       </div>
                     {/each}
@@ -1384,7 +1384,7 @@
                           };
                         }}
                         placeholder={plugin.missingAuthKeys.includes(field.key) ? "Required" : "Saved - enter a new value to replace"}
-                        class="w-full bg-surface-1 border border-border-subtle px-2.5 py-1.5 text-[0.78rem] text-text-primary placeholder:text-text-disabled focus:outline-none focus:border-border-accent transition-colors font-mono"
+                        class="control-input py-1.5 font-mono"
                       />
                     </div>
                   {/each}
@@ -1635,7 +1635,7 @@
                   type="text"
                   bind:value={sbName}
                   placeholder="StashDB"
-                  class="w-full bg-surface-1 border border-border-subtle px-2.5 py-1.5 text-[0.78rem] text-text-primary placeholder:text-text-disabled focus:outline-none focus:border-border-accent transition-colors"
+                  class="control-input py-1.5"
                 />
               </div>
               <div>
@@ -1645,7 +1645,7 @@
                   type="text"
                   bind:value={sbEndpoint}
                   placeholder="https://stashdb.org/graphql"
-                  class="w-full bg-surface-1 border border-border-subtle px-2.5 py-1.5 text-[0.78rem] text-text-primary placeholder:text-text-disabled focus:outline-none focus:border-border-accent transition-colors"
+                  class="control-input py-1.5"
                 />
                 <div class="flex gap-1.5 mt-1.5 flex-wrap">
                   {#each [{ label: "StashDB", url: "https://stashdb.org/graphql" }, { label: "FansDB", url: "https://fansdb.cc/graphql" }, { label: "PMVStash", url: "https://pmvstash.org/graphql" }, { label: "ThePornDB", url: "https://theporndb.net/graphql" }] as preset (preset.url)}
@@ -1673,7 +1673,7 @@
                   type="password"
                   bind:value={sbApiKey}
                   placeholder={editingStashBox ? "••••••••" : "Paste your API key"}
-                  class="w-full bg-surface-1 border border-border-subtle px-2.5 py-1.5 text-[0.78rem] text-text-primary placeholder:text-text-disabled focus:outline-none focus:border-border-accent transition-colors font-mono"
+                  class="control-input py-1.5 font-mono"
                 />
               </div>
             </div>

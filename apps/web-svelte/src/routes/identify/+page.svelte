@@ -13,6 +13,7 @@
     Search,
     X,
   } from "@lucide/svelte";
+  import { cn } from "@prismedia/ui-svelte";
   import {
     applyIdentifyProposal,
     closeBulkIdentifySession,
@@ -347,50 +348,81 @@
   <title>Identify · Prismedia</title>
 </svelte:head>
 
-<section class="identify-page">
-  <header class="page-header">
+<div class="space-y-4 pb-16">
+  <!-- ── Header ── -->
+  <div class="flex items-start justify-between gap-4">
     <div>
-      <h1>
+      <h1 class="flex items-center gap-2.5">
         <ScanSearch class="h-5 w-5 text-text-accent" />
         Identify
       </h1>
-      <p>Provider IDs first, title search only when needed.</p>
+      <p class="mt-1 text-[0.82rem] text-text-muted">
+        Provider IDs first, title search only when needed.
+      </p>
     </div>
-    <button type="button" class="icon-button" onclick={() => void load()} aria-label="Refresh identify data">
+    <button
+      type="button"
+      onclick={() => void load()}
+      class="flex h-9 w-9 items-center justify-center rounded-xs border border-border-default bg-surface-2 text-text-muted transition-colors hover:bg-surface-3 hover:text-text-primary"
+      aria-label="Refresh identify data"
+    >
       {#if loading}
         <Loader2 class="h-4 w-4 animate-spin" />
       {:else}
         <RefreshCw class="h-4 w-4" />
       {/if}
     </button>
-  </header>
+  </div>
 
+  <!-- ── Notices ── -->
   {#if error}
-    <div class="notice error" role="alert">
-      <AlertCircle class="h-4 w-4" />
-      <span>{error}</span>
-      <button type="button" class="icon-button small" onclick={() => (error = null)} aria-label="Dismiss error">
+    <div
+      class="flex items-center gap-2.5 rounded-xs border border-status-error/40 bg-surface-1 px-3 py-2.5 text-[0.82rem] text-text-primary"
+      role="alert"
+    >
+      <AlertCircle class="h-4 w-4 shrink-0 text-status-error-text" />
+      <span class="min-w-0 flex-1">{error}</span>
+      <button
+        type="button"
+        class="shrink-0 text-text-disabled transition-colors hover:text-text-primary"
+        onclick={() => (error = null)}
+        aria-label="Dismiss error"
+      >
         <X class="h-3.5 w-3.5" />
       </button>
     </div>
   {/if}
 
   {#if message}
-    <div class="notice success">
-      <Check class="h-4 w-4" />
-      <span>{message}</span>
-      <button type="button" class="icon-button small" onclick={() => (message = null)} aria-label="Dismiss message">
+    <div
+      class="flex items-center gap-2.5 rounded-xs border border-border-accent bg-surface-1 px-3 py-2.5 text-[0.82rem] text-text-primary"
+    >
+      <Check class="h-4 w-4 shrink-0 text-text-accent" />
+      <span class="min-w-0 flex-1">{message}</span>
+      <button
+        type="button"
+        class="shrink-0 text-text-disabled transition-colors hover:text-text-primary"
+        onclick={() => (message = null)}
+        aria-label="Dismiss message"
+      >
         <X class="h-3.5 w-3.5" />
       </button>
     </div>
   {/if}
 
-  <div class="controls">
-    <div class="segmented" aria-label="Entity kind">
+  <!-- ── Controls: kind toggle + search ── -->
+  <div class="surface-panel grid grid-cols-1 items-center gap-3 p-3 md:grid-cols-[auto_minmax(16rem,1fr)_auto]">
+    <div class="grid grid-cols-2 rounded-xs border border-border-default" aria-label="Entity kind">
       {#each Object.entries(KIND_LABELS) as [kindCode, label] (kindCode)}
         <button
           type="button"
-          class:active={kind === kindCode}
+          class={cn(
+            "border-0 border-r border-border-default px-3 py-2 text-[0.78rem] last:border-r-0",
+            "transition-colors",
+            kind === kindCode
+              ? "bg-surface-3 text-text-accent shadow-[inset_0_0_0_1px_rgba(242,194,106,0.5)]"
+              : "bg-transparent text-text-muted hover:bg-surface-2 hover:text-text-primary",
+          )}
           onclick={() => {
             kind = kindCode as IdentifyKind;
             selectedEntityIds = [];
@@ -404,9 +436,10 @@
       {/each}
     </div>
 
-    <label class="search-box">
-      <Search class="h-4 w-4" />
+    <label class="control-input flex items-center gap-2">
+      <Search class="h-4 w-4 shrink-0 text-text-disabled" />
       <input
+        class="allow-compact-input-text min-w-0 flex-1 border-0 bg-transparent text-[0.85rem] text-text-primary outline-none"
         placeholder="Search"
         bind:value={query}
         onkeydown={(event) => {
@@ -415,39 +448,60 @@
       />
     </label>
 
-    <button type="button" class="action-button" onclick={() => void refreshEntities()}>
+    <button
+      type="button"
+      class="inline-flex h-9 items-center gap-1.5 rounded-xs border border-border-default bg-surface-2 px-3 text-[0.78rem] text-text-primary transition-colors hover:bg-surface-3"
+      onclick={() => void refreshEntities()}
+    >
       <Search class="h-4 w-4" />
       Search
     </button>
   </div>
 
-  <section class="provider-strip">
+  <!-- ── Provider strip ── -->
+  <div class="surface-panel grid grid-cols-1 gap-2.5 p-3 md:grid-cols-[repeat(auto-fit,minmax(18rem,1fr))]">
     {#if availableProviders.length === 0}
-      <div class="empty-row">No providers for {KIND_LABELS[kind]}.</div>
+      <p class="text-[0.82rem] text-text-muted">No providers for {KIND_LABELS[kind]}.</p>
     {:else}
       {#each availableProviders as provider (provider.id)}
-        <article class:active={provider.id === selectedProvider?.id}>
-          <button type="button" class="provider-main" onclick={() => (providerId = provider.id)}>
-            <span>{provider.name}</span>
-            <small>v{provider.version}</small>
+        <article
+          class={cn(
+            "surface-card rounded-xs",
+            provider.id === selectedProvider?.id && "active",
+          )}
+        >
+          <button
+            type="button"
+            class="flex w-full items-center justify-between border-0 bg-transparent px-3 py-2.5 text-left text-text-primary"
+            onclick={() => (providerId = provider.id)}
+          >
+            <span class="text-[0.82rem] font-medium">{provider.name}</span>
+            <small class="text-[0.7rem] text-text-muted">v{provider.version}</small>
           </button>
-          <div class="provider-actions">
+          <div class="flex flex-col gap-2 px-3 pb-3">
             {#if !provider.installed || !provider.enabled}
-              <button type="button" class="small-button" onclick={() => void install(provider)}>Install</button>
+              <button
+                type="button"
+                class="inline-flex h-7 items-center justify-center rounded-xs border border-border-default bg-surface-2 px-2 text-[0.72rem] text-text-primary transition-colors hover:bg-surface-3"
+                onclick={() => void install(provider)}
+              >
+                Install
+              </button>
             {/if}
             {#if provider.auth.length > 0}
-              <div class="auth-row">
-                <KeyRound class="h-3.5 w-3.5" />
+              <div class="flex items-center gap-2 rounded-xs border border-border-default bg-surface-1 p-1.5">
+                <KeyRound class="h-3.5 w-3.5 shrink-0 text-text-disabled" />
                 {#each provider.auth as field (field.key)}
                   <input
                     type="password"
+                    class="allow-compact-input-text min-w-0 flex-1 border-0 bg-transparent text-[0.78rem] text-text-primary outline-none"
                     placeholder={field.label}
                     bind:value={authValues[`${provider.id}:${field.key}`]}
                   />
                 {/each}
                 <button
                   type="button"
-                  class="small-button"
+                  class="inline-flex h-7 items-center justify-center rounded-xs border border-border-default bg-surface-2 px-2 text-[0.72rem] text-text-primary transition-colors hover:bg-surface-3 disabled:opacity-40"
                   disabled={authSaving === provider.id}
                   onclick={() => void saveAuth(provider)}
                 >
@@ -463,13 +517,14 @@
         </article>
       {/each}
     {/if}
-  </section>
+  </div>
 
-  <div class="bulk-bar">
+  <!-- ── Bulk bar ── -->
+  <div class="flex items-center justify-between rounded-xs border border-border-default bg-surface-1 px-3 py-2.5 text-[0.78rem] text-text-muted">
     <span>{selectedEntityIds.length} selected</span>
     <button
       type="button"
-      class="action-button"
+      class="inline-flex h-9 items-center gap-1.5 rounded-xs border border-border-default bg-surface-2 px-3 text-[0.78rem] text-text-primary transition-colors hover:bg-surface-3 disabled:cursor-not-allowed disabled:opacity-40"
       disabled={!selectedProvider || selectedEntityIds.length === 0 || bulkStarting}
       onclick={() => void startBulk()}
     >
@@ -482,22 +537,34 @@
     </button>
   </div>
 
-  <div class="entity-table">
+  <!-- ── Entity table ── -->
+  <div class="grid gap-2">
     {#each entities as entity (entity.id)}
-      <article class:active={activeEntity?.id === entity.id}>
+      <article
+        class={cn(
+          "grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-xs border border-border-default bg-surface-1 p-2.5 transition-shadow",
+          activeEntity?.id === entity.id &&
+            "shadow-[inset_0_0_0_1px_rgba(242,194,106,0.5),0_0_18px_rgba(242,194,106,0.12)]",
+        )}
+      >
         <input
           type="checkbox"
+          class="h-4 w-4 accent-accent-500"
           checked={selectedEntityIds.includes(entity.id)}
           aria-label={`Select ${entity.title}`}
           onchange={() => toggleSelected(entity.id)}
         />
-        <button type="button" class="entity-title" onclick={() => (activeEntity = entity)}>
-          <span>{entity.title}</span>
-          <small>{entity.kind}</small>
+        <button
+          type="button"
+          class="flex min-w-0 flex-col gap-0.5 border-0 bg-transparent text-left text-text-primary"
+          onclick={() => (activeEntity = entity)}
+        >
+          <span class="truncate text-[0.88rem]">{entity.title}</span>
+          <small class="text-[0.7rem] text-text-muted">{entity.kind}</small>
         </button>
         <button
           type="button"
-          class="action-button"
+          class="inline-flex h-9 items-center gap-1.5 rounded-xs border border-border-default bg-surface-2 px-3 text-[0.78rem] text-text-primary transition-colors hover:bg-surface-3 disabled:cursor-not-allowed disabled:opacity-40"
           disabled={!selectedProvider || identifyingId === entity.id || selectedProvider.missingAuthKeys.length > 0}
           onclick={() => void runIdentify(entity)}
         >
@@ -512,71 +579,94 @@
     {/each}
   </div>
 
+  <!-- ── Bulk results ── -->
   {#if bulkSession}
-    <section class="bulk-results">
-      <header>
+    <section class="surface-panel p-3.5">
+      <header class="flex items-center justify-between gap-4">
         <div>
           <h2>Bulk Session</h2>
-          <p>{bulkSession.status} · {bulkResults.length}/{bulkSession.entityIds.length}</p>
+          <p class="mt-0.5 text-[0.78rem] text-text-muted">
+            {bulkSession.status} · {bulkResults.length}/{bulkSession.entityIds.length}
+          </p>
         </div>
-        <button type="button" class="icon-button" onclick={() => void closeBulk()} aria-label="Close bulk session">
+        <button
+          type="button"
+          class="flex h-9 w-9 items-center justify-center rounded-xs border border-border-default bg-surface-2 text-text-muted transition-colors hover:bg-surface-3 hover:text-text-primary"
+          onclick={() => void closeBulk()}
+          aria-label="Close bulk session"
+        >
           <X class="h-4 w-4" />
         </button>
       </header>
-      <div class="result-list">
+      <div class="mt-3 grid gap-1.5">
         {#each bulkResults as result (result.entityId)}
           <button
             type="button"
+            class="flex items-center justify-between gap-4 rounded-xs border border-border-default bg-surface-2 px-3 py-2 text-left text-text-primary transition-colors hover:bg-surface-3 disabled:cursor-not-allowed disabled:opacity-40"
             disabled={!result.response.ok || !result.response.result}
             onclick={() => result.response.result && reviewBulkResult(result.response.result, result.entityId)}
           >
-            <span>{entities.find((entity) => entity.id === result.entityId)?.title ?? result.entityId}</span>
-            <small>{result.response.ok ? result.response.result?.matchReason : result.response.error}</small>
+            <span class="text-[0.82rem]">{entities.find((entity) => entity.id === result.entityId)?.title ?? result.entityId}</span>
+            <small class="text-[0.7rem] text-text-muted">{result.response.ok ? result.response.result?.matchReason : result.response.error}</small>
           </button>
         {/each}
       </div>
     </section>
   {/if}
-</section>
+</div>
 
+<!-- ── Review drawer ── -->
 {#if proposal && activeEntity}
-  <aside class="review-drawer" aria-label="Review identify result">
-    <header>
+  <aside
+    class="fixed inset-y-0 right-0 z-60 flex w-[min(100vw,520px)] flex-col gap-4 overflow-auto border-l border-border-default p-4"
+    style="background: rgba(9,12,18,0.94); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);"
+    aria-label="Review identify result"
+  >
+    <header class="flex items-center justify-between gap-4">
       <div>
-        <p>{proposal.provider} · {proposal.matchReason ?? "match"}</p>
+        <p class="text-[0.72rem] text-text-muted">{proposal.provider} · {proposal.matchReason ?? "match"}</p>
         <h2>{proposal.patch.title ?? activeEntity.title}</h2>
       </div>
-      <button type="button" class="icon-button" onclick={closeReview} aria-label="Close review">
+      <button
+        type="button"
+        class="flex h-9 w-9 items-center justify-center rounded-xs border border-border-default bg-surface-2 text-text-muted transition-colors hover:bg-surface-3 hover:text-text-primary"
+        onclick={closeReview}
+        aria-label="Close review"
+      >
         <PanelRightClose class="h-4 w-4" />
       </button>
     </header>
 
     {#if proposal.candidates.length > 1}
-      <section class="drawer-section">
-        <h3>Candidates</h3>
-        <div class="candidate-list">
+      <section class="grid gap-3">
+        <h3 class="text-kicker">Candidates</h3>
+        <div class="grid grid-cols-[repeat(auto-fill,minmax(8rem,1fr))] gap-2">
           {#each proposal.candidates as candidate (candidate.externalIds.tmdb ?? candidate.title)}
-            <button type="button" onclick={() => rerunCandidate(candidate)}>
+            <button
+              type="button"
+              class="grid gap-1.5 rounded-xs border border-border-default bg-surface-1 p-1.5 text-left text-text-primary transition-colors hover:border-border-accent hover:bg-surface-2"
+              onclick={() => rerunCandidate(candidate)}
+            >
               {#if candidate.posterUrl}
-                <img src={candidate.posterUrl} alt="" />
+                <img class="aspect-[2/3] w-full rounded-xs object-cover" src={candidate.posterUrl} alt="" />
               {/if}
-              <span>{candidate.title}</span>
-              <small>{candidate.year ?? ""}</small>
+              <span class="text-[0.78rem]">{candidate.title}</span>
+              <small class="text-[0.68rem] text-text-muted">{candidate.year ?? ""}</small>
             </button>
           {/each}
         </div>
       </section>
     {/if}
 
-    <section class="drawer-section">
-      <h3>Fields</h3>
-      <div class="field-list">
+    <section class="grid gap-3">
+      <h3 class="text-kicker">Fields</h3>
+      <div class="grid gap-1.5">
         {#each FIELD_KEYS as field (field)}
           {#if hasField(proposal, field)}
-            <label>
-              <input type="checkbox" bind:checked={selectedFields[field]} />
-              <span>{FIELD_LABELS[field]}</span>
-              <small>{fieldValue(proposal, field)}</small>
+            <label class="grid grid-cols-[auto_7rem_minmax(0,1fr)] items-start gap-2 rounded-xs border border-border-default bg-surface-1 p-2.5">
+              <input type="checkbox" class="mt-0.5 h-4 w-4 accent-accent-500" bind:checked={selectedFields[field]} />
+              <span class="text-[0.78rem] text-text-primary">{FIELD_LABELS[field]}</span>
+              <small class="truncate text-[0.72rem] text-text-muted">{fieldValue(proposal, field)}</small>
             </label>
           {/if}
         {/each}
@@ -584,22 +674,27 @@
     </section>
 
     {#if proposal.images.length > 0}
-      <section class="drawer-section">
-        <h3>
+      <section class="grid gap-3">
+        <h3 class="text-kicker">
           <Images class="h-4 w-4" />
           Artwork
         </h3>
         {#each imageGroups(proposal.images) as group (group.kind)}
-          <div class="image-group">
-            <p>{group.kind}</p>
-            <div>
+          <div class="grid gap-1.5">
+            <p class="text-[0.72rem] font-medium uppercase tracking-wider text-text-muted">{group.kind}</p>
+            <div class="grid grid-cols-[repeat(auto-fill,minmax(5rem,1fr))] gap-1.5">
               {#each group.images as image (image.url)}
                 <button
                   type="button"
-                  class:active={selectedImages[group.kind] === image.url}
+                  class={cn(
+                    "rounded-xs border bg-surface-1 p-1 transition-all",
+                    selectedImages[group.kind] === image.url
+                      ? "border-border-accent-strong shadow-[0_0_16px_rgba(242,194,106,0.2)]"
+                      : "border-border-default hover:border-border-accent",
+                  )}
                   onclick={() => (selectedImages[group.kind] = image.url)}
                 >
-                  <img src={image.url} alt="" />
+                  <img class="aspect-[2/3] w-full rounded-xs object-cover" src={image.url} alt="" />
                 </button>
               {/each}
             </div>
@@ -609,22 +704,37 @@
     {/if}
 
     {#if proposalReviewChildren.length > 0}
-      <section class="drawer-section">
-        <h3>Related Results</h3>
-        <div class="children-list">
+      <section class="grid gap-3">
+        <h3 class="text-kicker">Related Results</h3>
+        <div class="grid gap-1.5">
           {#each proposalReviewChildren as child (child.proposalId)}
-            <div>
-              <span>{child.patch.title}</span>
-              <small>{child.targetKind}</small>
+            <div class="flex items-center justify-between gap-4 rounded-xs border border-border-default bg-surface-1 px-2.5 py-2">
+              <span class="text-[0.82rem] text-text-primary">{child.patch.title}</span>
+              <small class="text-[0.68rem] text-text-muted">{child.targetKind}</small>
             </div>
           {/each}
         </div>
       </section>
     {/if}
 
-    <footer>
-      <button type="button" class="ghost-button" onclick={closeReview}>Reject</button>
-      <button type="button" class="action-button primary" disabled={!canIdentify || applying} onclick={() => void applyProposal()}>
+    <footer
+      class="sticky -bottom-4 -mx-4 -mb-4 mt-auto flex items-center justify-between gap-4 border-t border-border-default p-4"
+      style="background: rgba(9,12,18,0.96);"
+    >
+      <button
+        type="button"
+        class="inline-flex h-9 items-center gap-1.5 rounded-xs border border-border-default bg-transparent px-3 text-[0.78rem] text-text-muted transition-colors hover:bg-surface-2 hover:text-text-primary"
+        onclick={closeReview}
+      >
+        Reject
+      </button>
+      <button
+        type="button"
+        class="inline-flex h-9 items-center gap-1.5 rounded-xs border border-border-accent-strong px-3 text-[0.78rem] text-text-primary transition-all disabled:cursor-not-allowed disabled:opacity-40"
+        style="background: linear-gradient(135deg, rgba(242,194,106,0.24), rgba(242,194,106,0.1)); box-shadow: 0 0 18px rgba(242,194,106,0.16);"
+        disabled={!canIdentify || applying}
+        onclick={() => void applyProposal()}
+      >
         {#if applying}
           <Loader2 class="h-4 w-4 animate-spin" />
         {:else}
@@ -635,72 +745,3 @@
     </footer>
   </aside>
 {/if}
-
-<style>
-  .identify-page { display: flex; flex-direction: column; gap: 1rem; padding-bottom: 4rem; }
-  .page-header, .bulk-results header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
-  h1, h2, h3 { margin: 0; letter-spacing: 0; }
-  h1 { display: flex; align-items: center; gap: 0.65rem; font-size: 1.4rem; }
-  h2 { font-size: 1.05rem; }
-  h3 { display: flex; align-items: center; gap: 0.45rem; font-size: 0.78rem; text-transform: uppercase; color: var(--color-text-muted); }
-  p, small { margin: 0; color: var(--color-text-muted); }
-  button, input { border-radius: 0; }
-  button { cursor: pointer; }
-  button:disabled { cursor: not-allowed; opacity: 0.5; }
-  .controls, .bulk-bar, .provider-strip, .entity-table article, .bulk-results, .notice { border: 1px solid var(--color-border, #1c2235); background: var(--color-surface-1, #0c1018); }
-  .controls { display: grid; grid-template-columns: 1fr; gap: 0.75rem; padding: 0.8rem; }
-  .segmented { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border: 1px solid var(--color-border, #1c2235); }
-  .segmented button { border: 0; border-right: 1px solid var(--color-border, #1c2235); background: transparent; color: var(--color-text-muted); padding: 0.6rem; font-size: 0.78rem; }
-  .segmented button:last-child { border-right: 0; }
-  .segmented button.active, .provider-strip article.active, .entity-table article.active { box-shadow: inset 0 0 0 1px rgba(196, 154, 90, 0.65), 0 0 18px rgba(196, 154, 90, 0.16); }
-  .search-box { display: flex; align-items: center; gap: 0.55rem; border: 1px solid var(--color-border, #1c2235); padding: 0 0.65rem; min-height: 2.4rem; }
-  .search-box input, .auth-row input { min-width: 0; flex: 1; border: 0; outline: none; background: transparent; color: var(--color-text); font-size: 0.82rem; }
-  .action-button, .ghost-button, .small-button, .icon-button { display: inline-flex; align-items: center; justify-content: center; gap: 0.45rem; border: 1px solid var(--color-border, #1c2235); background: var(--color-surface-2, #111827); color: var(--color-text); min-height: 2.4rem; padding: 0 0.8rem; font-size: 0.78rem; }
-  .action-button.primary { border-color: rgba(196, 154, 90, 0.75); background: linear-gradient(135deg, rgba(196, 154, 90, 0.24), rgba(196, 154, 90, 0.1)); box-shadow: 0 0 18px rgba(196, 154, 90, 0.16); }
-  .ghost-button { background: transparent; }
-  .icon-button { width: 2.4rem; padding: 0; }
-  .icon-button.small { width: 1.9rem; min-height: 1.9rem; }
-  .small-button { min-height: 2rem; padding: 0 0.55rem; }
-  .notice { display: flex; align-items: center; gap: 0.6rem; padding: 0.65rem; font-size: 0.82rem; }
-  .notice span { flex: 1; }
-  .notice.error { border-color: rgba(239, 68, 68, 0.45); }
-  .notice.success { border-color: rgba(196, 154, 90, 0.55); }
-  .provider-strip { display: grid; grid-template-columns: 1fr; gap: 0.65rem; padding: 0.8rem; }
-  .provider-strip article { border: 1px solid var(--color-border, #1c2235); background: var(--color-surface-2, #111827); }
-  .provider-main { display: flex; align-items: center; justify-content: space-between; width: 100%; border: 0; background: transparent; color: var(--color-text); padding: 0.75rem; text-align: left; }
-  .provider-actions { display: flex; flex-direction: column; gap: 0.55rem; padding: 0 0.75rem 0.75rem; }
-  .auth-row { display: flex; align-items: center; gap: 0.5rem; border: 1px solid var(--color-border, #1c2235); padding: 0.35rem; }
-  .bulk-bar { display: flex; align-items: center; justify-content: space-between; padding: 0.75rem; color: var(--color-text-muted); font-size: 0.78rem; }
-  .entity-table { display: grid; gap: 0.55rem; }
-  .entity-table article { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 0.65rem; padding: 0.65rem; }
-  .entity-table input[type="checkbox"], .field-list input[type="checkbox"] { width: 1rem; height: 1rem; accent-color: #c49a5a; }
-  .entity-title { display: flex; min-width: 0; flex-direction: column; gap: 0.15rem; border: 0; background: transparent; color: var(--color-text); text-align: left; }
-  .entity-title span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.88rem; }
-  .bulk-results { padding: 0.85rem; }
-  .result-list { display: grid; gap: 0.45rem; margin-top: 0.75rem; }
-  .result-list button { display: flex; align-items: center; justify-content: space-between; gap: 1rem; border: 1px solid var(--color-border, #1c2235); background: var(--color-surface-2, #111827); color: var(--color-text); padding: 0.6rem; text-align: left; }
-  .review-drawer { position: fixed; inset: 0 0 0 auto; z-index: 60; display: flex; width: min(100vw, 520px); flex-direction: column; gap: 1rem; overflow: auto; border-left: 1px solid var(--color-border, #1c2235); background: rgba(9, 12, 18, 0.94); padding: 1rem; backdrop-filter: blur(18px); }
-  .review-drawer header, .review-drawer footer { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
-  .review-drawer footer { position: sticky; bottom: -1rem; margin: auto -1rem -1rem; border-top: 1px solid var(--color-border, #1c2235); background: rgba(9, 12, 18, 0.96); padding: 1rem; }
-  .drawer-section { display: grid; gap: 0.7rem; }
-  .field-list { display: grid; gap: 0.45rem; }
-  .field-list label { display: grid; grid-template-columns: auto 7rem minmax(0, 1fr); gap: 0.55rem; align-items: start; border: 1px solid var(--color-border, #1c2235); background: var(--color-surface-1, #0c1018); padding: 0.65rem; }
-  .field-list span { font-size: 0.78rem; color: var(--color-text); }
-  .field-list small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .candidate-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(8rem, 1fr)); gap: 0.55rem; }
-  .candidate-list button { display: grid; gap: 0.4rem; border: 1px solid var(--color-border, #1c2235); background: var(--color-surface-1, #0c1018); color: var(--color-text); padding: 0.45rem; text-align: left; }
-  .candidate-list img { width: 100%; aspect-ratio: 2 / 3; object-fit: cover; }
-  .image-group { display: grid; gap: 0.45rem; }
-  .image-group > div { display: grid; grid-template-columns: repeat(auto-fill, minmax(5rem, 1fr)); gap: 0.45rem; }
-  .image-group button { border: 1px solid var(--color-border, #1c2235); background: var(--color-surface-1, #0c1018); padding: 0.25rem; }
-  .image-group button.active { border-color: rgba(196, 154, 90, 0.8); box-shadow: 0 0 16px rgba(196, 154, 90, 0.2); }
-  .image-group img { width: 100%; aspect-ratio: 2 / 3; object-fit: cover; }
-  .children-list { display: grid; gap: 0.4rem; }
-  .children-list div { display: flex; justify-content: space-between; gap: 1rem; border: 1px solid var(--color-border, #1c2235); padding: 0.5rem; }
-  .empty-row { color: var(--color-text-muted); font-size: 0.82rem; }
-
-  @media (min-width: 760px) {
-    .controls { grid-template-columns: auto minmax(16rem, 1fr) auto; align-items: center; }
-    .provider-strip { grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr)); }
-  }
-</style>

@@ -390,7 +390,7 @@
 </script>
 
 <svelte:head>
-  <title>Files | Prismedia</title>
+  <title>Files · Prismedia</title>
 </svelte:head>
 
 <main

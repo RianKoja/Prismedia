@@ -56,11 +56,11 @@
       zIndex: "9999",
       display: "grid",
       minWidth: "10rem",
-      border: "1px solid rgba(164, 172, 185, 0.12)",
-      background: "#181d27",
+      border: "1px solid var(--color-border-default, rgba(164, 172, 185, 0.12))",
+      background: "var(--color-surface-2, #11161d)",
       boxShadow: "0 12px 40px rgba(0, 0, 0, 0.6)",
       backdropFilter: "blur(20px)",
-      fontFamily: "Inter, system-ui, sans-serif",
+      fontFamily: "var(--font-inter, Inter), system-ui, sans-serif",
     });
 
     const rect = context.anchorRect;
@@ -79,25 +79,31 @@
       button.type = "button";
       button.textContent = action.label;
       button.dataset.action = action.id;
+      const defaultColor = action.destructive
+        ? "var(--color-error-text, #ff9f92)"
+        : "var(--color-text-secondary, #c8ccd4)";
+      const hoverColor = action.destructive
+        ? "var(--color-error-text, #ff9f92)"
+        : "var(--color-text-primary, #f0ede3)";
       Object.assign(button.style, {
         display: "block",
         width: "100%",
         border: "0",
         borderRadius: "0",
         background: "transparent",
-        color: action.destructive ? "#cc7880" : "#c8ccd4",
+        color: defaultColor,
         padding: "0.5rem 0.75rem",
         textAlign: "left",
-        font: "500 0.8rem Inter, system-ui, sans-serif",
+        font: "500 0.8rem var(--font-inter, Inter), system-ui, sans-serif",
         cursor: "pointer",
       });
       button.addEventListener("mouseenter", () => {
-        button.style.background = "#1f2533";
-        button.style.color = action.destructive ? "#cc7880" : "#f5f2ea";
+        button.style.background = "var(--color-surface-3, #202734)";
+        button.style.color = hoverColor;
       });
       button.addEventListener("mouseleave", () => {
         button.style.background = "transparent";
-        button.style.color = action.destructive ? "#cc7880" : "#c8ccd4";
+        button.style.color = defaultColor;
       });
       button.addEventListener("click", () => {
         if (action.id === "rename") {
@@ -135,13 +141,15 @@
 
   const treeCSS = `
     :host {
-      --trees-fg-override: var(--color-text-primary, #f5f2ea);
+      --trees-fg-override: var(--color-text-primary, #f0ede3);
       --trees-muted-fg-override: var(--color-text-muted, #a4acb9);
-      --trees-border-color-override: var(--color-border-subtle, rgba(164, 172, 185, 0.06));
-      --trees-selected-bg-override: var(--color-surface-2, #11151c);
-      --trees-focus-ring-override: var(--color-border-accent-strong, rgba(199, 155, 92, 0.45));
-      background: var(--color-surface-1, #0d1017) !important;
-      color: var(--color-text-primary, #f5f2ea);
+      --trees-border-color-override: var(--color-border-subtle, rgba(164, 172, 185, 0.07));
+      --trees-selected-bg-override: var(--color-surface-2, #11161d);
+      --trees-focus-ring-color-override: var(--color-border-accent-strong, rgba(242, 194, 106, 0.52));
+      --trees-selected-focused-border-color-override: var(--color-border-accent, rgba(242, 194, 106, 0.24));
+      background: var(--color-surface-1, #0b0e12) !important;
+      color: var(--color-text-primary, #f0ede3);
+      font-family: var(--font-body, Inter), sans-serif;
     }
     [data-file-tree-virtualized-wrapper],
     [data-file-tree-virtualized-root],
@@ -149,15 +157,23 @@
     [data-file-tree-virtualized-list],
     [data-file-tree-virtualized-sticky],
     [data-truncate-marker] {
-      background: var(--color-surface-1, #0d1017) !important;
-      color: var(--color-text-primary, #f5f2ea);
+      background: var(--color-surface-1, #0b0e12) !important;
+      color: var(--color-text-primary, #f0ede3);
     }
     input[data-file-tree-search-input] {
       border: 1px solid var(--color-border-default, rgba(164, 172, 185, 0.12));
-      border-radius: 0;
-      background: var(--color-surface-2, #11151c) !important;
-      color: var(--color-text-primary, #f5f2ea);
-      font-family: Inter, system-ui, sans-serif;
+      border-radius: var(--radius-xs, 4px);
+      background: var(--color-surface-1, #0b0e12) !important;
+      color: var(--color-text-primary, #f0ede3);
+      font-family: var(--font-body, Inter), sans-serif;
+      font-size: 0.85rem;
+      box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.25);
+      padding: 0.45rem 0.6rem;
+    }
+    input[data-file-tree-search-input]:focus {
+      border-color: var(--color-border-accent-strong, rgba(242, 194, 106, 0.52));
+      box-shadow: 0 0 0 2px rgba(242, 194, 106, 0.20);
+      outline: none;
     }
     input[data-file-tree-search-input]::placeholder {
       color: var(--color-text-disabled, #5a6070);
@@ -166,24 +182,39 @@
       border-radius: 0;
       background: transparent !important;
       color: var(--color-text-secondary, #c8ccd4);
-      font-family: Inter, system-ui, sans-serif;
+      font-family: var(--font-body, Inter), sans-serif;
       font-size: 0.8rem;
+      transition: background 100ms ease, color 100ms ease;
     }
     button[data-type='item']:hover {
-      background: var(--color-surface-2, #11151c) !important;
+      background: var(--color-surface-2, #11161d) !important;
+      color: var(--color-text-primary, #f0ede3);
+    }
+    *:focus,
+    *:focus-visible {
+      outline: none !important;
     }
     button[data-type='item'][data-item-selected] {
-      background: var(--color-surface-2, #11151c) !important;
-      box-shadow: inset 2px 0 0 var(--color-accent-500, #c79b5c);
-      color: var(--color-text-primary, #f5f2ea);
+      background: rgba(242, 194, 106, 0.06) !important;
+      box-shadow: inset 0 0 0 1px var(--color-border-accent, rgba(242, 194, 106, 0.24));
+      color: var(--color-text-primary, #f0ede3);
     }
     button[data-type='item'][data-item-drag-target='true'] {
-      background: rgba(196, 154, 90, 0.10) !important;
-      box-shadow: inset 2px 0 0 var(--color-accent-500, #c79b5c);
-      color: var(--color-text-primary, #f5f2ea);
+      background: rgba(242, 194, 106, 0.08) !important;
+      box-shadow: inset 2px 0 0 var(--color-accent-500, #f2c26a);
+      color: var(--color-text-primary, #f0ede3);
     }
     button[data-type='item'][data-item-dragging='true'] {
       opacity: 0.4;
+    }
+    /* Context menu trigger button */
+    button[data-type='item'] [data-context-menu-trigger] {
+      color: var(--color-text-disabled, #5a6070);
+      transition: color 100ms ease;
+    }
+    button[data-type='item']:hover [data-context-menu-trigger],
+    button[data-type='item'][data-item-selected] [data-context-menu-trigger] {
+      color: var(--color-text-muted, #a4acb9);
     }
   `;
 
@@ -315,21 +346,28 @@
     min-width: 0;
     width: 100%;
     border: 1px solid var(--color-border-default);
-    border-radius: 0;
-    background: var(--color-surface-2);
+    border-radius: var(--radius-xs);
+    background: var(--color-surface-1);
     color: var(--color-text-primary);
-    padding: 0.38rem 0.55rem;
-    font-size: 0.8rem;
+    padding: 0.45rem 0.6rem;
+    font-family: var(--font-body);
+    font-size: 0.85rem;
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.25);
     outline: none;
   }
 
   .tree-toolbar input:focus {
     border-color: var(--color-border-accent-strong);
-    box-shadow: var(--shadow-focus-accent);
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.25), 0 0 0 2px rgba(242, 194, 106, 0.20);
   }
 
   .tree-host {
     min-height: 0;
     height: 100%;
+  }
+
+  .tree-host :global(*:focus),
+  .tree-host :global(*:focus-visible) {
+    outline: none !important;
   }
 </style>

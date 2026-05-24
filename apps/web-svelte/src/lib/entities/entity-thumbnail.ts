@@ -127,6 +127,24 @@ export function toAspectRatioValue(ratio: EntityThumbnailAspectRatio): string {
   return `${ratio.width} / ${ratio.height}`;
 }
 
+/** Converts an aspect ratio to a numeric width/height value for CSS calculations. */
+export function toAspectRatioNumeric(ratio: EntityThumbnailAspectRatio): number {
+  if (typeof ratio === "string") {
+    switch (ratio) {
+      case "poster": return 2 / 3;
+      case "portrait": return 3 / 4;
+      case "square": return 1;
+      case "wide": return 21 / 9;
+      case "video":
+      default: return 16 / 9;
+    }
+  }
+  if (!Number.isFinite(ratio.width) || !Number.isFinite(ratio.height) || ratio.width <= 0 || ratio.height <= 0) {
+    return 16 / 9;
+  }
+  return ratio.width / ratio.height;
+}
+
 /** Chooses the default thumbnail frame for a referenced entity kind. */
 export function aspectRatioForKind(kind: string): EntityThumbnailAspectRatio {
   if (kind === ENTITY_KIND.video) return "video";

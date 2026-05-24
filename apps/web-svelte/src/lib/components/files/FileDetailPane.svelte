@@ -278,6 +278,7 @@
     grid-template-rows: auto auto 1fr;
     overflow: hidden;
     background: var(--color-bg);
+    height: 100%;
   }
 
   .detail-header {
@@ -478,8 +479,9 @@
 
   .state-panel {
     display: grid;
-    height: 100%;
+    grid-row: 2 / -1;
     place-items: center;
+    align-content: center;
     color: var(--color-text-disabled);
     text-align: center;
     font-size: 0.8rem;
@@ -487,7 +489,6 @@
 
   .state-panel.empty {
     gap: 0.5rem;
-    align-content: center;
   }
 
   .state-panel.error {

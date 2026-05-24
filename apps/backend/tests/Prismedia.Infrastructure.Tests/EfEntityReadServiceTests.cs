@@ -138,6 +138,45 @@ public sealed class EfEntityReadServiceTests {
     }
 
     [Fact]
+    public async Task ListAsyncProjectsVideoTechnicalMetadataAsThumbnailMeta() {
+        await using var db = CreateContext();
+        var videoId = Guid.Parse("55555555-5555-5555-5555-555555555555");
+        var now = DateTimeOffset.UtcNow;
+        db.Entities.Add(new EntityRow {
+            Id = videoId,
+            KindCode = EntityKindRegistry.Video.Code,
+            Title = "Probed Video",
+            CreatedAt = now,
+            UpdatedAt = now
+        });
+        db.EntityTechnical.Add(new EntityTechnicalRow {
+            EntityId = videoId,
+            DurationSeconds = 596,
+            Width = 1920,
+            Height = 1080,
+            Codec = "h264",
+            Container = "matroska",
+            UpdatedAt = now
+        });
+        await db.SaveChangesAsync();
+
+        var repository = new EfEntityRepository(db, EntityMappers.Kinds(db), EntityMappers.Capabilities(db));
+        var service = new EfEntityReadService(db, repository, EntityMappers.Kinds(db));
+
+        var result = await service.ListAsync(EntityKindRegistry.Video.Code, null, null, null, null, CancellationToken.None);
+        var item = Assert.Single(result.Items);
+
+        Assert.Equal(
+            [
+                new EntityThumbnailMeta("duration", "09:56"),
+                new EntityThumbnailMeta("video", "1080p"),
+                new EntityThumbnailMeta("video", "H264"),
+                new EntityThumbnailMeta("video", "MATROSKA")
+            ],
+            item.Meta);
+    }
+
+    [Fact]
     public async Task ListAsyncProjectsRepresentativeChildHoverImages() {
         await using var db = CreateContext();
         var bookId = Guid.Parse("11111111-1111-1111-1111-111111111111");
