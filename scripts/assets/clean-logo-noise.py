@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Clear neutral gray fringe noise from Prismedia logo PNGs.
+"""Clean Prismedia logo PNG backgrounds.
 
 The script is intentionally dependency-free so it can run anywhere the repo can
 run Python. It writes cleaned copies beside the source images by default and
@@ -22,6 +22,8 @@ DEFAULT_INPUTS = [
     Path("apps/web-svelte/static/brand/prismedia-logo.png"),
     Path("apps/web-svelte/static/brand/prismedia-logo-nsfw.png"),
 ]
+MODE_GRAY_FRINGE = "gray-fringe"
+MODE_OUTSIDE_BLACK = "outside-black"
 
 
 class PngImage:
@@ -245,6 +247,173 @@ def clean_logo_noise(
     return removed, sum(gray_candidate)
 
 
+def clear_outside_logo_background(
+    image: PngImage,
+    edge_luma_min: int,
+    edge_gradient_min: int,
+    barrier_radius: int,
+    zero_rgb: bool,
+) -> int:
+    """Clear only canvas-connected background outside detected logo edges."""
+
+    width = image.width
+    height = image.height
+    rgba = image.rgba
+    total = width * height
+    barrier = detect_logo_edge_barrier(image, edge_luma_min, edge_gradient_min)
+    if barrier_radius > 0:
+        barrier = dilate(barrier, width, height, barrier_radius)
+
+    outside = flood_fill_outside_background(barrier, width, height)
+    removed = 0
+    for index in range(total):
+        if not outside[index]:
+            continue
+
+        pixel = index * 4
+        if rgba[pixel + 3] == 0:
+            continue
+
+        rgba[pixel + 3] = 0
+        if zero_rgb:
+            rgba[pixel] = 0
+            rgba[pixel + 1] = 0
+            rgba[pixel + 2] = 0
+        removed += 1
+
+    return removed
+
+
+def apply_alpha_mask(image: PngImage, mask: PngImage, zero_rgb: bool) -> int:
+    """Copy alpha from a same-size mask image onto another logo variant."""
+
+    if image.width != mask.width or image.height != mask.height:
+        raise ValueError(
+            "alpha mask dimensions do not match source "
+            f"({mask.width}x{mask.height} mask for {image.width}x{image.height} image)"
+        )
+
+    changed = 0
+    total = image.width * image.height
+    for index in range(total):
+        pixel = index * 4
+        mask_alpha = mask.rgba[pixel + 3]
+        if image.rgba[pixel + 3] != mask_alpha:
+            changed += 1
+
+        image.rgba[pixel + 3] = mask_alpha
+        if zero_rgb and mask_alpha == 0:
+            image.rgba[pixel] = 0
+            image.rgba[pixel + 1] = 0
+            image.rgba[pixel + 2] = 0
+
+    return changed
+
+
+def detect_logo_edge_barrier(
+    image: PngImage,
+    edge_luma_min: int,
+    edge_gradient_min: int,
+) -> bytearray:
+    width = image.width
+    height = image.height
+    total = width * height
+    lumas = bytearray(total)
+    visible = bytearray(total)
+
+    for index in range(total):
+        pixel = index * 4
+        alpha = image.rgba[pixel + 3]
+        if alpha == 0:
+            continue
+
+        visible[index] = 1
+        lumas[index] = pixel_luma(image.rgba[pixel], image.rgba[pixel + 1], image.rgba[pixel + 2])
+
+    barrier = bytearray(total)
+    for y in range(height):
+        row = y * width
+        for x in range(width):
+            index = row + x
+            if not visible[index]:
+                continue
+
+            center_luma = lumas[index]
+            if center_luma >= edge_luma_min:
+                barrier[index] = 1
+                continue
+
+            highest_neighbor = center_luma
+            lowest_neighbor = center_luma
+            for dy in (-1, 0, 1):
+                ny = y + dy
+                if ny < 0 or ny >= height:
+                    continue
+                for dx in (-1, 0, 1):
+                    if dx == 0 and dy == 0:
+                        continue
+                    nx = x + dx
+                    if nx < 0 or nx >= width:
+                        continue
+                    neighbor = ny * width + nx
+                    if not visible[neighbor]:
+                        continue
+                    neighbor_luma = lumas[neighbor]
+                    highest_neighbor = max(highest_neighbor, neighbor_luma)
+                    lowest_neighbor = min(lowest_neighbor, neighbor_luma)
+
+            gradient_floor = max(1, edge_luma_min - edge_gradient_min)
+            if (
+                center_luma >= gradient_floor
+                and highest_neighbor >= edge_luma_min
+                and highest_neighbor - lowest_neighbor >= edge_gradient_min
+            ):
+                barrier[index] = 1
+
+    return barrier
+
+
+def pixel_luma(red: int, green: int, blue: int) -> int:
+    return (77 * red + 150 * green + 29 * blue) >> 8
+
+
+def flood_fill_outside_background(barrier: bytearray, width: int, height: int) -> bytearray:
+    total = width * height
+    outside = bytearray(total)
+    queue: deque[int] = deque()
+
+    def enqueue(index: int) -> None:
+        if barrier[index] or outside[index]:
+            return
+        outside[index] = 1
+        queue.append(index)
+
+    last_row = (height - 1) * width
+    for x in range(width):
+        enqueue(x)
+        enqueue(last_row + x)
+    for y in range(height):
+        row = y * width
+        enqueue(row)
+        enqueue(row + width - 1)
+
+    while queue:
+        index = queue.popleft()
+        x = index % width
+        y = index // width
+
+        if x > 0:
+            enqueue(index - 1)
+        if x < width - 1:
+            enqueue(index + 1)
+        if y > 0:
+            enqueue(index - width)
+        if y < height - 1:
+            enqueue(index + width)
+
+    return outside
+
+
 def flood_fill_protected_area(seed: bytearray, width: int, height: int) -> bytearray:
     total = width * height
     outside = bytearray(total)
@@ -320,11 +489,21 @@ def destination_for(source: Path, suffix: str, overwrite: bool) -> Path:
 def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("inputs", nargs="*", type=Path, default=DEFAULT_INPUTS)
+    parser.add_argument(
+        "--mode",
+        choices=(MODE_GRAY_FRINGE, MODE_OUTSIDE_BLACK),
+        default=MODE_GRAY_FRINGE,
+        help="cleanup mode to apply",
+    )
     parser.add_argument("--suffix", default="-cleaned", help="suffix for cleaned copies")
     parser.add_argument("--gray-chroma", type=int, default=60, help="max RGB channel spread treated as gray")
     parser.add_argument("--gray-luma-min", type=int, default=35, help="minimum luma treated as removable gray")
     parser.add_argument("--gray-luma-max", type=int, default=235, help="maximum luma treated as removable gray")
     parser.add_argument("--protect-radius", type=int, default=0, help="pixels to preserve around the foreground mask")
+    parser.add_argument("--edge-luma-min", type=int, default=26, help="minimum luma treated as a logo edge")
+    parser.add_argument("--edge-gradient-min", type=int, default=10, help="local luma contrast treated as an edge")
+    parser.add_argument("--barrier-radius", type=int, default=2, help="pixels to preserve around detected edges")
+    parser.add_argument("--alpha-mask", type=Path, help="copy alpha from a same-size PNG instead of detecting edges")
     parser.add_argument("--overwrite", action="store_true", help="replace sources instead of creating copies")
     parser.add_argument("--keep-rgb", action="store_true", help="leave RGB values under cleared alpha")
     return parser.parse_args(argv)
@@ -332,22 +511,35 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
 
 def main(argv: list[str]) -> int:
     args = parse_args(argv)
+    alpha_mask = parse_png(args.alpha_mask) if args.alpha_mask else None
     for source in args.inputs:
         image = parse_png(source)
-        removed, candidates = clean_logo_noise(
-            image,
-            gray_chroma=args.gray_chroma,
-            gray_luma_min=args.gray_luma_min,
-            gray_luma_max=args.gray_luma_max,
-            protect_radius=args.protect_radius,
-            zero_rgb=not args.keep_rgb,
-        )
+        if alpha_mask is not None:
+            changed = apply_alpha_mask(image, alpha_mask, zero_rgb=not args.keep_rgb)
+            summary = f"copied alpha mask; changed {changed:,} pixels"
+        elif args.mode == MODE_OUTSIDE_BLACK:
+            removed = clear_outside_logo_background(
+                image,
+                edge_luma_min=args.edge_luma_min,
+                edge_gradient_min=args.edge_gradient_min,
+                barrier_radius=args.barrier_radius,
+                zero_rgb=not args.keep_rgb,
+            )
+            summary = f"cleared {removed:,} outside-background pixels"
+        else:
+            removed, candidates = clean_logo_noise(
+                image,
+                gray_chroma=args.gray_chroma,
+                gray_luma_min=args.gray_luma_min,
+                gray_luma_max=args.gray_luma_max,
+                protect_radius=args.protect_radius,
+                zero_rgb=not args.keep_rgb,
+            )
+            summary = f"removed {removed:,}/{candidates:,} gray-edge pixels"
+
         destination = destination_for(source, args.suffix, args.overwrite)
         write_png(destination, image)
-        print(
-            f"{source} -> {destination} "
-            f"removed {removed:,}/{candidates:,} gray-edge pixels"
-        )
+        print(f"{source} -> {destination} {summary}")
 
     return 0
 
