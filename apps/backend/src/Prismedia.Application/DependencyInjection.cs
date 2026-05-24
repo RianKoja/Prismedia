@@ -6,6 +6,7 @@ using Prismedia.Application.Files;
 using Prismedia.Application.Jobs;
 using Prismedia.Application.Organization;
 using Prismedia.Application.Settings;
+using Prismedia.Application.Health;
 using Prismedia.Application.UserState;
 using Prismedia.Application.Jobs.Handlers;
 using Prismedia.Application.Jobs.Handlers.Generate;
@@ -85,6 +86,7 @@ public static class DependencyInjection {
         services.AddTransient<IJobHandler, LibraryMaintenanceJobHandler>();
 
         // Background services
+        services.AddHostedService<WorkerHeartbeatPublisher>();
         services.AddHostedService<QueueWorker>();
         services.AddHostedService<JobScheduler>();
         services.AddHostedService<JobHistoryPruner>();

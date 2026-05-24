@@ -20,6 +20,7 @@
     createJob,
     fetchJobs,
     fetchSettingsValues,
+    fetchWorkerHealth,
   } from "$lib/api/prismedia";
   import { settingKeys, valuesToLibrarySettings } from "$lib/settings/app-settings";
   import type { JobRun, JobsDashboard } from "$lib/jobs/models";
@@ -36,6 +37,10 @@
     errorFingerprint,
     formatRelativeTimeShort,
   } from "$lib/jobs/helpers";
+  import {
+    describeWorkerHealth,
+    type WorkerHealthBadge,
+  } from "$lib/jobs/worker-health";
   import { dismissedErrors } from "$lib/stores/dismissed-errors.svelte";
   import RunCatalogRow from "$lib/components/jobs/RunCatalogRow.svelte";
   import ActiveJobCard from "$lib/components/jobs/ActiveJobCard.svelte";
@@ -58,6 +63,7 @@
 
   let error = $state<string | null>(null);
   let message = $state<string | null>(null);
+  let workerHealth = $state<WorkerHealthBadge>(describeWorkerHealth(null));
 
   let pollTimer: ReturnType<typeof setInterval> | null = null;
   let lastNsfwMode = $state(nsfw.mode);
@@ -105,11 +111,28 @@
     }
   }
 
+  async function loadWorkerHealth() {
+    try {
+      workerHealth = describeWorkerHealth(await fetchWorkerHealth());
+    } catch {
+      workerHealth = describeWorkerHealth({
+        status: "offline",
+        workerId: null,
+        lastSeenAt: null,
+        staleAfterSeconds: 45,
+      });
+    }
+  }
+
   onMount(() => {
     dismissedErrors.init();
     void loadSchedule();
+    void loadWorkerHealth();
     void loadDashboard();
-    pollTimer = setInterval(() => void loadDashboard(), 5000);
+    pollTimer = setInterval(() => {
+      void loadDashboard();
+      void loadWorkerHealth();
+    }, 5000);
   });
 
   onDestroy(() => {
@@ -272,10 +295,25 @@
   <!-- ── Header ── -->
   <div class="flex flex-wrap items-start justify-between gap-3">
     <div>
-      <h1 class="flex items-center gap-2.5">
-        <Activity class="h-5 w-5 text-text-accent" />
-        Job Control
-      </h1>
+      <div class="flex flex-wrap items-center gap-2.5">
+        <h1 class="flex items-center gap-2.5">
+          <Activity class="h-5 w-5 text-text-accent" />
+          Job Control
+        </h1>
+        <span
+          class={cn(
+            "inline-flex items-center gap-1.5 border border-border-subtle bg-surface-2/60 px-2 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.12em]",
+            workerHealth.status === "online" && "border-border-accent/60 text-text-accent shadow-[0_0_16px_rgba(196,154,90,0.12)]",
+            workerHealth.status === "offline" && "border-status-error/50 text-status-error-text",
+            workerHealth.status === "checking" && "text-text-muted",
+          )}
+          title={workerHealth.tooltip}
+          aria-label={workerHealth.tooltip}
+        >
+          <StatusLed status={workerHealth.led} size="sm" pulse={workerHealth.pulse} />
+          {workerHealth.label}
+        </span>
+      </div>
       <div class="mt-1.5 flex flex-wrap items-center gap-3 text-mono-sm">
         <span
           class={cn(

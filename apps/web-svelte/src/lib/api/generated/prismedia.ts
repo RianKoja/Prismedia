@@ -150,6 +150,42 @@ export const getHealth = async ( options?: RequestInit): Promise<getHealthRespon
 
 
 
+export type getWorkerHealthResponse200 = {
+  data: void
+  status: 200
+}
+
+export type getWorkerHealthResponseSuccess = (getWorkerHealthResponse200) & {
+  headers: Headers;
+};
+;
+
+export type getWorkerHealthResponse = (getWorkerHealthResponseSuccess)
+
+export const getGetWorkerHealthUrl = () => {
+
+
+
+
+  return `/api/health/worker`
+}
+
+/**
+ * @summary Reports whether the Prismedia worker has published a fresh heartbeat.
+ */
+export const getWorkerHealth = async ( options?: RequestInit): Promise<getWorkerHealthResponse> => {
+
+  return orvalFetch<getWorkerHealthResponse>(getGetWorkerHealthUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
 export type getVideoSeasonResponse200 = {
   data: VideoSeasonDetail
   status: 200

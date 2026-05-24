@@ -9,6 +9,7 @@ using Prismedia.Application.Jobs;
 using Prismedia.Application.Jobs.Ports;
 using Prismedia.Application.Organization;
 using Prismedia.Application.Settings;
+using Prismedia.Application.Health;
 using Prismedia.Application.UserState;
 using Prismedia.Application.Videos;
 using Prismedia.Infrastructure.Collections;
@@ -25,6 +26,7 @@ using Prismedia.Infrastructure.Plugins;
 using Prismedia.Infrastructure.Processes;
 using Prismedia.Infrastructure.Queue;
 using Prismedia.Infrastructure.Settings;
+using Prismedia.Infrastructure.Health;
 using Prismedia.Infrastructure.UserState;
 using Prismedia.Infrastructure.Videos;
 
@@ -53,6 +55,7 @@ public static class DependencyInjection {
         services.AddDbContext<PrismediaDbContext>((provider, options) =>
             options.UseNpgsql(provider.GetRequiredService<NpgsqlDataSource>()));
         services.AddSingleton<ProcessExecutor>();
+        services.AddSingleton<IWorkerHeartbeatStore>(new FileWorkerHeartbeatStore(dataDir));
         var mediaToolOptions = MediaToolOptions.FromConfiguration(
             configuration["PRISMEDIA_FFMPEG_PATH"] ?? configuration["Prismedia:Hls:FfmpegPath"],
             configuration["PRISMEDIA_FFPROBE_PATH"] ?? configuration["Prismedia:Hls:FfprobePath"]);

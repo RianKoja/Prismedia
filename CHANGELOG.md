@@ -13,6 +13,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 ### Added
 - Added a centralized app settings registry and descriptor-driven settings UI for app-wide visibility, playback, subtitle, scan, generation, worker, and HLS defaults.
 - Added a media wall toggle to entity grids for browsing thumbnail-only library layouts.
+- Added a worker status badge to Job Control so stalled queues show when the background worker is offline.
 
 ### Changed
 - Updated README, docs, browser, and install branding surfaces to prefer the red accent logo while keeping the in-app logo mode-aware.

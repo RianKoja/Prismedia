@@ -142,6 +142,12 @@ export interface BulkJobResponse {
   enqueued: number;
   skipped: number;
 }
+export interface WorkerHealthResponse {
+  status: "online" | "offline" | string;
+  workerId: string | null;
+  lastSeenAt: string | null;
+  staleAfterSeconds: number;
+}
 export type ImageDetail = GeneratedImageDetail;
 export type GalleryDetail = GeneratedGalleryDetail;
 export type BookDetail = GeneratedBookDetail;
@@ -840,6 +846,10 @@ export function deleteEntityMarker(
 
 export function fetchJobs(options?: RequestOptions): Promise<JobListResponse> {
   return listJobs(undefined, requestInit(options)).then((response) => response.data);
+}
+
+export function fetchWorkerHealth(options?: RequestOptions): Promise<WorkerHealthResponse> {
+  return fetchApi<WorkerHealthResponse>("/health/worker", { signal: options?.signal });
 }
 
 export async function createJob(
