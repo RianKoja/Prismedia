@@ -11,6 +11,7 @@ vi.mock("@prismedia/ui-svelte", () => ({
 
 describe("EntityThumbnail", () => {
   beforeEach(() => {
+    loadTrickplayFrames.mockClear();
     loadTrickplayFrames.mockResolvedValue([
       { start: 0, end: 10, x: 0, y: 0, width: 160, height: 90, url: "/Videos/1/Trickplay/280/0.jpg" },
     ]);
@@ -31,7 +32,8 @@ describe("EntityThumbnail", () => {
     vi.restoreAllMocks();
   });
 
-  it("shows the first sprite frame as soon as a trickplay thumbnail is hovered", async () => {
+  it("shows the first sprite frame after hover intent settles", async () => {
+    vi.useFakeTimers();
     const { container } = render(EntityThumbnail, {
       props: {
         card: spriteCard(),
@@ -44,6 +46,9 @@ describe("EntityThumbnail", () => {
     });
 
     await fireEvent(media, pointerEvent("pointerenter", 50));
+
+    expect(loadTrickplayFrames).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(140);
 
     await waitFor(() => {
       expect(loadTrickplayFrames).toHaveBeenCalledWith("/Videos/1/Trickplay/280/tiles.m3u8");
@@ -124,6 +129,7 @@ describe("EntityThumbnail", () => {
   });
 
   it("renders image-sequence thumbnails as the first still until hovered", async () => {
+    vi.useFakeTimers();
     const { container } = render(EntityThumbnail, {
       props: {
         card: imageSequenceCard(),
@@ -137,7 +143,9 @@ describe("EntityThumbnail", () => {
 
     expect(container.querySelector<HTMLImageElement>(".media > img")?.getAttribute("src")).toBe("/assets/pages/1.jpg");
 
-    await fireEvent(media, pointerEvent("pointermove", 90));
+    await fireEvent(media, pointerEvent("pointerenter", 90));
+    expect(container.querySelector<HTMLImageElement>(".media > img")?.getAttribute("src")).toBe("/assets/pages/1.jpg");
+    await vi.advanceTimersByTimeAsync(140);
 
     const activeImage = container.querySelector<HTMLImageElement>(".media > img");
     expect(activeImage?.getAttribute("src")).toBe("/assets/pages/3.jpg");
@@ -160,11 +168,32 @@ describe("EntityThumbnail", () => {
     await fireEvent(media, pointerEvent("pointerenter", 0));
     expect(container.querySelector<HTMLImageElement>(".media > img")?.getAttribute("src")).toBe("/assets/pages/1.jpg");
 
-    await vi.advanceTimersByTimeAsync(700);
+    await vi.advanceTimersByTimeAsync(840);
 
     await waitFor(() => {
       expect(container.querySelector<HTMLImageElement>(".media > img")?.getAttribute("src")).toBe("/assets/pages/2.jpg");
     });
+  });
+
+  it("does not load hover previews while previews are disabled", async () => {
+    vi.useFakeTimers();
+    const { container } = render(EntityThumbnail, {
+      props: {
+        card: spriteCard(),
+        hoverPreviewsEnabled: false,
+      },
+    });
+    const media = container.querySelector(".media") as HTMLElement;
+    Object.defineProperty(media, "getBoundingClientRect", {
+      configurable: true,
+      value: () => ({ left: 0, width: 100 }),
+    });
+
+    await fireEvent(media, pointerEvent("pointerenter", 50));
+    await vi.advanceTimersByTimeAsync(500);
+
+    expect(loadTrickplayFrames).not.toHaveBeenCalled();
+    expect(container.querySelector(".sprite-overlay")).toBeNull();
   });
 
   it("renders card titles as wrapping static text", () => {

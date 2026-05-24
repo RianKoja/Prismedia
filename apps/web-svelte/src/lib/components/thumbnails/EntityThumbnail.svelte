@@ -43,6 +43,7 @@
     layout?: "grid" | "list";
     linkable?: boolean;
     mediaOnly?: boolean;
+    hoverPreviewsEnabled?: boolean;
     onActivate?: (card: EntityThumbnailCard) => void;
     onSelectedChange?: (selected: boolean) => void;
     selectable?: boolean;
@@ -58,6 +59,7 @@
     layout = "grid",
     linkable = true,
     mediaOnly = false,
+    hoverPreviewsEnabled = true,
     onActivate,
     onSelectedChange,
     selectable = false,
@@ -73,6 +75,8 @@
   let hoverBroken = $state(false);
   let lastSrc = $state<string | undefined>(undefined);
   let sequenceTimer: number | null = null;
+  let hoverIntentTimer: number | null = null;
+  let latestPointerRatio = 0.5;
 
   let spriteFrames = $state<TrickplayFrame[] | null>(null);
   let spriteError = $state(false);
@@ -83,6 +87,7 @@
   const asset = $derived(getThumbnailAsset(card, hoverBroken || isSpriteHover ? null : pointerRatio));
   const aspectRatio = $derived(toAspectRatioValue(card.aspectRatio));
   const aspectRatioNumeric = $derived(toAspectRatioNumeric(card.aspectRatio));
+  const imageOnly = $derived(mediaOnly || card.entity.kind === ENTITY_KIND.bookPage);
   const containerAspectRatio = $derived(imageOnly ? undefined : `${aspectRatioNumeric * 3} / 4`);
   const imageFit = $derived(card.fit ?? "cover");
   const placeholderIcon = $derived(iconForKind(card.entity.kind));
@@ -139,6 +144,12 @@
     sequenceTimer = null;
   }
 
+  function clearHoverIntentTimer() {
+    if (!hoverIntentTimer) return;
+    window.clearTimeout(hoverIntentTimer);
+    hoverIntentTimer = null;
+  }
+
   function startSequenceTimer() {
     if (!isImageSequenceHover || hoverBroken || sequenceAssets.length <= 1 || sequenceTimer) return;
     sequenceTimer = window.setInterval(() => {
@@ -148,16 +159,27 @@
     }, 650);
   }
 
+  function activateHoverPreview() {
+    if (!hoverPreviewsEnabled || !hoverable) return;
+    pointerRatio = latestPointerRatio;
+    void ensureSpriteLoaded();
+    startSequenceTimer();
+  }
+
   $effect(() => {
     if (asset?.src !== lastSrc) {
       lastSrc = asset?.src;
       imageFailed = false;
     }
   });
+  $effect(() => {
+    if (!hoverPreviewsEnabled && pointerRatio !== null) {
+      clearHover();
+    }
+  });
   const hoverable = $derived(hasHoverPreview(card) && !hoverBroken && !spriteError);
   const nsfw = $derived(isNsfw(card.entity.capabilities));
   const rating = $derived(getRatingValue(card.entity.capabilities));
-  const imageOnly = $derived(mediaOnly || card.entity.kind === ENTITY_KIND.bookPage);
   const bottomLeft = $derived(card.custom?.bottomLeft);
   const href = $derived(linkable ? resolveEntityThumbnailHref(card) : undefined);
   const inSelectMode = $derived(selectMode && selectable);
@@ -172,27 +194,35 @@
   function updatePointerRatio(event: PointerEvent) {
     if (!hoverable) return;
     const bounds = (event.currentTarget as HTMLElement).getBoundingClientRect();
-    pointerRatio = bounds.width > 0 ? (event.clientX - bounds.left) / bounds.width : 0;
+    latestPointerRatio = bounds.width > 0 ? (event.clientX - bounds.left) / bounds.width : 0;
+    if (pointerRatio !== null) pointerRatio = latestPointerRatio;
   }
 
   function handlePointerEnter(event: PointerEvent) {
+    if (!hoverPreviewsEnabled) return;
     updatePointerRatio(event);
-    void ensureSpriteLoaded();
-    startSequenceTimer();
+    clearHoverIntentTimer();
+    hoverIntentTimer = window.setTimeout(() => {
+      hoverIntentTimer = null;
+      activateHoverPreview();
+    }, 140);
   }
 
   function handlePointerMove(event: PointerEvent) {
+    if (!hoverPreviewsEnabled) return;
     updatePointerRatio(event);
-    void ensureSpriteLoaded();
+    if (pointerRatio !== null) void ensureSpriteLoaded();
   }
 
   function handleFocus() {
+    if (!hoverPreviewsEnabled) return;
     pointerRatio = hoverable ? 0.5 : null;
     void ensureSpriteLoaded();
     startSequenceTimer();
   }
 
   function clearHover() {
+    clearHoverIntentTimer();
     clearSequenceTimer();
     pointerRatio = null;
   }
@@ -239,7 +269,10 @@
     return String(Math.round(value));
   }
 
-  onDestroy(clearSequenceTimer);
+  onDestroy(() => {
+    clearHoverIntentTimer();
+    clearSequenceTimer();
+  });
 </script>
 
 <svelte:element
@@ -274,6 +307,7 @@
       <img
         src={activeSequenceAsset.src}
         alt={activeSequenceAsset.alt}
+        decoding="async"
         loading="lazy"
         style:object-fit={imageFit}
         onerror={() => {
@@ -286,6 +320,7 @@
       <img
         src={sequenceRestCover.src}
         alt={sequenceRestCover.alt}
+        decoding="async"
         loading="lazy"
         style:object-fit={imageFit}
         onerror={() => { imageFailed = true; }}
@@ -294,6 +329,7 @@
       <img
         src={card.cover.src}
         alt={card.cover.alt}
+        decoding="async"
         loading="lazy"
         style:object-fit={imageFit}
         class:sprite-active={activeSpriteFrame !== null}
@@ -303,6 +339,7 @@
       <img
         src={asset.src}
         alt={asset.alt}
+        decoding="async"
         loading="lazy"
         style:object-fit={imageFit}
         onerror={() => {
@@ -472,6 +509,8 @@
     display: flex;
     flex-direction: column;
     container-type: inline-size;
+    content-visibility: auto;
+    contain-intrinsic-size: auto 18rem;
     color: var(--color-text, #f4efe6);
     text-decoration: none;
     min-width: 0;
@@ -506,6 +545,7 @@
     flex-direction: row;
     inline-size: 100%;
     min-block-size: 5.25rem;
+    contain-intrinsic-size: auto 5.25rem;
     border: 1px solid rgb(255 255 255 / 0.08);
     background: rgb(12 12 13 / 0.92);
     box-shadow:

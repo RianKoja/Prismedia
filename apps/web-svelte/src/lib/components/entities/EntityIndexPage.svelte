@@ -8,8 +8,6 @@
     withRatingCapability,
   } from "$lib/api/capabilities";
   import { useNsfw } from "$lib/nsfw/store.svelte";
-  import ImageLightboxDetails from "$lib/components/ImageLightboxDetails.svelte";
-  import UniversalLightbox from "$lib/components/UniversalLightbox.svelte";
   import {
     lightboxEntityFromCard,
     type UniversalLightboxEntity,
@@ -42,6 +40,9 @@
     title: string;
   }
 
+  type UniversalLightboxComponent = typeof import("$lib/components/UniversalLightbox.svelte").default;
+  type ImageLightboxDetailsComponent = typeof import("$lib/components/ImageLightboxDetails.svelte").default;
+
   let {
     actionHref,
     actionIcon: ActionIcon,
@@ -70,11 +71,14 @@
   let lightboxCards = $state.raw<EntityThumbnailCard[]>([]);
   let lightboxIndex = $state(0);
   let hydratedLightboxEntities = $state.raw<Record<string, UniversalLightboxEntity>>({});
+  let ImageLightboxDetailsLazy = $state<ImageLightboxDetailsComponent | null>(null);
+  let UniversalLightboxLazy = $state<UniversalLightboxComponent | null>(null);
   let remoteTotalCount = $derived(page.totalCount);
   const lightboxEntities = $derived(
     lightboxCards.map((card) => hydratedLightboxEntities[card.entity.id] ?? lightboxEntityFromCard(card)),
   );
   let lightboxHydrationInFlight = $state.raw<string[]>([]);
+  let lightboxComponentLoad: Promise<void> | null = null;
 
   onMount(() => {
     void page.loadInitial();
@@ -102,11 +106,26 @@
   function handleCardActivate(card: EntityThumbnailCard, visibleCards: EntityThumbnailCard[]) {
     if (!enableLightbox) return;
 
+    void ensureLightboxComponents();
+
     const nextCards = visibleCards.length > 0 ? visibleCards : [card];
     const nextIndex = nextCards.findIndex((candidate) => candidate.entity.id === card.entity.id);
 
     lightboxCards = nextCards;
     lightboxIndex = Math.max(0, nextIndex);
+  }
+
+  async function ensureLightboxComponents() {
+    if (UniversalLightboxLazy && ImageLightboxDetailsLazy) return;
+    lightboxComponentLoad ??= Promise.all([
+      import("$lib/components/UniversalLightbox.svelte"),
+      import("$lib/components/ImageLightboxDetails.svelte"),
+    ]).then(([lightbox, details]) => {
+      UniversalLightboxLazy = lightbox.default;
+      ImageLightboxDetailsLazy = details.default;
+    });
+
+    await lightboxComponentLoad;
   }
 
   function closeLightbox() {
@@ -238,19 +257,19 @@
   {/if}
 </section>
 
-{#if enableLightbox && lightboxEntities.length > 0}
-  <UniversalLightbox
+{#if enableLightbox && lightboxEntities.length > 0 && UniversalLightboxLazy && ImageLightboxDetailsLazy}
+  <UniversalLightboxLazy
     entities={lightboxEntities}
     initialIndex={lightboxIndex}
     onClose={closeLightbox}
-    onIndexChange={(index) => (lightboxIndex = index)}
-    onRatingChange={(entityId, rating) => void handleLightboxRatingChange(entityId, rating)}
+    onIndexChange={(index: number) => (lightboxIndex = index)}
+    onRatingChange={(entityId: string, rating: number | null) => void handleLightboxRatingChange(entityId, rating)}
     sharedKey={`index-${lightboxTitle}`}
   >
-    {#snippet detailsContent(entity)}
-      <ImageLightboxDetails {entity} onRatingChange={updateLightboxCardRating} />
+    {#snippet detailsContent(entity: UniversalLightboxEntity)}
+      <ImageLightboxDetailsLazy {entity} onRatingChange={updateLightboxCardRating} />
     {/snippet}
-  </UniversalLightbox>
+  </UniversalLightboxLazy>
 {/if}
 
 <style>
