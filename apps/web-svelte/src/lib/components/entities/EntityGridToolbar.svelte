@@ -652,16 +652,26 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    height: 1rem;
-    min-width: 1rem;
-    border: 1px solid rgb(242 194 106 / 0.4);
-    background: linear-gradient(180deg, rgb(242 194 106 / 0.9), rgb(184 134 46 / 0.95));
-    color: #1a1408;
+    height: 1.05rem;
+    min-width: 1.05rem;
+    border: 1px solid rgb(242 194 106 / 0.48);
+    border-radius: var(--radius-xs, 4px);
+    background:
+      linear-gradient(180deg, rgb(255 255 255 / 0.08), transparent 48%),
+      linear-gradient(180deg, rgb(45 34 16 / 0.96), rgb(18 15 10 / 0.92));
+    color: var(--color-text-accent-bright, #f5d48a);
+    font-family: var(--font-mono, "JetBrains Mono", monospace);
     font-size: 0.58rem;
     font-weight: 700;
     letter-spacing: 0;
-    box-shadow: 0 0 10px rgb(242 194 106 / 0.35);
+    line-height: 1;
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.10),
+      inset 0 -1px 0 rgb(0 0 0 / 0.55),
+      0 0 0 1px rgb(242 194 106 / 0.12),
+      0 0 14px rgb(242 194 106 / 0.24);
     padding: 0 0.25rem;
+    text-shadow: 0 0 8px rgb(242 194 106 / 0.55);
   }
 
   .thumb-size-inline {
