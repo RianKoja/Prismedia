@@ -56,6 +56,25 @@ public sealed class IdentifyQueueServiceTests : IDisposable {
     }
 
     [Fact]
+    public async Task SearchAsyncNormalizesLegacyProviderCandidateFields() {
+        await using var db = CreateContext();
+        var entityId = Guid.Parse("22222222-2222-2222-2222-222222222223");
+        SeedProvider(db);
+        SeedEntity(db, entityId, "video", "Legacy Candidate Movie");
+        await db.SaveChangesAsync();
+        var service = CreateQueueService(db, new LegacyCandidateProcessExecutor(), _tempRoot);
+        await service.AddAsync(entityId, CancellationToken.None);
+
+        var item = await service.SearchAsync(entityId, new IdentifyQueueSearchRequest("tmdb", new IdentifyQuery("Legacy Candidate", null, null)), hideNsfw: false, CancellationToken.None);
+
+        var candidate = Assert.Single(item.Candidates);
+        Assert.Equal("Legacy Candidate Movie", candidate.Title);
+        Assert.Equal("Description from an older plugin contract.", candidate.Overview);
+        Assert.Equal("https://image.example.test/poster.jpg", candidate.PosterUrl);
+        Assert.Equal(8.75m, candidate.Popularity);
+    }
+
+    [Fact]
     public async Task SearchAsyncStoresConfirmedProposalForReview() {
         await using var db = CreateContext();
         var entityId = Guid.Parse("33333333-3333-3333-3333-333333333333");
@@ -285,6 +304,38 @@ public sealed class IdentifyQueueServiceTests : IDisposable {
                 0,
                 SerializeWireProposal(request.Entity.Id, $"{request.Entity.Title} identified"),
                 string.Empty);
+        }
+    }
+
+    private sealed class LegacyCandidateProcessExecutor : ProcessExecutor {
+        public override Task<ProcessExecutionResult> RunAsync(
+            string fileName,
+            IReadOnlyList<string> arguments,
+            IReadOnlyDictionary<string, string>? environment,
+            CancellationToken cancellationToken) {
+            var wire = new {
+                ok = true,
+                result = new {
+                    type = "candidates",
+                    proposal = (object?)null,
+                    candidates = new[] {
+                        new {
+                            candidateId = "tmdb:movie:987",
+                            externalIds = new Dictionary<string, string> { ["tmdb"] = "987" },
+                            title = "Legacy Candidate Movie",
+                            description = "Description from an older plugin contract.",
+                            thumbnailUrl = "https://image.example.test/poster.jpg",
+                            year = 2025,
+                            source = "TMDB",
+                            confidence = 8.75m,
+                            matchReason = "title-search"
+                        }
+                    }
+                },
+                error = (string?)null
+            };
+
+            return Task.FromResult(new ProcessExecutionResult(0, JsonSerializer.Serialize(wire, JsonOptions), string.Empty));
         }
     }
 

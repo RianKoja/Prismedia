@@ -438,9 +438,20 @@ public sealed class DotnetPluginProcessRunner {
     private sealed record PluginWireResult(
         string? Type,
         EntityMetadataProposal? Proposal,
-        IReadOnlyList<EntitySearchCandidate>? Candidates);
+        IReadOnlyList<PluginWireSearchCandidate>? Candidates);
 
     private sealed record PluginWireResponse(bool Ok, PluginWireResult? Result, string? Error);
+
+    private sealed record PluginWireSearchCandidate(
+        IReadOnlyDictionary<string, string>? ExternalIds,
+        string? Title,
+        int? Year,
+        string? Overview,
+        string? Description,
+        string? PosterUrl,
+        string? ThumbnailUrl,
+        decimal? Popularity,
+        decimal? Confidence);
 
     private static IdentifyPluginResponse ConvertWireResponse(PluginWireResponse wire) {
         if (!wire.Ok || wire.Result is null) {
@@ -453,6 +464,14 @@ public sealed class DotnetPluginProcessRunner {
         }
 
         if (result.Type == "candidates" && result.Candidates is { Count: > 0 }) {
+            var candidates = result.Candidates
+                .Select(NormalizeSearchCandidate)
+                .Where(candidate => !string.IsNullOrWhiteSpace(candidate.Title))
+                .ToArray();
+            if (candidates.Length == 0) {
+                return new IdentifyPluginResponse(true, null, wire.Error ?? "No TMDB match was found.");
+            }
+
             var shell = new EntityMetadataProposal(
                 ProposalId: null!,
                 Provider: null!,
@@ -462,7 +481,7 @@ public sealed class DotnetPluginProcessRunner {
                 Patch: null!,
                 Images: [],
                 Children: [],
-                Candidates: result.Candidates,
+                Candidates: candidates,
                 TargetEntityId: null,
                 Relationships: []);
             return new IdentifyPluginResponse(true, shell, wire.Error);
@@ -470,6 +489,15 @@ public sealed class DotnetPluginProcessRunner {
 
         return new IdentifyPluginResponse(true, null, wire.Error ?? "No TMDB match was found.");
     }
+
+    private static EntitySearchCandidate NormalizeSearchCandidate(PluginWireSearchCandidate candidate) =>
+        new(
+            candidate.ExternalIds ?? new Dictionary<string, string>(),
+            candidate.Title ?? string.Empty,
+            candidate.Year,
+            candidate.Overview ?? candidate.Description,
+            candidate.PosterUrl ?? candidate.ThumbnailUrl,
+            candidate.Popularity ?? candidate.Confidence);
 
     private static void TryDelete(string path) {
         try {

@@ -1,20 +1,19 @@
 <script lang="ts">
   import {
     ChevronLeft,
-    ChevronRight,
     Film,
     Loader2,
     Search,
     Star,
-    Wand,
     X,
   } from "@lucide/svelte";
-  import { cn, StatusLed } from "@prismedia/ui-svelte";
   import EntityThumbnail from "$lib/components/thumbnails/EntityThumbnail.svelte";
-  import { entityCardToThumbnailCard } from "$lib/entities/entity-grid";
   import type { EntitySearchCandidate } from "$lib/api/identify";
   import type { EntityCard } from "$lib/api/prismedia";
-  import type { EntityThumbnailCard } from "$lib/entities/entity-thumbnail";
+  import {
+    identifyCandidateKey,
+    identifyCandidateToThumbnailCard,
+  } from "./identify-candidate-card";
   import { useIdentifyStore } from "./identify-store.svelte";
 
   interface Props {
@@ -57,27 +56,8 @@
   }
 
   function pickCandidate(candidate: EntitySearchCandidate) {
-    if (!defaultProvider) return;
+    if (!defaultProvider || store.identifyingId !== null) return;
     void store.identifyWithCandidate(entity, defaultProvider.id, candidate);
-  }
-
-  function candidateToCard(candidate: EntitySearchCandidate, index: number): EntityThumbnailCard {
-    return {
-      entity: {
-        id: `candidate-${index}`,
-        kind: entity.kind,
-        title: candidate.title,
-        parentEntityId: null,
-        sortOrder: null,
-        capabilities: [],
-        childrenByKind: [],
-        relationships: [],
-      },
-      aspectRatio: "poster",
-      cover: candidate.posterUrl ? { src: candidate.posterUrl, alt: candidate.title } : null,
-      hover: { kind: "none" },
-      meta: [],
-    };
   }
 </script>
 
@@ -175,17 +155,17 @@
     </div>
   </section>
 
-  <!-- Candidates grid -->
+  <!-- Candidates list -->
   <section class="surface-panel overflow-hidden">
     <header class="flex items-center gap-2.5 border-b border-border-subtle bg-surface-2 px-3.5 py-2.5">
       <span class="text-kicker text-text-accent">Candidates</span>
       <span class="font-mono text-[0.7rem] text-text-muted">{localCandidates.length} found</span>
     </header>
-    <div class="grid grid-cols-2 gap-4 p-4 sm:grid-cols-3 lg:grid-cols-4">
-      {#each localCandidates as candidate, i (candidate.title + i)}
-        <div class="relative flex flex-col gap-2">
+    <div class="flex flex-col gap-2.5 p-3.5">
+      {#each localCandidates as candidate, i (identifyCandidateKey(candidate, i))}
+        <div class="relative flex flex-col gap-1.5">
           {#if i === 0}
-            <div class="absolute -top-2 left-2.5 z-10">
+            <div class="absolute left-2.5 top-2 z-10">
               <span class="inline-flex items-center gap-1 rounded-xs border border-border-accent bg-accent-950/60 px-1.5 py-0.5 font-mono text-[0.6rem] text-text-accent">
                 <Star class="h-2.5 w-2.5" />
                 Best
@@ -194,42 +174,29 @@
           {/if}
 
           <EntityThumbnail
-            card={candidateToCard(candidate, i)}
+            card={identifyCandidateToThumbnailCard(candidate, entity.kind, i)}
+            layout="list"
+            linkable={false}
+            hoverPreviewsEnabled={false}
             onActivate={() => pickCandidate(candidate)}
           />
 
-          <p class="line-clamp-3 text-[0.74rem] leading-snug text-text-muted">
-            {candidate.overview ?? ""}
-          </p>
-
-          <div class="flex items-center gap-2 text-[0.66rem] text-text-muted">
-            {#if candidate.year}
-              <span class="font-mono">{candidate.year}</span>
+          <button
+            type="button"
+            class="rounded-xs border border-border-subtle bg-surface-1 px-3 py-2 text-left transition-colors hover:border-border-accent hover:bg-surface-2 focus-visible:border-border-accent focus-visible:outline-none disabled:cursor-wait disabled:opacity-60"
+            disabled={store.identifyingId !== null}
+            onclick={() => pickCandidate(candidate)}
+          >
+            {#if candidate.overview}
+              <span class="line-clamp-2 text-[0.74rem] leading-snug text-text-muted">
+                {candidate.overview}
+              </span>
+            {:else}
+              <span class="text-[0.72rem] text-text-disabled">
+                No provider description available.
+              </span>
             {/if}
-            {#if candidate.popularity}
-              <span class="font-mono">★ {candidate.popularity}</span>
-            {/if}
-          </div>
-
-          <div class="flex gap-1.5">
-            <button
-              type="button"
-              class={cn(
-                "inline-flex h-7 flex-1 items-center justify-center gap-1 rounded-xs border text-[0.72rem] font-medium transition-colors",
-                i === 0
-                  ? "border-border-accent-strong bg-accent-950/40 text-text-accent hover:bg-accent-950/60"
-                  : "border-border-default bg-surface-2 text-text-primary hover:bg-surface-3",
-              )}
-              onclick={() => pickCandidate(candidate)}
-              disabled={store.identifyingId !== null}
-            >
-              {#if store.identifyingId}
-                <Loader2 class="h-3 w-3 animate-spin" />
-              {/if}
-              {i === 0 ? "Pick" : "Use"}
-              <ChevronRight class="h-3 w-3" />
-            </button>
-          </div>
+          </button>
         </div>
       {/each}
     </div>
