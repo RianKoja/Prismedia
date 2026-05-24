@@ -301,33 +301,35 @@
           {onOverwritePreset}
           {onDeletePreset}
         />
-
-        {#if canClearFiltersAndSort}
-          <button
-            type="button"
-            title="Clear filters, sort, search, and saved preferences"
-            class="ctrl-btn ctrl-clear"
-            onclick={onClearFiltersAndSort}
-          >
-            <RotateCcw class="h-3.5 w-3.5 shrink-0" />
-            <span class="ctrl-label">Clear</span>
-          </button>
-        {/if}
       </div>
     </div>
 
-    <div class="filter-scroll" class:is-active={activeFilters.length > 0} aria-live="polite">
-      {#if activeFilters.length > 0}
-        <span class="filter-chip-label" aria-hidden="true">
-          <SlidersHorizontal class="h-3 w-3 shrink-0" />
-          ACTIVE
-        </span>
-        {#each activeFilters as option (option.id)}
-          <button type="button" class="filter-chip" onclick={() => removeFilter(option.id)}>
-            <span>{option.label}</span>
-            <X class="h-3 w-3" />
-          </button>
-        {/each}
+    <div class="filter-row" class:is-active={activeFilters.length > 0 || canClearFiltersAndSort}>
+      <div class="filter-scroll" aria-live="polite">
+        {#if activeFilters.length > 0}
+          <span class="filter-chip-label" aria-hidden="true">
+            <SlidersHorizontal class="h-3 w-3 shrink-0" />
+            ACTIVE
+          </span>
+          {#each activeFilters as option (option.id)}
+            <button type="button" class="filter-chip" onclick={() => removeFilter(option.id)}>
+              <span>{option.label}</span>
+              <X class="h-3 w-3" />
+            </button>
+          {/each}
+        {/if}
+      </div>
+
+      {#if canClearFiltersAndSort}
+        <button
+          type="button"
+          title="Clear filters, sort, search, and saved preferences"
+          class="ctrl-btn ctrl-clear filter-reset"
+          onclick={onClearFiltersAndSort}
+        >
+          <RotateCcw class="h-3.5 w-3.5 shrink-0" />
+          <span class="ctrl-label">Clear</span>
+        </button>
       {/if}
     </div>
   </div>
@@ -906,22 +908,37 @@
     color: var(--color-text-accent, #f2c26a);
   }
 
-  .filter-scroll {
+  .filter-row {
     display: flex;
     align-items: center;
     gap: 0.4rem;
-    overflow-x: auto;
     padding: 0;
-    scrollbar-width: thin;
     pointer-events: auto;
   }
 
-  .filter-scroll.is-active {
+  .filter-row.is-active {
     min-height: 2rem;
     border: 1px solid var(--color-border-subtle, rgba(148, 158, 178, 0.07));
     background: var(--color-surface-1, #0c0f15);
     box-shadow: inset 0 2px 8px rgba(0,0,0,0.30);
     padding: 0.3rem 0.5rem;
+  }
+
+  .filter-scroll {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow-x: auto;
+    scrollbar-width: thin;
+  }
+
+  .filter-reset {
+    flex: 0 0 auto;
+    height: 1.6rem;
+    min-height: 1.6rem;
+    margin-left: auto;
   }
 
   .filter-chip-label {

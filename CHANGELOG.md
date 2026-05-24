@@ -24,6 +24,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - Updated web app manifest and mobile browser metadata for home-screen installation and browser UI theme colors.
 
 ### Fixed
+- Kept the library toolbar reset action on the active filter row so the main toolbar buttons no longer shift when reset becomes available.
 - Recovered stale running jobs from previous worker processes so the queue no longer appears stuck after a worker restart.
 - Restored richer running and queued job rows with job-kind grouping, target details, and live status messages.
 - Fixed generated thumbnail and preview asset serving on fresh startup by creating and mounting the media cache directory before assets are requested.
