@@ -520,40 +520,6 @@
     </div>
   {/if}
 
-  <div
-    data-reader-control
-    class={`reader-bottom-layer ${controlsVisible ? "reader-layer-visible" : "reader-layer-hidden"}`}
-  >
-    <div class="flex items-center justify-between gap-2">
-      <button type="button" onclick={goPrev} class="reader-mode-button">
-        <ChevronLeft class="h-4 w-4" />
-        Prev
-      </button>
-      <div class="font-mono text-[0.68rem] text-text-muted">{counterText}</div>
-      <button type="button" onclick={goNext} class="reader-mode-button">
-        {showingChapterEndPage ? (hasNextChapter ? "Start" : "Close") : "Next"}
-        <ChevronRight class="h-4 w-4" />
-      </button>
-    </div>
-    {#if readerMode === "paged"}
-      <div class="mt-2 flex items-center justify-center gap-2">
-        <button
-          type="button"
-          onclick={() => (pageMode = pageMode === "single" ? "double" : "single")}
-          class:active-reader-control={pageMode === "double"}
-          class="reader-mode-button"
-        >
-          {pageMode === "double" ? "2 pages" : "1 page"}
-        </button>
-        {#if pageMode === "double"}
-          <label class="reader-check">
-            <input type="checkbox" bind:checked={firstPageIsCover} />
-            <span>Cover first</span>
-          </label>
-        {/if}
-      </div>
-    {/if}
-  </div>
 </div>
 
 <style>
@@ -577,6 +543,17 @@
 
   .reader-overlay {
     z-index: 2147483000;
+    width: 100vw;
+    height: 100vh;
+    min-height: 100vh;
+    overflow: hidden;
+  }
+
+  @supports (height: 100lvh) {
+    .reader-overlay {
+      height: 100lvh;
+      min-height: 100lvh;
+    }
   }
 
   .reader-stage {
@@ -604,8 +581,7 @@
     bottom: 0;
   }
 
-  .reader-top-layer,
-  .reader-bottom-layer {
+  .reader-top-layer {
     position: absolute;
     left: 0;
     right: 0;
@@ -631,17 +607,6 @@
     gap: 0.5rem;
   }
 
-  .reader-bottom-layer {
-    bottom: 0;
-    border-top: 1px solid rgb(255 255 255 / 0.12);
-    background: linear-gradient(
-      to top,
-      rgb(0 0 0 / 0.78),
-      rgb(0 0 0 / 0.48) 68%,
-      rgb(0 0 0 / 0)
-    );
-    padding: 1.25rem 0.75rem max(0.5rem, env(safe-area-inset-bottom));
-  }
 
   .reader-layer-visible {
     opacity: 1;
@@ -658,9 +623,6 @@
     transform: translateY(-0.75rem);
   }
 
-  .reader-bottom-layer.reader-layer-hidden {
-    transform: translateY(0.75rem);
-  }
 
   .reader-icon-button {
     padding: 0.4rem;
@@ -795,9 +757,6 @@
       padding: 0.5rem 0.75rem;
     }
 
-    .reader-bottom-layer {
-      display: none;
-    }
 
     .reader-nav-button {
       display: flex;

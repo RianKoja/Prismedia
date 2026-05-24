@@ -74,11 +74,13 @@
   let imageFailed = $state(false);
   let hoverBroken = $state(false);
   let lastSrc = $state<string | undefined>(undefined);
-  let sequenceTimer: number | null = null;
   let hoverIntentTimer: number | null = null;
   let latestPointerRatio = 0.5;
   let pointerScrubbing = false;
+  let capturedPointerId: number | null = null;
   let scrubStartClientX = 0;
+  let scrubStartClientY = 0;
+  let scrubPointerType = "mouse";
   let suppressNextActivation = false;
 
   let spriteFrames = $state<TrickplayFrame[] | null>(null);
@@ -141,11 +143,6 @@
     }
   }
 
-  function clearSequenceTimer() {
-    if (!sequenceTimer) return;
-    window.clearInterval(sequenceTimer);
-    sequenceTimer = null;
-  }
 
   function clearHoverIntentTimer() {
     if (!hoverIntentTimer) return;
@@ -153,20 +150,21 @@
     hoverIntentTimer = null;
   }
 
-  function startSequenceTimer() {
-    if (!isImageSequenceHover || hoverBroken || sequenceAssets.length <= 1 || sequenceTimer) return;
-    sequenceTimer = window.setInterval(() => {
-      const currentIndex = activeSequenceIndex >= 0 ? activeSequenceIndex : 0;
-      const nextIndex = (currentIndex + 1) % sequenceAssets.length;
-      pointerRatio = (nextIndex + 0.5) / sequenceAssets.length;
-    }, 650);
+  function capturePointer(element: HTMLElement, pointerId: number) {
+    element.setPointerCapture?.(pointerId);
+    capturedPointerId = pointerId;
+  }
+
+  function releaseCapturedPointer(element: HTMLElement) {
+    if (capturedPointerId === null) return;
+    element.releasePointerCapture?.(capturedPointerId);
+    capturedPointerId = null;
   }
 
   function activateHoverPreview() {
     if (!hoverPreviewsEnabled || !hoverable) return;
     pointerRatio = latestPointerRatio;
     void ensureSpriteLoaded();
-    startSequenceTimer();
   }
 
   $effect(() => {
@@ -213,6 +211,21 @@
 
   function handlePointerMove(event: PointerEvent) {
     if (!hoverPreviewsEnabled) return;
+    if (!pointerScrubbing && scrubPointerType === "touch") {
+      const deltaX = event.clientX - scrubStartClientX;
+      const deltaY = event.clientY - scrubStartClientY;
+      if (Math.abs(deltaX) < 12 || Math.abs(deltaX) <= Math.abs(deltaY) * 1.25) return;
+      pointerScrubbing = true;
+      suppressNextActivation = true;
+      capturePointer(event.currentTarget as HTMLElement, event.pointerId);
+      updatePointerRatio(event);
+      pointerRatio = latestPointerRatio;
+      void ensureSpriteLoaded();
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+
     if (pointerScrubbing) {
       updatePointerRatio(event);
       if (Math.abs(event.clientX - scrubStartClientX) > 6) {
@@ -230,21 +243,32 @@
 
   function handlePointerDown(event: PointerEvent) {
     if (!hoverPreviewsEnabled || !hoverable) return;
-    pointerScrubbing = true;
     scrubStartClientX = event.clientX;
+    scrubStartClientY = event.clientY;
+    scrubPointerType = event.pointerType;
+    pointerScrubbing = false;
     suppressNextActivation = false;
     clearHoverIntentTimer();
-    clearSequenceTimer();
+    if (event.pointerType === "touch") {
+      return;
+    }
+    pointerScrubbing = true;
     updatePointerRatio(event);
     pointerRatio = latestPointerRatio;
     void ensureSpriteLoaded();
-    (event.currentTarget as HTMLElement).setPointerCapture?.(event.pointerId);
+    capturePointer(event.currentTarget as HTMLElement, event.pointerId);
   }
 
   function handlePointerUp(event: PointerEvent) {
-    if (!pointerScrubbing) return;
+    if (!pointerScrubbing && scrubPointerType !== "touch") return;
     pointerScrubbing = false;
-    (event.currentTarget as HTMLElement).releasePointerCapture?.(event.pointerId);
+    scrubPointerType = "mouse";
+    releaseCapturedPointer(event.currentTarget as HTMLElement);
+  }
+
+  function handlePointerCancel(event: PointerEvent) {
+    releaseCapturedPointer(event.currentTarget as HTMLElement);
+    clearHover();
   }
 
   function handlePointerLeave() {
@@ -256,13 +280,13 @@
     if (!hoverPreviewsEnabled) return;
     pointerRatio = hoverable ? 0.5 : null;
     void ensureSpriteLoaded();
-    startSequenceTimer();
   }
 
   function clearHover() {
     clearHoverIntentTimer();
-    clearSequenceTimer();
     pointerScrubbing = false;
+    capturedPointerId = null;
+    scrubPointerType = "mouse";
     pointerRatio = null;
   }
 
@@ -317,7 +341,6 @@
 
   onDestroy(() => {
     clearHoverIntentTimer();
-    clearSequenceTimer();
   });
 </script>
 
@@ -349,7 +372,7 @@
     onpointerdown={handlePointerDown}
     onpointermove={handlePointerMove}
     onpointerup={handlePointerUp}
-    onpointercancel={clearHover}
+    onpointercancel={handlePointerCancel}
     onpointerleave={handlePointerLeave}
   >
     {#if activeSequenceAsset}

@@ -84,6 +84,20 @@ describe("ComicReader", () => {
     expect(getByLabelText("Back")).toBeInTheDocument();
   });
 
+  it("does not render the mobile bottom control bar", () => {
+    const { container } = render(ComicReader, {
+      props: {
+        images,
+        initialIndex: 0,
+        title: "Comic",
+        onClose: vi.fn(),
+      },
+    });
+
+    const root = readerRoot(container);
+    expect(root.querySelector(".reader-bottom-layer")).toBeNull();
+  });
+
   it("keeps controls hidden while navigating with side taps", async () => {
     const { container } = render(ComicReader, {
       props: {

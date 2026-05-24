@@ -70,13 +70,41 @@ describe("EntityThumbnail", () => {
       value: () => ({ left: 0, width: 100 }),
     });
 
-    await fireEvent(media, pointerEvent("pointerdown", 90, { pointerType: "touch", pointerId: 7 }));
+    await fireEvent(media, pointerEvent("pointerdown", 10, { pointerType: "touch", pointerId: 7 }));
+    await fireEvent(media, pointerEvent("pointermove", 90, { pointerType: "touch", pointerId: 7 }));
 
     await waitFor(() => {
       const overlay = container.querySelector<HTMLElement>(".sprite-overlay");
       expect(loadTrickplayFrames).toHaveBeenCalledWith("/Videos/1/Trickplay/280/tiles.m3u8");
       expect(overlay?.style.backgroundPosition).toContain("100%");
     });
+  });
+
+  it("keeps touch taps navigable when a thumbnail can scrub", async () => {
+    const onActivate = vi.fn();
+    const { container } = render(EntityThumbnail, {
+      props: {
+        card: spriteCard(),
+        linkable: false,
+        onActivate,
+      },
+    });
+    const surface = container.querySelector<HTMLElement>(".entity-thumbnail");
+    const media = container.querySelector(".media") as HTMLElement;
+    media.setPointerCapture = vi.fn();
+    media.releasePointerCapture = vi.fn();
+    Object.defineProperty(media, "getBoundingClientRect", {
+      configurable: true,
+      value: () => ({ left: 0, width: 100 }),
+    });
+
+    await fireEvent(media, pointerEvent("pointerdown", 50, { pointerType: "touch", pointerId: 7 }));
+    await fireEvent(media, pointerEvent("pointermove", 54, { pointerType: "touch", pointerId: 7 }));
+    expect(media.setPointerCapture).not.toHaveBeenCalled();
+    await fireEvent(media, pointerEvent("pointerup", 54, { pointerType: "touch", pointerId: 7 }));
+    await fireEvent.click(surface!);
+
+    expect(onActivate).toHaveBeenCalledWith(spriteCard());
   });
 
   it("resolves default entity links inside the shared thumbnail", () => {
@@ -188,13 +216,14 @@ describe("EntityThumbnail", () => {
       value: () => ({ left: 0, width: 100 }),
     });
 
-    await fireEvent(media, pointerEvent("pointerdown", 90, { pointerType: "touch", pointerId: 8 }));
+    await fireEvent(media, pointerEvent("pointerdown", 10, { pointerType: "touch", pointerId: 8 }));
+    await fireEvent(media, pointerEvent("pointermove", 90, { pointerType: "touch", pointerId: 8 }));
 
     expect(container.querySelector<HTMLImageElement>(".media > img")?.getAttribute("src")).toBe("/assets/pages/3.jpg");
     expect(container.querySelector(".sequence-rail span.is-active")).not.toBeNull();
   });
 
-  it("cycles image-sequence thumbnails while hovered", async () => {
+  it("keeps image-sequence hover previews on the selected frame until the user scrubs", async () => {
     vi.useFakeTimers();
     const { container } = render(EntityThumbnail, {
       props: {
@@ -210,11 +239,12 @@ describe("EntityThumbnail", () => {
     await fireEvent(media, pointerEvent("pointerenter", 0));
     expect(container.querySelector<HTMLImageElement>(".media > img")?.getAttribute("src")).toBe("/assets/pages/1.jpg");
 
-    await vi.advanceTimersByTimeAsync(840);
+    await vi.advanceTimersByTimeAsync(1_500);
+    expect(container.querySelector<HTMLImageElement>(".media > img")?.getAttribute("src")).toBe("/assets/pages/1.jpg");
 
-    await waitFor(() => {
-      expect(container.querySelector<HTMLImageElement>(".media > img")?.getAttribute("src")).toBe("/assets/pages/2.jpg");
-    });
+    await fireEvent(media, pointerEvent("pointermove", 90));
+
+    expect(container.querySelector<HTMLImageElement>(".media > img")?.getAttribute("src")).toBe("/assets/pages/3.jpg");
   });
 
   it("does not load hover previews while previews are disabled", async () => {
@@ -360,10 +390,11 @@ function personCard(): EntityThumbnailCard {
 function pointerEvent(
   type: string,
   clientX: number,
-  options: { pointerId?: number; pointerType?: string } = {},
+  options: { clientY?: number; pointerId?: number; pointerType?: string } = {},
 ) {
   const event = new Event(type, { bubbles: true, cancelable: true });
   Object.defineProperty(event, "clientX", { value: clientX });
+  Object.defineProperty(event, "clientY", { value: options.clientY ?? 0 });
   Object.defineProperty(event, "pointerId", { value: options.pointerId ?? 1 });
   Object.defineProperty(event, "pointerType", { value: options.pointerType ?? "mouse" });
   return event;
