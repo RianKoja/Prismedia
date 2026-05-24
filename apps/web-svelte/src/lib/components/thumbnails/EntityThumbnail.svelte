@@ -77,6 +77,9 @@
   let sequenceTimer: number | null = null;
   let hoverIntentTimer: number | null = null;
   let latestPointerRatio = 0.5;
+  let pointerScrubbing = false;
+  let scrubStartClientX = 0;
+  let suppressNextActivation = false;
 
   let spriteFrames = $state<TrickplayFrame[] | null>(null);
   let spriteError = $state(false);
@@ -210,8 +213,43 @@
 
   function handlePointerMove(event: PointerEvent) {
     if (!hoverPreviewsEnabled) return;
+    if (pointerScrubbing) {
+      updatePointerRatio(event);
+      if (Math.abs(event.clientX - scrubStartClientX) > 6) {
+        suppressNextActivation = true;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      if (pointerRatio !== null) void ensureSpriteLoaded();
+      return;
+    }
+
     updatePointerRatio(event);
     if (pointerRatio !== null) void ensureSpriteLoaded();
+  }
+
+  function handlePointerDown(event: PointerEvent) {
+    if (!hoverPreviewsEnabled || !hoverable) return;
+    pointerScrubbing = true;
+    scrubStartClientX = event.clientX;
+    suppressNextActivation = false;
+    clearHoverIntentTimer();
+    clearSequenceTimer();
+    updatePointerRatio(event);
+    pointerRatio = latestPointerRatio;
+    void ensureSpriteLoaded();
+    (event.currentTarget as HTMLElement).setPointerCapture?.(event.pointerId);
+  }
+
+  function handlePointerUp(event: PointerEvent) {
+    if (!pointerScrubbing) return;
+    pointerScrubbing = false;
+    (event.currentTarget as HTMLElement).releasePointerCapture?.(event.pointerId);
+  }
+
+  function handlePointerLeave() {
+    if (pointerScrubbing) return;
+    clearHover();
   }
 
   function handleFocus() {
@@ -224,6 +262,7 @@
   function clearHover() {
     clearHoverIntentTimer();
     clearSequenceTimer();
+    pointerScrubbing = false;
     pointerRatio = null;
   }
 
@@ -238,7 +277,14 @@
     onSelectedChange?.(!selected);
   }
 
-  function handleSurfaceClick() {
+  function handleSurfaceClick(event: MouseEvent) {
+    if (suppressNextActivation) {
+      suppressNextActivation = false;
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+
     if (onActivate && !effectiveHref) {
       onActivate(card);
       return;
@@ -300,8 +346,11 @@
     role="presentation"
     style:background={showPlaceholder ? gradient : undefined}
     onpointerenter={handlePointerEnter}
+    onpointerdown={handlePointerDown}
     onpointermove={handlePointerMove}
-    onpointerleave={clearHover}
+    onpointerup={handlePointerUp}
+    onpointercancel={clearHover}
+    onpointerleave={handlePointerLeave}
   >
     {#if activeSequenceAsset}
       <img
@@ -567,6 +616,7 @@
     flex: 3;
     min-height: 0;
     overflow: hidden;
+    touch-action: pan-y;
     border: 1px solid rgb(255 255 255 / 0.08);
     border-radius: 6px;
     background:

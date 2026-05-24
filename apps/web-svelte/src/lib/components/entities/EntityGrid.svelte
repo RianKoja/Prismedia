@@ -164,6 +164,7 @@
   let pageSizeOpen = $state(false);
   let pendingAdvanceAfterLoad = $state(false);
   let scale = $state(5);
+  let mediaWall = $state(false);
   let selectedIds = $state<string[]>([]);
   let viewportEl: HTMLDivElement | undefined = $state();
   let paginationBarEl: HTMLElement | undefined = $state();
@@ -258,6 +259,7 @@
     sortBy: EntityGridSort;
     sortDir: EntityGridSortDir;
     viewMode: EntityGridViewMode;
+    mediaWall?: boolean;
     selectedIds: string[];
     scale: number;
     pageIndex: number;
@@ -283,6 +285,7 @@
         sortBy,
         sortDir,
         viewMode,
+        mediaWall,
         selectedIds: [...selectedIds],
         scale,
         pageIndex: currentPageIndex,
@@ -296,6 +299,7 @@
         sortBy = snapshot.sortBy;
         sortDir = snapshot.sortDir;
         viewMode = snapshot.viewMode;
+        mediaWall = snapshot.mediaWall ?? false;
         selectedIds = snapshot.selectedIds;
         scale = snapshot.scale;
         pageSize = normalizePageSize(snapshot.pageSize ?? pageSize);
@@ -495,6 +499,12 @@
 
   function setViewMode(value: EntityGridViewMode) {
     viewMode = value;
+    if (value === "list") mediaWall = false;
+  }
+
+  function setMediaWall(value: boolean) {
+    mediaWall = value;
+    if (value) viewMode = "grid";
   }
 
   function savePresets(next: FilterPreset[]) {
@@ -562,6 +572,7 @@
     sortBy = initialSortBy;
     sortDir = initialSortDir;
     viewMode = "grid";
+    mediaWall = false;
     pageIndex = 0;
     onSelectionChange?.(selectedIds);
   }
@@ -680,17 +691,20 @@
         query ||
         sortBy !== initialSortBy ||
         sortDir !== initialSortDir ||
+        mediaWall ||
         selectedIds.length > 0,
     )}
     {drawerOpen}
     {filterOptions}
     {maxScale}
+    {mediaWall}
     {minScale}
     onActiveFilterIdsChange={setFilterIds}
     onApplyPreset={applyPreset}
     onClearFiltersAndSort={clearFiltersAndSort}
     onDeletePreset={deletePreset}
     onDrawerOpenChange={(open) => (drawerOpen = open)}
+    onMediaWallChange={setMediaWall}
     onOverwritePreset={overwritePreset}
     onQueryChange={setQuery}
     onSavePreset={savePreset}
@@ -826,12 +840,13 @@
         {/each}
       </div>
     {:else if visibleCards.length > 0}
-      <div class="cards" class:is-list={viewMode === "list"} aria-label="Entities">
+      <div class="cards" class:is-list={viewMode === "list"} class:is-media-wall={mediaWall} aria-label="Entities">
         {#each pagedCards as card (card.entity.id)}
           <EntityThumbnail
             {card}
             layout={viewMode}
             linkable={!onCardActivate}
+            mediaOnly={mediaWall}
             onActivate={onCardActivate ? (activatedCard) => onCardActivate(activatedCard, pagedCards) : undefined}
             {hoverPreviewsEnabled}
             {selectable}
@@ -1049,6 +1064,11 @@
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
+  }
+
+  .cards.is-media-wall {
+    grid-template-columns: repeat(var(--col-count, 5), minmax(0, 1fr));
+    gap: clamp(0.25rem, 0.8vw, 0.5rem);
   }
 
   /*

@@ -5,6 +5,7 @@
     ChevronDown,
     Grid2x2,
     Grid3x3,
+    Image,
     LayoutGrid,
     List,
     RotateCcw,
@@ -38,12 +39,14 @@
     onDrawerOpenChange: (open: boolean) => void;
     onOverwritePreset: (id: string) => void;
     onQueryChange: (query: string) => void;
+    onMediaWallChange: (mediaWall: boolean) => void;
     onSavePreset: (name: string) => void;
     onScaleChange: (scale: number) => void;
     onSortByChange: (sortBy: EntityGridSort) => void;
     onSortDirChange: (sortDir: EntityGridSortDir) => void;
     onViewModeChange: (viewMode: EntityGridViewMode) => void;
     presets: FilterPreset[];
+    mediaWall: boolean;
     query: string;
     scale: number;
     selectedCount: number;
@@ -67,12 +70,14 @@
     onDrawerOpenChange,
     onOverwritePreset,
     onQueryChange,
+    onMediaWallChange,
     onSavePreset,
     onScaleChange,
     onSortByChange,
     onSortDirChange,
     onViewModeChange,
     presets,
+    mediaWall,
     query,
     scale,
     selectedCount,
@@ -210,6 +215,17 @@
             <List class="h-3.5 w-3.5" />
           </button>
         </div>
+
+        <button
+          type="button"
+          class={cn("ctrl-btn ctrl-icon", mediaWall && "is-active")}
+          title="Media wall"
+          aria-label="Media wall"
+          aria-pressed={mediaWall}
+          onclick={() => onMediaWallChange(!mediaWall)}
+        >
+          <Image class="h-3.5 w-3.5" />
+        </button>
 
         <label class="thumb-size-inline" title="Drag to change thumbnail size">
           <Grid2x2 class="thumb-size-icon thumb-size-icon-min" aria-hidden="true" />

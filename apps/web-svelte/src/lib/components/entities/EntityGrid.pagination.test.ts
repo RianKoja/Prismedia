@@ -90,6 +90,25 @@ describe("EntityGrid pagination", () => {
     );
     expect(onCardActivate.mock.calls[0][1]).toHaveLength(250);
   });
+
+  it("can render grid cards as a metadata-free media wall", async () => {
+    const cards = Array.from({ length: 6 }, (_, index) => card(index));
+    const { container } = render(EntityGrid, {
+      props: {
+        cards,
+        prefsKey: undefined,
+      },
+    });
+
+    expect(container.querySelector(".glass-info")).not.toBeNull();
+
+    await fireEvent.click(screen.getByRole("button", { name: "Media wall" }));
+
+    await waitFor(() => {
+      expect(container.querySelector(".cards")?.classList.contains("is-media-wall")).toBe(true);
+      expect(container.querySelector(".glass-info")).toBeNull();
+    });
+  });
 });
 
 function card(index: number): EntityThumbnailCard {

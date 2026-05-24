@@ -14,6 +14,7 @@ describe("EntityThumbnail", () => {
     loadTrickplayFrames.mockClear();
     loadTrickplayFrames.mockResolvedValue([
       { start: 0, end: 10, x: 0, y: 0, width: 160, height: 90, url: "/Videos/1/Trickplay/280/0.jpg" },
+      { start: 10, end: 20, x: 160, y: 0, width: 160, height: 90, url: "/Videos/1/Trickplay/280/0.jpg" },
     ]);
     vi.stubGlobal("requestAnimationFrame", vi.fn((callback: FrameRequestCallback) => {
       callback(0);
@@ -53,6 +54,28 @@ describe("EntityThumbnail", () => {
     await waitFor(() => {
       expect(loadTrickplayFrames).toHaveBeenCalledWith("/Videos/1/Trickplay/280/tiles.m3u8");
       expect(container.querySelector(".sprite-overlay")).not.toBeNull();
+    });
+  });
+
+  it("scrubs sprite trickplay from touch pointer drag", async () => {
+    const { container } = render(EntityThumbnail, {
+      props: {
+        card: spriteCard(),
+      },
+    });
+    const media = container.querySelector(".media") as HTMLElement;
+    media.setPointerCapture = vi.fn();
+    Object.defineProperty(media, "getBoundingClientRect", {
+      configurable: true,
+      value: () => ({ left: 0, width: 100 }),
+    });
+
+    await fireEvent(media, pointerEvent("pointerdown", 90, { pointerType: "touch", pointerId: 7 }));
+
+    await waitFor(() => {
+      const overlay = container.querySelector<HTMLElement>(".sprite-overlay");
+      expect(loadTrickplayFrames).toHaveBeenCalledWith("/Videos/1/Trickplay/280/tiles.m3u8");
+      expect(overlay?.style.backgroundPosition).toContain("100%");
     });
   });
 
@@ -149,6 +172,25 @@ describe("EntityThumbnail", () => {
 
     const activeImage = container.querySelector<HTMLImageElement>(".media > img");
     expect(activeImage?.getAttribute("src")).toBe("/assets/pages/3.jpg");
+    expect(container.querySelector(".sequence-rail span.is-active")).not.toBeNull();
+  });
+
+  it("scrubs image-sequence thumbnails from touch pointer drag", async () => {
+    const { container } = render(EntityThumbnail, {
+      props: {
+        card: imageSequenceCard(),
+      },
+    });
+    const media = container.querySelector(".media") as HTMLElement;
+    media.setPointerCapture = vi.fn();
+    Object.defineProperty(media, "getBoundingClientRect", {
+      configurable: true,
+      value: () => ({ left: 0, width: 100 }),
+    });
+
+    await fireEvent(media, pointerEvent("pointerdown", 90, { pointerType: "touch", pointerId: 8 }));
+
+    expect(container.querySelector<HTMLImageElement>(".media > img")?.getAttribute("src")).toBe("/assets/pages/3.jpg");
     expect(container.querySelector(".sequence-rail span.is-active")).not.toBeNull();
   });
 
@@ -315,8 +357,14 @@ function personCard(): EntityThumbnailCard {
   };
 }
 
-function pointerEvent(type: string, clientX: number) {
+function pointerEvent(
+  type: string,
+  clientX: number,
+  options: { pointerId?: number; pointerType?: string } = {},
+) {
   const event = new Event(type, { bubbles: true, cancelable: true });
   Object.defineProperty(event, "clientX", { value: clientX });
+  Object.defineProperty(event, "pointerId", { value: options.pointerId ?? 1 });
+  Object.defineProperty(event, "pointerType", { value: options.pointerType ?? "mouse" });
   return event;
 }
