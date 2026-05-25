@@ -27,6 +27,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ### Fixed
 - Fixed Identify dashboard navigation so returning to `/identify` from a review detail exits the stale detail view.
+- Fixed Identify review navigation so walking between child proposals returns the page to the top of the new review.
 - Fixed Identify relationship review so walked cast, studio, and tag proposals hydrate current metadata from existing related entities.
 - Fixed Identify child proposal review so walked children load current metadata, use the same field/artwork/tag selectors as roots, and keep rich selector fields out of the diff table.
 - Fixed Identify proposal review so structural children use selectable thumbnails for inclusion and final accept actions stay on the root review.

@@ -2,7 +2,7 @@
   import "../app.css";
 
   import { afterNavigate } from "$app/navigation";
-  import { tick } from "svelte";
+  import { onMount, tick } from "svelte";
   import type { Snapshot } from "@sveltejs/kit";
   import { cn } from "@prismedia/ui-svelte";
   import Sidebar from "$lib/components/Sidebar.svelte";
@@ -15,6 +15,7 @@
   import { provideNsfw } from "$lib/nsfw/store.svelte";
   import { browser } from "$app/environment";
   import { provideAppChrome } from "$lib/stores/app-chrome.svelte";
+  import { MAIN_SCROLL_TOP_EVENT } from "$lib/stores/main-scroll";
   import { providePageSnapshots, type AppPageSnapshot } from "$lib/stores/page-snapshots.svelte";
   import { provideSearch } from "$lib/stores/search.svelte";
   import { providePlaylist } from "$lib/stores/playlist.svelte";
@@ -56,10 +57,23 @@
     void playlist.hydrate();
   });
 
+  function scrollMainToTop() {
+    void tick().then(() => {
+      mainScroller?.scrollTo({ top: 0, left: 0 });
+    });
+  }
+
   afterNavigate(({ from, to, type }) => {
     if (!from?.url || !to?.url || type === "popstate") return;
     if (from.url.pathname === to.url.pathname) return;
-    mainScroller?.scrollTo({ top: 0, left: 0 });
+    scrollMainToTop();
+  });
+
+  onMount(() => {
+    window.addEventListener(MAIN_SCROLL_TOP_EVENT, scrollMainToTop);
+    return () => {
+      window.removeEventListener(MAIN_SCROLL_TOP_EVENT, scrollMainToTop);
+    };
   });
 
   function restoreMainScroller(snapshot: { top: number; left: number }) {

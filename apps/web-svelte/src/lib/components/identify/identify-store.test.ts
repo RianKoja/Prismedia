@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { IdentifyStore } from "./identify-store.svelte";
 import type { EntityMetadataProposal } from "$lib/api/identify";
 import type { EntityCard, EntityDetailCard } from "$lib/api/prismedia";
+import { MAIN_SCROLL_TOP_EVENT } from "$lib/stores/main-scroll";
 
 const fetchPluginProviders = vi.fn();
 const fetchIdentifyQueue = vi.fn();
@@ -84,6 +85,21 @@ describe("IdentifyStore", () => {
     expect(fetchIdentifyEntity).toHaveBeenCalledWith("person-tim");
     expect(store.getReviewDetailForProposal("series-1", creditProposal)?.id).toBe(personDetail.id);
     expect(store.getReviewDetailForProposal("series-1", creditProposal)?.title).toBe(personDetail.title);
+  });
+
+  it("requests a main scroll reset when navigating between review views", () => {
+    const store = new IdentifyStore();
+    const dispatchEvent = vi.spyOn(window, "dispatchEvent");
+
+    store.navigateTo({
+      kind: "review-child",
+      entity: entity("series-1"),
+      proposal: proposal("child-proposal", { targetKind: "video-episode", title: "Episode" }),
+      parentProposal: proposal("parent-proposal"),
+      ancestors: [proposal("parent-proposal")],
+    });
+
+    expect(dispatchEvent.mock.calls.some(([event]) => event.type === MAIN_SCROLL_TOP_EVENT)).toBe(true);
   });
 });
 

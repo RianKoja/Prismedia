@@ -19,6 +19,7 @@ import {
 import type { EntityCard, EntityDetailCard } from "$lib/api/prismedia";
 import { entityCardToThumbnailCard } from "$lib/entities/entity-grid";
 import { resolveEntityHrefById } from "$lib/entities/entity-route-resolver";
+import { requestMainScrollTop } from "$lib/stores/main-scroll";
 
 export type IdentifyView =
   | { kind: "dashboard" }
@@ -186,6 +187,7 @@ export class IdentifyStore {
     this.view = view;
     this.error = null;
     this.message = null;
+    if (shouldResetScrollForView(view)) requestMainScrollTop();
   }
 
   navigateToDashboard() {
@@ -611,6 +613,10 @@ function entityCardFromQueueItem(item: ApiIdentifyQueueItem): EntityCard {
     isNsfw: false,
     isOrganized: false,
   };
+}
+
+function shouldResetScrollForView(view: IdentifyView): boolean {
+  return view.kind === "review-parent" || view.kind === "review-child";
 }
 
 function relationshipEntityIdForProposal(
