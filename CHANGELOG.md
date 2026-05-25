@@ -17,6 +17,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - Added a worker status badge to Job Control so stalled queues show when the background worker is offline.
 
 ### Changed
+- Bulk identify now runs as a durable background job instead of an ephemeral in-memory session, so progress survives app restarts and results feed directly into the identify review queue.
+- Standardized all API error responses to use the `ApiProblem` format with consistent `code` and `message` fields.
 - Removed development-only links from app navigation.
 - Removed the summary stats cards from the Identify dashboard so the page starts with actionable queue content.
 - Removed the redundant plugin inventory panel from the Identify dashboard.
