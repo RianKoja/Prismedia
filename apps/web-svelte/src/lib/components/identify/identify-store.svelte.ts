@@ -433,6 +433,33 @@ export class IdentifyStore {
     }
   }
 
+  reviewDetailEntityIdForProposal(scopeEntityId: string, proposal: EntityMetadataProposal): string | null {
+    if (proposal.targetEntityId) return proposal.targetEntityId;
+    return relationshipEntityIdForProposal(this.getReviewDetail(scopeEntityId), proposal);
+  }
+
+  getReviewDetailForProposal(scopeEntityId: string, proposal: EntityMetadataProposal): EntityDetailCard | null {
+    const entityId = this.reviewDetailEntityIdForProposal(scopeEntityId, proposal);
+    return entityId ? this.getReviewDetail(entityId) : null;
+  }
+
+  async ensureReviewDetailForProposal(
+    scopeEntityId: string,
+    proposal: EntityMetadataProposal,
+  ): Promise<EntityDetailCard | null> {
+    if (proposal.targetEntityId) {
+      return this.ensureReviewDetail(proposal.targetEntityId);
+    }
+
+    let entityId = this.reviewDetailEntityIdForProposal(scopeEntityId, proposal);
+    if (!entityId && !this.getReviewDetail(scopeEntityId)) {
+      await this.ensureReviewDetail(scopeEntityId);
+      entityId = this.reviewDetailEntityIdForProposal(scopeEntityId, proposal);
+    }
+
+    return entityId ? this.ensureReviewDetail(entityId) : null;
+  }
+
   getReviewFieldSelections(proposalId: string): Record<string, boolean> | null {
     const selected = this.reviewFieldSelections[proposalId];
     return selected ? { ...selected } : null;
@@ -584,6 +611,42 @@ function entityCardFromQueueItem(item: ApiIdentifyQueueItem): EntityCard {
     isNsfw: false,
     isOrganized: false,
   };
+}
+
+function relationshipEntityIdForProposal(
+  detail: EntityDetailCard | null | undefined,
+  proposal: EntityMetadataProposal,
+): string | null {
+  const title = proposal.patch.title?.trim();
+  if (!title) return null;
+
+  return (detail?.relationships ?? [])
+    .filter((group) => relationshipGroupMatchesKind(group.kind, group.code, proposal.targetKind))
+    .flatMap((group) => group.entities)
+    .find((entity) => entity.title.localeCompare(title, undefined, { sensitivity: "accent" }) === 0)
+    ?.id ?? null;
+}
+
+function relationshipGroupMatchesKind(kind: string, code: string | null | undefined, targetKind: string): boolean {
+  const normalizedKind = kind.toLowerCase();
+  const normalizedCode = code?.toLowerCase() ?? "";
+  const normalizedTarget = targetKind.toLowerCase();
+  if (normalizedKind === normalizedTarget || normalizedCode === normalizedTarget) return true;
+
+  if (normalizedTarget === "person") {
+    return normalizedKind === "cast" || normalizedCode === "cast" ||
+      normalizedKind === "credits" || normalizedCode === "credits";
+  }
+
+  if (normalizedTarget === "tag") {
+    return normalizedKind === "tags" || normalizedCode === "tags";
+  }
+
+  if (normalizedTarget === "studio") {
+    return normalizedKind === "studios" || normalizedCode === "studios";
+  }
+
+  return false;
 }
 
 function readError(err: unknown): string {

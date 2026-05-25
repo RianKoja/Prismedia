@@ -61,7 +61,9 @@
   const credits = $derived(relationships.filter((r) => r.targetKind === "person"));
   const nonCreditRelationships = $derived(relationships.filter((r) => r.targetKind !== "person"));
   const tags = $derived(proposal.patch?.tags ?? []);
-  const currentDetail = $derived(proposal.targetEntityId ? store.getReviewDetail(proposal.targetEntityId) : null);
+  const currentScopeEntityId = $derived(parentProposal.targetEntityId ?? entity.id);
+  const currentDetailEntityId = $derived(store.reviewDetailEntityIdForProposal(currentScopeEntityId, proposal));
+  const currentDetail = $derived(store.getReviewDetailForProposal(currentScopeEntityId, proposal));
   const existingTagTitles = $derived(relationshipTitlesForDetail(currentDetail, "tag"));
   const looseTags = $derived(tags.filter((tag) => !tagRelationshipForTitle(tag)));
   const imageGroups = $derived(groupReviewImages(proposal));
@@ -78,9 +80,7 @@
   const nextChild = $derived(currentIndex < parentChildren.length - 1 ? parentChildren[currentIndex + 1] : null);
 
   $effect(() => {
-    if (proposal.targetEntityId) {
-      void store.ensureReviewDetail(proposal.targetEntityId);
-    }
+    void store.ensureReviewDetailForProposal(currentScopeEntityId, proposal);
   });
 
   $effect(() => {
@@ -111,7 +111,7 @@
 
   function currentEntityFallback(): EntityCard {
     return {
-      id: proposal.targetEntityId ?? proposal.proposalId,
+      id: currentDetailEntityId ?? proposal.targetEntityId ?? proposal.proposalId,
       kind: proposal.targetKind,
       title: currentDetail?.title ?? "",
       parentEntityId: null,
