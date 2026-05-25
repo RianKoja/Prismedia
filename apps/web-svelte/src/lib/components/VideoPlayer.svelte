@@ -136,6 +136,7 @@
     initialMuted?: boolean;
     onEnded?: () => void;
     autoPlay?: boolean;
+    autoRepeat?: boolean;
     handle?: VideoPlayerHandle;
   }
 
@@ -198,6 +199,7 @@
     initialMuted = false,
     onEnded,
     autoPlay = false,
+    autoRepeat = false,
     handle = $bindable(),
   }: Props = $props();
 
@@ -1510,6 +1512,7 @@
         crossOrigin
         playsInline
         autoPlay={autoPlay}
+        loop={autoRepeat}
         muted={initialMuted}
         bind:this={player}
         onclick={(event) => {
@@ -1533,7 +1536,8 @@
         <media-time-slider
           class={cn(
             "video-time-slider mobile-video-progress group/track",
-            showControls ? "opacity-100" : "opacity-0",
+            !fullChrome && "is-minimal-progress",
+            !fullChrome || showControls ? "opacity-100" : "opacity-0",
             markers.length === 0 && "no-markers",
           )}
           style:--prismedia-slider-fill={`${playbackProgressPercent}%`}
@@ -1547,7 +1551,7 @@
           }}
           onpointerleave={() => (timelineHover = null)}
         >
-          {#if timelineHover}
+          {#if fullChrome && timelineHover}
             <div
               class="pointer-events-none absolute bottom-[calc(100%+0.6rem)] z-20 w-[min(11rem,54vw)] border border-border-default bg-[rgba(12,15,21,0.72)] p-1.5 text-center shadow-[0_2px_12px_rgba(0,0,0,0.35)] backdrop-blur-[12px] rounded-[10px] overflow-hidden"
               style:left="clamp(0%, {timelineHover.percent}%, 100%)"
@@ -1582,22 +1586,26 @@
               {/if}
             </div>
           {/if}
-          <div class="video-slider-native-progress is-buffered"></div>
+          {#if fullChrome}
+            <div class="video-slider-native-progress is-buffered"></div>
+          {/if}
           <div class="video-slider-native-progress is-played"></div>
-          <media-slider-chapters>
-            <template>
-              <div class="video-slider-chapter">
-                <div class="video-slider-track"></div>
-                <div class="video-slider-track-progress"></div>
-                <div class="video-slider-track-fill"></div>
-              </div>
-            </template>
-          </media-slider-chapters>
-          <media-slider-preview class="video-slider-preview">
-            <span data-part="chapter-title" class="video-slider-chapter-title"></span>
-            <media-slider-value type="pointer" class="video-slider-time"></media-slider-value>
-          </media-slider-preview>
-          <div class="video-slider-thumb"></div>
+          {#if fullChrome}
+            <media-slider-chapters>
+              <template>
+                <div class="video-slider-chapter">
+                  <div class="video-slider-track"></div>
+                  <div class="video-slider-track-progress"></div>
+                  <div class="video-slider-track-fill"></div>
+                </div>
+              </template>
+            </media-slider-chapters>
+            <media-slider-preview class="video-slider-preview">
+              <span data-part="chapter-title" class="video-slider-chapter-title"></span>
+              <media-slider-value type="pointer" class="video-slider-time"></media-slider-value>
+            </media-slider-preview>
+            <div class="video-slider-thumb"></div>
+          {/if}
         </media-time-slider>
       </media-player>
     {:else if requestedPlayerSrc}
@@ -2698,6 +2706,20 @@
     z-index: 45;
   }
 
+  .video-time-slider.is-minimal-progress {
+    background: rgba(255, 255, 255, 0.18);
+    bottom: 0;
+    height: 4px;
+    left: 0;
+    overflow: hidden;
+    right: 0;
+    z-index: 55;
+  }
+
+  .video-time-slider.is-minimal-progress:hover {
+    height: 6px;
+  }
+
   .video-time-slider media-slider-chapters {
     align-items: center;
     display: flex;
@@ -2807,6 +2829,11 @@
 
     .video-time-slider.no-markers {
       bottom: 5.25rem;
+    }
+
+    .video-time-slider.is-minimal-progress,
+    .video-time-slider.is-minimal-progress.no-markers {
+      bottom: 0;
     }
 
     .mobile-video-progress {

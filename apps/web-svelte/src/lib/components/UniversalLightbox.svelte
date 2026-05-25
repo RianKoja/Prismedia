@@ -426,15 +426,6 @@
         ondblclick={handleDoubleClick}
         style:cursor={!isCurrentVideo && scale > fitScale + 0.02 ? (panning ? "grabbing" : "grab") : "default"}
       >
-        {#if entities.length > 1}
-          <button type="button" onclick={goPrev} class="nav-button is-prev" aria-label="Previous">
-            <ChevronLeft class="h-6 w-6" />
-          </button>
-          <button type="button" onclick={goNext} class="nav-button is-next" aria-label="Next">
-            <ChevronRight class="h-6 w-6" />
-          </button>
-        {/if}
-
         {#if current}
           <div
             class="media-frame"
@@ -457,6 +448,7 @@
                   enableKeyboardShortcuts={false}
                   initialMuted={videoMuted}
                   autoPlay
+                  autoRepeat
                 />
               {:else if currentImageSource}
                 <img
@@ -602,8 +594,7 @@
     gap: 0.15rem;
   }
 
-  .lightbox-button,
-  .nav-button {
+  .lightbox-button {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -615,8 +606,7 @@
   }
 
   .lightbox-button:hover,
-  .lightbox-button.is-active,
-  .nav-button:hover {
+  .lightbox-button.is-active {
     border-color: rgb(196 154 90 / 0.45);
     color: var(--color-text-accent, #c49a5a);
     box-shadow: 0 0 18px rgb(196 154 90 / 0.22);
@@ -653,24 +643,6 @@
     flex: 1;
     overflow: hidden;
     user-select: none;
-  }
-
-  .nav-button {
-    position: absolute;
-    top: 50%;
-    z-index: 10;
-    width: 2.6rem;
-    height: 2.6rem;
-    background: rgb(0 0 0 / 0.54);
-    transform: translateY(-50%);
-  }
-
-  .nav-button.is-prev {
-    left: 0.75rem;
-  }
-
-  .nav-button.is-next {
-    right: 0.75rem;
   }
 
   .media-frame {
@@ -773,8 +745,7 @@
       display: none;
     }
 
-    .keyboard-hints,
-    .nav-button {
+    .keyboard-hints {
       display: none;
     }
   }

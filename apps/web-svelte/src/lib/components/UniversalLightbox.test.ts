@@ -145,7 +145,7 @@ describe("UniversalLightbox", () => {
     expect(screen.queryByRole("button", { name: "Player settings" })).not.toBeInTheDocument();
   });
 
-  it("autoplays video-capable items muted with a lightbox mute toggle", async () => {
+  it("autoplays video-capable items muted and repeating with a lightbox mute toggle", async () => {
     render(UniversalLightboxHarness, {
       props: { entities: [animated], initialIndex: 0, onClose: vi.fn() },
     });
@@ -154,6 +154,9 @@ describe("UniversalLightbox", () => {
       expect(screen.getByTestId("vidstack-video-player")).toBeInTheDocument();
     });
     expect(screen.getByRole("button", { name: "Unmute" })).toBeInTheDocument();
+
+    const source = await readFile("src/lib/components/UniversalLightbox.svelte", "utf8");
+    expect(source).toContain("autoRepeat");
   });
 
   it("sizes embedded minimal videos with a real responsive lightbox frame", async () => {
@@ -162,5 +165,13 @@ describe("UniversalLightbox", () => {
     expect(source).toContain(".media-frame :global([data-testid=\"vidstack-video-player\"])");
     expect(source).toContain("aspect-ratio: 16 / 9;");
     expect(source).toContain("max-height: calc(100dvh - 10rem);");
+  });
+
+  it("keeps lightbox navigation in the bars instead of overlaying media", async () => {
+    const source = await readFile("src/lib/components/UniversalLightbox.svelte", "utf8");
+
+    expect(source).not.toContain("nav-button is-prev");
+    expect(source).not.toContain("nav-button is-next");
+    expect(source).toContain("bottom-controls");
   });
 });

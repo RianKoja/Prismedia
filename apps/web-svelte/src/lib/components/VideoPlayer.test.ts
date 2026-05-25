@@ -188,13 +188,14 @@ describe("VideoPlayer", () => {
     expect(screen.queryByRole("button", { name: "Fullscreen" })).not.toBeInTheDocument();
   });
 
-  it("can mount autoplay media muted for lightbox playback", async () => {
+  it("can mount autoplay looping media muted for lightbox playback", async () => {
     render(VideoPlayer, {
       props: {
         directSrc: "/fixtures/lightbox/animated-loop.webm",
         defaultPlaybackMode: "direct",
         chrome: "minimal",
         autoPlay: true,
+        autoRepeat: true,
         initialMuted: true,
       },
     });
@@ -203,6 +204,7 @@ describe("VideoPlayer", () => {
       expect(document.querySelector("media-player")).toBeInTheDocument();
     });
     expect(document.querySelector("media-player")?.getAttribute("muted")).not.toBeNull();
+    expect(document.querySelector("media-player")?.getAttribute("loop")).not.toBeNull();
   });
 
   it("keeps minimal lightbox video clicks and muted state on the native media element", async () => {
@@ -456,6 +458,17 @@ describe("VideoPlayer", () => {
     expect(source).toContain("left: var(--prismedia-slider-fill, var(--slider-fill, 0%));");
   });
 
+  it("keeps minimal lightbox progress visible at the bottom edge", async () => {
+    const source = await readFile("src/lib/components/VideoPlayer.svelte", "utf8");
+
+    expect(source).toContain('!fullChrome && "is-minimal-progress"');
+    expect(source).toContain('!fullChrome || showControls ? "opacity-100" : "opacity-0"');
+    expect(source).toContain("{#if fullChrome && timelineHover}");
+    expect(source).toContain(".video-time-slider.is-minimal-progress");
+    expect(source).toContain("background: rgba(255, 255, 255, 0.18)");
+    expect(source).toContain("bottom: 0;");
+  });
+
   it("keeps VidStack controls synchronized with the native video element", async () => {
     const source = await readFile("src/lib/components/VideoPlayer.svelte", "utf8");
 
@@ -471,7 +484,8 @@ describe("VideoPlayer", () => {
     const source = await readFile("src/lib/components/VideoPlayer.svelte", "utf8");
 
     expect(source).toContain('data-testid="video-marker-chip"');
-    expect(source).toContain('class="pointer-events-auto order-3 hidden flex-wrap gap-1.5 sm:flex"');
+    expect(source).toContain("pointer-events-auto order-3 hidden flex-wrap gap-1.5");
+    expect(source).toContain("sm:flex");
     expect(source).toContain("onpointerdown={(event) => event.stopPropagation()}");
     expect(source).toContain("aria-label={`Seek to ${marker.title}`}");
   });
@@ -486,7 +500,7 @@ describe("VideoPlayer", () => {
     expect(source).toContain("bottom: 7.25rem");
     expect(source).toContain("height: auto");
     expect(source).toContain("position: absolute");
-    expect(source).toContain("animation: player-settings-flyout-in 160ms ease-out");
+    expect(source).toContain("animation: player-settings-flyout-in var(--duration-moderate) var(--ease-enter)");
   });
 
   it("keeps the sidecar button square like the other player controls", async () => {
