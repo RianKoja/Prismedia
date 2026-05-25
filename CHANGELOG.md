@@ -17,6 +17,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - Added a worker status badge to Job Control so stalled queues show when the background worker is offline.
 
 ### Changed
+- Removed the redundant plugin inventory panel from the Identify dashboard.
 - Simplified the Identify dashboard header by removing the redundant manual refresh action.
 - Updated entity grid filter count badges to use Prism Noir Luxe brass-on-glass styling.
 - Moved common thumbnail badges for NSFW, rating, and episode/season position onto the thumbnail image so below-title chips can focus on entity-specific metadata.

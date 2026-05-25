@@ -1,12 +1,8 @@
 <script lang="ts">
   import {
     ChevronRight,
-    Filter,
-    Loader2,
-    Plug,
     ScanSearch,
     Sparkles,
-    Zap,
   } from "@lucide/svelte";
   import { cn, StatusLed } from "@prismedia/ui-svelte";
   import { useIdentifyStore } from "./identify-store.svelte";
@@ -47,45 +43,6 @@
       <span class="font-mono text-[0.7rem] text-text-muted">active</span>
     </div>
   </div>
-
-  <!-- Plugins strip -->
-  <section class="surface-panel overflow-hidden">
-    <header class="flex items-center gap-2.5 border-b border-border-subtle bg-surface-2 px-3.5 py-2.5">
-      <Plug class="h-3.5 w-3.5 text-text-accent" />
-      <span class="text-kicker text-text-accent">Plugins</span>
-      <span class="font-mono text-[0.7rem] text-text-muted">
-        {store.providers.filter((p) => p.installed && p.enabled).length} active
-      </span>
-    </header>
-    <div class="grid grid-cols-1 gap-2 p-3 sm:grid-cols-2 lg:grid-cols-3">
-      {#each store.providers as provider (provider.id)}
-        {@const active = provider.installed && provider.enabled}
-        {@const needsAuth = provider.missingAuthKeys.length > 0}
-        <div
-          class={cn(
-            "flex items-center gap-3 rounded-sm border p-2.5 transition-colors",
-            active && !needsAuth
-              ? "border-border-accent bg-accent-950/30"
-              : "border-border-default bg-surface-1",
-          )}
-        >
-          <StatusLed
-            status={needsAuth ? "warning" : active ? "accent" : "idle"}
-            pulse={active && !needsAuth}
-          />
-          <div class="min-w-0 flex-1">
-            <div class="truncate font-heading text-[0.82rem] font-semibold text-text-primary">
-              {provider.name}
-            </div>
-            <div class="font-mono text-[0.66rem] text-text-muted">
-              {provider.supports.map((s) => s.entityKind).join(", ")}
-            </div>
-          </div>
-          <span class="font-mono text-[0.66rem] text-text-disabled">v{provider.version}</span>
-        </div>
-      {/each}
-    </div>
-  </section>
 
   <!-- Queue -->
   {#if store.queue.length > 0}
