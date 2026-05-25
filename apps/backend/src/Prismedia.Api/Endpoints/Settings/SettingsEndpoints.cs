@@ -1,5 +1,6 @@
 using Prismedia.Application.Settings;
 using Prismedia.Contracts.Settings;
+using Prismedia.Contracts.System;
 
 namespace Prismedia.Api.Endpoints;
 
@@ -101,16 +102,8 @@ public static class SettingsEndpoints {
     }
 
     private static IResult SettingNotFound(SettingNotFoundException ex) =>
-        Results.Problem(
-            title: "Setting not found",
-            detail: ex.Message,
-            statusCode: StatusCodes.Status404NotFound,
-            extensions: new Dictionary<string, object?> { ["key"] = ex.Key });
+        Results.NotFound(new ApiProblem("setting_not_found", ex.Message));
 
     private static IResult InvalidSetting(SettingValidationException ex) =>
-        Results.Problem(
-            title: "Invalid setting value",
-            detail: ex.Message,
-            statusCode: StatusCodes.Status400BadRequest,
-            extensions: new Dictionary<string, object?> { ["key"] = ex.Key });
+        Results.BadRequest(new ApiProblem("setting_invalid", ex.Message));
 }

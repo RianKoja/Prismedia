@@ -67,11 +67,13 @@ public sealed class SettingsEndpointServiceTests {
         var invalid = await client.PatchAsJsonAsync(
             $"/api/settings/{AppSettingKeys.JobsBackgroundConcurrency}",
             new SettingUpdateRequest(JsonSerializer.SerializeToElement(99)));
+        var unknownJson = await unknown.Content.ReadFromJsonAsync<JsonElement>();
         var invalidJson = await invalid.Content.ReadFromJsonAsync<JsonElement>();
 
         Assert.Equal(HttpStatusCode.NotFound, unknown.StatusCode);
+        Assert.Equal("setting_not_found", unknownJson.GetProperty("code").GetString());
         Assert.Equal(HttpStatusCode.BadRequest, invalid.StatusCode);
-        Assert.Equal(AppSettingKeys.JobsBackgroundConcurrency, invalidJson.GetProperty("key").GetString());
+        Assert.Equal("setting_invalid", invalidJson.GetProperty("code").GetString());
     }
 
     [Fact]

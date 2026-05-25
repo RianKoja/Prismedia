@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Prismedia.Application.Jobs;
+using Prismedia.Contracts.System;
 
 namespace Prismedia.Api.Endpoints;
 
@@ -10,7 +11,7 @@ internal static class JobCancelEndpoints {
             JobService jobs,
             CancellationToken cancellationToken) => {
                 if (!JobRouteValues.TryDecodeJobType(type, out var jobType)) {
-                    return Results.BadRequest(new { message = $"Unknown job type '{type}'." });
+                    return Results.BadRequest(new ApiProblem("unknown_job_type", $"Unknown job type '{type}'."));
                 }
 
                 return Results.Ok(await jobs.CancelAsync(jobType, cancellationToken));
