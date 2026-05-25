@@ -1,7 +1,7 @@
 <script lang="ts">
   import {
     ChevronRight,
-    Film,
+    Layers,
     Loader2,
     Search,
     Star,
@@ -74,23 +74,33 @@
 
 <div class="flex flex-col gap-4">
   <!-- Entity context bar -->
-  <div class="grid grid-cols-[auto_1fr_auto] items-center gap-4 rounded-sm border border-border-subtle border-l-2 border-l-warning bg-surface-1 p-3.5">
-    <div class="grid h-11 w-11 place-items-center rounded-xs border border-dashed border-border-default bg-surface-3 text-text-disabled">
-      <Film class="h-5 w-5" />
-    </div>
+  <div class="grid grid-cols-[auto_1fr_auto_auto] items-center gap-4 rounded-sm border border-border-subtle bg-surface-1 p-3.5 shadow-well">
+    {#if entity.coverUrl}
+      <img src={entity.coverUrl} alt="" class="h-16 w-11 rounded-xs object-cover" decoding="async" />
+    {:else}
+      <div class="grid h-16 w-11 place-items-center rounded-xs bg-surface-3">
+        <Layers class="h-5 w-5 text-text-disabled" />
+      </div>
+    {/if}
     <div class="min-w-0">
       <div class="flex items-baseline gap-2">
-        <span class="text-kicker">{entity.kind} · awaiting match</span>
-        <span class="rounded-xs border border-warning/30 bg-warning-muted px-1.5 py-0.5 font-mono text-[0.6rem] text-warning-text">
-          {localCandidates.length} candidates
+        <h2 class="truncate">{entity.title}</h2>
+        <span class="rounded-xs border border-phosphor-600/20 bg-surface-3 px-1.5 py-0.5 font-mono text-[0.6rem] text-phosphor-600">
+          {entity.kind}
         </span>
       </div>
-      <h3 class="mt-1 truncate font-mono text-[1rem] font-medium">{entity.title}</h3>
+      <div class="mt-0.5 truncate font-mono text-[0.7rem] text-text-muted">awaiting match</div>
     </div>
     <div class="hidden flex-col items-end gap-0.5 md:flex">
-      <span class="text-kicker">Filename</span>
-      <span class="text-[0.74rem] text-text-secondary">{entity.title}</span>
+      <span class="text-kicker">Candidates</span>
+      <span class="font-mono font-semibold text-text-accent">{localCandidates.length}</span>
     </div>
+    {#if defaultProvider}
+      <div class="hidden flex-col items-end gap-0.5 md:flex">
+        <span class="text-kicker">Provider</span>
+        <span class="text-[0.82rem] text-text-primary">{defaultProvider.name}</span>
+      </div>
+    {/if}
   </div>
 
   <!-- Manual search panel -->

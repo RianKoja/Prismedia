@@ -296,22 +296,22 @@
 
 <div class="flex flex-col gap-4">
   <!-- Nav -->
-  <div class="flex items-center gap-3">
+  <div class="flex flex-col gap-2 md:flex-row md:items-center md:gap-3">
     <button
       type="button"
-      class="inline-flex h-8 items-center gap-1.5 rounded-xs border border-border-default bg-surface-2 px-2.5 text-[0.78rem] text-text-muted transition-colors hover:bg-surface-3 hover:text-text-primary"
+      class="inline-flex h-10 items-center justify-center gap-1.5 rounded-xs border border-border-default bg-surface-2 px-2.5 text-[0.78rem] text-text-muted transition-colors hover:bg-surface-3 hover:text-text-primary md:h-8 md:flex-none"
       onclick={goBackToParent}
     >
       <ChevronLeft class="h-3.5 w-3.5" />
       {parentProposal.patch?.title ?? entity.title}
     </button>
-    <div class="flex-1"></div>
+    <div class="hidden flex-1 md:block"></div>
     <!-- Sibling nav -->
     {#if parentChildren.length > 1}
-      <div class="flex items-center gap-1.5">
+      <div class="flex items-center justify-center gap-1.5">
         <button
           type="button"
-          class="inline-flex h-7 w-7 items-center justify-center rounded-xs border border-border-default bg-surface-2 text-text-muted transition-colors hover:bg-surface-3 disabled:opacity-30"
+          class="inline-flex h-8 w-8 items-center justify-center rounded-xs border border-border-default bg-surface-2 text-text-muted transition-colors hover:bg-surface-3 disabled:opacity-30 md:h-7 md:w-7"
           disabled={!prevChild}
           onclick={() => prevChild && goToSibling(prevChild)}
           aria-label="Previous sibling"
@@ -323,7 +323,7 @@
         </span>
         <button
           type="button"
-          class="inline-flex h-7 w-7 items-center justify-center rounded-xs border border-border-default bg-surface-2 text-text-muted transition-colors hover:bg-surface-3 disabled:opacity-30"
+          class="inline-flex h-8 w-8 items-center justify-center rounded-xs border border-border-default bg-surface-2 text-text-muted transition-colors hover:bg-surface-3 disabled:opacity-30 md:h-7 md:w-7"
           disabled={!nextChild}
           onclick={() => nextChild && goToSibling(nextChild)}
           aria-label="Next sibling"
@@ -623,20 +623,20 @@
   {/if}
 
   <!-- Action footer -->
-  <div class="flex items-center gap-3 py-2">
+  <div class="flex flex-col gap-2 py-2 md:flex-row md:items-center md:gap-3">
     <button
       type="button"
-      class="inline-flex h-9 items-center gap-1.5 rounded-xs border border-border-default bg-surface-2 px-3 text-[0.78rem] text-text-muted transition-colors hover:bg-surface-3 hover:text-text-primary"
+      class="inline-flex h-10 items-center justify-center gap-1.5 rounded-xs border border-border-default bg-surface-2 px-3 text-[0.78rem] text-text-muted transition-colors hover:bg-surface-3 hover:text-text-primary md:h-9 md:flex-none"
       onclick={goBackToParent}
     >
       <ChevronLeft class="h-3.5 w-3.5" />
       {parentProposal.patch?.title ?? entity.title}
     </button>
     {#if parentChildren.length > 1}
-      <div class="flex items-center gap-1.5">
+      <div class="flex items-center justify-center gap-1.5">
         <button
           type="button"
-          class="inline-flex h-7 w-7 items-center justify-center rounded-xs border border-border-default bg-surface-2 text-text-muted transition-colors hover:bg-surface-3 disabled:opacity-30"
+          class="inline-flex h-8 w-8 items-center justify-center rounded-xs border border-border-default bg-surface-2 text-text-muted transition-colors hover:bg-surface-3 disabled:opacity-30 md:h-7 md:w-7"
           disabled={!prevChild}
           onclick={() => prevChild && goToSibling(prevChild)}
           aria-label="Previous sibling"
@@ -648,7 +648,7 @@
         </span>
         <button
           type="button"
-          class="inline-flex h-7 w-7 items-center justify-center rounded-xs border border-border-default bg-surface-2 text-text-muted transition-colors hover:bg-surface-3 disabled:opacity-30"
+          class="inline-flex h-8 w-8 items-center justify-center rounded-xs border border-border-default bg-surface-2 text-text-muted transition-colors hover:bg-surface-3 disabled:opacity-30 md:h-7 md:w-7"
           disabled={!nextChild}
           onclick={() => nextChild && goToSibling(nextChild)}
           aria-label="Next sibling"

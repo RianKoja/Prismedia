@@ -71,29 +71,28 @@
 </svelte:head>
 
 <div class="flex flex-col gap-4 pb-16">
-  <div class="flex items-center gap-3">
-    <!-- Breadcrumb -->
-    <div class="flex items-center gap-1.5 text-[0.78rem]">
-      <a
-        href="/identify"
-        class="text-text-muted transition-colors hover:text-text-accent"
-      >
-        Identify
-      </a>
-      {#if current}
-        <ChevronRight class="h-3 w-3 text-text-disabled" />
-        <span class="font-heading font-semibold text-text-primary">{current.title}</span>
-      {/if}
-    </div>
+  <!-- Breadcrumb row -->
+  <div class="flex items-center gap-1.5 text-[0.78rem]">
+    <a
+      href="/identify"
+      class="text-text-muted transition-colors hover:text-text-accent"
+    >
+      Identify
+    </a>
+    {#if current}
+      <ChevronRight class="h-3 w-3 text-text-disabled" />
+      <span class="truncate font-heading font-semibold text-text-primary">{current.title}</span>
+    {/if}
+  </div>
 
-    <div class="flex-1"></div>
-
+  <!-- Controls row -->
+  <div class="flex flex-col gap-2 md:flex-row md:items-center md:gap-3">
     <!-- Queue position nav -->
     {#if store.queue.length > 1 && queueIndex >= 0}
       <div class="flex items-center gap-1.5">
         <button
           type="button"
-          class="inline-flex h-7 w-7 items-center justify-center rounded-xs border border-border-default bg-surface-2 text-text-muted transition-colors hover:bg-surface-3 disabled:opacity-30"
+          class="inline-flex h-8 w-8 items-center justify-center rounded-xs border border-border-default bg-surface-2 text-text-muted transition-colors hover:bg-surface-3 disabled:opacity-30 md:h-7 md:w-7"
           disabled={!prevQueueItem}
           onclick={() => goToQueueItem(prevQueueItem)}
           aria-label="Previous queue item"
@@ -105,20 +104,33 @@
         </span>
         <button
           type="button"
-          class="inline-flex h-7 w-7 items-center justify-center rounded-xs border border-border-default bg-surface-2 text-text-muted transition-colors hover:bg-surface-3 disabled:opacity-30"
+          class="inline-flex h-8 w-8 items-center justify-center rounded-xs border border-border-default bg-surface-2 text-text-muted transition-colors hover:bg-surface-3 disabled:opacity-30 md:h-7 md:w-7"
           disabled={!nextQueueItem}
           onclick={() => goToQueueItem(nextQueueItem)}
           aria-label="Next queue item"
         >
           <ChevronDown class="h-3.5 w-3.5" />
         </button>
+        <div class="flex-1 md:hidden"></div>
+        {#if current}
+          <button
+            type="button"
+            class="inline-flex h-8 items-center gap-1.5 rounded-xs border border-border-default bg-surface-2 px-2.5 text-[0.76rem] text-text-muted transition-colors hover:border-error/50 hover:text-error-text md:hidden"
+            onclick={cancelItem}
+          >
+            <X class="h-3.5 w-3.5" />
+            Cancel
+          </button>
+        {/if}
       </div>
     {/if}
+
+    <div class="hidden flex-1 md:block"></div>
 
     {#if current}
       <button
         type="button"
-        class="inline-flex h-8 items-center gap-1.5 rounded-xs border border-border-default bg-surface-2 px-2.5 text-[0.76rem] text-text-muted transition-colors hover:border-error/50 hover:text-error-text"
+        class="hidden h-8 items-center gap-1.5 rounded-xs border border-border-default bg-surface-2 px-2.5 text-[0.76rem] text-text-muted transition-colors hover:border-error/50 hover:text-error-text md:inline-flex"
         onclick={cancelItem}
       >
         <X class="h-3.5 w-3.5" />

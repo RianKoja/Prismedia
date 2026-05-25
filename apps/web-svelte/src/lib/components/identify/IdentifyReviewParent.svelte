@@ -572,78 +572,86 @@
   {/if}
 
   <!-- Action footer -->
-  <div class="flex items-center gap-3 py-2">
-    <button
-      type="button"
-      class="inline-flex h-9 items-center gap-1.5 rounded-xs border border-border-default bg-transparent px-3 text-[0.78rem] text-text-muted transition-colors hover:border-error/50 hover:text-error-text"
-      onclick={() => void store.deleteQueueItem(entity.id)}
-    >
-      <X class="h-3.5 w-3.5" />
-      Cancel
-    </button>
-    <span class="font-mono text-[0.7rem] text-text-muted">
+  <div class="flex flex-col gap-2 py-2 md:flex-row md:items-center md:gap-3">
+    <!-- Top row on mobile: cancel + summary -->
+    <div class="flex items-center gap-3">
+      <button
+        type="button"
+        class="inline-flex h-10 flex-1 items-center justify-center gap-1.5 rounded-xs border border-border-default bg-transparent text-[0.78rem] text-text-muted transition-colors hover:border-error/50 hover:text-error-text md:h-9 md:flex-none md:px-3"
+        onclick={() => void store.deleteQueueItem(entity.id)}
+      >
+        <X class="h-3.5 w-3.5" />
+        Cancel
+      </button>
+      {#if store.queue.length > 1 && queueIndex >= 0}
+        <div class="flex items-center gap-1.5">
+          <button
+            type="button"
+            class="inline-flex h-8 w-8 items-center justify-center rounded-xs border border-border-default bg-surface-2 text-text-muted transition-colors hover:bg-surface-3 disabled:opacity-30 md:h-7 md:w-7"
+            disabled={!prevQueueNavItem}
+            onclick={() => prevQueueNavItem && store.reviewQueueItem(prevQueueNavItem)}
+            aria-label="Previous queue item"
+          >
+            <ChevronUp class="h-3.5 w-3.5" />
+          </button>
+          <span class="font-mono text-[0.72rem] text-text-muted">
+            {queueIndex + 1}/{store.queue.length}
+          </span>
+          <button
+            type="button"
+            class="inline-flex h-8 w-8 items-center justify-center rounded-xs border border-border-default bg-surface-2 text-text-muted transition-colors hover:bg-surface-3 disabled:opacity-30 md:h-7 md:w-7"
+            disabled={!nextQueueNavItem}
+            onclick={() => nextQueueNavItem && store.reviewQueueItem(nextQueueNavItem)}
+            aria-label="Next queue item"
+          >
+            <ChevronDown class="h-3.5 w-3.5" />
+          </button>
+        </div>
+      {/if}
+    </div>
+
+    <span class="hidden font-mono text-[0.7rem] text-text-muted md:inline">
       {Object.values(selectedFields).filter(Boolean).length} fields
       · {Object.values(selectedImages).filter(Boolean).length} imgs
       · {selectedRelationshipCount} rels
       · {selectedTagCount} tags
       · {selectedChildCount} children
     </span>
-    <div class="flex-1"></div>
-    {#if store.queue.length > 1 && queueIndex >= 0}
-      <div class="flex items-center gap-1.5">
-        <button
-          type="button"
-          class="inline-flex h-7 w-7 items-center justify-center rounded-xs border border-border-default bg-surface-2 text-text-muted transition-colors hover:bg-surface-3 disabled:opacity-30"
-          disabled={!prevQueueNavItem}
-          onclick={() => prevQueueNavItem && store.reviewQueueItem(prevQueueNavItem)}
-          aria-label="Previous queue item"
-        >
-          <ChevronUp class="h-3.5 w-3.5" />
-        </button>
-        <span class="font-mono text-[0.72rem] text-text-muted">
-          {queueIndex + 1}/{store.queue.length}
-        </span>
-        <button
-          type="button"
-          class="inline-flex h-7 w-7 items-center justify-center rounded-xs border border-border-default bg-surface-2 text-text-muted transition-colors hover:bg-surface-3 disabled:opacity-30"
-          disabled={!nextQueueNavItem}
-          onclick={() => nextQueueNavItem && store.reviewQueueItem(nextQueueNavItem)}
-          aria-label="Next queue item"
-        >
-          <ChevronDown class="h-3.5 w-3.5" />
-        </button>
-      </div>
-    {/if}
-    <button
-      type="button"
-      class="inline-flex h-9 items-center gap-1.5 rounded-xs border border-border-accent-strong px-3 text-[0.78rem] text-text-primary transition-all disabled:cursor-not-allowed disabled:opacity-40"
-      style="background: linear-gradient(135deg, rgba(242,194,106,0.24), rgba(242,194,106,0.1)); box-shadow: 0 0 18px rgba(242,194,106,0.16);"
-      disabled={store.applying}
-      onclick={() => handleApply(false)}
-    >
-      {#if store.applying}
-        <Loader2 class="h-4 w-4 animate-spin" />
-      {:else}
-        <Check class="h-4 w-4" />
-      {/if}
-      Accept
-    </button>
-    {#if nextQueueItem}
+    <div class="hidden flex-1 md:block"></div>
+
+    <!-- Accept buttons: full-width stacked on mobile -->
+    <div class="flex flex-col gap-2 md:flex-row md:gap-3">
       <button
         type="button"
-        class="inline-flex h-9 items-center gap-1.5 rounded-xs border border-border-accent-strong px-3 text-[0.78rem] text-text-primary transition-all disabled:cursor-not-allowed disabled:opacity-40"
+        class="inline-flex h-10 items-center justify-center gap-1.5 rounded-xs border border-border-accent-strong px-3 text-[0.78rem] text-text-primary transition-all disabled:cursor-not-allowed disabled:opacity-40 md:h-9"
         style="background: linear-gradient(135deg, rgba(242,194,106,0.24), rgba(242,194,106,0.1)); box-shadow: 0 0 18px rgba(242,194,106,0.16);"
         disabled={store.applying}
-        onclick={() => handleApply(true)}
+        onclick={() => handleApply(false)}
       >
         {#if store.applying}
           <Loader2 class="h-4 w-4 animate-spin" />
         {:else}
           <Check class="h-4 w-4" />
         {/if}
-        Accept and Next
+        Accept
       </button>
-    {/if}
+      {#if nextQueueItem}
+        <button
+          type="button"
+          class="inline-flex h-10 items-center justify-center gap-1.5 rounded-xs border border-border-accent-strong px-3 text-[0.78rem] text-text-primary transition-all disabled:cursor-not-allowed disabled:opacity-40 md:h-9"
+          style="background: linear-gradient(135deg, rgba(242,194,106,0.24), rgba(242,194,106,0.1)); box-shadow: 0 0 18px rgba(242,194,106,0.16);"
+          disabled={store.applying}
+          onclick={() => handleApply(true)}
+        >
+          {#if store.applying}
+            <Loader2 class="h-4 w-4 animate-spin" />
+          {:else}
+            <Check class="h-4 w-4" />
+          {/if}
+          Accept and Next
+        </button>
+      {/if}
+    </div>
   </div>
 </div>
 

@@ -109,10 +109,10 @@
           type="button"
           class="inline-flex h-7 items-center gap-1.5 rounded-xs border border-border-accent-strong bg-accent-950/40 px-2.5 text-[0.72rem] font-medium text-text-accent transition-colors hover:bg-accent-950/60 disabled:cursor-not-allowed disabled:opacity-40"
           disabled={!hasReviewable}
-          onclick={() => store.resumeNext()}
+          onclick={() => store.reviewQueueItem(store.queue[0])}
         >
           <Sparkles class="h-3 w-3" />
-          Resume next
+          Review all
         </button>
       </header>
 
