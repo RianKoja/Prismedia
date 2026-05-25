@@ -155,7 +155,7 @@ describe("Identify review surfaces", () => {
     expect(header).toHaveAttribute("aria-expanded", "true");
   });
 
-  it("shows New and Merge chips on child and relationship thumbnails", () => {
+  it("shows New and Merge chips on relationship thumbnails and Matched chips on children", () => {
     render(IdentifyReviewParent, {
       props: {
         entity: entity(),
@@ -186,8 +186,9 @@ describe("Identify review surfaces", () => {
       },
     });
 
-    expect(screen.getAllByText("Merge").length).toBeGreaterThanOrEqual(2);
-    expect(screen.getAllByText("New").length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText("Merge").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("New").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("Matched").length).toBeGreaterThanOrEqual(2);
   });
 });
 

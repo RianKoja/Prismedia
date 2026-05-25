@@ -176,6 +176,11 @@
     return { bottomLeft: { label, title: `${label} ${relationshipKindLabel(result.targetKind)}` } };
   }
 
+  function childStatusCustom(child: EntityMetadataProposal): EntityThumbnailCard["custom"] {
+    const label = "Matched";
+    return { bottomLeft: { label, title: `${label} ${relationshipKindLabel(child.targetKind)}` } };
+  }
+
   function relationshipCard(result: EntityMetadataProposal): EntityThumbnailCard {
     const image = preferredRelationshipImage(result);
     const title = proposalTitle(result);
@@ -559,7 +564,7 @@
             cover: childImage ? { src: reviewImagePreviewUrl(childImage, child.targetKind), alt: child.patch?.title ?? "" } : null,
             hover: { kind: "none" } as const,
             subtitle: child.targetKind,
-            custom: proposalStatusCustom(child),
+            custom: childStatusCustom(child),
             meta: childMeta(child),
           }}
           <EntityThumbnail
