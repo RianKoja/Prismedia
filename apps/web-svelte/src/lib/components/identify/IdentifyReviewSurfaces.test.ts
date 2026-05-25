@@ -1,4 +1,4 @@
-import { render } from "@testing-library/svelte";
+import { fireEvent, render, screen } from "@testing-library/svelte";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { EntityMetadataPatch, EntityMetadataProposal } from "$lib/api/identify";
 import type { EntityCard } from "$lib/api/prismedia";
@@ -95,6 +95,65 @@ describe("Identify review surfaces", () => {
     expect(thumbnails.length).toBeGreaterThan(0);
     expect(container.querySelector(".entity-thumbnail.is-list")).toBeNull();
   });
+
+  it("renders poster and backdrop artwork as enlarged review groups", () => {
+    const { container } = render(IdentifyReviewParent, {
+      props: {
+        entity: entity(),
+        proposal: proposal("root", {
+          images: [
+            image("poster", "poster-1"),
+            image("poster", "poster-2"),
+            image("backdrop", "backdrop-1"),
+            image("backdrop", "backdrop-2"),
+          ],
+        }),
+      },
+    });
+
+    const artworkGroups = container.querySelector<HTMLElement>(".identify-artwork-groups");
+    const posterGroup = container.querySelector<HTMLElement>("[data-artwork-kind='poster']");
+    const backdropGroup = container.querySelector<HTMLElement>("[data-artwork-kind='backdrop']");
+
+    expect(artworkGroups).not.toBeNull();
+    expect(posterGroup?.classList.contains("identify-artwork-group")).toBe(true);
+    expect(backdropGroup?.classList.contains("identify-artwork-group")).toBe(true);
+    expect(posterGroup?.querySelectorAll(".identify-artwork-tile")).toHaveLength(2);
+    expect(backdropGroup?.querySelectorAll(".identify-artwork-tile")).toHaveLength(2);
+  });
+
+  it("labels the field diff panel as base fields and collapses panel content from the header", async () => {
+    render(IdentifyReviewParent, {
+      props: {
+        entity: entity(),
+        proposal: proposal("root"),
+      },
+    });
+
+    expect(screen.queryByText("Field diff")).not.toBeInTheDocument();
+    const header = screen.getByRole("button", { name: /Base fields/ });
+    expect(header).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByText("Current")).toBeInTheDocument();
+
+    await fireEvent.click(header);
+
+    expect(header).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByText("Current")).not.toBeInTheDocument();
+  });
+
+  it("keeps base field actions from toggling the section", async () => {
+    render(IdentifyReviewParent, {
+      props: {
+        entity: entity(),
+        proposal: proposal("root"),
+      },
+    });
+
+    const header = screen.getByRole("button", { name: /Base fields/ });
+    await fireEvent.click(screen.getByRole("button", { name: "None" }));
+
+    expect(header).toHaveAttribute("aria-expanded", "true");
+  });
 });
 
 function entity(): EntityCard {
@@ -155,5 +214,13 @@ function proposal(
     relationships: [],
     candidates: [],
     ...proposalOverrides,
+  };
+}
+
+function image(kind: string, name: string) {
+  return {
+    kind,
+    url: `https://image.tmdb.org/t/p/original/${name}.jpg`,
+    source: "tmdb",
   };
 }

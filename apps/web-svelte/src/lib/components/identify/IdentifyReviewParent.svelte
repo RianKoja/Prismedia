@@ -14,6 +14,7 @@
   } from "@lucide/svelte";
   import { cn, StatusLed } from "@prismedia/ui-svelte";
   import EntityThumbnail from "$lib/components/thumbnails/EntityThumbnail.svelte";
+  import IdentifyReviewSection from "./IdentifyReviewSection.svelte";
   import {
     buildRootReviewApplyPayload,
     currentFieldValueForReview,
@@ -332,15 +333,16 @@
     </div>
   </div>
 
-  <!-- Field diff -->
-  <section class="surface-panel overflow-hidden">
-    <header class="flex items-center gap-2.5 border-b border-border-subtle bg-surface-2 px-3.5 py-2.5">
+  <!-- Base fields -->
+  <IdentifyReviewSection
+    panelId={`base-fields-${proposal.proposalId}`}
+    title="Base fields"
+    meta={`${DIFF_FIELD_KEYS.filter((k) => selectedFields[k]).length} of ${DIFF_FIELD_KEYS.filter((k) => hasField(k)).length} accepted`}
+  >
+    {#snippet icon()}
       <Info class="h-3.5 w-3.5 text-text-accent" />
-      <span class="text-kicker text-text-accent">Field diff</span>
-      <span class="font-mono text-[0.7rem] text-text-muted">
-        {DIFF_FIELD_KEYS.filter((k) => selectedFields[k]).length} of {DIFF_FIELD_KEYS.filter((k) => hasField(k)).length} accepted
-      </span>
-      <div class="flex-1"></div>
+    {/snippet}
+    {#snippet actions()}
       <button
         type="button"
         class="text-[0.72rem] text-text-muted transition-colors hover:text-text-primary"
@@ -355,7 +357,7 @@
       >
         None
       </button>
-    </header>
+    {/snippet}
 
     <!-- Diff header -->
     <div class="hidden grid-cols-[auto_110px_1fr_1fr] items-center gap-3 border-b border-border-default bg-surface-2 px-3.5 py-1.5 md:grid">
@@ -390,18 +392,19 @@
         </div>
       {/if}
     {/each}
-  </section>
+  </IdentifyReviewSection>
 
   <!-- Credits -->
   {#if credits.length > 0}
-    <section class="surface-panel identify-lazy-section overflow-hidden">
-      <header class="flex items-center gap-2.5 border-b border-border-subtle bg-surface-2 px-3.5 py-2.5">
+    <IdentifyReviewSection
+      panelId={`credits-${proposal.proposalId}`}
+      title="Credits"
+      meta={`${credits.filter((credit) => store.isReviewProposalSelected(credit.proposalId)).length} of ${credits.length} selected`}
+      lazy
+    >
+      {#snippet icon()}
         <Users class="h-3.5 w-3.5 text-text-accent" />
-        <span class="text-kicker text-text-accent">Credits</span>
-        <span class="font-mono text-[0.7rem] text-text-muted">
-          {credits.filter((credit) => store.isReviewProposalSelected(credit.proposalId)).length} of {credits.length} selected
-        </span>
-      </header>
+      {/snippet}
       <div class="identify-thumbnail-grid grid grid-cols-2 gap-2 p-3.5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
         {#each credits as credit (credit.proposalId)}
           {@const scopedCredit = scopedCreditForProposal(proposal, credit)}
@@ -425,19 +428,20 @@
           />
         {/each}
       </div>
-    </section>
+    </IdentifyReviewSection>
   {/if}
 
   <!-- Relationships -->
   {#if nonCreditRelationships.length > 0}
-    <section class="surface-panel identify-lazy-section overflow-hidden">
-      <header class="flex items-center gap-2.5 border-b border-border-subtle bg-surface-2 px-3.5 py-2.5">
+    <IdentifyReviewSection
+      panelId={`relationships-${proposal.proposalId}`}
+      title="Relationships"
+      meta={`${nonCreditRelationships.filter((relationship) => store.isReviewProposalSelected(relationship.proposalId)).length} of ${nonCreditRelationships.length} selected`}
+      lazy
+    >
+      {#snippet icon()}
         <Layers class="h-3.5 w-3.5 text-text-accent" />
-        <span class="text-kicker text-text-accent">Relationships</span>
-        <span class="font-mono text-[0.7rem] text-text-muted">
-          {nonCreditRelationships.filter((relationship) => store.isReviewProposalSelected(relationship.proposalId)).length} of {nonCreditRelationships.length} selected
-        </span>
-      </header>
+      {/snippet}
       <div class="identify-thumbnail-grid grid grid-cols-2 gap-2 p-3.5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
         {#each nonCreditRelationships as relationship (relationship.proposalId)}
           <EntityThumbnail
@@ -451,25 +455,28 @@
           />
         {/each}
       </div>
-    </section>
+    </IdentifyReviewSection>
   {/if}
 
   <!-- Artwork -->
   {#if artworkCandidateCount > 0}
-    <section class="surface-panel identify-lazy-section overflow-hidden">
-      <header class="flex items-center gap-2.5 border-b border-border-subtle bg-surface-2 px-3.5 py-2.5">
+    <IdentifyReviewSection
+      panelId={`artwork-${proposal.proposalId}`}
+      title="Artwork"
+      meta={`${artworkCandidateCount} candidates`}
+      lazy
+    >
+      {#snippet icon()}
         <Images class="h-3.5 w-3.5 text-text-accent" />
-        <span class="text-kicker text-text-accent">Artwork</span>
-        <span class="font-mono text-[0.7rem] text-text-muted">{artworkCandidateCount} candidates</span>
-      </header>
-      <div class="grid grid-cols-1 gap-4 p-3.5 md:grid-cols-3">
+      {/snippet}
+      <div class="identify-artwork-groups p-3.5">
         {#each imageGroups as group (group.kind)}
-          <div>
+          <div class="identify-artwork-group" data-artwork-kind={group.kind}>
             <div class="mb-2 flex items-center gap-2">
               <span class="text-kicker">{group.kind}</span>
               <span class="font-mono text-[0.62rem] text-text-disabled">{group.images.length}</span>
             </div>
-            <div class="grid grid-cols-3 gap-1.5" class:grid-cols-2={group.kind === "backdrop"}>
+            <div class="identify-artwork-grid">
               {#each group.images as image (image.url)}
                 <button
                   type="button"
@@ -509,17 +516,19 @@
           </div>
         {/each}
       </div>
-    </section>
+    </IdentifyReviewSection>
   {/if}
 
   <!-- Tags -->
   {#if looseTags.length > 0}
-    <section class="surface-panel overflow-hidden">
-      <header class="flex items-center gap-2.5 border-b border-border-subtle bg-surface-2 px-3.5 py-2.5">
+    <IdentifyReviewSection
+      panelId={`tags-${proposal.proposalId}`}
+      title="Tags"
+      meta={`${selectedTagCount} of ${tags.length} selected`}
+    >
+      {#snippet icon()}
         <Tag class="h-3.5 w-3.5 text-text-accent" />
-        <span class="text-kicker text-text-accent">Tags</span>
-        <span class="font-mono text-[0.7rem] text-text-muted">{selectedTagCount} of {tags.length} selected</span>
-      </header>
+      {/snippet}
       <div class="flex flex-wrap items-center gap-2 p-3.5">
         {#each looseTags as tag (tag)}
           {@const isExisting = !isNewRelationshipTitle(tag, existingTagTitles)}
@@ -551,17 +560,20 @@
           </button>
         {/each}
       </div>
-    </section>
+    </IdentifyReviewSection>
   {/if}
 
   <!-- Children -->
   {#if children.length > 0}
-    <section class="surface-panel identify-lazy-section overflow-hidden">
-      <header class="flex items-center gap-2.5 border-b border-border-subtle bg-surface-2 px-3.5 py-2.5">
+    <IdentifyReviewSection
+      panelId={`children-${proposal.proposalId}`}
+      title="Children"
+      meta={`${selectedChildCount} of ${children.length} selected`}
+      lazy
+    >
+      {#snippet icon()}
         <Layers class="h-3.5 w-3.5 text-text-accent" />
-        <span class="text-kicker text-text-accent">Children</span>
-        <span class="font-mono text-[0.7rem] text-text-muted">{selectedChildCount} of {children.length} selected</span>
-      </header>
+      {/snippet}
       <div class="identify-thumbnail-grid grid grid-cols-2 gap-2 p-3.5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
         {#each children as child, i (child.proposalId)}
           {@const childImage = preferredProposalImage(child)}
@@ -584,7 +596,7 @@
           />
         {/each}
       </div>
-    </section>
+    </IdentifyReviewSection>
   {/if}
 
   <!-- Action footer -->
@@ -647,14 +659,62 @@
 </div>
 
 <style>
-  .identify-lazy-section {
-    content-visibility: auto;
-    contain-intrinsic-size: auto 36rem;
-  }
-
   .identify-thumbnail-grid {
     content-visibility: auto;
     contain-intrinsic-size: auto 28rem;
+  }
+
+  .identify-artwork-groups {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1rem;
+  }
+
+  .identify-artwork-group {
+    min-width: 0;
+  }
+
+  .identify-artwork-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
+    gap: 0.5rem;
+  }
+
+  .identify-artwork-group[data-artwork-kind="poster"] .identify-artwork-grid {
+    grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr));
+  }
+
+  .identify-artwork-group[data-artwork-kind="backdrop"] .identify-artwork-grid {
+    grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr));
+  }
+
+  @media (min-width: 1024px) {
+    .identify-artwork-groups {
+      grid-template-columns: minmax(19rem, 0.85fr) minmax(28rem, 1.35fr);
+      align-items: start;
+    }
+
+    .identify-artwork-group[data-artwork-kind="poster"] {
+      grid-column: 1;
+    }
+
+    .identify-artwork-group[data-artwork-kind="backdrop"] {
+      grid-column: 2;
+    }
+
+    .identify-artwork-group:not([data-artwork-kind="poster"]):not([data-artwork-kind="backdrop"]) {
+      grid-column: 1 / -1;
+    }
+  }
+
+  @media (min-width: 1280px) {
+    .identify-artwork-group[data-artwork-kind="poster"] .identify-artwork-grid {
+      grid-template-columns: repeat(auto-fill, minmax(10.5rem, 1fr));
+    }
+
+    .identify-artwork-group[data-artwork-kind="backdrop"] .identify-artwork-grid {
+      grid-template-columns: repeat(auto-fill, minmax(20rem, 1fr));
+    }
   }
 
   .identify-artwork-tile::before {

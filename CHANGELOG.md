@@ -26,6 +26,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - Updated web app manifest and mobile browser metadata for home-screen installation and browser UI theme colors.
 
 ### Fixed
+- Renamed Identify review field diffs to Base fields and made review panels collapsible from their headers.
+- Made Identify artwork review poster and backdrop groups larger now that logo candidates are no longer shown for most entities.
 - Improved heavy Identify proposal pages by deferring offscreen review sections, showing async image skeletons, and using standard thumbnail cards for related entities.
 - Improved Identify proposal review performance by rendering provider image previews lazily with smaller browser-cacheable artwork sizes.
 - Fixed Identify dashboard navigation so returning to `/identify` from a review detail exits the stale detail view.
