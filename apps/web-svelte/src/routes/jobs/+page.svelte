@@ -302,16 +302,16 @@
         </h1>
         <span
           class={cn(
-            "inline-flex items-center gap-1.5 border border-border-subtle bg-surface-2/60 px-2 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.12em]",
-            workerHealth.status === "online" && "border-border-accent/60 text-text-accent shadow-[0_0_16px_rgba(196,154,90,0.12)]",
-            workerHealth.status === "offline" && "border-status-error/50 text-status-error-text",
-            workerHealth.status === "checking" && "text-text-muted",
+            "worker-status-badge",
+            workerHealth.status === "online" && "is-online",
+            workerHealth.status === "offline" && "is-offline",
+            workerHealth.status === "checking" && "is-checking",
           )}
           title={workerHealth.tooltip}
           aria-label={workerHealth.tooltip}
         >
           <StatusLed status={workerHealth.led} size="sm" pulse={workerHealth.pulse} />
-          {workerHealth.label}
+          <span>{workerHealth.label}</span>
         </span>
       </div>
       <div class="mt-1.5 flex flex-wrap items-center gap-3 text-mono-sm">
@@ -612,3 +612,58 @@
     </section>
   {/if}
 </div>
+
+<style>
+  .worker-status-badge {
+    display: inline-flex;
+    min-height: 1.45rem;
+    align-items: center;
+    gap: 0.4rem;
+    border: 1px solid var(--color-border-default);
+    border-radius: var(--radius-xs);
+    background:
+      linear-gradient(135deg, rgba(255, 255, 255, 0.055), transparent 42%),
+      var(--color-overlay-glass-light);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.055),
+      0 2px 8px rgba(0, 0, 0, 0.32);
+    color: var(--color-text-muted);
+    padding: 0.26rem 0.58rem 0.24rem 0.46rem;
+    font-family: var(--font-mono);
+    font-size: 0.63rem;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    line-height: 1;
+    text-transform: uppercase;
+    transition:
+      border-color var(--duration-fast) var(--ease-default),
+      box-shadow var(--duration-fast) var(--ease-default),
+      color var(--duration-fast) var(--ease-default);
+  }
+
+  .worker-status-badge.is-online {
+    border-color: var(--color-border-accent);
+    background:
+      linear-gradient(135deg, rgba(242, 194, 106, 0.14), rgba(242, 194, 106, 0.035) 44%, transparent 100%),
+      var(--color-overlay-glass-accent);
+    box-shadow:
+      inset 0 1px 0 rgba(242, 194, 106, 0.13),
+      var(--shadow-glow-accent);
+    color: var(--color-text-accent);
+  }
+
+  .worker-status-badge.is-offline {
+    border-color: rgba(255, 128, 111, 0.32);
+    background:
+      linear-gradient(135deg, rgba(255, 128, 111, 0.13), transparent 52%),
+      rgba(74, 28, 24, 0.34);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 159, 146, 0.1),
+      0 0 18px rgba(255, 128, 111, 0.11);
+    color: var(--color-error-text);
+  }
+
+  .worker-status-badge.is-checking {
+    color: var(--color-text-muted);
+  }
+</style>

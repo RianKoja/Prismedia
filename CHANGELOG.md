@@ -34,6 +34,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - Updated web app manifest and mobile browser metadata for home-screen installation and browser UI theme colors.
 
 ### Fixed
+- Brought the Jobs worker heartbeat badge into the Prism Noir design language with controlled corners, glass material, and status glow.
 - Fixed animated image lightbox playback so video-backed items loop, keep progress visible at the bottom edge, and keep navigation controls out of the media frame.
 - Fixed sub-gallery thumbnail navigation so gallery detail pages update immediately without a manual refresh.
 - Removed duplicate shell padding from gallery detail pages.
