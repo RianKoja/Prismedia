@@ -10,40 +10,12 @@
 
   const store = useIdentifyStore();
 
-  const pendingCount = $derived(store.queue.filter((q) => q.state === "proposal").length);
-  const choiceCount = $derived(store.queue.filter((q) => q.state === "search").length);
   const hasReviewable = $derived(
     store.queue.some((q) => q.state === "proposal" || q.state === "search" || q.state === "error"),
   );
 </script>
 
 <div class="flex flex-col gap-4">
-  <!-- Stats row -->
-  <div class="grid grid-cols-2 gap-3 md:grid-cols-4">
-    <div class="surface-panel flex flex-col gap-1 p-3.5">
-      <span class="text-kicker">Queue</span>
-      <span class="font-mono text-2xl font-semibold text-text-accent">{store.queue.length}</span>
-      <span class="font-mono text-[0.7rem] text-text-muted">awaiting review</span>
-    </div>
-    <div class="surface-panel flex flex-col gap-1 p-3.5">
-      <span class="text-kicker">Pending</span>
-      <span class="font-mono text-2xl font-semibold text-text-primary">{pendingCount}</span>
-      <span class="font-mono text-[0.7rem] text-text-muted">ready to review</span>
-    </div>
-    <div class="surface-panel flex flex-col gap-1 p-3.5">
-      <span class="text-kicker">Pick</span>
-      <span class="font-mono text-2xl font-semibold text-warning-text">{choiceCount}</span>
-      <span class="font-mono text-[0.7rem] text-text-muted">need candidate pick</span>
-    </div>
-    <div class="surface-panel flex flex-col gap-1 p-3.5">
-      <span class="text-kicker">Providers</span>
-      <span class="font-mono text-2xl font-semibold text-text-primary">
-        {store.providers.filter((p) => p.installed && p.enabled).length}/{store.providers.length}
-      </span>
-      <span class="font-mono text-[0.7rem] text-text-muted">active</span>
-    </div>
-  </div>
-
   <!-- Queue -->
   {#if store.queue.length > 0}
     <section class="surface-panel overflow-hidden">

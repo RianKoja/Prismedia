@@ -52,11 +52,14 @@ describe("IdentifyDashboard", () => {
     store.reviewQueueItem.mockReset();
   });
 
-  it("keeps the provider summary without rendering the plugin inventory panel", () => {
+  it("renders dashboard content without summary stats or plugin inventory", () => {
     render(IdentifyDashboard);
 
-    expect(screen.getByText("Providers")).toBeInTheDocument();
-    expect(screen.getByText("1/1")).toBeInTheDocument();
+    expect(screen.getByText("Browse by kind")).toBeInTheDocument();
+    expect(screen.queryByText("Queue")).not.toBeInTheDocument();
+    expect(screen.queryByText("Pending")).not.toBeInTheDocument();
+    expect(screen.queryByText("Pick")).not.toBeInTheDocument();
+    expect(screen.queryByText("Providers")).not.toBeInTheDocument();
     expect(screen.queryByText("Plugins")).not.toBeInTheDocument();
     expect(screen.queryByText("The Movie Database")).not.toBeInTheDocument();
   });
