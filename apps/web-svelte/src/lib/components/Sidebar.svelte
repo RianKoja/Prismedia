@@ -138,7 +138,7 @@
                 title={!isExpanded ? item.label : undefined}
               >
                 {#if active}
-                  <span class="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-r-full bg-accent-500 shadow-[var(--shadow-glow-accent)]"></span>
+                  <span class="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-l-full bg-accent-500 shadow-[var(--shadow-glow-accent)]"></span>
                 {/if}
                 <div class="w-5 flex items-center justify-center shrink-0">
                   {#if Icon}
@@ -172,7 +172,7 @@
   <div class="shrink-0 space-y-1 border-t border-border-subtle px-3 py-3">
     <ChangelogDialog version={APP_VERSION}>
       <div
-        class="group flex h-8 items-center overflow-hidden whitespace-nowrap text-text-muted transition-colors duration-fast hover:bg-surface-2 hover:text-text-primary"
+        class="group flex h-8 items-center overflow-hidden whitespace-nowrap rounded-sm text-text-muted transition-colors duration-fast hover:bg-surface-2 hover:text-text-primary"
         title={!isExpanded ? (updateAvailable ? "Update available" : "Changelog") : undefined}
       >
         <div class="flex w-8 shrink-0 items-center justify-center">
@@ -199,7 +199,7 @@
       rel="noopener noreferrer"
       aria-label="Open Prismedia documentation"
       title={!isExpanded ? "Docs" : undefined}
-      class="group flex h-8 items-center overflow-hidden whitespace-nowrap text-text-muted transition-colors duration-fast hover:bg-surface-2 hover:text-text-primary"
+      class="group flex h-8 items-center overflow-hidden whitespace-nowrap rounded-sm text-text-muted transition-colors duration-fast hover:bg-surface-2 hover:text-text-primary"
     >
       <div class="flex w-8 shrink-0 items-center justify-center">
         <BookOpen class="h-4 w-4 transition-colors group-hover:text-text-accent" />

@@ -57,10 +57,12 @@
       display: "grid",
       minWidth: "10rem",
       border: "1px solid var(--color-border-default, rgba(164, 172, 185, 0.12))",
+      borderRadius: "var(--radius-sm, 6px)",
       background: "var(--color-surface-2, #11161d)",
       boxShadow: "0 12px 40px rgba(0, 0, 0, 0.6)",
       backdropFilter: "blur(20px)",
       fontFamily: "var(--font-inter, Inter), system-ui, sans-serif",
+      overflow: "hidden",
     });
 
     const rect = context.anchorRect;
@@ -179,7 +181,7 @@
       color: var(--color-text-disabled, #5a6070);
     }
     button[data-type='item'] {
-      border-radius: 0;
+      border-radius: var(--radius-xs, 4px);
       background: transparent !important;
       color: var(--color-text-secondary, #c8ccd4);
       font-family: var(--font-body, Inter), sans-serif;

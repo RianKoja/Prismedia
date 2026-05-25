@@ -1,9 +1,7 @@
 <script lang="ts">
   import { Ellipsis, Search, Settings } from "@lucide/svelte";
   import { page } from "$app/state";
-  import { onMount } from "svelte";
   import { cn } from "@prismedia/ui-svelte";
-  import { apiPath } from "$lib/api/orval-fetch";
   import { useAppChrome } from "$lib/stores/app-chrome.svelte";
   import { useSearch } from "$lib/stores/search.svelte";
   import { getCanvasHeaderBreadcrumbItems } from "./canvas-header-breadcrumbs";
@@ -52,27 +50,8 @@
 
   let appleMod = $state(false);
   let breadcrumbMenuOpen = $state(false);
-  let backendRuntime = $state<"dotnet" | "unknown" | "offline">("unknown");
   $effect(() => {
     appleMod = typeof navigator !== "undefined" && /Mac|iPhone|iPad/i.test(navigator.userAgent);
-  });
-
-  onMount(() => {
-    let cancelled = false;
-    const checkBackend = async () => {
-      try {
-        const response = await fetch(apiPath("/health"));
-        const health = (await response.json()) as { runtime?: string };
-        if (!cancelled) backendRuntime = health.runtime === "dotnet" ? "dotnet" : "unknown";
-      } catch {
-        if (!cancelled) backendRuntime = "offline";
-      }
-    };
-
-    void checkBackend();
-    return () => {
-      cancelled = true;
-    };
   });
 
   const searchShortcutKbd = $derived(appleMod ? "⌘K" : "Ctrl+K");
@@ -92,7 +71,7 @@
       href="/"
       aria-label="Dashboard"
       class={cn(
-        "md:hidden flex h-8 w-8 shrink-0 items-center justify-center",
+        "md:hidden flex h-8 w-8 shrink-0 items-center justify-center rounded-sm",
         "text-text-muted hover:text-text-primary hover:bg-surface-2",
         "transition-colors duration-fast",
       )}
@@ -113,7 +92,7 @@
                 <button
                   type="button"
                   class={cn(
-                    "flex h-6 w-6 items-center justify-center border border-border-subtle bg-glass-1 text-text-muted backdrop-blur-md",
+                    "flex h-6 w-6 items-center justify-center rounded-xs border border-border-subtle bg-glass-1 text-text-muted backdrop-blur-md",
                     "hover:text-text-primary hover:border-border-accent focus-visible:border-border-accent-strong focus-visible:shadow-focus-accent",
                     "transition-colors duration-fast outline-none",
                   )}
@@ -126,14 +105,14 @@
                 </button>
                 {#if breadcrumbMenuOpen}
                   <div
-                    class="absolute left-0 top-full z-[120] mt-2 w-[min(14rem,calc(100vw-2rem))] border border-border-default bg-glass-2 p-1 shadow-glass backdrop-blur-xl"
+                    class="absolute left-0 top-full z-[120] mt-2 w-[min(14rem,calc(100vw-2rem))] rounded-sm border border-border-default bg-glass-2 p-1 shadow-glass backdrop-blur-xl"
                     role="menu"
                   >
                     {#each item.items as crumb (crumb.href)}
                       <a
                         href={resolveHref(crumb.href)}
                         role="menuitem"
-                        class="block min-w-0 truncate px-3 py-2 text-text-muted transition-colors duration-fast hover:bg-surface-2 hover:text-text-primary focus-visible:bg-surface-2 focus-visible:text-text-primary outline-none"
+                        class="block min-w-0 truncate rounded-xs px-3 py-2 text-text-muted transition-colors duration-fast hover:bg-surface-2 hover:text-text-primary focus-visible:bg-surface-2 focus-visible:text-text-primary outline-none"
                         onclick={closeBreadcrumbMenu}
                       >
                         {crumb.label}
@@ -173,7 +152,7 @@
                 <button
                   type="button"
                   class={cn(
-                    "flex h-7 w-7 items-center justify-center border border-border-subtle bg-glass-1 text-text-muted backdrop-blur-md",
+                    "flex h-7 w-7 items-center justify-center rounded-xs border border-border-subtle bg-glass-1 text-text-muted backdrop-blur-md",
                     "hover:text-text-primary hover:border-border-accent focus-visible:border-border-accent-strong focus-visible:shadow-focus-accent",
                     "transition-colors duration-fast outline-none",
                   )}
@@ -186,14 +165,14 @@
                 </button>
                 {#if breadcrumbMenuOpen}
                   <div
-                    class="absolute left-0 top-full z-[120] mt-2 w-[min(14rem,calc(100vw-2rem))] border border-border-default bg-glass-2 p-1 shadow-glass backdrop-blur-xl"
+                    class="absolute left-0 top-full z-[120] mt-2 w-[min(14rem,calc(100vw-2rem))] rounded-sm border border-border-default bg-glass-2 p-1 shadow-glass backdrop-blur-xl"
                     role="menu"
                   >
                     {#each item.items as crumb (crumb.href)}
                       <a
                         href={resolveHref(crumb.href)}
                         role="menuitem"
-                        class="block min-w-0 truncate px-3 py-2 text-text-muted transition-colors duration-fast hover:bg-surface-2 hover:text-text-primary focus-visible:bg-surface-2 focus-visible:text-text-primary outline-none"
+                        class="block min-w-0 truncate rounded-xs px-3 py-2 text-text-muted transition-colors duration-fast hover:bg-surface-2 hover:text-text-primary focus-visible:bg-surface-2 focus-visible:text-text-primary outline-none"
                         onclick={closeBreadcrumbMenu}
                       >
                         {crumb.label}
@@ -222,28 +201,11 @@
   </div>
 
   <div class="flex items-center gap-2">
-    <div
-      class={cn(
-        "hidden items-center gap-1.5 border border-border-subtle bg-surface-1 px-2 py-1 text-[0.64rem] font-mono uppercase tracking-wider text-text-disabled lg:flex",
-        backendRuntime === "dotnet" && "border-border-accent/30 text-text-accent",
-        backendRuntime === "offline" && "border-status-error/30 text-status-error-text",
-      )}
-      title={backendRuntime === "dotnet" ? "API served by .NET" : "Checking .NET API"}
-    >
-      <span
-        class={cn(
-          "h-1.5 w-1.5 bg-text-disabled",
-          backendRuntime === "dotnet" && "bg-accent-500 shadow-[0_0_8px_rgba(196,154,90,0.75)]",
-          backendRuntime === "offline" && "bg-status-error",
-        )}
-      ></span>
-      API {backendRuntime}
-    </div>
     <button
       type="button"
       onclick={() => search.openPalette()}
       class={cn(
-        "group flex items-center justify-center sm:justify-between w-8 sm:w-64 px-0 sm:px-3 py-1.5",
+        "group flex items-center justify-center sm:justify-between w-8 sm:w-64 px-0 sm:px-3 py-1.5 rounded-sm",
         "bg-transparent sm:bg-surface-1 border border-transparent sm:border-border-default sm:border-t-[rgba(0,0,0,0.6)]",
         "sm:shadow-[inset_0_2px_6px_rgba(0,0,0,0.5)]",
         "text-text-muted hover:text-text-primary sm:hover:border-border-accent focus-visible:border-border-accent-strong focus-visible:shadow-focus-accent",
@@ -256,13 +218,13 @@
         <Search class="h-4 w-4 sm:h-3.5 sm:w-3.5 text-text-muted sm:text-text-disabled group-hover:text-text-primary sm:group-hover:text-text-muted transition-colors duration-fast" />
         <span class="hidden sm:inline text-[0.8rem]">Search...</span>
       </div>
-      <kbd class="hidden sm:inline-flex h-5 items-center border border-border-subtle px-1.5 text-[0.65rem] font-mono text-text-disabled bg-surface-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_1px_2px_rgba(0,0,0,0.2)]">
+      <kbd class="hidden sm:inline-flex h-5 items-center rounded-xs border border-border-subtle px-1.5 text-[0.65rem] font-mono text-text-disabled bg-surface-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_1px_2px_rgba(0,0,0,0.2)]">
         {searchShortcutKbd}
       </kbd>
     </button>
     <a
       href="/settings"
-      class="flex h-8 w-8 items-center justify-center text-text-muted hover:text-text-primary hover:bg-surface-2 transition-colors duration-fast"
+      class="flex h-8 w-8 items-center justify-center rounded-sm text-text-muted hover:text-text-primary hover:bg-surface-2 transition-colors duration-fast"
     >
       <Settings class="h-4 w-4" />
     </a>

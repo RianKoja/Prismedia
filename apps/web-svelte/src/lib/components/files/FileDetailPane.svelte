@@ -329,7 +329,7 @@
     place-items: center;
     flex-shrink: 0;
     border: none;
-    border-radius: 0;
+    border-radius: var(--radius-xs);
     background: transparent;
     color: var(--color-text-muted);
     cursor: pointer;
@@ -356,7 +356,7 @@
     min-height: 1.65rem;
     padding: 0.2rem 0.5rem;
     border: none;
-    border-radius: 0;
+    border-radius: var(--radius-xs);
     background: transparent;
     color: var(--color-text-muted);
     font-size: 0.72rem;
@@ -471,8 +471,10 @@
     display: grid;
     min-height: 12rem;
     border: 1px solid var(--color-border-subtle);
+    border-radius: var(--radius-sm);
     background: var(--color-surface-1);
     box-shadow: var(--shadow-well);
+    overflow: hidden;
   }
 
   .preview img,
