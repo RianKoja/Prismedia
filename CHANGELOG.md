@@ -34,6 +34,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - Updated web app manifest and mobile browser metadata for home-screen installation and browser UI theme colors.
 
 ### Fixed
+- Removed duplicate shell padding from gallery detail pages.
 - Fixed gallery and audio library browse pages so nested folders only appear inside their parent detail view.
 - Fixed gallery scans so web-style animated media files such as MP4, WebM, and MOV are added as gallery image items.
 - Fixed the Files context menu layering so actions stay visible over adjacent detail panes.
