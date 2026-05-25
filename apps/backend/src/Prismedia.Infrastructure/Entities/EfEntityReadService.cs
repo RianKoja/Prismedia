@@ -49,7 +49,11 @@ public sealed class EfEntityReadService : IEntityReadService {
             .Where(entity => entity.DeletedAt == null);
 
         if (!string.IsNullOrWhiteSpace(kind)) {
-            entityQuery = entityQuery.Where(entity => entity.KindCode == kind);
+            var kindCode = kind.Trim();
+            entityQuery = entityQuery.Where(entity => entity.KindCode == kindCode);
+            if (ListBrowseShowsOnlyTopLevel(kindCode)) {
+                entityQuery = entityQuery.Where(entity => entity.ParentEntityId == null);
+            }
         }
 
         if (!string.IsNullOrWhiteSpace(query)) {
@@ -141,6 +145,10 @@ public sealed class EfEntityReadService : IEntityReadService {
         hideNsfw
             ? query.Where(entity => !entity.IsNsfw)
             : query;
+
+    private static bool ListBrowseShowsOnlyTopLevel(string kind) =>
+        kind.Equals(EntityKindRegistry.Gallery.Code, StringComparison.OrdinalIgnoreCase) ||
+        kind.Equals(EntityKindRegistry.AudioLibrary.Code, StringComparison.OrdinalIgnoreCase);
 
     private async Task<bool> IsEntityHiddenAsync(Guid id, CancellationToken cancellationToken) =>
         await _db.Entities.AsNoTracking()

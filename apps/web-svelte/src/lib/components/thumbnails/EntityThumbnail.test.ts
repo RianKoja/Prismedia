@@ -118,6 +118,18 @@ describe("EntityThumbnail", () => {
     expect(link?.getAttribute("href")).toBe("/people/person-1");
   });
 
+  it("resolves nested gallery cards to their gallery detail route", () => {
+    const { container } = render(EntityThumbnail, {
+      props: {
+        card: galleryCard(),
+        selectable: false,
+      },
+    });
+
+    const link = container.querySelector<HTMLAnchorElement>("a.entity-thumbnail");
+    expect(link?.getAttribute("href")).toBe("/galleries/gallery-2");
+  });
+
   it("can disable the default link and toggle selection from the card surface", async () => {
     const onSelectedChange = vi.fn();
     const { container } = render(EntityThumbnail, {
@@ -455,6 +467,29 @@ function personCard(): EntityThumbnailCard {
     },
     aspectRatio: "portrait",
     cover: null,
+    hover: {
+      kind: "none",
+    },
+  };
+}
+
+function galleryCard(): EntityThumbnailCard {
+  return {
+    entity: {
+      id: "gallery-2",
+      kind: "gallery",
+      title: "A secondGallery",
+      parentEntityId: "gallery-1",
+      sortOrder: 0,
+      relationships: [],
+      capabilities: [],
+      childrenByKind: [],
+    },
+    aspectRatio: "square",
+    cover: {
+      alt: "A secondGallery cover",
+      src: "/assets/galleries/2/thumb.jpg",
+    },
     hover: {
       kind: "none",
     },

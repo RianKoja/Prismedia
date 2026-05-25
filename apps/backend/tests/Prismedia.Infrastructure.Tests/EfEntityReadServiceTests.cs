@@ -178,6 +178,76 @@ public sealed class EfEntityReadServiceTests {
     }
 
     [Fact]
+    public async Task ListAsyncReturnsOnlyTopLevelGalleriesForGalleryBrowse() {
+        await using var db = CreateContext();
+        var galleryId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+        var subgalleryId = Guid.Parse("22222222-2222-2222-2222-222222222222");
+        var now = DateTimeOffset.UtcNow;
+        db.Entities.AddRange(
+            new EntityRow {
+                Id = galleryId,
+                KindCode = EntityKindRegistry.Gallery.Code,
+                Title = "Gallery",
+                CreatedAt = now,
+                UpdatedAt = now
+            },
+            new EntityRow {
+                Id = subgalleryId,
+                KindCode = EntityKindRegistry.Gallery.Code,
+                Title = "A secondGallery",
+                ParentEntityId = galleryId,
+                SortOrder = 0,
+                CreatedAt = now,
+                UpdatedAt = now
+            });
+        await db.SaveChangesAsync();
+
+        var repository = new EfEntityRepository(db, EntityMappers.Kinds(db), EntityMappers.Capabilities(db));
+        var service = new EfEntityReadService(db, repository, EntityMappers.Kinds(db));
+
+        var result = await service.ListAsync(EntityKindRegistry.Gallery.Code, null, null, null, null, CancellationToken.None);
+        var item = Assert.Single(result.Items);
+
+        Assert.Equal(galleryId, item.Id);
+        Assert.Equal(1, result.TotalCount);
+    }
+
+    [Fact]
+    public async Task ListAsyncReturnsOnlyTopLevelAudioLibrariesForAudioBrowse() {
+        await using var db = CreateContext();
+        var libraryId = Guid.Parse("33333333-3333-3333-3333-333333333333");
+        var nestedLibraryId = Guid.Parse("44444444-4444-4444-4444-444444444444");
+        var now = DateTimeOffset.UtcNow;
+        db.Entities.AddRange(
+            new EntityRow {
+                Id = libraryId,
+                KindCode = EntityKindRegistry.AudioLibrary.Code,
+                Title = "Album",
+                CreatedAt = now,
+                UpdatedAt = now
+            },
+            new EntityRow {
+                Id = nestedLibraryId,
+                KindCode = EntityKindRegistry.AudioLibrary.Code,
+                Title = "Disc 2",
+                ParentEntityId = libraryId,
+                SortOrder = 1,
+                CreatedAt = now,
+                UpdatedAt = now
+            });
+        await db.SaveChangesAsync();
+
+        var repository = new EfEntityRepository(db, EntityMappers.Kinds(db), EntityMappers.Capabilities(db));
+        var service = new EfEntityReadService(db, repository, EntityMappers.Kinds(db));
+
+        var result = await service.ListAsync(EntityKindRegistry.AudioLibrary.Code, null, null, null, null, CancellationToken.None);
+        var item = Assert.Single(result.Items);
+
+        Assert.Equal(libraryId, item.Id);
+        Assert.Equal(1, result.TotalCount);
+    }
+
+    [Fact]
     public async Task ListAsyncProjectsRepresentativeChildHoverImages() {
         await using var db = CreateContext();
         var bookId = Guid.Parse("11111111-1111-1111-1111-111111111111");
