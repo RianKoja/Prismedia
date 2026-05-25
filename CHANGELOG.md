@@ -11,6 +11,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - Mobile install metadata now presents Prismedia with the correct app name, theme colors, and safer icon spacing for browser and home-screen surfaces.
 
 ### Added
+- Added reversible file explorer exclusions so files and folders can be skipped by library scans without deleting them.
 - Added a centralized app settings registry and descriptor-driven settings UI for app-wide visibility, playback, subtitle, scan, generation, worker, and HLS defaults.
 - Added a durable Identify queue so search results and metadata proposals survive navigation and backend restarts.
 - Added a media wall toggle to entity grids for browsing thumbnail-only library layouts.
@@ -33,6 +34,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - Updated web app manifest and mobile browser metadata for home-screen installation and browser UI theme colors.
 
 ### Fixed
+- Fixed the Files context menu layering so actions stay visible over adjacent detail panes.
 - Restored associated entity thumbnails in file details and placed the primary entity beside the properties card.
 - Polished file detail properties so associated artwork and metadata share one cohesive card.
 - Fixed Files NSFW filtering so folders represented only by NSFW catalog entities are hidden with their thumbnails.

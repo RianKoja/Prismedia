@@ -1,4 +1,4 @@
-export type FileActionId = "open" | "new-folder" | "rename" | "move" | "rescan" | "delete";
+export type FileActionId = "open" | "new-folder" | "rename" | "move" | "rescan" | "exclude" | "remove-exclusion" | "delete";
 
 export interface FileAction {
   id: FileActionId;
@@ -18,6 +18,7 @@ const directoryActions: FileAction[] = [
   { id: "rename", label: "Rename" },
   { id: "move", label: "Move" },
   { id: "rescan", label: "Rescan" },
+  { id: "exclude", label: "Exclude" },
   { id: "delete", label: "Delete", destructive: true },
 ];
 
@@ -25,11 +26,16 @@ const fileActions: FileAction[] = [
   { id: "open", label: "Open" },
   { id: "rename", label: "Rename" },
   { id: "move", label: "Move" },
+  { id: "exclude", label: "Exclude" },
   { id: "delete", label: "Delete", destructive: true },
 ];
 
-export function fileContextActions(kind: string, isRoot?: boolean): FileAction[] {
-  if (isRoot) return rootActions;
-  return kind === "directory" ? directoryActions : fileActions;
-}
+const removeExclusionAction: FileAction = { id: "remove-exclusion", label: "Remove exclusion" };
 
+export function fileContextActions(kind: string, isRoot?: boolean, excluded?: boolean): FileAction[] {
+  if (isRoot) return rootActions;
+  const actions = kind === "directory" ? directoryActions : fileActions;
+  return excluded
+    ? actions.map((action) => action.id === "exclude" ? removeExclusionAction : action)
+    : actions;
+}

@@ -7,6 +7,7 @@
 import type {
   ApiProblem,
   ApplyIdentifyProposalRequest,
+  ApplyIdentifyQueueItemRequest,
   AudioLibraryDetail,
   AudioTrackDetail,
   BookDetail,
@@ -26,9 +27,11 @@ import type {
   EntityRefreshResponse,
   EntityThumbnailBatchRequest,
   EntityThumbnailBatchResponse,
+  ExcludeFileParams,
   FileChildrenResponse,
   FileCreateFolderRequest,
   FileDetail,
+  FileExclusionRequest,
   FileMoveRequest,
   FileOperationResponse,
   FileRenameRequest,
@@ -57,11 +60,13 @@ import type {
   GetVideoSeasonParams,
   GetVideoSeriesParams,
   HeadFileContentParams,
-  IdentifyBulkSession,
   IdentifyBulkStartRequest,
   IdentifyEntityParams,
   IdentifyEntityRequest,
+  IdentifyQueueItem,
+  IdentifyQueueSearchRequest,
   ImageDetail,
+  JobCreateResponse,
   JobListResponse,
   LibraryBrowseResponse,
   LibraryConfigResponse,
@@ -77,6 +82,7 @@ import type {
   ListFileRootsParams,
   ListGalleriesParams,
   ListIdentifyProvidersParams,
+  ListIdentifyQueueParams,
   ListImagesParams,
   ListJobsParams,
   ListPeopleParams,
@@ -97,8 +103,10 @@ import type {
   PluginProvider,
   ProblemDetails,
   RatingUpdateRequest,
+  RemoveFileExclusionParams,
   RenameFileParams,
   RescanFileRootParams,
+  SearchIdentifyQueueItemParams,
   SettingDescriptor,
   SettingUpdateRequest,
   SettingsBatchUpdateRequest,
@@ -3936,135 +3944,6 @@ export const listFileChildren = async (params: ListFileChildrenParams, options?:
 
 
 
-export type getFileDetailResponse200 = {
-  data: FileDetail
-  status: 200
-}
-
-export type getFileDetailResponseSuccess = (getFileDetailResponse200) & {
-  headers: Headers;
-};
-;
-
-export type getFileDetailResponse = (getFileDetailResponseSuccess)
-
-export const getGetFileDetailUrl = (params: GetFileDetailParams,) => {
-  const normalizedParams = new URLSearchParams();
-
-  Object.entries(params || {}).forEach(([key, value]) => {
-
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : value.toString())
-    }
-  });
-
-  const stringifiedParams = normalizedParams.toString();
-
-  return stringifiedParams.length > 0 ? `/api/files/detail?${stringifiedParams}` : `/api/files/detail`
-}
-
-/**
- * @summary Gets file or directory details for the Files page.
- */
-export const getFileDetail = async (params: GetFileDetailParams, options?: RequestInit): Promise<getFileDetailResponse> => {
-
-  return orvalFetch<getFileDetailResponse>(getGetFileDetailUrl(params),
-  {
-    ...options,
-    method: 'GET'
-
-
-  }
-);}
-
-
-
-export type getFileContentResponse200 = {
-  data: void
-  status: 200
-}
-
-export type getFileContentResponseSuccess = (getFileContentResponse200) & {
-  headers: Headers;
-};
-;
-
-export type getFileContentResponse = (getFileContentResponseSuccess)
-
-export const getGetFileContentUrl = (params: GetFileContentParams,) => {
-  const normalizedParams = new URLSearchParams();
-
-  Object.entries(params || {}).forEach(([key, value]) => {
-
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : value.toString())
-    }
-  });
-
-  const stringifiedParams = normalizedParams.toString();
-
-  return stringifiedParams.length > 0 ? `/api/files/content?${stringifiedParams}` : `/api/files/content`
-}
-
-/**
- * @summary Streams a watched-root file with range support.
- */
-export const getFileContent = async (params: GetFileContentParams, options?: RequestInit): Promise<getFileContentResponse> => {
-
-  return orvalFetch<getFileContentResponse>(getGetFileContentUrl(params),
-  {
-    ...options,
-    method: 'GET'
-
-
-  }
-);}
-
-
-
-export type headFileContentResponse200 = {
-  data: void
-  status: 200
-}
-
-export type headFileContentResponseSuccess = (headFileContentResponse200) & {
-  headers: Headers;
-};
-;
-
-export type headFileContentResponse = (headFileContentResponseSuccess)
-
-export const getHeadFileContentUrl = (params: HeadFileContentParams,) => {
-  const normalizedParams = new URLSearchParams();
-
-  Object.entries(params || {}).forEach(([key, value]) => {
-
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : value.toString())
-    }
-  });
-
-  const stringifiedParams = normalizedParams.toString();
-
-  return stringifiedParams.length > 0 ? `/api/files/content?${stringifiedParams}` : `/api/files/content`
-}
-
-/**
- * @summary Probes a watched-root file with range metadata.
- */
-export const headFileContent = async (params: HeadFileContentParams, options?: RequestInit): Promise<headFileContentResponse> => {
-
-  return orvalFetch<headFileContentResponse>(getHeadFileContentUrl(params),
-  {
-    ...options,
-    method: 'HEAD'
-
-
-  }
-);}
-
-
-
 export type createFileFolderResponse200 = {
   data: FileOperationResponse
   status: 200
@@ -4105,42 +3984,6 @@ export const createFileFolder = async (fileCreateFolderRequest: FileCreateFolder
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(
       fileCreateFolderRequest,)
-  }
-);}
-
-
-
-export type uploadFilesResponse200 = {
-  data: FileOperationResponse
-  status: 200
-}
-
-export type uploadFilesResponseSuccess = (uploadFilesResponse200) & {
-  headers: Headers;
-};
-;
-
-export type uploadFilesResponse = (uploadFilesResponseSuccess)
-
-export const getUploadFilesUrl = () => {
-
-
-
-
-  return `/api/files/upload`
-}
-
-/**
- * @summary Uploads files into a watched-root folder.
- */
-export const uploadFiles = async ( options?: RequestInit): Promise<uploadFilesResponse> => {
-
-  return orvalFetch<uploadFilesResponse>(getUploadFilesUrl(),
-  {
-    ...options,
-    method: 'POST'
-
-
   }
 );}
 
@@ -4279,6 +4122,130 @@ export const deleteFile = async (params: DeleteFileParams, options?: RequestInit
 
 
 
+export type excludeFileResponse200 = {
+  data: FileOperationResponse
+  status: 200
+}
+
+export type excludeFileResponseSuccess = (excludeFileResponse200) & {
+  headers: Headers;
+};
+;
+
+export type excludeFileResponse = (excludeFileResponseSuccess)
+
+export const getExcludeFileUrl = (params?: ExcludeFileParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/files/exclusions?${stringifiedParams}` : `/api/files/exclusions`
+}
+
+/**
+ * @summary Excludes a watched-root file or folder from library scans.
+ */
+export const excludeFile = async (fileExclusionRequest: FileExclusionRequest,
+    params?: ExcludeFileParams, options?: RequestInit): Promise<excludeFileResponse> => {
+
+  return orvalFetch<excludeFileResponse>(getExcludeFileUrl(params),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      fileExclusionRequest,)
+  }
+);}
+
+
+
+export type removeFileExclusionResponse200 = {
+  data: FileOperationResponse
+  status: 200
+}
+
+export type removeFileExclusionResponseSuccess = (removeFileExclusionResponse200) & {
+  headers: Headers;
+};
+;
+
+export type removeFileExclusionResponse = (removeFileExclusionResponseSuccess)
+
+export const getRemoveFileExclusionUrl = (params: RemoveFileExclusionParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/files/exclusions?${stringifiedParams}` : `/api/files/exclusions`
+}
+
+/**
+ * @summary Removes a watched-root file or folder scan exclusion.
+ */
+export const removeFileExclusion = async (params: RemoveFileExclusionParams, options?: RequestInit): Promise<removeFileExclusionResponse> => {
+
+  return orvalFetch<removeFileExclusionResponse>(getRemoveFileExclusionUrl(params),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+export type uploadFilesResponse200 = {
+  data: FileOperationResponse
+  status: 200
+}
+
+export type uploadFilesResponseSuccess = (uploadFilesResponse200) & {
+  headers: Headers;
+};
+;
+
+export type uploadFilesResponse = (uploadFilesResponseSuccess)
+
+export const getUploadFilesUrl = () => {
+
+
+
+
+  return `/api/files/upload`
+}
+
+/**
+ * @summary Uploads files into a watched-root folder.
+ */
+export const uploadFiles = async ( options?: RequestInit): Promise<uploadFilesResponse> => {
+
+  return orvalFetch<uploadFilesResponse>(getUploadFilesUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
 export type rescanFileRootResponse200 = {
   data: FileOperationResponse
   status: 200
@@ -4319,6 +4286,135 @@ export const rescanFileRoot = async (fileRescanRequest: FileRescanRequest,
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(
       fileRescanRequest,)
+  }
+);}
+
+
+
+export type getFileDetailResponse200 = {
+  data: FileDetail
+  status: 200
+}
+
+export type getFileDetailResponseSuccess = (getFileDetailResponse200) & {
+  headers: Headers;
+};
+;
+
+export type getFileDetailResponse = (getFileDetailResponseSuccess)
+
+export const getGetFileDetailUrl = (params: GetFileDetailParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/files/detail?${stringifiedParams}` : `/api/files/detail`
+}
+
+/**
+ * @summary Gets file or directory details for the Files page.
+ */
+export const getFileDetail = async (params: GetFileDetailParams, options?: RequestInit): Promise<getFileDetailResponse> => {
+
+  return orvalFetch<getFileDetailResponse>(getGetFileDetailUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export type getFileContentResponse200 = {
+  data: void
+  status: 200
+}
+
+export type getFileContentResponseSuccess = (getFileContentResponse200) & {
+  headers: Headers;
+};
+;
+
+export type getFileContentResponse = (getFileContentResponseSuccess)
+
+export const getGetFileContentUrl = (params: GetFileContentParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/files/content?${stringifiedParams}` : `/api/files/content`
+}
+
+/**
+ * @summary Streams a watched-root file with range support.
+ */
+export const getFileContent = async (params: GetFileContentParams, options?: RequestInit): Promise<getFileContentResponse> => {
+
+  return orvalFetch<getFileContentResponse>(getGetFileContentUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export type headFileContentResponse200 = {
+  data: void
+  status: 200
+}
+
+export type headFileContentResponseSuccess = (headFileContentResponse200) & {
+  headers: Headers;
+};
+;
+
+export type headFileContentResponse = (headFileContentResponseSuccess)
+
+export const getHeadFileContentUrl = (params: HeadFileContentParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/files/content?${stringifiedParams}` : `/api/files/content`
+}
+
+/**
+ * @summary Probes a watched-root file with range metadata.
+ */
+export const headFileContent = async (params: HeadFileContentParams, options?: RequestInit): Promise<headFileContentResponse> => {
+
+  return orvalFetch<headFileContentResponse>(getHeadFileContentUrl(params),
+  {
+    ...options,
+    method: 'HEAD'
+
+
   }
 );}
 
@@ -4746,8 +4842,284 @@ export const applyIdentifyProposal = async (entityId: string,
 
 
 
+export type listIdentifyQueueResponse200 = {
+  data: IdentifyQueueItem[]
+  status: 200
+}
+
+export type listIdentifyQueueResponseSuccess = (listIdentifyQueueResponse200) & {
+  headers: Headers;
+};
+;
+
+export type listIdentifyQueueResponse = (listIdentifyQueueResponseSuccess)
+
+export const getListIdentifyQueueUrl = (params?: ListIdentifyQueueParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/identify/queue?${stringifiedParams}` : `/api/identify/queue`
+}
+
+/**
+ * @summary Lists durable identify queue items.
+ */
+export const listIdentifyQueue = async (params?: ListIdentifyQueueParams, options?: RequestInit): Promise<listIdentifyQueueResponse> => {
+
+  return orvalFetch<listIdentifyQueueResponse>(getListIdentifyQueueUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export type addIdentifyQueueItemResponse200 = {
+  data: IdentifyQueueItem
+  status: 200
+}
+
+export type addIdentifyQueueItemResponse404 = {
+  data: ApiProblem
+  status: 404
+}
+
+export type addIdentifyQueueItemResponseSuccess = (addIdentifyQueueItemResponse200) & {
+  headers: Headers;
+};
+export type addIdentifyQueueItemResponseError = (addIdentifyQueueItemResponse404) & {
+  headers: Headers;
+};
+
+export type addIdentifyQueueItemResponse = (addIdentifyQueueItemResponseSuccess | addIdentifyQueueItemResponseError)
+
+export const getAddIdentifyQueueItemUrl = (entityId: string,) => {
+
+
+
+
+  return `/api/identify/queue/entities/${entityId}`
+}
+
+/**
+ * @summary Adds an entity to the durable identify queue.
+ */
+export const addIdentifyQueueItem = async (entityId: string, options?: RequestInit): Promise<addIdentifyQueueItemResponse> => {
+
+  return orvalFetch<addIdentifyQueueItemResponse>(getAddIdentifyQueueItemUrl(entityId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+export type getIdentifyQueueItemResponse200 = {
+  data: IdentifyQueueItem
+  status: 200
+}
+
+export type getIdentifyQueueItemResponse404 = {
+  data: ApiProblem
+  status: 404
+}
+
+export type getIdentifyQueueItemResponseSuccess = (getIdentifyQueueItemResponse200) & {
+  headers: Headers;
+};
+export type getIdentifyQueueItemResponseError = (getIdentifyQueueItemResponse404) & {
+  headers: Headers;
+};
+
+export type getIdentifyQueueItemResponse = (getIdentifyQueueItemResponseSuccess | getIdentifyQueueItemResponseError)
+
+export const getGetIdentifyQueueItemUrl = (entityId: string,) => {
+
+
+
+
+  return `/api/identify/queue/entities/${entityId}`
+}
+
+/**
+ * @summary Gets one durable identify queue item by entity id.
+ */
+export const getIdentifyQueueItem = async (entityId: string, options?: RequestInit): Promise<getIdentifyQueueItemResponse> => {
+
+  return orvalFetch<getIdentifyQueueItemResponse>(getGetIdentifyQueueItemUrl(entityId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export type deleteIdentifyQueueItemResponse200 = {
+  data: IdentifyQueueItem
+  status: 200
+}
+
+export type deleteIdentifyQueueItemResponse404 = {
+  data: ApiProblem
+  status: 404
+}
+
+export type deleteIdentifyQueueItemResponseSuccess = (deleteIdentifyQueueItemResponse200) & {
+  headers: Headers;
+};
+export type deleteIdentifyQueueItemResponseError = (deleteIdentifyQueueItemResponse404) & {
+  headers: Headers;
+};
+
+export type deleteIdentifyQueueItemResponse = (deleteIdentifyQueueItemResponseSuccess | deleteIdentifyQueueItemResponseError)
+
+export const getDeleteIdentifyQueueItemUrl = (entityId: string,) => {
+
+
+
+
+  return `/api/identify/queue/entities/${entityId}`
+}
+
+/**
+ * @summary Removes an entity from the active identify queue.
+ */
+export const deleteIdentifyQueueItem = async (entityId: string, options?: RequestInit): Promise<deleteIdentifyQueueItemResponse> => {
+
+  return orvalFetch<deleteIdentifyQueueItemResponse>(getDeleteIdentifyQueueItemUrl(entityId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+export type searchIdentifyQueueItemResponse200 = {
+  data: IdentifyQueueItem
+  status: 200
+}
+
+export type searchIdentifyQueueItemResponse404 = {
+  data: ApiProblem
+  status: 404
+}
+
+export type searchIdentifyQueueItemResponseSuccess = (searchIdentifyQueueItemResponse200) & {
+  headers: Headers;
+};
+export type searchIdentifyQueueItemResponseError = (searchIdentifyQueueItemResponse404) & {
+  headers: Headers;
+};
+
+export type searchIdentifyQueueItemResponse = (searchIdentifyQueueItemResponseSuccess | searchIdentifyQueueItemResponseError)
+
+export const getSearchIdentifyQueueItemUrl = (entityId: string,
+    params?: SearchIdentifyQueueItemParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/identify/queue/entities/${entityId}/search?${stringifiedParams}` : `/api/identify/queue/entities/${entityId}/search`
+}
+
+/**
+ * @summary Runs a provider search and stores candidates or a proposal on the queue item.
+ */
+export const searchIdentifyQueueItem = async (entityId: string,
+    identifyQueueSearchRequest: IdentifyQueueSearchRequest,
+    params?: SearchIdentifyQueueItemParams, options?: RequestInit): Promise<searchIdentifyQueueItemResponse> => {
+
+  return orvalFetch<searchIdentifyQueueItemResponse>(getSearchIdentifyQueueItemUrl(entityId,params),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      identifyQueueSearchRequest,)
+  }
+);}
+
+
+
+export type applyIdentifyQueueItemResponse200 = {
+  data: IdentifyQueueItem
+  status: 200
+}
+
+export type applyIdentifyQueueItemResponse400 = {
+  data: ApiProblem
+  status: 400
+}
+
+export type applyIdentifyQueueItemResponse404 = {
+  data: ApiProblem
+  status: 404
+}
+
+export type applyIdentifyQueueItemResponseSuccess = (applyIdentifyQueueItemResponse200) & {
+  headers: Headers;
+};
+export type applyIdentifyQueueItemResponseError = (applyIdentifyQueueItemResponse400 | applyIdentifyQueueItemResponse404) & {
+  headers: Headers;
+};
+
+export type applyIdentifyQueueItemResponse = (applyIdentifyQueueItemResponseSuccess | applyIdentifyQueueItemResponseError)
+
+export const getApplyIdentifyQueueItemUrl = (entityId: string,) => {
+
+
+
+
+  return `/api/identify/queue/entities/${entityId}/apply`
+}
+
+/**
+ * @summary Applies a reviewed identify queue proposal and marks the item done.
+ */
+export const applyIdentifyQueueItem = async (entityId: string,
+    applyIdentifyQueueItemRequest: ApplyIdentifyQueueItemRequest, options?: RequestInit): Promise<applyIdentifyQueueItemResponse> => {
+
+  return orvalFetch<applyIdentifyQueueItemResponse>(getApplyIdentifyQueueItemUrl(entityId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      applyIdentifyQueueItemRequest,)
+  }
+);}
+
+
+
 export type startBulkIdentifyResponse202 = {
-  data: IdentifyBulkSession
+  data: JobCreateResponse
   status: 202
 }
 
@@ -4781,7 +5153,7 @@ export const getStartBulkIdentifyUrl = (params?: StartBulkIdentifyParams,) => {
 }
 
 /**
- * @summary Starts a transient in-memory bulk identify review session.
+ * @summary Enqueues a bulk identify job that searches a provider for each entity.
  */
 export const startBulkIdentify = async (identifyBulkStartRequest: IdentifyBulkStartRequest,
     params?: StartBulkIdentifyParams, options?: RequestInit): Promise<startBulkIdentifyResponse> => {
@@ -4793,92 +5165,6 @@ export const startBulkIdentify = async (identifyBulkStartRequest: IdentifyBulkSt
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(
       identifyBulkStartRequest,)
-  }
-);}
-
-
-
-export type getBulkIdentifySessionResponse200 = {
-  data: IdentifyBulkSession
-  status: 200
-}
-
-export type getBulkIdentifySessionResponse404 = {
-  data: ApiProblem
-  status: 404
-}
-
-export type getBulkIdentifySessionResponseSuccess = (getBulkIdentifySessionResponse200) & {
-  headers: Headers;
-};
-export type getBulkIdentifySessionResponseError = (getBulkIdentifySessionResponse404) & {
-  headers: Headers;
-};
-
-export type getBulkIdentifySessionResponse = (getBulkIdentifySessionResponseSuccess | getBulkIdentifySessionResponseError)
-
-export const getGetBulkIdentifySessionUrl = (sessionId: string,) => {
-
-
-
-
-  return `/api/identify/bulk/${sessionId}`
-}
-
-/**
- * @summary Gets transient bulk identify session status and results.
- */
-export const getBulkIdentifySession = async (sessionId: string, options?: RequestInit): Promise<getBulkIdentifySessionResponse> => {
-
-  return orvalFetch<getBulkIdentifySessionResponse>(getGetBulkIdentifySessionUrl(sessionId),
-  {
-    ...options,
-    method: 'GET'
-
-
-  }
-);}
-
-
-
-export type closeBulkIdentifySessionResponse204 = {
-  data: void
-  status: 204
-}
-
-export type closeBulkIdentifySessionResponse404 = {
-  data: ApiProblem
-  status: 404
-}
-
-export type closeBulkIdentifySessionResponseSuccess = (closeBulkIdentifySessionResponse204) & {
-  headers: Headers;
-};
-export type closeBulkIdentifySessionResponseError = (closeBulkIdentifySessionResponse404) & {
-  headers: Headers;
-};
-
-export type closeBulkIdentifySessionResponse = (closeBulkIdentifySessionResponseSuccess | closeBulkIdentifySessionResponseError)
-
-export const getCloseBulkIdentifySessionUrl = (sessionId: string,) => {
-
-
-
-
-  return `/api/identify/bulk/${sessionId}`
-}
-
-/**
- * @summary Closes a transient bulk identify review session.
- */
-export const closeBulkIdentifySession = async (sessionId: string, options?: RequestInit): Promise<closeBulkIdentifySessionResponse> => {
-
-  return orvalFetch<closeBulkIdentifySessionResponse>(getCloseBulkIdentifySessionUrl(sessionId),
-  {
-    ...options,
-    method: 'DELETE'
-
-
   }
 );}
 

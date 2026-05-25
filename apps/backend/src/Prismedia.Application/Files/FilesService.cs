@@ -35,6 +35,7 @@ public sealed class FilesService(
             entries = await FilterVisibleEntriesAsync(directory, entries, cancellationToken);
         }
 
+        entries = await ApplyExcludedFlagsAsync(directory.Root.Id, entries, cancellationToken);
         return new FileChildrenResponse(request.RootId, directory.RelativePath, entries);
     }
 
@@ -45,8 +46,18 @@ public sealed class FilesService(
         CancellationToken cancellationToken) {
         var path = await ResolveAsync(request.RootId, request.Path, hideNsfw, cancellationToken);
         await EnsureVisiblePathAsync(path, hideNsfw, cancellationToken);
-        var linked = await persistence.ListLinkedEntitiesAsync(path.AbsolutePath, hideNsfw, cancellationToken);
-        return await storage.GetDetailAsync(path, linked, cancellationToken);
+        var excluded = await IsExcludedAsync(path.Root.Id, path.RelativePath, cancellationToken);
+        var linked = excluded
+            ? []
+            : await persistence.ListLinkedEntitiesAsync(path.AbsolutePath, hideNsfw, cancellationToken);
+        var detail = await storage.GetDetailAsync(path, linked, cancellationToken);
+        return excluded
+            ? detail with {
+                Entry = detail.Entry with { Excluded = true },
+                LinkedEntities = [],
+                CanPreview = false
+            }
+            : detail with { Entry = detail.Entry with { Excluded = false } };
     }
 
     /// <summary>Gets content metadata for one previewable file.</summary>
@@ -148,6 +159,41 @@ public sealed class FilesService(
         return new FileOperationResponse(await QueueScansAsync([target.Root], cancellationToken));
     }
 
+    /// <summary>Marks a watched-root file or directory as excluded from future scans.</summary>
+    public async Task<FileOperationResponse> ExcludeAsync(
+        FileExclusionRequest request,
+        bool hideNsfw,
+        CancellationToken cancellationToken) {
+        if (string.IsNullOrWhiteSpace(request.Path)) {
+            throw new FileOperationException("invalid_path", "Library roots cannot be excluded from Files.");
+        }
+
+        var target = await ResolveAsync(request.RootId, request.Path, hideNsfw, cancellationToken);
+        await EnsureVisiblePathAsync(target, hideNsfw, cancellationToken);
+        var detail = await storage.GetDetailAsync(target, [], cancellationToken);
+        await persistence.UpsertExclusionAsync(
+            target.Root.Id,
+            target.RelativePath,
+            detail.Entry.Kind,
+            cancellationToken);
+        return new FileOperationResponse(await QueueScansAsync([target.Root], cancellationToken));
+    }
+
+    /// <summary>Removes a watched-root file or directory scan exclusion.</summary>
+    public async Task<FileOperationResponse> RemoveExclusionAsync(
+        FileExclusionRequest request,
+        bool hideNsfw,
+        CancellationToken cancellationToken) {
+        if (string.IsNullOrWhiteSpace(request.Path)) {
+            throw new FileOperationException("invalid_path", "Library roots cannot have exclusions removed from Files.");
+        }
+
+        var target = await ResolveAsync(request.RootId, request.Path, hideNsfw, cancellationToken);
+        await EnsureVisiblePathAsync(target, hideNsfw, cancellationToken);
+        await persistence.RemoveExclusionAsync(target.Root.Id, target.RelativePath, cancellationToken);
+        return new FileOperationResponse(await QueueScansAsync([target.Root], cancellationToken));
+    }
+
     /// <summary>Queues scans for one watched root.</summary>
     public async Task<FileOperationResponse> RescanAsync(
         FileRescanRequest request,
@@ -222,6 +268,37 @@ public sealed class FilesService(
         return entries
             .Where(entry => !hidden.Contains(AbsolutePathForEntry(directory.Root.Path, entry.Path)))
             .ToArray();
+    }
+
+    private async Task<IReadOnlyList<FileEntry>> ApplyExcludedFlagsAsync(
+        Guid rootId,
+        IReadOnlyList<FileEntry> entries,
+        CancellationToken cancellationToken) {
+        if (entries.Count == 0) {
+            return entries;
+        }
+
+        var relativePaths = entries.Select(entry => entry.Path).ToArray();
+        var excluded = await persistence.ListExcludedRelativePathsAsync(rootId, relativePaths, cancellationToken);
+        if (excluded.Count == 0) {
+            return entries.Select(entry => entry with { Excluded = false }).ToArray();
+        }
+
+        return entries
+            .Select(entry => entry with { Excluded = excluded.Contains(entry.Path) })
+            .ToArray();
+    }
+
+    private async Task<bool> IsExcludedAsync(
+        Guid rootId,
+        string relativePath,
+        CancellationToken cancellationToken) {
+        if (string.IsNullOrWhiteSpace(relativePath)) {
+            return false;
+        }
+
+        var excluded = await persistence.ListExcludedRelativePathsAsync(rootId, [relativePath], cancellationToken);
+        return excluded.Contains(relativePath);
     }
 
     private async Task EnsureVisiblePathAsync(

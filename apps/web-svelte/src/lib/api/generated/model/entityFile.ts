@@ -6,7 +6,7 @@
  */
 import type { EntityFileRole } from './entityFileRole';
 
-export interface CapabilityFilesItem {
+export interface EntityFile {
   role: EntityFileRole;
   path: string;
   /** @nullable */

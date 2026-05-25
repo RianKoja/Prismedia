@@ -4,10 +4,8 @@
  * Prismedia.Api | v1
  * OpenAPI spec version: 1.0.0
  */
+import type { JobRun } from './jobRun';
 
-export interface CapabilityLinksExternalId {
-  provider: string;
-  value: string;
-  /** @nullable */
-  url: string | null;
+export interface JobCreateResponse {
+  job: JobRun;
 }

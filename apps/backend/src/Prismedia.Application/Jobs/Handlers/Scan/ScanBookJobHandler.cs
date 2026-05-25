@@ -25,9 +25,10 @@ public sealed class ScanBookJobHandler(
 
     protected override async Task ScanRootAsync(JobContext context, LibraryRootData root, CancellationToken cancellationToken) {
         logger.LogInformation("ScanBook: discovering archives in {Path}", root.Path);
+        var excludedPaths = await Persistence.GetExcludedPathsForRootAsync(root.Id, cancellationToken);
 
         var archiveFiles = await FileDiscovery.DiscoverFilesAsync(
-            root.Path, MediaCategory.ComicArchive, root.Recursive, cancellationToken);
+            root.Path, MediaCategory.ComicArchive, root.Recursive, excludedPaths, cancellationToken);
 
         logger.LogInformation("ScanBook: found {Count} archive files in {Label}", archiveFiles.Count, root.Label);
 
@@ -122,6 +123,7 @@ public sealed class ScanBookJobHandler(
         }
 
         await Persistence.RemoveStaleBooksInRootAsync(root.Id, validBookPaths, cancellationToken);
+        await Persistence.RemoveEntitiesInExcludedPathsAsync(root.Id, cancellationToken);
     }
 
     private async Task UpsertChapterPagesAsync(

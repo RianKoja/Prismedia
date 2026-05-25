@@ -14,6 +14,7 @@ import {
   deleteLibraryRoot as deleteLibraryRootRequest,
   getFileDetail,
   getGetFileContentUrl,
+  excludeFile as excludeFileRequest,
   listEntities,
   listFileChildren,
   listFileRoots,
@@ -28,6 +29,7 @@ import {
   postJellyfinUserPlayedItem,
   renameFile as renameFileRequest,
   rebuildPreviews as rebuildPreviewsRequest,
+  removeFileExclusion as removeFileExclusionRequest,
   rescanFileRoot as rescanFileRootRequest,
   updateEntityFlags as updateEntityFlagsRequest,
   updateEntityMarker as updateEntityMarkerRequest,
@@ -80,6 +82,7 @@ import type {
   FileCreateFolderRequest as GeneratedFileCreateFolderRequest,
   FileDetail as GeneratedFileDetail,
   FileEntry as GeneratedFileEntry,
+  FileExclusionRequest as GeneratedFileExclusionRequest,
   FileMoveRequest as GeneratedFileMoveRequest,
   FileOperationResponse as GeneratedFileOperationResponse,
   FileRenameRequest as GeneratedFileRenameRequest,
@@ -235,6 +238,7 @@ export type FileChildrenResponse = GeneratedFileChildrenResponse;
 export type FileOperationResponse = GeneratedFileOperationResponse;
 type EntityThumbnailBatchResponse = GeneratedEntityThumbnailBatchResponse;
 type FileCreateFolderRequest = GeneratedFileCreateFolderRequest;
+type FileExclusionRequest = GeneratedFileExclusionRequest;
 type FileMoveRequest = GeneratedFileMoveRequest;
 type FileRenameRequest = GeneratedFileRenameRequest;
 type FileRescanRequest = GeneratedFileRescanRequest;
@@ -1126,6 +1130,26 @@ export async function deleteFile(
   return unwrapGenerated(
     await deleteFileRequest({ rootId, path }, { signal: options?.signal }),
     "Failed to delete file",
+  );
+}
+
+export async function excludeFile(
+  payload: FileExclusionRequest,
+  options?: RequestOptions,
+): Promise<FileOperationResponse> {
+  return unwrapGenerated(
+    await excludeFileRequest(payload, undefined, requestInit(options)),
+    "Failed to exclude file",
+  );
+}
+
+export async function removeFileExclusion(
+  payload: FileExclusionRequest,
+  options?: RequestOptions,
+): Promise<FileOperationResponse> {
+  return unwrapGenerated(
+    await removeFileExclusionRequest(payload, requestInit(options)),
+    "Failed to remove file exclusion",
   );
 }
 

@@ -3,10 +3,13 @@ using Prismedia.Domain.Entities;
 namespace Prismedia.Infrastructure.Persistence.Entities;
 
 public sealed class MediaFileIgnoreRow {
+    public Guid LibraryRootId { get; set; }
     public string Path { get; set; } = string.Empty;
+    public string Kind { get; set; } = "file";
     public string EntityKindCode { get; set; } = string.Empty;
     public string Reason { get; set; } = "deleted-from-library";
     public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset UpdatedAt { get; set; }
 }
 
 public sealed class UiPreferenceRow {

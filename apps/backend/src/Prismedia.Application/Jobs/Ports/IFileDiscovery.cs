@@ -8,12 +8,14 @@ public interface IFileDiscovery {
         string rootPath,
         MediaCategory category,
         bool recursive,
+        IReadOnlySet<string> excludedPaths,
         CancellationToken cancellationToken);
 
     Task<IReadOnlyDictionary<string, IReadOnlyList<string>>> DiscoverFilesByDirectoryAsync(
         string rootPath,
         MediaCategory category,
         bool recursive,
+        IReadOnlySet<string> excludedPaths,
         CancellationToken cancellationToken);
 }
 

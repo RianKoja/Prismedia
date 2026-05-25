@@ -7,6 +7,8 @@ using Prismedia.Infrastructure.Persistence.Entities;
 namespace Prismedia.Infrastructure.Tests;
 
 public sealed class EfFilesPersistenceTests {
+    private static readonly Guid RootId = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+
     [Fact]
     public async Task ListHiddenPathsAsyncHidesFoldersWhoseAssociatedSourcesAreAllNsfw() {
         await using var db = CreateContext();
@@ -49,6 +51,55 @@ public sealed class EfFilesPersistenceTests {
         Assert.DoesNotContain(safeVideoPath, hidden);
     }
 
+    [Fact]
+    public async Task ExclusionsAreScopedToLibraryRootAndCoverDescendants() {
+        await using var db = CreateContext();
+        var otherRootId = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
+        SeedLibraryRoot(db, RootId, "/media/root");
+        SeedLibraryRoot(db, otherRootId, "/media/other");
+        var persistence = new EfFilesPersistence(db);
+
+        await persistence.UpsertExclusionAsync(RootId, "Skip", "directory", CancellationToken.None);
+        await persistence.UpsertExclusionAsync(otherRootId, "Skip", "directory", CancellationToken.None);
+
+        var excluded = await persistence.ListExcludedRelativePathsAsync(
+            RootId,
+            ["Skip", "Skip/nested.mkv", "Keep.mkv"],
+            CancellationToken.None);
+
+        Assert.Equal(["Skip", "Skip/nested.mkv"], excluded.OrderBy(path => path, StringComparer.OrdinalIgnoreCase));
+        Assert.Equal(2, db.MediaFileIgnores.Count());
+    }
+
+    [Fact]
+    public async Task RemoveExclusionDeletesOnlyTheSelectedRootPath() {
+        await using var db = CreateContext();
+        var otherRootId = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
+        SeedLibraryRoot(db, RootId, "/media/root");
+        SeedLibraryRoot(db, otherRootId, "/media/other");
+        db.MediaFileIgnores.Add(new MediaFileIgnoreRow {
+            LibraryRootId = RootId,
+            Path = "Skip",
+            Kind = "directory",
+            CreatedAt = DateTimeOffset.UtcNow,
+            UpdatedAt = DateTimeOffset.UtcNow
+        });
+        db.MediaFileIgnores.Add(new MediaFileIgnoreRow {
+            LibraryRootId = otherRootId,
+            Path = "Skip",
+            Kind = "directory",
+            CreatedAt = DateTimeOffset.UtcNow,
+            UpdatedAt = DateTimeOffset.UtcNow
+        });
+        await db.SaveChangesAsync();
+        var persistence = new EfFilesPersistence(db);
+
+        await persistence.RemoveExclusionAsync(RootId, "Skip", CancellationToken.None);
+
+        var remaining = Assert.Single(db.MediaFileIgnores);
+        Assert.Equal(otherRootId, remaining.LibraryRootId);
+    }
+
     private static async Task AddSourceEntityAsync(
         PrismediaDbContext db,
         string kindCode,
@@ -74,6 +125,16 @@ public sealed class EfFilesPersistenceTests {
             UpdatedAt = now
         });
         await db.SaveChangesAsync();
+    }
+
+    private static void SeedLibraryRoot(PrismediaDbContext db, Guid id, string path) {
+        db.LibraryRoots.Add(new LibraryRootRow {
+            Id = id,
+            Path = path,
+            Label = Path.GetFileName(path),
+            CreatedAt = DateTimeOffset.UtcNow,
+            UpdatedAt = DateTimeOffset.UtcNow
+        });
     }
 
     private static PrismediaDbContext CreateContext() =>

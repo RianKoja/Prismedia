@@ -7,12 +7,14 @@
   import {
     createFileFolder as apiCreateFileFolder,
     deleteFile as apiDeleteFile,
+    excludeFile as apiExcludeFile,
     fetchFileChildren,
     fetchFileDetail,
     fetchFileRoots,
     moveFile as apiMoveFile,
     refreshEntity,
     renameFile as apiRenameFile,
+    removeFileExclusion as apiRemoveFileExclusion,
     rescanFileRoot as apiRescanFileRoot,
     uploadFiles as apiUploadFiles,
     type FileDetail,
@@ -232,6 +234,21 @@
     await refreshSelected();
   }
 
+  async function excludePath(meta: FileTreeNodeMeta): Promise<void> {
+    if (!meta.path) {
+      alert("Library roots cannot be excluded here.");
+      return;
+    }
+    await apiExcludeFile({ rootId: meta.rootId, path: meta.path });
+    await refreshSelected();
+  }
+
+  async function removeExclusion(meta: FileTreeNodeMeta): Promise<void> {
+    if (!meta.path) return;
+    await apiRemoveFileExclusion({ rootId: meta.rootId, path: meta.path });
+    await refreshSelected();
+  }
+
   async function handleAction(action: FileActionId, treePath = selectedTreePath): Promise<void> {
     const meta = treePath ? registry.get(treePath) : null;
     if (!meta) return;
@@ -242,6 +259,8 @@
       if (action === "move") await moveFile(meta);
       if (action === "delete") await deleteFile(meta);
       if (action === "rescan") await rescan(meta);
+      if (action === "exclude") await excludePath(meta);
+      if (action === "remove-exclusion") await removeExclusion(meta);
     } catch (operationError) {
       const message = operationError instanceof Error ? operationError.message : "File operation failed";
       error = message.includes("already exists")

@@ -19,9 +19,10 @@ public sealed class ScanGalleryJobHandler(
 
     protected override async Task ScanRootAsync(JobContext context, LibraryRootData root, CancellationToken cancellationToken) {
         logger.LogInformation("ScanGallery: discovering images in {Path}", root.Path);
+        var excludedPaths = await Persistence.GetExcludedPathsForRootAsync(root.Id, cancellationToken);
 
         var dirGroups = await FileDiscovery.DiscoverFilesByDirectoryAsync(
-            root.Path, MediaCategory.Image, root.Recursive, cancellationToken);
+            root.Path, MediaCategory.Image, root.Recursive, excludedPaths, cancellationToken);
 
         logger.LogInformation("ScanGallery: found {DirCount} directories with images in {Label}",
             dirGroups.Count, root.Label);
@@ -100,6 +101,7 @@ public sealed class ScanGalleryJobHandler(
         }
 
         await Persistence.RemoveStaleLooseImagesInRootAsync(root.Id, validLooseImagePaths, cancellationToken);
+        await Persistence.RemoveEntitiesInExcludedPathsAsync(root.Id, cancellationToken);
 
         foreach (var galleryPath in validGalleryPaths) {
             await Persistence.RemoveStaleImagesInGalleryAsync(

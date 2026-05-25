@@ -13,4 +13,6 @@ export interface IdentifyQuery {
   url: string | null;
   /** @nullable */
   externalIds: IdentifyQueryExternalIds;
+  /** @nullable */
+  requireChoice?: boolean | null;
 }

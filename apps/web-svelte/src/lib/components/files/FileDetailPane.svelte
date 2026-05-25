@@ -6,8 +6,10 @@
     Pencil,
     RefreshCw,
     ScanLine,
+    ShieldOff,
     Trash2,
     Upload,
+    Undo2,
   } from "@lucide/svelte";
   import type { FileDetail } from "$lib/api/prismedia";
   import { fileContentUrl } from "$lib/api/prismedia";
@@ -50,6 +52,7 @@
   const entry = $derived(detail?.entry ?? null);
   const isDirectory = $derived(entry?.kind === "directory");
   const isRoot = $derived(isDirectory && (!entry?.path || entry.path === "."));
+  const isExcluded = $derived(Boolean(entry?.excluded));
   const contentUrl = $derived(entry ? fileContentUrl(entry.rootId, entry.path) : "");
   const mime = $derived(entry?.mimeType ?? "");
   const previewKind = $derived(resolvePreviewKind(entry?.name ?? "", mime, isDirectory));
@@ -59,6 +62,7 @@
 
   const primaryLinked = $derived.by(() => {
     const linked = detail?.linkedEntities;
+    if (isExcluded) return null;
     if (!linked?.length) return null;
     if (linked.length === 1) return linked[0];
     const matchKinds = isDirectory ? containerKinds : leafKinds;
@@ -72,7 +76,7 @@
       : null,
   );
   const linkedCards = $derived(
-    (detail?.linkedEntities ?? [])
+    isExcluded ? [] : (detail?.linkedEntities ?? [])
       .filter((linked) => linked.entityId !== primaryLinked?.entityId)
       .map((linked) =>
         entityReferenceToThumbnailCard(
@@ -82,7 +86,7 @@
   );
 
   function resolvePreviewKind(name: string, mimeType: string, directory: boolean): "image" | "video" | "audio" | "text" | "none" {
-    if (directory) return "none";
+    if (directory || isExcluded) return "none";
     if (mimeType.startsWith("image/")) return "image";
     if (mimeType.startsWith("video/")) return "video";
     if (mimeType.startsWith("audio/")) return "audio";
@@ -187,6 +191,11 @@
       {#if !isRoot}
         <button type="button" onclick={() => onAction?.("rename")}><Pencil class="h-3.5 w-3.5" />Rename</button>
         <button type="button" onclick={() => onAction?.("move")}><FileArchive class="h-3.5 w-3.5" />Move</button>
+        {#if isExcluded}
+          <button type="button" onclick={() => onAction?.("remove-exclusion")}><Undo2 class="h-3.5 w-3.5" />Remove exclusion</button>
+        {:else}
+          <button type="button" onclick={() => onAction?.("exclude")}><ShieldOff class="h-3.5 w-3.5" />Exclude</button>
+        {/if}
         <div class="toolbar-spacer"></div>
         <button class="danger" type="button" onclick={() => onAction?.("delete")}><Trash2 class="h-3.5 w-3.5" /></button>
       {/if}
@@ -249,6 +258,9 @@
               <div><span>Size</span><strong>{formatBytes(entry.sizeBytes)}</strong></div>
             {/if}
             <div><span>Kind</span><strong>{entry.kind}</strong></div>
+            {#if isExcluded}
+              <div><span>Excluded</span><strong>Library scans skip this path</strong></div>
+            {/if}
             <div><span>Modified</span><strong>{formatDate(entry.modifiedAt)}</strong></div>
             <div><span>Created</span><strong>{formatDate(detail.createdAt)}</strong></div>
             {#if entry.mimeType}

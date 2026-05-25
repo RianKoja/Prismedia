@@ -17,6 +17,7 @@ public sealed class FileDiscoveryService {
         string rootPath,
         IReadOnlySet<string> extensions,
         bool recursive,
+        IReadOnlySet<string>? excludedPaths,
         CancellationToken cancellationToken) {
         var results = new List<string>();
 
@@ -24,7 +25,7 @@ public sealed class FileDiscoveryService {
             return Task.FromResult<IReadOnlyList<string>>(results);
         }
 
-        WalkDirectory(rootPath, extensions, recursive, results, cancellationToken);
+        WalkDirectory(rootPath, extensions, recursive, NormalizeExcludedPaths(excludedPaths), results, cancellationToken);
         results.Sort(StringComparer.OrdinalIgnoreCase);
         return Task.FromResult<IReadOnlyList<string>>(results);
     }
@@ -37,6 +38,7 @@ public sealed class FileDiscoveryService {
         string rootPath,
         IReadOnlySet<string> extensions,
         bool recursive,
+        IReadOnlySet<string>? excludedPaths,
         CancellationToken cancellationToken) {
         var allFiles = new List<string>();
 
@@ -45,7 +47,7 @@ public sealed class FileDiscoveryService {
                 new Dictionary<string, IReadOnlyList<string>>());
         }
 
-        WalkDirectory(rootPath, extensions, recursive, allFiles, cancellationToken);
+        WalkDirectory(rootPath, extensions, recursive, NormalizeExcludedPaths(excludedPaths), allFiles, cancellationToken);
 
         var grouped = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase);
 
@@ -61,12 +63,20 @@ public sealed class FileDiscoveryService {
         string directory,
         IReadOnlySet<string> extensions,
         bool recursive,
+        IReadOnlySet<string> excludedPaths,
         List<string> results,
         CancellationToken cancellationToken) {
         cancellationToken.ThrowIfCancellationRequested();
+        if (IsExcluded(directory, excludedPaths)) {
+            return;
+        }
 
         try {
             foreach (var file in Directory.EnumerateFiles(directory)) {
+                if (IsExcluded(file, excludedPaths)) {
+                    continue;
+                }
+
                 var ext = Path.GetExtension(file);
                 if (ext.Length == 0 || !extensions.Contains(ext))
                     continue;
@@ -82,16 +92,38 @@ public sealed class FileDiscoveryService {
                 return;
 
             foreach (var subDir in Directory.EnumerateDirectories(directory)) {
+                if (IsExcluded(subDir, excludedPaths)) {
+                    continue;
+                }
+
                 var dirName = Path.GetFileName(subDir);
                 if (dirName.StartsWith('.'))
                     continue;
 
-                WalkDirectory(subDir, extensions, recursive, results, cancellationToken);
+                WalkDirectory(subDir, extensions, recursive, excludedPaths, results, cancellationToken);
             }
         } catch (UnauthorizedAccessException) {
             // skip inaccessible directories silently
         } catch (DirectoryNotFoundException) {
             // directory was removed between enumeration and access
         }
+    }
+
+    private static IReadOnlySet<string> NormalizeExcludedPaths(IReadOnlySet<string>? excludedPaths) =>
+        excludedPaths is null || excludedPaths.Count == 0
+            ? new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            : excludedPaths
+                .Select(path => Path.TrimEndingDirectorySeparator(Path.GetFullPath(path)))
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+    private static bool IsExcluded(string path, IReadOnlySet<string> excludedPaths) {
+        if (excludedPaths.Count == 0) {
+            return false;
+        }
+
+        var normalized = Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
+        return excludedPaths.Any(excluded =>
+            string.Equals(normalized, excluded, StringComparison.OrdinalIgnoreCase) ||
+            normalized.StartsWith(excluded + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase));
     }
 }

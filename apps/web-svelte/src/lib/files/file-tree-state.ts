@@ -6,6 +6,7 @@ export interface FileTreeNodeMeta {
   name: string;
   kind: string;
   treePath: string;
+  excluded?: boolean;
 }
 
 export function fileTreeRootPath(root: Pick<FileRoot, "id" | "label" | "path">, allRoots?: Pick<FileRoot, "id" | "label" | "path">[]): string {
@@ -56,6 +57,7 @@ export function upsertFileTreeEntries(
       name: entry.name,
       kind: entry.kind,
       treePath,
+      excluded: Boolean(entry.excluded),
     });
     treePaths.push(treePath);
   }

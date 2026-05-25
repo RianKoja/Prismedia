@@ -139,6 +139,60 @@ public sealed class ScanJobHandlerTests {
     }
 
     [Fact]
+    public async Task VideoScanPassesRootExclusionsToDiscovery() {
+        var root = new LibraryRootData(
+            Guid.Parse("11111111-1111-1111-1111-111111111111"),
+            "/media/videos",
+            "Videos",
+            Enabled: true,
+            Recursive: true,
+            ScanVideos: true,
+            ScanImages: false,
+            ScanAudio: false,
+            ScanBooks: false,
+            IsNsfw: false);
+        var videoId = Guid.Parse("22222222-2222-2222-2222-222222222222");
+        var persistence = new FakeScanPersistence([root]) {
+            Settings = DisabledGeneratedWorkSettings,
+            UpsertedVideoIds = [videoId],
+            ExcludedPathsByRoot = new Dictionary<Guid, IReadOnlySet<string>> {
+                [root.Id] = new HashSet<string>(["/media/videos/Skip"], StringComparer.OrdinalIgnoreCase)
+            },
+            DownstreamNeedsById = new Dictionary<Guid, DownstreamNeeds> {
+                [videoId] = new(
+                    NeedsProbe: false,
+                    NeedsFingerprint: false,
+                    NeedsPreview: false,
+                    NeedsTrickplay: false,
+                    NeedsSubtitleExtraction: false)
+            }
+        };
+        var discovery = new RecordingFileDiscovery(["/media/videos/Keep/movie.mkv"]);
+        var handler = new ScanLibraryJobHandler(
+            NullLogger<ScanLibraryJobHandler>.Instance,
+            discovery,
+            persistence);
+        var job = new JobRunSnapshot(
+            Guid.NewGuid(),
+            JobType.ScanLibrary,
+            JobRunStatus.Running,
+            Progress: 0,
+            Message: null,
+            PayloadJson: $$"""{"libraryRootId":"{{root.Id}}"}""",
+            TargetEntityKind: "library-root",
+            TargetEntityId: root.Id.ToString(),
+            TargetLabel: root.Label,
+            CreatedAt: DateTimeOffset.UtcNow,
+            StartedAt: DateTimeOffset.UtcNow,
+            FinishedAt: null);
+
+        await handler.HandleAsync(new JobContext(job, new RecordingJobQueue()), CancellationToken.None);
+
+        Assert.Equal(["/media/videos/Skip"], discovery.LastExcludedPaths);
+        Assert.Equal("/media/videos/Keep/movie.mkv", Assert.Single(persistence.UpsertedVideoItems).FilePath);
+    }
+
+    [Fact]
     public async Task GalleryScanTreatsRootFilesAsLooseAndFoldersAsNestedGalleries() {
         var root = new LibraryRootData(
             Guid.Parse("11111111-1111-1111-1111-111111111111"),
@@ -489,6 +543,8 @@ public sealed class ScanJobHandlerTests {
         public IReadOnlyList<string> ValidBookPaths { get; private set; } = [];
         public IReadOnlyList<string> ValidBookVolumePaths { get; private set; } = [];
         public IReadOnlyList<string> ValidBookChapterPaths { get; private set; } = [];
+        public IReadOnlyDictionary<Guid, IReadOnlySet<string>> ExcludedPathsByRoot { get; init; } =
+            new Dictionary<Guid, IReadOnlySet<string>>();
         private readonly Dictionary<string, Guid> _entityIdsBySource = new(StringComparer.OrdinalIgnoreCase);
 
         public Task<LibraryRootData?> GetLibraryRootAsync(Guid rootId, CancellationToken cancellationToken) {
@@ -506,6 +562,13 @@ public sealed class ScanJobHandlerTests {
 
         public Task UpdateRootLastScannedAsync(Guid rootId, CancellationToken cancellationToken) =>
             Task.CompletedTask;
+
+        public Task<IReadOnlySet<string>> GetExcludedPathsForRootAsync(Guid rootId, CancellationToken cancellationToken) =>
+            Task.FromResult(ExcludedPathsByRoot.GetValueOrDefault(rootId) ??
+                new HashSet<string>(StringComparer.OrdinalIgnoreCase) as IReadOnlySet<string>);
+
+        public Task<int> RemoveEntitiesInExcludedPathsAsync(Guid rootId, CancellationToken cancellationToken) =>
+            Task.FromResult(0);
 
         public Task<Guid> UpsertVideoAsync(string filePath, string title, Guid libraryRootId, bool isNsfw, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
@@ -699,22 +762,27 @@ public sealed class ScanJobHandlerTests {
     private sealed record BookPageRecord(Guid Id, string SourcePath, string Title, Guid BookEntityId, Guid ChapterEntityId, int SortOrder);
 
     private sealed class NoopFileDiscovery : IFileDiscovery {
-        public Task<IReadOnlyList<string>> DiscoverFilesAsync(string rootPath, MediaCategory category, bool recursive, CancellationToken cancellationToken) =>
+        public Task<IReadOnlyList<string>> DiscoverFilesAsync(string rootPath, MediaCategory category, bool recursive, IReadOnlySet<string> excludedPaths, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
 
-        public Task<IReadOnlyDictionary<string, IReadOnlyList<string>>> DiscoverFilesByDirectoryAsync(string rootPath, MediaCategory category, bool recursive, CancellationToken cancellationToken) =>
+        public Task<IReadOnlyDictionary<string, IReadOnlyList<string>>> DiscoverFilesByDirectoryAsync(string rootPath, MediaCategory category, bool recursive, IReadOnlySet<string> excludedPaths, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
     }
 
     private sealed class RecordingFileDiscovery(
         IReadOnlyList<string>? files = null,
         IReadOnlyDictionary<string, IReadOnlyList<string>>? directoryGroups = null) : IFileDiscovery {
+        public IReadOnlyList<string> LastExcludedPaths { get; private set; } = [];
+
         public Task<IReadOnlyList<string>> DiscoverFilesAsync(
-            string rootPath, MediaCategory category, bool recursive, CancellationToken cancellationToken) =>
-            Task.FromResult(files ?? []);
+            string rootPath, MediaCategory category, bool recursive, IReadOnlySet<string> excludedPaths, CancellationToken cancellationToken) {
+            LastExcludedPaths = excludedPaths.OrderBy(path => path, StringComparer.OrdinalIgnoreCase).ToArray();
+            return Task.FromResult(files ?? []);
+        }
 
         public Task<IReadOnlyDictionary<string, IReadOnlyList<string>>> DiscoverFilesByDirectoryAsync(
-            string rootPath, MediaCategory category, bool recursive, CancellationToken cancellationToken) {
+            string rootPath, MediaCategory category, bool recursive, IReadOnlySet<string> excludedPaths, CancellationToken cancellationToken) {
+            LastExcludedPaths = excludedPaths.OrderBy(path => path, StringComparer.OrdinalIgnoreCase).ToArray();
             if (directoryGroups is not null) {
                 return Task.FromResult(directoryGroups);
             }

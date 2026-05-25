@@ -51,6 +51,25 @@ public interface IFilesPersistence {
         IReadOnlyList<string> absolutePaths,
         CancellationToken cancellationToken);
 
+    /// <summary>Returns the requested root-relative paths covered by scan exclusions.</summary>
+    Task<IReadOnlySet<string>> ListExcludedRelativePathsAsync(
+        Guid rootId,
+        IReadOnlyList<string> relativePaths,
+        CancellationToken cancellationToken);
+
+    /// <summary>Adds or updates a scan exclusion for one root-relative path.</summary>
+    Task UpsertExclusionAsync(
+        Guid rootId,
+        string relativePath,
+        string kind,
+        CancellationToken cancellationToken);
+
+    /// <summary>Removes a scan exclusion for one root-relative path.</summary>
+    Task RemoveExclusionAsync(
+        Guid rootId,
+        string relativePath,
+        CancellationToken cancellationToken);
+
     /// <summary>Rewrites catalog source paths that match a moved filesystem path prefix.</summary>
     Task ApplyPathPrefixRewriteAsync(
         string sourcePath,

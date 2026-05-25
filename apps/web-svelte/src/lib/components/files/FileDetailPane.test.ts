@@ -39,6 +39,31 @@ describe("FileDetailPane", () => {
     expect(source).toContain("background: transparent;");
     expect(source).not.toContain(".meta-grid {\n    display: grid;\n    grid-template-columns: repeat(2, minmax(0, 1fr));\n    border: 1px solid var(--color-border-subtle);");
   });
+
+  it("renders excluded paths as filesystem-only details", () => {
+    const detail = fileDetail({
+      entry: {
+        ...fileDetail().entry,
+        excluded: true,
+      },
+      linkedEntities: [
+        {
+          entityId: "video-1",
+          kind: "video",
+          title: "A Feature Film",
+          coverUrl: "/covers/video-1.jpg",
+        },
+      ],
+      canPreview: true,
+    });
+
+    render(FileDetailPane, { props: { detail } });
+
+    expect(screen.getByText("Excluded")).toBeInTheDocument();
+    expect(screen.getByText("Library scans skip this path")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "A Feature Film" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Linked entities")).not.toBeInTheDocument();
+  });
 });
 
 function fileDetail(overrides: Partial<FileDetail> = {}): FileDetail {

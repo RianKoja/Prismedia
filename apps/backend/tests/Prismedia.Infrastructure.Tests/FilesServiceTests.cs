@@ -109,6 +109,72 @@ public sealed class FilesServiceTests : IDisposable {
     }
 
     [Fact]
+    public async Task ExcludePersistsRelativePathAndQueuesScans() {
+        await File.WriteAllTextAsync(Path.Combine(_tempRoot.FullName, "skip.mkv"), "video");
+        var service = CreateService();
+
+        var response = await service.ExcludeAsync(
+            new FileExclusionRequest(_rootId, "skip.mkv"),
+            hideNsfw: false,
+            CancellationToken.None);
+
+        Assert.Equal(2, response.ScansQueued);
+        Assert.Equal(("skip.mkv", "file"), Persistence.Exclusions.Single());
+        Assert.Contains(JobType.ScanLibrary, Queue.Enqueued.Select(job => job.Type));
+        Assert.Contains(JobType.ScanGallery, Queue.Enqueued.Select(job => job.Type));
+    }
+
+    [Fact]
+    public async Task RemoveExclusionClearsRelativePathAndQueuesScans() {
+        Persistence.ExcludedPaths.Add("skip.mkv");
+        var service = CreateService();
+
+        var response = await service.RemoveExclusionAsync(
+            new FileExclusionRequest(_rootId, "skip.mkv"),
+            hideNsfw: false,
+            CancellationToken.None);
+
+        Assert.Equal(2, response.ScansQueued);
+        Assert.Empty(Persistence.ExcludedPaths);
+        Assert.Contains(JobType.ScanLibrary, Queue.Enqueued.Select(job => job.Type));
+        Assert.Contains(JobType.ScanGallery, Queue.Enqueued.Select(job => job.Type));
+    }
+
+    [Fact]
+    public async Task ListChildrenMarksExcludedEntriesWithoutHidingThem() {
+        Directory.CreateDirectory(Path.Combine(_tempRoot.FullName, "Skip"));
+        await File.WriteAllTextAsync(Path.Combine(_tempRoot.FullName, "Keep.mkv"), "keep");
+        Persistence.ExcludedPaths.Add("Skip");
+        var service = CreateService();
+
+        var response = await service.ListChildrenAsync(
+            new FileChildrenRequest(_rootId, string.Empty),
+            hideNsfw: false,
+            CancellationToken.None);
+
+        Assert.Contains(response.Entries, entry => entry.Name == "Skip" && entry.Excluded);
+        Assert.Contains(response.Entries, entry => entry.Name == "Keep.mkv" && !entry.Excluded);
+    }
+
+    [Fact]
+    public async Task GetDetailSuppressesLinkedEntitiesAndPreviewForExcludedPaths() {
+        await File.WriteAllTextAsync(Path.Combine(_tempRoot.FullName, "skip.mkv"), "video");
+        Persistence.ExcludedPaths.Add("skip.mkv");
+        Persistence.LinkedEntities.Add(new FileLinkedEntity(Guid.NewGuid(), "video", "Should not render"));
+        var service = CreateService();
+
+        var detail = await service.GetDetailAsync(
+            new FileDetailRequest(_rootId, "skip.mkv"),
+            hideNsfw: false,
+            CancellationToken.None);
+
+        Assert.True(detail.Entry.Excluded);
+        Assert.False(detail.CanPreview);
+        Assert.Empty(detail.LinkedEntities);
+        Assert.Equal(0, Persistence.LinkedEntityCalls);
+    }
+
+    [Fact]
     public async Task StorageBlocksWriteThroughSymlinkedFolders() {
         if (OperatingSystem.IsWindows()) {
             return;
@@ -159,6 +225,10 @@ public sealed class FilesServiceTests : IDisposable {
     private sealed class RecordingFilesPersistence : IFilesPersistence {
         public Dictionary<Guid, FileLibraryRoot> Roots { get; } = new();
         public List<(string SourcePath, string TargetPath)> Rewrites { get; } = [];
+        public HashSet<string> ExcludedPaths { get; } = new(StringComparer.OrdinalIgnoreCase);
+        public List<(string Path, string Kind)> Exclusions { get; } = [];
+        public List<FileLinkedEntity> LinkedEntities { get; } = [];
+        public int LinkedEntityCalls { get; private set; }
 
         public Task<IReadOnlyList<FileLibraryRoot>> ListRootsAsync(CancellationToken cancellationToken) =>
             Task.FromResult<IReadOnlyList<FileLibraryRoot>>(Roots.Values.ToArray());
@@ -169,8 +239,10 @@ public sealed class FilesServiceTests : IDisposable {
         public Task<IReadOnlyList<FileLinkedEntity>> ListLinkedEntitiesAsync(
             string absolutePath,
             bool hideNsfw,
-            CancellationToken cancellationToken) =>
-            Task.FromResult<IReadOnlyList<FileLinkedEntity>>([]);
+            CancellationToken cancellationToken) {
+            LinkedEntityCalls++;
+            return Task.FromResult<IReadOnlyList<FileLinkedEntity>>(LinkedEntities);
+        }
 
         public Task<IReadOnlySet<string>> ListHiddenPathsAsync(
             IReadOnlyList<string> absolutePaths,
@@ -184,6 +256,38 @@ public sealed class FilesServiceTests : IDisposable {
             Rewrites.Add((sourcePath, targetPath));
             return Task.CompletedTask;
         }
+
+        public Task<IReadOnlySet<string>> ListExcludedRelativePathsAsync(
+            Guid rootId,
+            IReadOnlyList<string> relativePaths,
+            CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlySet<string>>(
+                relativePaths
+                    .Where(IsExcluded)
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase));
+
+        public Task UpsertExclusionAsync(
+            Guid rootId,
+            string relativePath,
+            string kind,
+            CancellationToken cancellationToken) {
+            ExcludedPaths.Add(relativePath);
+            Exclusions.Add((relativePath, kind));
+            return Task.CompletedTask;
+        }
+
+        public Task RemoveExclusionAsync(
+            Guid rootId,
+            string relativePath,
+            CancellationToken cancellationToken) {
+            ExcludedPaths.Remove(relativePath);
+            return Task.CompletedTask;
+        }
+
+        private bool IsExcluded(string relativePath) =>
+            ExcludedPaths.Any(excluded =>
+                string.Equals(relativePath, excluded, StringComparison.OrdinalIgnoreCase) ||
+                relativePath.StartsWith($"{excluded}/", StringComparison.OrdinalIgnoreCase));
     }
 
     private sealed class RecordingJobQueue : IJobQueueService {

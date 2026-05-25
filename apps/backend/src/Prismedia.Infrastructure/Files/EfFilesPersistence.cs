@@ -3,6 +3,7 @@ using Prismedia.Application.Files;
 using Prismedia.Contracts.Files;
 using Prismedia.Domain.Entities;
 using Prismedia.Infrastructure.Persistence;
+using Prismedia.Infrastructure.Persistence.Entities;
 
 namespace Prismedia.Infrastructure.Files;
 
@@ -127,6 +128,71 @@ public sealed class EfFilesPersistence(PrismediaDbContext db) : IFilesPersistenc
     }
 
     /// <inheritdoc />
+    public async Task<IReadOnlySet<string>> ListExcludedRelativePathsAsync(
+        Guid rootId,
+        IReadOnlyList<string> relativePaths,
+        CancellationToken cancellationToken) {
+        if (relativePaths.Count == 0) {
+            return new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        }
+
+        var exclusions = await db.MediaFileIgnores.AsNoTracking()
+            .Where(row => row.LibraryRootId == rootId)
+            .Select(row => row.Path)
+            .ToArrayAsync(cancellationToken);
+        if (exclusions.Length == 0) {
+            return new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        }
+
+        return relativePaths
+            .Select(NormalizeRelativePath)
+            .Where(relativePath => exclusions.Any(excluded => IsSameOrDescendant(relativePath, excluded)))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+    }
+
+    /// <inheritdoc />
+    public async Task UpsertExclusionAsync(
+        Guid rootId,
+        string relativePath,
+        string kind,
+        CancellationToken cancellationToken) {
+        var path = NormalizeRelativePath(relativePath);
+        var now = DateTimeOffset.UtcNow;
+        var row = await db.MediaFileIgnores.FindAsync([rootId, path], cancellationToken);
+        if (row is null) {
+            db.MediaFileIgnores.Add(new MediaFileIgnoreRow {
+                LibraryRootId = rootId,
+                Path = path,
+                Kind = NormalizeKind(kind),
+                Reason = "excluded-from-library",
+                CreatedAt = now,
+                UpdatedAt = now
+            });
+        } else {
+            row.Kind = NormalizeKind(kind);
+            row.Reason = "excluded-from-library";
+            row.UpdatedAt = now;
+        }
+
+        await db.SaveChangesAsync(cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task RemoveExclusionAsync(
+        Guid rootId,
+        string relativePath,
+        CancellationToken cancellationToken) {
+        var path = NormalizeRelativePath(relativePath);
+        var row = await db.MediaFileIgnores.FindAsync([rootId, path], cancellationToken);
+        if (row is null) {
+            return;
+        }
+
+        db.MediaFileIgnores.Remove(row);
+        await db.SaveChangesAsync(cancellationToken);
+    }
+
+    /// <inheritdoc />
     public async Task ApplyPathPrefixRewriteAsync(
         string sourcePath,
         string targetPath,
@@ -145,6 +211,23 @@ public sealed class EfFilesPersistence(PrismediaDbContext db) : IFilesPersistenc
 
             file.Path = nextPath;
             file.UpdatedAt = now;
+        }
+
+        var root = (await db.LibraryRoots.AsNoTracking().ToArrayAsync(cancellationToken))
+            .FirstOrDefault(row =>
+                IsSameOrDescendant(source, row.Path) ||
+                IsSameOrDescendant(target, row.Path));
+        if (root is not null) {
+            var exclusions = await db.MediaFileIgnores
+                .Where(row => row.LibraryRootId == root.Id)
+                .ToArrayAsync(cancellationToken);
+            foreach (var exclusion in exclusions) {
+                var absolute = Path.GetFullPath(Path.Combine(root.Path, exclusion.Path));
+                if (TryMapMovedPath(absolute, source, target, out var nextPath)) {
+                    exclusion.Path = NormalizeRelativePath(Path.GetRelativePath(root.Path, nextPath));
+                    exclusion.UpdatedAt = now;
+                }
+            }
         }
 
         await db.SaveChangesAsync(cancellationToken);
@@ -176,5 +259,18 @@ public sealed class EfFilesPersistence(PrismediaDbContext db) : IFilesPersistenc
         return string.Equals(candidate, source, StringComparison.OrdinalIgnoreCase) ||
             candidate.StartsWith(source + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) ||
             source.StartsWith(candidate + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string NormalizeRelativePath(string path) =>
+        path.Replace('\\', '/').Trim('/');
+
+    private static string NormalizeKind(string kind) =>
+        string.Equals(kind, "directory", StringComparison.OrdinalIgnoreCase) ? "directory" : "file";
+
+    private static bool IsSameOrDescendant(string relativePath, string excludedPath) {
+        var path = NormalizeRelativePath(relativePath);
+        var excluded = NormalizeRelativePath(excludedPath);
+        return string.Equals(path, excluded, StringComparison.OrdinalIgnoreCase) ||
+            path.StartsWith(excluded + "/", StringComparison.OrdinalIgnoreCase);
     }
 }

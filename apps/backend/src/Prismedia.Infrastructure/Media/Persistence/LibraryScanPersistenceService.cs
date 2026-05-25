@@ -51,6 +51,52 @@ public sealed class LibraryScanPersistenceService(PrismediaDbContext db) : ILibr
         }
     }
 
+    public async Task<IReadOnlySet<string>> GetExcludedPathsForRootAsync(Guid rootId, CancellationToken cancellationToken) {
+        var rootPath = await db.LibraryRoots.AsNoTracking()
+            .Where(root => root.Id == rootId)
+            .Select(root => root.Path)
+            .FirstOrDefaultAsync(cancellationToken);
+        if (string.IsNullOrWhiteSpace(rootPath)) {
+            return new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        }
+
+        var exclusions = await db.MediaFileIgnores.AsNoTracking()
+            .Where(row => row.LibraryRootId == rootId)
+            .Select(row => row.Path)
+            .ToArrayAsync(cancellationToken);
+
+        return exclusions
+            .Select(path => Path.GetFullPath(Path.Combine(rootPath, path)))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+    }
+
+    public async Task<int> RemoveEntitiesInExcludedPathsAsync(Guid rootId, CancellationToken cancellationToken) {
+        var excludedPaths = await GetExcludedPathsForRootAsync(rootId, cancellationToken);
+        if (excludedPaths.Count == 0) {
+            return 0;
+        }
+
+        var sourceRows = await db.EntityFiles.AsNoTracking()
+            .Where(file => file.Role == EntityFileRole.Source)
+            .Select(file => new { file.EntityId, file.Path })
+            .ToArrayAsync(cancellationToken);
+        var excludedEntityIds = sourceRows
+            .Where(file => excludedPaths.Any(excluded => IsPathCoveredByExclusion(file.Path, excluded)))
+            .Select(file => file.EntityId)
+            .Distinct()
+            .ToArray();
+        if (excludedEntityIds.Length == 0) {
+            return 0;
+        }
+
+        var entities = await db.Entities
+            .Where(entity => excludedEntityIds.Contains(entity.Id))
+            .ToArrayAsync(cancellationToken);
+        db.Entities.RemoveRange(entities);
+        await db.SaveChangesAsync(cancellationToken);
+        return entities.Length;
+    }
+
     // ── Entity upsert ──
 
     public async Task<Guid> UpsertVideoAsync(string filePath, string title, Guid libraryRootId, bool isNsfw, CancellationToken cancellationToken) {
@@ -1382,6 +1428,15 @@ public sealed class LibraryScanPersistenceService(PrismediaDbContext db) : ILibr
 
         return normalizedPath.Equals(normalizedRoot, StringComparison.OrdinalIgnoreCase) ||
             normalizedPath.StartsWith(normalizedRoot + "/", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsPathCoveredByExclusion(string path, string excludedPath) {
+        var normalizedPath = NormalizePath(path);
+        var normalizedExcluded = NormalizePath(excludedPath);
+
+        return normalizedPath.Equals(normalizedExcluded, StringComparison.OrdinalIgnoreCase) ||
+            normalizedPath.StartsWith(normalizedExcluded + "/", StringComparison.OrdinalIgnoreCase) ||
+            normalizedPath.StartsWith(normalizedExcluded + "::", StringComparison.OrdinalIgnoreCase);
     }
 
     private static string NormalizePath(string path) =>

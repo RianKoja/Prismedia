@@ -13,6 +13,7 @@ export interface PluginProvider {
   version: string;
   installed: boolean;
   enabled: boolean;
+  isNsfw: boolean;
   supports: PluginEntitySupport[];
   auth: PluginAuthField[];
   missingAuthKeys: string[];

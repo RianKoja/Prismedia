@@ -5,8 +5,7 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export interface CapabilityLinksUrl {
-  value: string;
-  /** @nullable */
-  label: string | null;
-}
+/**
+ * @nullable
+ */
+export type ApplyIdentifyQueueItemRequestSelectedImages = null | {[key: string]: string};

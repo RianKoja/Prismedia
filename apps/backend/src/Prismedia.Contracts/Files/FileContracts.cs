@@ -19,6 +19,7 @@ public sealed record FileRoot(Guid Id, string Label, string Path, bool Enabled);
 /// <param name="SizeBytes">File size when known.</param>
 /// <param name="MimeType">Detected content type for files.</param>
 /// <param name="ModifiedAt">Last modification timestamp when known.</param>
+/// <param name="Excluded">Whether this path is excluded from library scans.</param>
 public sealed record FileEntry(
     Guid RootId,
     string Path,
@@ -26,7 +27,8 @@ public sealed record FileEntry(
     string Kind,
     long? SizeBytes,
     string? MimeType,
-    DateTimeOffset? ModifiedAt);
+    DateTimeOffset? ModifiedAt,
+    bool Excluded = false);
 
 /// <summary>
 /// Files page root list response.
@@ -130,6 +132,13 @@ public sealed record FileMoveRequest(Guid SourceRootId, string SourcePath, Guid 
 /// <param name="RootId">Library root identifier.</param>
 /// <param name="Path">Root-relative path to delete.</param>
 public sealed record FileDeleteRequest(Guid RootId, string Path);
+
+/// <summary>
+/// Request to add or remove a scan exclusion for one watched-root file or directory.
+/// </summary>
+/// <param name="RootId">Library root identifier.</param>
+/// <param name="Path">Root-relative file or directory path. The root itself cannot be excluded.</param>
+public sealed record FileExclusionRequest(Guid RootId, string Path);
 
 /// <summary>
 /// Request to rescan one watched root after filesystem changes.

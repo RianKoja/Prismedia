@@ -32,10 +32,11 @@ public sealed class ScanLibraryJobHandler(
         var timer = new JobPhaseTimer();
 
         IReadOnlyList<string> files;
+        var excludedPaths = await Persistence.GetExcludedPathsForRootAsync(root.Id, cancellationToken);
         using (timer.Phase("discover")) {
             logger.LogInformation("ScanLibrary: discovering videos in {Path}", root.Path);
             files = await FileDiscovery.DiscoverFilesAsync(
-                root.Path, MediaCategory.Video, root.Recursive, cancellationToken);
+                root.Path, MediaCategory.Video, root.Recursive, excludedPaths, cancellationToken);
             logger.LogInformation("ScanLibrary: found {Count} video files in {Label}", files.Count, root.Label);
         }
 
@@ -112,6 +113,10 @@ public sealed class ScanLibraryJobHandler(
             removed = await Persistence.RemoveStaleVideosByRootAsync(root.Id, validPaths, cancellationToken);
             if (removed > 0)
                 logger.LogInformation("ScanLibrary: removed {Count} stale video entities from {Label}", removed, root.Label);
+
+            var excluded = await Persistence.RemoveEntitiesInExcludedPathsAsync(root.Id, cancellationToken);
+            if (excluded > 0)
+                logger.LogInformation("ScanLibrary: removed {Count} excluded entities from {Label}", excluded, root.Label);
 
             orphans = await Persistence.RemoveOrphanSeriesAndSeasonsAsync(cancellationToken);
             if (orphans > 0)

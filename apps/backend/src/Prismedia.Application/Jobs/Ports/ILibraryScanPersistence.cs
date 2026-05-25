@@ -13,6 +13,8 @@ public interface ILibraryScanPersistence {
     Task<IReadOnlyList<LibraryRootData>> GetEnabledRootsAsync(CancellationToken cancellationToken);
     Task<LibrarySettingsData> GetSettingsAsync(CancellationToken cancellationToken);
     Task UpdateRootLastScannedAsync(Guid rootId, CancellationToken cancellationToken);
+    Task<IReadOnlySet<string>> GetExcludedPathsForRootAsync(Guid rootId, CancellationToken cancellationToken);
+    Task<int> RemoveEntitiesInExcludedPathsAsync(Guid rootId, CancellationToken cancellationToken);
 
     // ── Entity upsert (returns entity ID) ──
 

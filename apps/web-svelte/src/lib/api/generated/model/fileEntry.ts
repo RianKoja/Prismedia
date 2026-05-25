@@ -19,4 +19,5 @@ export interface FileEntry {
   mimeType: string | null;
   /** @nullable */
   modifiedAt: string | null;
+  excluded?: boolean;
 }

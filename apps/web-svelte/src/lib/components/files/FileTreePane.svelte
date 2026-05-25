@@ -53,7 +53,7 @@
     menu.dataset.fileTreeContextMenuRoot = "true";
     Object.assign(menu.style, {
       position: "fixed",
-      zIndex: "9999",
+      zIndex: "2147483647",
       display: "grid",
       minWidth: "10rem",
       border: "1px solid var(--color-border-default, rgba(164, 172, 185, 0.12))",
@@ -63,12 +63,13 @@
       backdropFilter: "blur(20px)",
       fontFamily: "var(--font-inter, Inter), system-ui, sans-serif",
       overflow: "hidden",
+      transform: "translateZ(0)",
     });
 
     const rect = context.anchorRect;
     const meta = registry.get(item.path as string);
     const isRoot = meta?.path === "";
-    const actions = fileContextActions(item.kind, isRoot);
+    const actions = fileContextActions(item.kind, isRoot, meta?.excluded);
     const menuHeight = actions.length * 32 + 2;
     const menuWidth = 160;
     const top = rect.bottom + menuHeight > window.innerHeight ? Math.max(4, rect.top - menuHeight) : rect.bottom;
@@ -119,6 +120,14 @@
     }
 
     return menu;
+  }
+
+  function syncExcludedRows(): void {
+    if (!host) return;
+    for (const row of host.querySelectorAll<HTMLElement>("button[data-type='item']")) {
+      const treePath = row.dataset.itemPath;
+      row.dataset.fileExcluded = treePath && registry.get(treePath)?.excluded ? "true" : "false";
+    }
   }
 
   function checkLazyExpansion(): void {
@@ -209,6 +218,14 @@
     button[data-type='item'][data-item-dragging='true'] {
       opacity: 0.4;
     }
+    button[data-type='item'][data-file-excluded='true'] {
+      color: var(--color-text-disabled, #5a6070);
+      opacity: 0.58;
+    }
+    button[data-type='item'][data-file-excluded='true']:hover,
+    button[data-type='item'][data-file-excluded='true'][data-item-selected] {
+      color: var(--color-text-muted, #a4acb9);
+    }
     /* Context menu trigger button */
     button[data-type='item'] [data-context-menu-trigger] {
       color: var(--color-text-disabled, #5a6070);
@@ -257,6 +274,7 @@
     removeTreeClickBridge = () => host.removeEventListener("click", bridgeRowClick);
     unsubscribe = tree.subscribe(checkLazyExpansion);
     checkLazyExpansion();
+    syncExcludedRows();
     lastPathsKey = initialPaths.join("\n");
   }
 
@@ -292,7 +310,15 @@
       tree.resetPaths(paths, { initialExpandedPaths: expandedPaths });
       lastPathsKey = nextKey;
       checkLazyExpansion();
+      queueMicrotask(syncExcludedRows);
     }
+  });
+
+  $effect(() => {
+    registry;
+    paths;
+    if (!tree) return;
+    queueMicrotask(syncExcludedRows);
   });
 
   $effect(() => {

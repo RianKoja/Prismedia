@@ -9,14 +9,21 @@ describe("file actions", () => {
       "rename",
       "move",
       "rescan",
+      "exclude",
       "delete",
     ]);
     expect(fileContextActions("file").map((action) => action.id)).toEqual([
       "open",
       "rename",
       "move",
+      "exclude",
       "delete",
     ]);
   });
-});
 
+  it("offers removal instead of exclusion for excluded entries", () => {
+    expect(fileContextActions("directory", false, true).map((action) => action.id)).toContain("remove-exclusion");
+    expect(fileContextActions("directory", false, true).map((action) => action.id)).not.toContain("exclude");
+    expect(fileContextActions("file", false, true).map((action) => action.id)).toContain("remove-exclusion");
+  });
+});

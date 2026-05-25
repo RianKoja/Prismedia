@@ -8,12 +8,16 @@ internal static partial class PrismediaModelConfiguration {
     private static void ConfigureSystemTables(ModelBuilder modelBuilder) {
         modelBuilder.Entity<MediaFileIgnoreRow>(entity => {
             entity.ToTable("media_file_ignores");
-            entity.HasKey(row => row.Path);
+            entity.HasKey(row => new { row.LibraryRootId, row.Path });
+            entity.Property(row => row.LibraryRootId).HasColumnName("library_root_id");
             entity.Property(row => row.Path).HasColumnName("path");
+            entity.Property(row => row.Kind).HasColumnName("kind").HasMaxLength(32).HasDefaultValue("file").IsRequired();
             entity.Property(row => row.EntityKindCode).HasColumnName("entity_kind_code").HasMaxLength(64);
             entity.Property(row => row.Reason).HasColumnName("reason").HasMaxLength(128);
             entity.Property(row => row.CreatedAt).HasColumnName("created_at");
+            entity.Property(row => row.UpdatedAt).HasColumnName("updated_at");
             entity.HasIndex(row => row.EntityKindCode);
+            entity.HasOne<LibraryRootRow>().WithMany().HasForeignKey(row => row.LibraryRootId).OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<UiPreferenceRow>(entity => {

@@ -19,9 +19,10 @@ public sealed class ScanAudioJobHandler(
 
     protected override async Task ScanRootAsync(JobContext context, LibraryRootData root, CancellationToken cancellationToken) {
         logger.LogInformation("ScanAudio: discovering audio files in {Path}", root.Path);
+        var excludedPaths = await Persistence.GetExcludedPathsForRootAsync(root.Id, cancellationToken);
 
         var dirGroups = await FileDiscovery.DiscoverFilesByDirectoryAsync(
-            root.Path, MediaCategory.Audio, root.Recursive, cancellationToken);
+            root.Path, MediaCategory.Audio, root.Recursive, excludedPaths, cancellationToken);
 
         logger.LogInformation("ScanAudio: found {DirCount} directories with audio in {Label}",
             dirGroups.Count, root.Label);
@@ -97,6 +98,7 @@ public sealed class ScanAudioJobHandler(
         }
 
         await Persistence.RemoveStaleLooseAudioTracksInRootAsync(root.Id, validLooseTrackPaths, cancellationToken);
+        await Persistence.RemoveEntitiesInExcludedPathsAsync(root.Id, cancellationToken);
 
         foreach (var libraryPath in validLibraryPaths) {
             await Persistence.RemoveStaleAudioTracksInLibraryAsync(

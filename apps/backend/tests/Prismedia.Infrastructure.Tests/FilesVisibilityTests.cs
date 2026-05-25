@@ -90,6 +90,25 @@ public sealed class FilesVisibilityTests {
                     .Where(path => hiddenPaths.Contains(path))
                     .ToHashSet(StringComparer.OrdinalIgnoreCase));
 
+        public Task<IReadOnlySet<string>> ListExcludedRelativePathsAsync(
+            Guid rootId,
+            IReadOnlyList<string> relativePaths,
+            CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlySet<string>>(new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+
+        public Task UpsertExclusionAsync(
+            Guid rootId,
+            string relativePath,
+            string kind,
+            CancellationToken cancellationToken) =>
+            Task.CompletedTask;
+
+        public Task RemoveExclusionAsync(
+            Guid rootId,
+            string relativePath,
+            CancellationToken cancellationToken) =>
+            Task.CompletedTask;
+
         public Task ApplyPathPrefixRewriteAsync(
             string sourcePath,
             string targetPath,

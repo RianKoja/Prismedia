@@ -60,6 +60,34 @@ public sealed class FilesEndpointTests : IDisposable {
         Assert.Equal("invalid_path", problem?.Code);
     }
 
+    [Fact]
+    public async Task ExclusionEndpointMarksExistingPathExcluded() {
+        await File.WriteAllTextAsync(Path.Combine(_tempRoot.FullName, "skip.mp4"), "video");
+        using var factory = CreateFactory();
+        using var client = factory.CreateClient();
+
+        using var response = await client.PostAsJsonAsync(
+            "/api/files/exclusions",
+            new FileExclusionRequest(RootId, "skip.mp4"));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<FileOperationResponse>();
+        Assert.Equal(1, body?.ScansQueued);
+    }
+
+    [Fact]
+    public async Task RemoveExclusionEndpointClearsPathExclusion() {
+        using var factory = CreateFactory();
+        using var client = factory.CreateClient();
+
+        using var response = await client.DeleteAsync(
+            $"/api/files/exclusions?rootId={RootId}&path=skip.mp4");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<FileOperationResponse>();
+        Assert.Equal(1, body?.ScansQueued);
+    }
+
     public void Dispose() {
         if (_tempRoot.Exists) {
             _tempRoot.Delete(recursive: true);
@@ -92,6 +120,25 @@ public sealed class FilesEndpointTests : IDisposable {
             IReadOnlyList<string> absolutePaths,
             CancellationToken cancellationToken) =>
             Task.FromResult<IReadOnlySet<string>>(new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+
+        public Task<IReadOnlySet<string>> ListExcludedRelativePathsAsync(
+            Guid rootId,
+            IReadOnlyList<string> relativePaths,
+            CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlySet<string>>(new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+
+        public Task UpsertExclusionAsync(
+            Guid rootId,
+            string relativePath,
+            string kind,
+            CancellationToken cancellationToken) =>
+            Task.CompletedTask;
+
+        public Task RemoveExclusionAsync(
+            Guid rootId,
+            string relativePath,
+            CancellationToken cancellationToken) =>
+            Task.CompletedTask;
 
         public Task ApplyPathPrefixRewriteAsync(
             string sourcePath,

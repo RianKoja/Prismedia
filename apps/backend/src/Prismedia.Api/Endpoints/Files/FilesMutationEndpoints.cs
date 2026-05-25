@@ -63,6 +63,35 @@ internal static class FilesMutationEndpoints {
             .WithSummary("Permanently deletes a watched-root file or folder.")
             .Produces<FileOperationResponse>();
 
+        group.MapPost("/exclusions", async (
+            FileExclusionRequest request,
+            bool? hideNsfw,
+            HttpContext httpContext,
+            FilesService files,
+            CancellationToken cancellationToken) =>
+            FilesEndpoints.ToResult(await FilesEndpoints.RunAsync(() => files.ExcludeAsync(
+                request,
+                NsfwVisibility.ShouldHide(hideNsfw, httpContext),
+                cancellationToken))))
+            .WithName("ExcludeFile")
+            .WithSummary("Excludes a watched-root file or folder from library scans.")
+            .Produces<FileOperationResponse>();
+
+        group.MapDelete("/exclusions", async (
+            Guid rootId,
+            string path,
+            bool? hideNsfw,
+            HttpContext httpContext,
+            FilesService files,
+            CancellationToken cancellationToken) =>
+            FilesEndpoints.ToResult(await FilesEndpoints.RunAsync(() => files.RemoveExclusionAsync(
+                new FileExclusionRequest(rootId, path),
+                NsfwVisibility.ShouldHide(hideNsfw, httpContext),
+                cancellationToken))))
+            .WithName("RemoveFileExclusion")
+            .WithSummary("Removes a watched-root file or folder scan exclusion.")
+            .Produces<FileOperationResponse>();
+
         return group;
     }
 }

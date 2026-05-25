@@ -43,6 +43,16 @@ describe("file tree state", () => {
     });
   });
 
+  it("preserves excluded metadata for tree rendering", () => {
+    const registry = createFileTreeRegistry([root]);
+    const rootTreePath = `${fileTreeRootPath(root)}/`;
+    const [treePath] = upsertFileTreeEntries(registry, rootTreePath, [
+      { ...entry("Skipped", "Skipped", "directory"), excluded: true },
+    ]);
+
+    expect(registry.get(treePath)?.excluded).toBe(true);
+  });
+
   it("returns expanded unloaded directories once", () => {
     const registry = createFileTreeRegistry([root]);
     const rootTreePath = `${fileTreeRootPath(root)}/`;

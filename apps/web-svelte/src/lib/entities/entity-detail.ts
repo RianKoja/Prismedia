@@ -9,15 +9,15 @@ import {
 } from "$lib/api/capabilities";
 import type {
   CapabilityFingerprintsItem as EntityFingerprint,
-  CapabilityLinksExternalId as EntityExternalId,
-  CapabilityLinksUrl as EntityUrl,
   CapabilityMarkersItem as EntityMarker,
   CapabilitySourceItem as EntitySource,
   CapabilitySubtitlesItem as EntitySubtitle,
   EntityCapability,
   EntityCard,
   EntityDate,
+  EntityExternalId,
   EntityThumbnail,
+  EntityUrl,
 } from "$lib/api/generated/model";
 import { CAPABILITY_KIND, ENTITY_FILE_ROLE } from "./entity-codes";
 import { getEntityKindLabel } from "./entity-grid";

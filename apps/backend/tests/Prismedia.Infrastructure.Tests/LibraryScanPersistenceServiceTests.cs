@@ -8,6 +8,8 @@ using Prismedia.Infrastructure.Persistence.Entities;
 namespace Prismedia.Infrastructure.Tests;
 
 public sealed class LibraryScanPersistenceServiceTests {
+    private static readonly Guid RootId = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+
     [Fact]
     public async Task DownstreamNeedsProbeWhenTechnicalRowsLackMediaSources() {
         await using var db = CreateContext();
@@ -204,6 +206,52 @@ public sealed class LibraryScanPersistenceServiceTests {
             && subtitle.Language == "eng.3"
             && subtitle.StoragePath == "/data/cache/videos/888/subtitles/embedded-eng-3.vtt"
             && subtitle.SourcePath == "3");
+    }
+
+    [Fact]
+    public async Task RemoveEntitiesInExcludedPathsRemovesExistingSourcesUnderExcludedDirectories() {
+        await using var db = CreateContext();
+        var keepId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+        var skipId = Guid.Parse("22222222-2222-2222-2222-222222222222");
+        SeedLibraryRoot(db, RootId, "/media/videos");
+        SeedSourceEntity(db, keepId, EntityKindRegistry.Video.Code, "/media/videos/Keep/movie.mkv");
+        SeedSourceEntity(db, skipId, EntityKindRegistry.Video.Code, "/media/videos/Skip/movie.mkv");
+        db.VideoDetails.Add(new VideoDetailRow { EntityId = keepId, LibraryRootId = RootId });
+        db.VideoDetails.Add(new VideoDetailRow { EntityId = skipId, LibraryRootId = RootId });
+        db.MediaFileIgnores.Add(new MediaFileIgnoreRow {
+            LibraryRootId = RootId,
+            Path = "Skip",
+            Kind = "directory",
+            CreatedAt = DateTimeOffset.UtcNow,
+            UpdatedAt = DateTimeOffset.UtcNow
+        });
+        await db.SaveChangesAsync();
+        var service = new LibraryScanPersistenceService(db);
+
+        var removed = await service.RemoveEntitiesInExcludedPathsAsync(RootId, CancellationToken.None);
+
+        Assert.Equal(1, removed);
+        Assert.Contains(db.Entities, entity => entity.Id == keepId);
+        Assert.DoesNotContain(db.Entities, entity => entity.Id == skipId);
+    }
+
+    [Fact]
+    public async Task GetExcludedPathsForRootReturnsAbsolutePaths() {
+        await using var db = CreateContext();
+        SeedLibraryRoot(db, RootId, "/media/videos");
+        db.MediaFileIgnores.Add(new MediaFileIgnoreRow {
+            LibraryRootId = RootId,
+            Path = "Skip/movie.mkv",
+            Kind = "file",
+            CreatedAt = DateTimeOffset.UtcNow,
+            UpdatedAt = DateTimeOffset.UtcNow
+        });
+        await db.SaveChangesAsync();
+        var service = new LibraryScanPersistenceService(db);
+
+        var paths = await service.GetExcludedPathsForRootAsync(RootId, CancellationToken.None);
+
+        Assert.Equal([Path.GetFullPath("/media/videos/Skip/movie.mkv")], paths);
     }
 
     [Fact]
