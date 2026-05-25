@@ -85,5 +85,10 @@ public enum JobType {
     // ── Entity refresh ─────────────────────────────────────────
     /// <summary>Re-runs the processing pipeline for a single entity and its children.</summary>
     [Code("refresh-entity")]
-    RefreshEntity
+    RefreshEntity,
+
+    // ── Identify ─────────────────────────────────────────────────
+    /// <summary>Identifies multiple entities in batch via a provider plugin.</summary>
+    [Code("bulk-identify")]
+    BulkIdentify
 }

@@ -87,7 +87,7 @@ public static class DependencyInjection {
             provider.GetRequiredService<EntityMetadataApplyService>());
         services.AddScoped<IdentifyPluginService>();
         services.AddScoped<IdentifyQueueService>();
-        services.AddSingleton<IdentifySessionStore>();
+        services.AddScoped<IBulkIdentifyProvider, BulkIdentifyProviderAdapter>();
 
         services.AddSingleton<IFileDiscovery>(provider =>
             new FileDiscoveryAdapter(provider.GetRequiredService<FileDiscoveryService>()));

@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Prismedia.Contracts.Plugins;
@@ -950,35 +949,3 @@ public sealed class IdentifyPluginService {
     private sealed record StructuralChild(int? SortOrder, EntityRow Entity);
 }
 
-/// <summary>
-/// In-memory bulk identify session store for review data that should not survive process restarts.
-/// </summary>
-public sealed class IdentifySessionStore {
-    private readonly ConcurrentDictionary<Guid, IdentifyBulkSession> _sessions = new();
-
-    public IdentifyBulkSession Create(IReadOnlyList<Guid> entityIds, string provider) {
-        var session = new IdentifyBulkSession(Guid.NewGuid(), provider, entityIds, [], "running", DateTimeOffset.UtcNow);
-        _sessions[session.Id] = session;
-        return session;
-    }
-
-    public IdentifyBulkSession? Get(Guid id) => _sessions.TryGetValue(id, out var session) ? session : null;
-
-    public void Complete(Guid id, IReadOnlyList<IdentifyBulkResult> results) {
-        if (_sessions.TryGetValue(id, out var session)) {
-            _sessions[id] = session with { Results = results, Status = "completed" };
-        }
-    }
-
-    public bool Close(Guid id) => _sessions.TryRemove(id, out _);
-}
-
-public sealed record IdentifyBulkSession(
-    Guid Id,
-    string Provider,
-    IReadOnlyList<Guid> EntityIds,
-    IReadOnlyList<IdentifyBulkResult> Results,
-    string Status,
-    DateTimeOffset CreatedAt);
-
-public sealed record IdentifyBulkResult(Guid EntityId, IdentifyPluginResponse Response);
