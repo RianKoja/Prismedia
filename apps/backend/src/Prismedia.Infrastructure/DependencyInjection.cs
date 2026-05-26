@@ -11,7 +11,9 @@ using Prismedia.Application.Organization;
 using Prismedia.Application.Settings;
 using Prismedia.Application.Health;
 using Prismedia.Application.UserState;
+using Prismedia.Application.Audio;
 using Prismedia.Application.Videos;
+using Prismedia.Infrastructure.Audio;
 using Prismedia.Infrastructure.Collections;
 using Prismedia.Infrastructure.Database;
 using Prismedia.Infrastructure.Entities;
@@ -115,6 +117,7 @@ public static class DependencyInjection {
         services.AddScoped<IFilesPersistence, EfFilesPersistence>();
         services.AddSingleton<IManagedFileStorage, LocalManagedFileStorage>();
         services.AddScoped<IVideoSourceService, VideoSourceService>();
+        services.AddScoped<IAudioSourceService, AudioSourceService>();
         services.AddSingleton(new HlsAssetServiceOptions(
             cacheDir,
             HlsTranscoderProfiles.ParseOrDefault(configuration["PRISMEDIA_HLS_TRANSCODER"] ?? configuration["Prismedia:Hls:Transcoder"]),

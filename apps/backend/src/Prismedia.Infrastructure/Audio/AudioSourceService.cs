@@ -1,0 +1,65 @@
+using Microsoft.EntityFrameworkCore;
+using Prismedia.Application.Audio;
+using Prismedia.Domain.Entities;
+using Prismedia.Infrastructure.Persistence;
+
+namespace Prismedia.Infrastructure.Audio;
+
+/// <summary>
+/// EF-backed implementation that resolves source audio files from the shared file capability table.
+/// </summary>
+public sealed class AudioSourceService : IAudioSourceService {
+    private readonly PrismediaDbContext _db;
+
+    /// <summary>
+    /// Creates an audio source resolver over the database context.
+    /// </summary>
+    /// <param name="db">Database context used to find audio source file rows.</param>
+    public AudioSourceService(PrismediaDbContext db) {
+        _db = db;
+    }
+
+    /// <inheritdoc />
+    public async Task<AudioSourceFile?> GetSourceAsync(Guid id, CancellationToken cancellationToken) {
+        var source = await (
+            from entity in _db.Entities.AsNoTracking()
+            join file in _db.EntityFiles.AsNoTracking() on entity.Id equals file.EntityId
+            join technical in _db.EntityTechnical.AsNoTracking() on entity.Id equals technical.EntityId into technicalRows
+            from technical in technicalRows.DefaultIfEmpty()
+            where entity.Id == id &&
+                entity.KindCode == EntityKindRegistry.AudioTrack.Code &&
+                entity.DeletedAt == null &&
+                file.Role == EntityFileRole.Source
+            select new {
+                File = file,
+                Technical = technical
+            })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (source is null || !File.Exists(source.File.Path)) {
+            return null;
+        }
+
+        var extension = Path.GetExtension(source.File.Path);
+
+        return new AudioSourceFile(
+            id,
+            source.File.Path,
+            source.File.MimeType ?? MimeForExtension(extension),
+            source.Technical?.DurationSeconds);
+    }
+
+    private static string MimeForExtension(string extension) {
+        return extension.ToLowerInvariant() switch {
+            ".mp3" => "audio/mpeg",
+            ".m4a" or ".aac" => "audio/mp4",
+            ".ogg" or ".oga" => "audio/ogg",
+            ".opus" => "audio/opus",
+            ".flac" => "audio/flac",
+            ".wav" => "audio/wav",
+            ".aiff" or ".aif" => "audio/aiff",
+            ".wma" => "audio/x-ms-wma",
+            _ => "application/octet-stream"
+        };
+    }
+}
