@@ -16,6 +16,7 @@
   import { Button, buttonVariants, cn, dur, ease } from "@prismedia/ui-svelte";
   import { fade } from "svelte/transition";
   import { getCapability } from "$lib/api/capabilities";
+  import { positiveNumberValue } from "$lib/utils/format";
   import { portal } from "$lib/actions/portal";
   import { CAPABILITY_KIND } from "$lib/entities/entity-codes";
   import NsfwBlur from "./nsfw/NsfwBlur.svelte";
@@ -104,8 +105,8 @@
   $effect(() => {
     if (!current) return;
     ready = isCurrentVideo;
-    naturalW = numberValue(getCapability(current.capabilities, CAPABILITY_KIND.technical)?.width) ?? 0;
-    naturalH = numberValue(getCapability(current.capabilities, CAPABILITY_KIND.technical)?.height) ?? 0;
+    naturalW = positiveNumberValue(getCapability(current.capabilities, CAPABILITY_KIND.technical)?.width) ?? 0;
+    naturalH = positiveNumberValue(getCapability(current.capabilities, CAPABILITY_KIND.technical)?.height) ?? 0;
     translateX = 0;
     translateY = 0;
     scale = 1;
@@ -340,12 +341,6 @@
     };
   });
 
-  function numberValue(value: number | string | null | undefined): number | null {
-    if (typeof value === "number") return Number.isFinite(value) && value > 0 ? value : null;
-    if (typeof value !== "string" || value.trim() === "") return null;
-    const parsed = Number(value);
-    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
-  }
 </script>
 
 <div
@@ -439,8 +434,8 @@
                   bind:handle={videoPlayerHandle}
                   directSrc={primaryVideoSource.src}
                   codec={getCapability(current.capabilities, CAPABILITY_KIND.technical)?.codec}
-                  sourceWidth={numberValue(getCapability(current.capabilities, CAPABILITY_KIND.technical)?.width)}
-                  sourceHeight={numberValue(getCapability(current.capabilities, CAPABILITY_KIND.technical)?.height)}
+                  sourceWidth={positiveNumberValue(getCapability(current.capabilities, CAPABILITY_KIND.technical)?.width)}
+                  sourceHeight={positiveNumberValue(getCapability(current.capabilities, CAPABILITY_KIND.technical)?.height)}
                   poster={fallbackPoster}
                   defaultPlaybackMode="direct"
                   showCastControls={false}

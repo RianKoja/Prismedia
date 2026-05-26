@@ -7,6 +7,7 @@ import {
   isNsfw,
   type EntityCapabilityKind,
 } from "$lib/api/capabilities";
+import { numberValue, formatDurationString, durationToSeconds, normalized } from "$lib/utils/format";
 import type { EntityCard, EntityCapability } from "$lib/api/generated/model";
 import type { EntityThumbnail } from "$lib/api/generated/model";
 import {
@@ -85,35 +86,6 @@ export function getEntityKindLabel(kind: string): string {
   return labelForEntityKind(kind);
 }
 
-function numberValue(value: number | string | null | undefined): number | null {
-  if (typeof value === "number") return Number.isFinite(value) ? value : null;
-  if (typeof value !== "string" || value.trim() === "") return null;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
-function formatDuration(value: string | null | undefined): string | null {
-  if (!value) return null;
-  const [hours = "0", minutes = "0", seconds = "0"] = value.split(":");
-  const roundedSeconds = seconds.split(".")[0] ?? "0";
-  return hours === "00" || hours === "0"
-    ? `${minutes.padStart(2, "0")}:${roundedSeconds.padStart(2, "0")}`
-    : `${hours.padStart(2, "0")}:${minutes.padStart(2, "0")}`;
-}
-
-function durationSeconds(value: string | null | undefined): number | null {
-  if (!value) return null;
-  const [hours = "0", minutes = "0", seconds = "0"] = value.split(":");
-  const total =
-    Number(hours) * 3600 +
-    Number(minutes) * 60 +
-    Number(seconds);
-  return Number.isFinite(total) ? total : null;
-}
-
-function normalized(value: string | null | undefined): string {
-  return (value ?? "").toLowerCase().replaceAll(".", "").replaceAll("-", "").replaceAll("_", "");
-}
 
 function statLabel(code: string, value: number | string): string {
   const count = String(value);
@@ -265,7 +237,7 @@ function metaForEntity(entity: EntityGridSourceEntity): EntityThumbnailCard["met
 
   const meta: EntityThumbnailCard["meta"] = [];
   const technical = getTechnicalCapability(entity.capabilities);
-  const duration = formatDuration(technical?.duration);
+  const duration = formatDurationString(technical?.duration, false);
   const width = numberValue(technical?.width);
   const height = numberValue(technical?.height);
   const stats = getCapability(entity.capabilities, CAPABILITY_KIND.stats)?.items ?? [];
@@ -557,7 +529,7 @@ export function buildCapabilityFilterOptions(cards: EntityThumbnailCard[]): Enti
         case CAPABILITY_KIND.technical:
           if (capability.duration) {
             addOption(options, { id: "technical:duration", label: "Has duration", capabilityKind: CAPABILITY_KIND.technical, value: "duration" });
-            const seconds = durationSeconds(capability.duration);
+            const seconds = durationToSeconds(capability.duration);
             if (seconds != null) {
               if (seconds < 300) addOption(options, { id: "technical:duration:lt300", label: "< 5 min", capabilityKind: CAPABILITY_KIND.technical, value: "duration:lt300" });
               if (seconds >= 300 && seconds < 900) addOption(options, { id: "technical:duration:300-900", label: "5-15 min", capabilityKind: CAPABILITY_KIND.technical, value: "duration:300-900" });
@@ -686,7 +658,7 @@ function entityMatchesFilter(capabilities: EntityCapability[], filter: EntityGri
       if (!technical) return false;
       if (filter.value === "duration") return Boolean(technical.duration);
       if (filter.value?.startsWith("duration:")) {
-        const seconds = durationSeconds(technical.duration);
+        const seconds = durationToSeconds(technical.duration);
         if (seconds == null) return false;
         const bucket = filter.value.slice("duration:".length);
         if (bucket === "lt300") return seconds < 300;

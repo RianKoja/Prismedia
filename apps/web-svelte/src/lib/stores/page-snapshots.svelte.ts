@@ -1,6 +1,4 @@
-import { getContext, setContext } from "svelte";
-
-const KEY = Symbol("page-snapshots");
+import { createOptionalContext } from "$lib/utils/context";
 
 interface ScrollSnapshot {
   top: number;
@@ -72,13 +70,10 @@ const FALLBACK = new PageSnapshotsStore({
   restoreScroll: () => {},
 });
 
+const ctx = createOptionalContext<PageSnapshotsStore>("PageSnapshots", FALLBACK);
+
 export function providePageSnapshots(options: PageSnapshotsOptions) {
-  const store = new PageSnapshotsStore(options);
-  setContext(KEY, store);
-  return store;
+  return ctx.provide(new PageSnapshotsStore(options));
 }
 
-export function usePageSnapshots(): PageSnapshotsStore {
-  const ctx = getContext<PageSnapshotsStore | undefined>(KEY);
-  return ctx ?? FALLBACK;
-}
+export const usePageSnapshots = ctx.use;

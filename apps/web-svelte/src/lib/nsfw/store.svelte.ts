@@ -1,12 +1,12 @@
-import { getContext, setContext } from "svelte";
 import { browser } from "$app/environment";
 import { invalidateAll } from "$app/navigation";
+import { createContext } from "$lib/utils/context";
 import { isModShiftZ } from "./hotkey";
 import { type NsfwMode } from "./cookie";
 
 const COOKIE_NAME = "prismedia-nsfw-mode";
 const COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
-const KEY = Symbol("nsfw");
+const ctx = createContext<NsfwStore>("Nsfw");
 
 function writeCookie(mode: NsfwMode) {
   if (!browser) return;
@@ -98,13 +98,7 @@ export class NsfwStore {
 export function provideNsfw(
   getOpts: () => { initialMode: NsfwMode; lanAutoEnable: boolean; hasExplicitMode?: boolean },
 ) {
-  const store = new NsfwStore(getOpts());
-  setContext(KEY, store);
-  return store;
+  return ctx.provide(new NsfwStore(getOpts()));
 }
 
-export function useNsfw(): NsfwStore {
-  const ctx = getContext<NsfwStore | undefined>(KEY);
-  if (!ctx) throw new Error("useNsfw must be used inside a component tree with <NsfwProvider>");
-  return ctx;
-}
+export const useNsfw = ctx.use;

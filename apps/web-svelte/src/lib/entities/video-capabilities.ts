@@ -11,6 +11,7 @@ import type {
   SubtitleSourceFormat,
   VideoSubtitleTrack,
 } from "$lib/player/subtitle-types";
+import { positiveNumberValue } from "$lib/utils/format";
 import { CAPABILITY_KIND, ENTITY_FILE_ROLE } from "./entity-codes";
 
 export interface VideoPlayerProps {
@@ -70,8 +71,8 @@ export function extractVideoPlayerProps(
     src: hlsSrc,
     directSrc,
     codec: videoStream?.Codec ?? technical?.codec ?? null,
-    sourceWidth: videoStream?.Width ?? numberValue(technical?.width),
-    sourceHeight: videoStream?.Height ?? numberValue(technical?.height),
+    sourceWidth: videoStream?.Width ?? positiveNumberValue(technical?.width),
+    sourceHeight: videoStream?.Height ?? positiveNumberValue(technical?.height),
     poster: assetUrl(images?.thumbnailUrl) || "",
     markers: (markers?.items ?? []).map((m) => ({
       id: m.id,
@@ -238,12 +239,6 @@ function parseSubtitleSourceFormat(
   }
 }
 
-function numberValue(value: number | string | null | undefined): number | null {
-  if (typeof value === "number") return Number.isFinite(value) && value > 0 ? value : null;
-  if (typeof value !== "string" || value.trim() === "") return null;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
-}
 
 function isBrowserNativeVideoSource(
   path: string | null | undefined,

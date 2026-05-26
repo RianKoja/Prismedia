@@ -1,8 +1,8 @@
-import { getContext, setContext } from "svelte";
 import { browser } from "$app/environment";
+import { createContext } from "$lib/utils/context";
 import { isModK } from "../nsfw/hotkey";
 
-const KEY = Symbol("search");
+const ctx = createContext<SearchStore>("Search");
 
 export class SearchStore {
   open = $state(false);
@@ -44,13 +44,7 @@ export class SearchStore {
 }
 
 export function provideSearch() {
-  const store = new SearchStore();
-  setContext(KEY, store);
-  return store;
+  return ctx.provide(new SearchStore());
 }
 
-export function useSearch(): SearchStore {
-  const ctx = getContext<SearchStore | undefined>(KEY);
-  if (!ctx) throw new Error("useSearch must be used inside <SearchProvider>");
-  return ctx;
-}
+export const useSearch = ctx.use;

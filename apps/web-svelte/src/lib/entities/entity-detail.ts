@@ -7,6 +7,7 @@ import {
   isNsfw,
   type EntityCapabilityKind,
 } from "$lib/api/capabilities";
+import { numberValue, formatDurationString, durationToSeconds } from "$lib/utils/format";
 import type {
   CapabilityFingerprintsItem as EntityFingerprint,
   CapabilityMarkersItem as EntityMarker,
@@ -182,29 +183,6 @@ export interface EntityDetailCardFull extends EntityDetailCard {
   sources: EntitySource[];
 }
 
-function numberValue(value: number | string | null | undefined): number | null {
-  if (typeof value === "number") return Number.isFinite(value) ? value : null;
-  if (typeof value !== "string" || value.trim() === "") return null;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
-function formatDuration(value: string | null | undefined): string | null {
-  if (!value) return null;
-  const [hours = "0", minutes = "0", seconds = "0"] = value.split(":");
-  const roundedSeconds = seconds.split(".")[0] ?? "0";
-  if (hours === "00" || hours === "0") {
-    return `${minutes.padStart(2, "0")}:${roundedSeconds.padStart(2, "0")}`;
-  }
-  return `${hours}:${minutes.padStart(2, "0")}:${roundedSeconds.padStart(2, "0")}`;
-}
-
-function durationToSeconds(value: string | null | undefined): number | null {
-  if (!value) return null;
-  const [hours = "0", minutes = "0", seconds = "0"] = value.split(":");
-  const total = Number(hours) * 3600 + Number(minutes) * 60 + Number(seconds);
-  return Number.isFinite(total) ? total : null;
-}
 
 function formatResolution(width: number, height: number): string {
   if (height >= 2160) return `${width}×${height} (4K)`;
@@ -298,7 +276,7 @@ function resolveTechnical(capabilities: EntityCapability[]): EntityDetailTechnic
   const tech = getTechnicalCapability(capabilities);
   if (!tech) return [];
   const rows: EntityDetailTechnicalRow[] = [];
-  const duration = formatDuration(tech.duration);
+  const duration = formatDurationString(tech.duration);
   if (duration) rows.push({ label: "Duration", value: duration });
   const width = numberValue(tech.width);
   const height = numberValue(tech.height);

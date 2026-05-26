@@ -1,4 +1,3 @@
-import { getContext, setContext } from "svelte";
 import { goto } from "$app/navigation";
 import { page } from "$app/state";
 import type {
@@ -8,8 +7,9 @@ import type {
   PlaylistSessionWrite,
 } from "$lib/collections/models";
 import { apiPath } from "$lib/api/orval-fetch";
+import { createContext } from "$lib/utils/context";
 
-const KEY = Symbol("playlist");
+const ctx = createContext<PlaylistStore>("Playlist");
 
 function fisherYatesShuffle<T>(arr: T[]): T[] {
   const result = [...arr];
@@ -291,13 +291,7 @@ export class PlaylistStore {
 }
 
 export function providePlaylist() {
-  const store = new PlaylistStore();
-  setContext(KEY, store);
-  return store;
+  return ctx.provide(new PlaylistStore());
 }
 
-export function usePlaylist(): PlaylistStore {
-  const ctx = getContext<PlaylistStore | undefined>(KEY);
-  if (!ctx) throw new Error("usePlaylist must be used inside <PlaylistProvider>");
-  return ctx;
-}
+export const usePlaylist = ctx.use;

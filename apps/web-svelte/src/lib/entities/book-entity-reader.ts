@@ -1,5 +1,6 @@
 import type { ImageListItemDto } from "@prismedia/contracts";
 import { getCapability } from "$lib/api/capabilities";
+import { numberValue } from "$lib/utils/format";
 import type { EntityCard, EntityThumbnail } from "$lib/api/generated/model";
 
 export interface BookReaderChapter {
@@ -114,9 +115,3 @@ export function bookEntityProgressDisplay(
   };
 }
 
-function numberValue(value: number | string | null | undefined): number | null {
-  if (typeof value === "number") return Number.isFinite(value) ? value : null;
-  if (typeof value !== "string" || value.trim() === "") return null;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
-}

@@ -1,7 +1,7 @@
-import { getContext, setContext } from "svelte";
 import { browser } from "$app/environment";
+import { createContext } from "$lib/utils/context";
 
-const KEY = Symbol("app-chrome");
+const ctx = createContext<AppChromeStore>("AppChrome");
 const COOKIE_NAME = "prismedia-sidebar";
 const COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
 
@@ -61,13 +61,7 @@ export class AppChromeStore {
 }
 
 export function provideAppChrome(getInitialCollapsed: () => boolean) {
-  const store = new AppChromeStore(getInitialCollapsed());
-  setContext(KEY, store);
-  return store;
+  return ctx.provide(new AppChromeStore(getInitialCollapsed()));
 }
 
-export function useAppChrome(): AppChromeStore {
-  const ctx = getContext<AppChromeStore | undefined>(KEY);
-  if (!ctx) throw new Error("useAppChrome must be used inside <AppChromeProvider>");
-  return ctx;
-}
+export const useAppChrome = ctx.use;
