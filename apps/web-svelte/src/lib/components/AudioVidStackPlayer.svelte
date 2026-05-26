@@ -218,32 +218,29 @@
     const nextSrc = apiAssetUrl(`/audio-stream/${activeTrack.id}`);
     if (!nextSrc) return;
 
-    // Listen for canplay before starting playback
-    const el = audioEl;
-    const onCanPlay = () => {
-      el.removeEventListener("canplay", onCanPlay);
-      requestPlay();
-    };
-    el.addEventListener("canplay", onCanPlay);
-
-    el.src = nextSrc;
-    el.load();
+    audioEl.src = nextSrc;
     currentTime = 0;
     duration = activeTrack.duration ?? 0;
 
-    return () => {
-      el.removeEventListener("canplay", onCanPlay);
-    };
+    // Call play() directly — the browser queues it until data arrives.
+    // This also satisfies the user-gesture autoplay requirement since
+    // the track change is triggered by a click handler.
+    requestPlay();
   });
 
-  // Load waveform data for the active track
+  // Load waveform data for the active track.
+  // Try the explicit waveformPath first, then fall back to the
+  // conventional URL pattern so tracks loaded from lightweight
+  // entity thumbnails still get waveforms when available.
   $effect(() => {
-    if (!activeTrack?.waveformPath) {
+    if (!activeTrack) {
       waveformData = null;
       return;
     }
 
-    const waveformUrl = apiAssetUrl(activeTrack.waveformPath);
+    const waveformUrl =
+      (activeTrack.waveformPath ? apiAssetUrl(activeTrack.waveformPath) : null) ??
+      apiAssetUrl(`/assets/audio-tracks/${activeTrack.id}/waveform.json`);
     if (!waveformUrl) {
       waveformData = null;
       return;
@@ -401,7 +398,7 @@
   {#if activeTrack && duration > 0}
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div
-      class="video-progress-track group/track mx-3 mb-1"
+      class="video-progress-track group/track mx-3 mb-1 overflow-hidden"
       data-dragging={timelineDragging}
       onpointerdown={(event) => {
         if (duration <= 0) return;
