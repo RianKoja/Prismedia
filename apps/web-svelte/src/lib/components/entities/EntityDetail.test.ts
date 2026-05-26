@@ -143,11 +143,36 @@ describe("EntityDetail", () => {
     await fireEvent.click(screen.getByRole("button", { name: "Edit details" }));
 
     expect(screen.getByText("Poster empty")).toBeInTheDocument();
-    expect(screen.getByText("Header empty")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Header empty" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Upload poster" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Upload header" })).toBeInTheDocument();
+    expect(container.querySelector(".header-asset-placeholder")).toBeInTheDocument();
     expect(container.querySelector('[data-asset-dropzone="poster"]')).toBeInTheDocument();
     expect(container.querySelector('[data-asset-dropzone="backdrop"]')).toBeInTheDocument();
+
+    unmount();
+  });
+
+  it("keeps the poster upload target edit-only when the normal detail omits a poster", async () => {
+    const card = buildCard();
+    card.entity.kind = "gallery";
+
+    const { container, unmount } = render(EntityDetail, {
+      props: {
+        card,
+        posterSize: "none",
+        onMetadataSave: vi.fn().mockResolvedValue(undefined),
+        onImageAssetUpload: vi.fn().mockResolvedValue(undefined),
+      },
+    });
+
+    expect(container.querySelector(".poster-frame")).not.toBeInTheDocument();
+
+    await fireEvent.click(screen.getByRole("button", { name: "Edit details" }));
+
+    const posterThumbnail = container.querySelector<HTMLElement>(".poster-frame .entity-thumbnail");
+    expect(container.querySelector(".poster-frame")).toBeInTheDocument();
+    expect(posterThumbnail?.style.aspectRatio).toBe("2 / 3");
 
     unmount();
   });

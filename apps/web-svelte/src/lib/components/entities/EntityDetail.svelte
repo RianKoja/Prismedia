@@ -665,6 +665,7 @@
     if (poster) {
       return {
         ...(card.posterCard ?? entityReferenceToThumbnailCard(card.entity)),
+        aspectRatio: "poster",
         cover: { src: poster.src, alt: poster.alt, role: ENTITY_FILE_ROLE.poster },
         hover: { kind: "none" },
       };
@@ -672,7 +673,7 @@
 
     if (!isEditingActiveTab) return card.posterCard ?? null;
     return {
-      ...entityReferenceToThumbnailCard(card.entity, { cover: null }),
+      ...entityReferenceToThumbnailCard(card.entity, { aspectRatio: "poster", cover: null }),
       hover: { kind: "none" },
     };
   }
@@ -1585,13 +1586,29 @@
       </div>
     {/snippet}
 
+    {#if isEditingActiveTab && !headerHasAsset}
+      <div
+        class="header-asset-placeholder"
+        style:background-image={placeholderGradient(card.entity.title)}
+        aria-hidden="true"
+      >
+        <ImageIcon class="h-8 w-8" />
+      </div>
+    {/if}
+
     {#if isEditingActiveTab}
       <div class="header-asset-panel" class:is-empty={!headerHasAsset}>
         {#if !headerHasAsset}
-          <div class="asset-empty-label">
+          <button
+            type="button"
+            class="asset-empty-label asset-empty-button"
+            onclick={() => openAssetPicker(ENTITY_FILE_ROLE.backdrop)}
+            disabled={assetBusy(ENTITY_FILE_ROLE.backdrop)}
+            aria-label="Header empty"
+          >
             <ImageIcon class="h-4 w-4" />
             <span>Header empty</span>
-          </div>
+          </button>
         {/if}
         {@render imageAssetActions(ENTITY_FILE_ROLE.backdrop, "header", headerHasAsset)}
       </div>
@@ -1905,6 +1922,7 @@
 
   .poster-frame :global(.entity-thumbnail) {
     width: 100%;
+    height: 100%;
     border: 0;
     background: #050505;
     box-shadow: none;
@@ -1916,7 +1934,35 @@
   }
 
   .poster-frame :global(.media) {
+    height: 100%;
     border-bottom: 0;
+  }
+
+  .header-asset-placeholder {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    display: grid;
+    place-items: center;
+    background-size: cover;
+    color: color-mix(in srgb, var(--detail-accent) 42%, var(--detail-text-muted));
+    opacity: 0.84;
+  }
+
+  .header-asset-placeholder::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(circle at 50% 40%, rgba(242, 194, 106, 0.16), transparent 24%),
+      linear-gradient(180deg, rgba(7, 8, 11, 0.18), rgba(7, 8, 11, 0.58));
+  }
+
+  .header-asset-placeholder :global(svg) {
+    position: relative;
+    z-index: 1;
+    opacity: 0.48;
+    filter: drop-shadow(0 0 20px var(--detail-accent-glow));
   }
 
   .header-asset-panel {
@@ -1955,6 +2001,22 @@
     -webkit-backdrop-filter: blur(10px);
   }
 
+  .asset-empty-button {
+    cursor: pointer;
+    pointer-events: auto;
+  }
+
+  .asset-empty-button:hover:not(:disabled) {
+    color: var(--detail-accent);
+    border-color: color-mix(in srgb, var(--detail-accent) 62%, var(--detail-border));
+    box-shadow: 0 0 16px var(--detail-accent-glow);
+  }
+
+  .asset-empty-button:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+  }
+
   .poster-frame .asset-empty-label {
     position: absolute;
     inset: auto 0.45rem 3.2rem;
@@ -1962,6 +2024,8 @@
   }
 
   .image-asset-actions {
+    position: relative;
+    z-index: 2;
     display: flex;
     gap: 0.35rem;
     pointer-events: auto;
