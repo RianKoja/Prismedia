@@ -577,7 +577,7 @@
     color: var(--color-text-secondary);
     font-size: 0.72rem;
     line-height: 1;
-    backdrop-filter: blur(12px);
+    backdrop-filter: blur(var(--glass-blur-sm));
     transition:
       border-color var(--duration-normal) var(--ease-mechanical),
       color var(--duration-normal) var(--ease-mechanical),
@@ -637,7 +637,7 @@
       transparent
     );
     padding: max(0.5rem, env(safe-area-inset-top)) 0.75rem 1.25rem;
-    backdrop-filter: blur(14px);
+    backdrop-filter: blur(var(--glass-blur-sm));
     transition:
       opacity var(--duration-normal) var(--ease-mechanical),
       transform var(--duration-normal) var(--ease-mechanical);
@@ -694,7 +694,7 @@
     border-radius: var(--radius-sm);
     background: var(--color-overlay-heavy);
     color: var(--color-text-secondary);
-    backdrop-filter: blur(12px);
+    backdrop-filter: blur(var(--glass-blur-sm));
     transition:
       border-color var(--duration-normal) var(--ease-mechanical),
       color var(--duration-normal) var(--ease-mechanical),
@@ -717,7 +717,7 @@
       linear-gradient(135deg, var(--color-overlay-glass-accent), rgba(255, 255, 255, 0.04)),
       var(--color-overlay-heavy);
     box-shadow: var(--shadow-glow-accent);
-    backdrop-filter: blur(16px);
+    backdrop-filter: blur(var(--glass-blur-md));
   }
 
   .reader-next-chapter-button {

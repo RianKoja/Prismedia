@@ -972,7 +972,7 @@
     letter-spacing: 0;
     min-height: 1.35rem;
     padding: 0.25rem 0.38rem;
-    backdrop-filter: blur(12px);
+    backdrop-filter: blur(var(--glass-blur-sm));
   }
 
   .badge :global(svg) {
@@ -1027,7 +1027,7 @@
     cursor: pointer;
     opacity: 0;
     pointer-events: none;
-    backdrop-filter: blur(12px);
+    backdrop-filter: blur(var(--glass-blur-sm));
     transition:
       opacity 120ms ease,
       border-color 120ms ease,

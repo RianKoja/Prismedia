@@ -243,8 +243,8 @@
   .surface-glass {
     border: 1px solid var(--color-border-subtle, rgba(148, 158, 178, 0.07));
     background: rgba(12, 15, 21, 0.98);
-    backdrop-filter: blur(24px);
-    -webkit-backdrop-filter: blur(24px);
+    backdrop-filter: blur(var(--glass-blur-lg));
+    -webkit-backdrop-filter: blur(var(--glass-blur-lg));
     border-radius: var(--radius-sm, 6px);
     box-shadow: 0 8px 40px rgba(0,0,0,0.60);
     overflow: hidden;

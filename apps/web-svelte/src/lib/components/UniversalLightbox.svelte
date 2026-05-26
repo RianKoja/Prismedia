@@ -529,7 +529,7 @@
     overflow: hidden;
     isolation: isolate;
     background: rgb(0 0 0 / 0.95);
-    backdrop-filter: blur(12px);
+    backdrop-filter: blur(var(--glass-blur-sm));
     color: var(--color-text-primary, #f2eed8);
   }
 
@@ -540,7 +540,7 @@
     z-index: 20;
     border-color: var(--color-border-subtle, #1c2235);
     background: rgb(0 0 0 / 0.72);
-    backdrop-filter: blur(16px);
+    backdrop-filter: blur(var(--glass-blur-md));
   }
 
   .top-bar,

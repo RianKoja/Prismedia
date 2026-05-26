@@ -2597,8 +2597,8 @@
     border: 1px solid var(--detail-border, #1c2235);
     border-radius: var(--radius-sm, 6px);
     background: rgba(12, 15, 21, 0.98);
-    backdrop-filter: blur(24px);
-    -webkit-backdrop-filter: blur(24px);
+    backdrop-filter: blur(var(--glass-blur-lg));
+    -webkit-backdrop-filter: blur(var(--glass-blur-lg));
     color: var(--detail-text-secondary, #c4c9d4);
     padding: 1rem;
     box-shadow: 0 8px 40px rgba(0, 0, 0, 0.6);

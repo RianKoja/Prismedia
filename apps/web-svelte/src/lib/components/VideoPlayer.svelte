@@ -2215,9 +2215,9 @@
   }
 
   .player-skip-button {
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    background: rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(var(--glass-blur-sm));
+    -webkit-backdrop-filter: blur(var(--glass-blur-sm));
+    background: var(--color-white-overlay);
     border: 1px solid rgba(255, 255, 255, 0.12);
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
   }
@@ -2231,11 +2231,11 @@
   }
 
   .player-mode-chip {
-    backdrop-filter: blur(14px);
-    -webkit-backdrop-filter: blur(14px);
+    backdrop-filter: blur(var(--glass-blur-sm));
+    -webkit-backdrop-filter: blur(var(--glass-blur-sm));
     background: rgba(36, 30, 22, 0.75);
     border: 1px solid rgba(196, 154, 90, 0.30);
-    border-radius: 8px;
+    border-radius: var(--radius-base);
     box-shadow:
       inset 0 1px 0 rgba(196, 154, 90, 0.10),
       0 0 12px rgba(196, 154, 90, 0.12),
@@ -2243,11 +2243,11 @@
   }
 
   .player-instrument-chip {
-    backdrop-filter: blur(14px);
-    -webkit-backdrop-filter: blur(14px);
+    backdrop-filter: blur(var(--glass-blur-sm));
+    -webkit-backdrop-filter: blur(var(--glass-blur-sm));
     background: rgba(12, 15, 21, 0.70);
     border: 1px solid rgba(255, 255, 255, 0.10);
-    border-radius: 8px;
+    border-radius: var(--radius-base);
     box-shadow:
       inset 0 1px 0 rgba(255, 255, 255, 0.06),
       0 2px 8px rgba(0, 0, 0, 0.35);
@@ -2323,7 +2323,7 @@
   .prismedia-range {
     appearance: none;
     background: rgba(255, 255, 255, 0.18);
-    border-radius: 4px;
+    border-radius: var(--radius-xs);
     cursor: pointer;
     transition: background var(--duration-fast) var(--ease-default);
   }
@@ -2356,11 +2356,11 @@
 
   .player-control-button {
     align-items: center;
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(var(--glass-blur-sm));
+    -webkit-backdrop-filter: blur(var(--glass-blur-sm));
     background: rgba(12, 15, 21, 0.78);
     border: 1px solid rgba(148, 158, 178, 0.14);
-    border-radius: 8px;
+    border-radius: var(--radius-base);
     box-shadow:
       inset 0 1px 0 rgba(255, 255, 255, 0.07),
       0 2px 10px rgba(0, 0, 0, 0.35);
@@ -2441,11 +2441,11 @@
 
   .player-settings-menu {
     animation: player-settings-sheet-in var(--duration-moderate) var(--ease-enter);
-    backdrop-filter: blur(24px);
-    -webkit-backdrop-filter: blur(24px);
+    backdrop-filter: blur(var(--glass-blur-lg));
+    -webkit-backdrop-filter: blur(var(--glass-blur-lg));
     background: rgba(21, 26, 40, 0.92);
     border: 1px solid var(--color-border-default, rgba(148, 158, 178, 0.13));
-    border-radius: 12px;
+    border-radius: var(--radius-lg);
     bottom: max(0.75rem, env(safe-area-inset-bottom, 0px));
     box-shadow:
       inset 0 1px 0 rgba(255, 255, 255, 0.05),
@@ -2492,7 +2492,7 @@
   .player-settings-back {
     align-items: center;
     border: 1px solid transparent;
-    border-radius: 8px;
+    border-radius: var(--radius-base);
     color: rgba(255, 255, 255, 0.82);
     display: grid;
     gap: 0.75rem;
@@ -2585,7 +2585,7 @@
         rgba(255, 255, 255, 0.18) var(--range-progress) 100%
       );
     border: 1px solid var(--color-border-default, rgba(148, 158, 178, 0.13));
-    border-radius: 4px;
+    border-radius: var(--radius-xs);
     grid-column: 1 / -1;
     height: 0.45rem;
     width: 100%;
@@ -2816,7 +2816,7 @@
   .timeline-trickplay-preview {
     background-color: rgba(255, 255, 255, 0.06);
     border: 1px solid var(--color-border-default, rgba(148, 158, 178, 0.13));
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     margin-bottom: 0.4rem;
     overflow: hidden;
     width: 100%;
@@ -2857,11 +2857,11 @@
 
     .player-settings-menu {
       animation: player-settings-flyout-in var(--duration-moderate) var(--ease-enter);
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
+      backdrop-filter: blur(var(--glass-blur-md));
+      -webkit-backdrop-filter: blur(var(--glass-blur-md));
       background: rgba(16, 20, 32, 0.82);
       border: 1px solid var(--color-border-default, rgba(148, 158, 178, 0.13));
-      border-radius: 12px;
+      border-radius: var(--radius-lg);
       bottom: 7.25rem;
       box-shadow:
         inset 0 1px 0 rgba(255, 255, 255, 0.05),

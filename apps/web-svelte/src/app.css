@@ -98,10 +98,17 @@
   --color-overlay-glass: rgba(17, 22, 29, 0.8);
   --color-overlay-glass-light: rgba(17, 22, 29, 0.55);
   --color-overlay-glass-accent: rgba(36, 30, 18, 0.6);
+  --color-white-overlay: rgba(255, 255, 255, 0.08);
+
+  /* ── Glass Blur Scale ── */
+  --glass-blur-sm: 12px;
+  --glass-blur-md: 16px;
+  --glass-blur-lg: 24px;
 
   /* ── Border Radius ── */
   --radius-xs: 4px;
   --radius-sm: 6px;
+  --radius-base: 8px;
   --radius-md: 10px;
   --radius-lg: 14px;
   --radius-xl: 18px;
@@ -288,8 +295,8 @@
   /* Card: glass surface, hover transitions to accent */
   .surface-card {
     background: rgba(11, 14, 18, 0.72);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(var(--glass-blur-sm));
+    -webkit-backdrop-filter: blur(var(--glass-blur-sm));
     border: 1px solid var(--color-border-default);
     border-radius: var(--radius-sm);
     box-shadow: 0 2px 12px rgba(0,0,0,0.35);
@@ -346,8 +353,8 @@
   /* Elevated: floating panels with glass blur */
   .surface-elevated {
     background: rgba(16, 20, 32, 0.82);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
+    backdrop-filter: blur(var(--glass-blur-md));
+    -webkit-backdrop-filter: blur(var(--glass-blur-md));
     border: 1px solid var(--color-border-default);
     border-radius: var(--radius-md);
     box-shadow: 0 8px 40px rgba(0,0,0,0.60),
@@ -359,83 +366,24 @@
    */
   .glass-1 {
     background: rgba(11, 14, 18, 0.72);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(var(--glass-blur-sm));
+    -webkit-backdrop-filter: blur(var(--glass-blur-sm));
     border-radius: var(--radius-sm);
   }
   .glass-2 {
     background: rgba(16, 20, 32, 0.82);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
+    backdrop-filter: blur(var(--glass-blur-md));
+    -webkit-backdrop-filter: blur(var(--glass-blur-md));
     border-radius: var(--radius-sm);
   }
   .glass-3 {
     background: rgba(21, 26, 40, 0.92);
-    backdrop-filter: blur(24px);
-    -webkit-backdrop-filter: blur(24px);
+    backdrop-filter: blur(var(--glass-blur-lg));
+    -webkit-backdrop-filter: blur(var(--glass-blur-lg));
     border-radius: var(--radius-md);
   }
 
   /* Glass chip: aggressive blur for elements floating over media */
-  .glass-chip {
-    background: var(--color-overlay-glass-light);
-    backdrop-filter: blur(20px) saturate(1.4);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: var(--radius-xs);
-    box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.06),
-      inset 0 0 0 0.5px rgba(255, 255, 255, 0.04),
-      0 2px 8px rgba(0, 0, 0, 0.3);
-  }
-
-  /* Glass chip with accent tint */
-  .glass-chip-accent {
-    background: var(--color-overlay-glass-accent);
-    backdrop-filter: blur(20px) saturate(1.4);
-    border: 1px solid rgba(242, 194, 106, 0.2);
-    border-radius: var(--radius-xs);
-    box-shadow:
-      inset 0 1px 0 rgba(242, 194, 106, 0.08),
-      inset 0 0 0 0.5px rgba(242, 194, 106, 0.04),
-      0 2px 8px rgba(0, 0, 0, 0.3);
-  }
-
-  /*
-   * Scroll-heavy media grids need cheaper overlays than frosted glass.
-   */
-  .media-chip {
-    background: color-mix(in srgb, var(--color-overlay-glass) 96%, transparent);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: var(--radius-xs);
-    box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.04),
-      0 1px 3px rgba(0, 0, 0, 0.28);
-  }
-
-  .media-chip-accent {
-    background: color-mix(in srgb, var(--color-overlay-glass-accent) 98%, transparent);
-    border: 1px solid rgba(242, 194, 106, 0.18);
-    border-radius: var(--radius-xs);
-    box-shadow:
-      inset 0 1px 0 rgba(242, 194, 106, 0.06),
-      0 1px 3px rgba(0, 0, 0, 0.28);
-  }
-
-  /* Glass dropdown: heavier glass for menus */
-  .glass-dropdown {
-    background: rgba(12, 14, 20, 0.82);
-    backdrop-filter: blur(24px) saturate(1.3);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: var(--radius-sm);
-    box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.05),
-      0 10px 40px rgba(0, 0, 0, 0.5),
-      0 0 0 0.5px rgba(255, 255, 255, 0.04);
-  }
-
-  /*
-   * Video player: opaque chips/menus so the picture stays sharp.
-   */
   .player-chip {
     background: rgba(17, 22, 29, 0.92);
     border: 1px solid rgba(255, 255, 255, 0.1);
@@ -443,16 +391,6 @@
     box-shadow:
       inset 0 1px 0 rgba(255, 255, 255, 0.06),
       inset 0 0 0 0.5px rgba(255, 255, 255, 0.04),
-      0 2px 8px rgba(0, 0, 0, 0.3);
-  }
-
-  .player-chip-accent {
-    background: rgba(36, 30, 22, 0.92);
-    border: 1px solid rgba(242, 194, 106, 0.2);
-    border-radius: var(--radius-md);
-    box-shadow:
-      inset 0 1px 0 rgba(242, 194, 106, 0.08),
-      inset 0 0 0 0.5px rgba(242, 194, 106, 0.04),
       0 2px 8px rgba(0, 0, 0, 0.3);
   }
 
