@@ -39,6 +39,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - Updated web app manifest and mobile browser metadata for home-screen installation and browser UI theme colors.
 
 ### Fixed
+- Fixed the book progress card so the resume panel uses the Prism Noir Luxe glass surface, controlled radius, and brass progress treatment.
 - Fixed gallery detail pages so their EntityDetail wrapper uses the same full-width layout behavior as other detail pages.
 - Fixed cast thumbnails so saved character and role names appear as centered chips under people names on series, season, and video detail pages.
 - Fixed empty entity detail tabs so pages without displayable detail content no longer show a tab strip or "No details available" placeholder.

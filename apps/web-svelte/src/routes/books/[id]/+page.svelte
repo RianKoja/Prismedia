@@ -397,7 +397,7 @@
           </span>
         {/if}
         <div class="progress-actions">
-          <button type="button" class="reader-action" onclick={resumeProgress}>
+          <button type="button" class="reader-action primary" onclick={resumeProgress}>
             <Play class="h-3.5 w-3.5" />
             Resume
           </button>
@@ -488,19 +488,37 @@
     display: inline-flex;
     align-items: center;
     gap: 0.4rem;
-    border: 1px solid var(--color-border, #1c2235);
-    background: var(--color-surface-3, #151a28);
+    border: 1px solid var(--color-border-default, rgba(164, 172, 185, 0.12));
+    border-radius: var(--radius-xs, 4px);
+    background:
+      linear-gradient(160deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0)),
+      var(--color-overlay-glass-light, rgba(17, 22, 29, 0.55));
     color: var(--color-text-muted, #8a93a6);
     padding: 0.4rem 0.8rem;
     font-size: 0.78rem;
     cursor: pointer;
+    box-shadow: var(--shadow-card, 0 2px 6px rgba(0, 0, 0, 0.3));
+    transition:
+      border-color var(--duration-normal, 180ms) var(--ease-mechanical, ease),
+      box-shadow var(--duration-normal, 180ms) var(--ease-mechanical, ease),
+      color var(--duration-fast, 100ms) var(--ease-default, ease),
+      background var(--duration-normal, 180ms) var(--ease-mechanical, ease);
   }
 
   .reader-action:hover,
   .error-notice button:hover {
     color: var(--color-text-accent, #c49a5a);
-    border-color: rgba(196, 154, 90, 0.45);
-    box-shadow: 0 0 16px rgb(196 154 90 / 0.16);
+    border-color: var(--color-border-accent-strong, rgba(242, 194, 106, 0.52));
+    box-shadow: var(--shadow-card-hover, 0 8px 24px rgba(0, 0, 0, 0.4));
+  }
+
+  .reader-action.primary {
+    color: var(--color-text-accent-bright, #f5d48a);
+    border-color: var(--color-border-accent-strong, rgba(242, 194, 106, 0.52));
+    background:
+      linear-gradient(135deg, rgba(122, 94, 32, 0.28), rgba(242, 194, 106, 0.08)),
+      var(--color-overlay-glass-accent, rgba(36, 30, 18, 0.6));
+    box-shadow: var(--shadow-glow-accent, 0 0 25px rgba(242, 194, 106, 0.1));
   }
 
   :global(.meta-item) {
@@ -532,18 +550,55 @@
   }
 
   .progress-section {
+    position: relative;
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
-    gap: 0.85rem;
-    padding: 1rem;
+    gap: 0.9rem 1rem;
+    overflow: hidden;
+    padding: 1.1rem 1.25rem;
     text-align: left;
-    border: 1px solid var(--color-border-subtle, #1c2235);
-    background: var(--color-glass-1, rgba(12, 15, 21, 0.72));
+    border: 1px solid var(--color-border-default, rgba(164, 172, 185, 0.12));
+    border-radius: var(--radius-md, 10px);
+    background:
+      linear-gradient(145deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0) 32%),
+      linear-gradient(180deg, rgba(242, 194, 106, 0.08), rgba(242, 194, 106, 0) 38%),
+      var(--color-overlay-glass);
     color: var(--color-text-muted, #8a93a6);
-    backdrop-filter: blur(14px);
+    box-shadow: var(--shadow-elevated);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+  }
+
+  .progress-section::before {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    content: "";
+    border-radius: inherit;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.08),
+      inset 1px 0 0 rgba(255, 255, 255, 0.03);
+  }
+
+  .progress-section::after {
+    position: absolute;
+    top: 0;
+    right: 1.25rem;
+    left: 1.25rem;
+    height: 1px;
+    pointer-events: none;
+    content: "";
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgba(242, 194, 106, 0.48),
+      rgba(226, 232, 240, 0.18),
+      transparent
+    );
   }
 
   .progress-summary {
+    position: relative;
     min-width: 0;
     border: 0;
     padding: 0;
@@ -554,7 +609,13 @@
   }
 
   .progress-summary:hover strong {
-    color: var(--color-text-accent, #c49a5a);
+    color: var(--color-text-accent-bright, #f5d48a);
+    text-shadow: 0 0 16px rgba(242, 194, 106, 0.18);
+  }
+
+  .progress-summary:focus-visible {
+    outline: 2px solid rgba(242, 194, 106, 0.5);
+    outline-offset: 0.35rem;
   }
 
   .progress-detail-lines {
@@ -562,7 +623,7 @@
     flex-wrap: wrap;
     gap: 0.35rem 0.8rem;
     margin-top: 0.4rem;
-    color: var(--color-text-muted, #8a93a6);
+    color: var(--color-text-secondary, #c8ccd4);
     font-size: 0.86rem;
   }
 
@@ -589,26 +650,38 @@
   }
 
   .progress-percent {
+    position: relative;
     font-family: var(--font-mono, "JetBrains Mono", monospace);
-    color: var(--color-text-accent, #c49a5a);
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--color-text-accent-bright, #f5d48a);
+    text-shadow: 0 0 16px rgba(242, 194, 106, 0.2);
   }
 
   .progress-track {
+    position: relative;
     grid-column: 1 / -1;
     display: block;
-    height: 4px;
-    border: 1px solid rgb(255 255 255 / 0.1);
-    background: rgb(0 0 0 / 0.4);
+    height: 5px;
+    overflow: hidden;
+    border: 1px solid var(--color-border-subtle, rgba(164, 172, 185, 0.07));
+    border-radius: var(--radius-xs, 4px);
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent),
+      rgba(0, 0, 0, 0.42);
+    box-shadow: var(--shadow-well, inset 0 2px 5px rgba(0, 0, 0, 0.4));
   }
 
   .progress-track span {
     display: block;
     height: 100%;
-    background: linear-gradient(to right, #7a5228, #c49a5a, #f3d69c);
-    box-shadow: 0 0 14px rgb(196 154 90 / 0.55);
+    border-radius: inherit;
+    background: linear-gradient(135deg, #7a5e20 0%, #d59a2a 58%, #f2c26a 100%);
+    box-shadow: 0 0 18px rgba(242, 194, 106, 0.52);
   }
 
   .progress-actions {
+    position: relative;
     grid-column: 1 / -1;
     display: flex;
     flex-wrap: wrap;
