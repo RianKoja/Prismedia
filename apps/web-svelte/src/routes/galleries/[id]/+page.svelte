@@ -298,7 +298,7 @@
 
       {#snippet heroBadges()}
         {#if gallery?.galleryType}
-          <span class="type-badge">{gallery.galleryType}</span>
+          <span class="hero-badge">{gallery.galleryType}</span>
         {/if}
       {/snippet}
 
@@ -410,20 +410,6 @@
   :global(.meta-item.is-studio) { color: var(--color-text-accent, #c49a5a); text-decoration: none; transition: opacity 0.15s; }
   :global(.meta-item.is-studio:hover) { opacity: 0.8; }
   :global(.meta-sep) { display: inline-block; width: 3px; height: 3px; margin: 0 0.5rem; background: var(--color-text-muted, #8a93a6); opacity: 0.5; }
-
-  .type-badge {
-    display: inline-flex;
-    align-items: center;
-    padding: 0.15rem 0.5rem;
-    font-family: var(--font-mono, "JetBrains Mono", monospace);
-    font-size: 0.68rem;
-    font-weight: 600;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    color: var(--color-text-accent, #c49a5a);
-    border: 1px solid rgba(196, 154, 90, 0.35);
-    background: rgba(196, 154, 90, 0.08);
-  }
 
   .credits-section { padding: 1rem 1.5rem; border-top: 1px solid var(--color-border, #1c2235); }
 

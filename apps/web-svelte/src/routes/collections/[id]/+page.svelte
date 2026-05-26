@@ -143,7 +143,7 @@
 
       {#snippet heroBadges()}
         {#if collection?.mode}
-          <span class="type-badge">{collection.mode}</span>
+          <span class="hero-badge">{collection.mode}</span>
         {/if}
       {/snippet}
     </EntityDetail>
@@ -179,13 +179,6 @@
 
   :global(.meta-item) { white-space: nowrap; font-size: 0.82rem; }
   :global(.meta-sep) { display: inline-block; width: 3px; height: 3px; margin: 0 0.5rem; background: var(--color-text-muted, #8a93a6); opacity: 0.5; }
-
-  .type-badge {
-    display: inline-flex; align-items: center; padding: 0.15rem 0.5rem;
-    font-family: var(--font-mono, "JetBrains Mono", monospace); font-size: 0.68rem; font-weight: 600;
-    letter-spacing: 0.04em; text-transform: uppercase;
-    color: var(--color-text-accent, #c49a5a); border: 1px solid rgba(196, 154, 90, 0.35); background: rgba(196, 154, 90, 0.08);
-  }
 
   .content-section { display: grid; gap: 0.75rem; }
   .content-heading { display: flex; align-items: center; gap: 0.5rem; margin: 0; font-family: var(--font-heading, Geist, sans-serif); font-size: 1.1rem; font-weight: 600; color: var(--color-text-primary, #f2eed8); }

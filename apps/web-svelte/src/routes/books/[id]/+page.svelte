@@ -353,7 +353,7 @@
 
       {#snippet heroBadges()}
         {#if progressDisplay}
-          <span class="progress-badge">{progressDisplay.percent}%</span>
+          <span class="hero-badge">{progressDisplay.percent}%</span>
         {/if}
       {/snippet}
 
@@ -533,20 +533,6 @@
     margin: 0 0.5rem;
     background: var(--color-text-muted, #8a93a6);
     opacity: 0.5;
-  }
-
-  .progress-badge {
-    display: inline-flex;
-    align-items: center;
-    padding: 0.15rem 0.5rem;
-    font-family: var(--font-mono, "JetBrains Mono", monospace);
-    font-size: 0.68rem;
-    font-weight: 600;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    color: var(--color-text-accent, #c49a5a);
-    border: 1px solid rgba(196, 154, 90, 0.35);
-    background: rgba(196, 154, 90, 0.08);
   }
 
   .progress-section {

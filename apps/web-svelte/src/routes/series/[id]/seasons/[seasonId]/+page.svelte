@@ -242,7 +242,7 @@
 
       {#snippet heroBadges()}
         {#if seasonNumber != null}
-          <span class="position-badge">S{String(seasonNumber).padStart(2, "0")}</span>
+          <span class="hero-badge">S{String(seasonNumber).padStart(2, "0")}</span>
         {/if}
       {/snippet}
 
@@ -332,20 +332,6 @@
     margin: 0 0.5rem;
     background: var(--color-text-muted, #8a93a6);
     opacity: 0.5;
-  }
-
-  .position-badge {
-    display: inline-flex;
-    align-items: center;
-    padding: 0.15rem 0.5rem;
-    font-family: var(--font-mono, "JetBrains Mono", monospace);
-    font-size: 0.68rem;
-    font-weight: 600;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    color: var(--color-text-accent, #c49a5a);
-    border: 1px solid rgba(196, 154, 90, 0.35);
-    background: rgba(196, 154, 90, 0.08);
   }
 
   .content-section {
