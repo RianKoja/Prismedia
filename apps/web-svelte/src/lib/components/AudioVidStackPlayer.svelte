@@ -17,7 +17,7 @@
   import { formatDuration, type AudioTrackListItemDto } from "@prismedia/contracts";
   import { apiAssetUrl, assetUrl } from "$lib/api/orval-fetch";
   import AudioWaveformFilmstrip from "./AudioWaveformFilmstrip.svelte";
-  import { isRenderableWaveform } from "./audio-waveform";
+  import { waveformForDisplay } from "./audio-waveform";
 
   type RepeatMode = "off" | "all" | "one";
 
@@ -285,10 +285,7 @@
       })
       .then((payload) => {
         if (cancelled) return;
-        waveformData =
-          Array.isArray(payload.data) && isRenderableWaveform(payload.data)
-            ? payload.data
-            : null;
+        waveformData = Array.isArray(payload.data) ? waveformForDisplay(payload.data) : null;
       })
       .catch(() => {
         if (cancelled) return;

@@ -32,7 +32,7 @@ export function normalizeWaveformSample(value: number, scale: number): number {
   return Math.max(-1, Math.min(1, value / scale));
 }
 
-export function isRenderableWaveform(waveform: number[]): boolean {
+export function isLegacyPositiveOnlyWaveform(waveform: number[]): boolean {
   const pairCount = Math.floor(waveform.length / 2);
   if (pairCount <= 0) return false;
 
@@ -49,5 +49,23 @@ export function isRenderableWaveform(waveform: number[]): boolean {
   }
 
   if (audiblePairs === 0) return false;
-  return negativePairs / pairCount > 0.02 && positivePairs / pairCount > 0.02;
+  return negativePairs / pairCount <= 0.02 && positivePairs / pairCount > 0.02;
+}
+
+export function waveformForDisplay(waveform: number[]): number[] | null {
+  const pairCount = Math.floor(waveform.length / 2);
+  if (pairCount <= 0) return null;
+
+  if (!isLegacyPositiveOnlyWaveform(waveform)) return waveform;
+
+  const mirrored = new Array(pairCount * 2);
+  for (let i = 0; i < pairCount; i += 1) {
+    const min = waveform[i * 2] ?? 0;
+    const max = waveform[i * 2 + 1] ?? 0;
+    const amplitude = Math.max(Math.abs(min), Math.abs(max));
+    mirrored[i * 2] = -amplitude;
+    mirrored[i * 2 + 1] = amplitude;
+  }
+
+  return mirrored;
 }
