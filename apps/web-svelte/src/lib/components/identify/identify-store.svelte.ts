@@ -7,6 +7,7 @@ import {
   deleteIdentifyQueueItem,
   fetchIdentifyEntity,
   fetchIdentifyQueue,
+  fetchIdentifyQueueItem,
   fetchPluginProviders,
   searchIdentifyQueueItem,
   type EntityMetadataProposal,
@@ -175,14 +176,20 @@ export class IdentifyStore {
     await this.loadInitial();
   }
 
-  async seedEntity(entityId: string, returnEntityId: string | null) {
+  async seedEntity(
+    entityId: string,
+    returnEntityId: string | null,
+    options: { openExistingOnly?: boolean } = {},
+  ) {
     this.returnEntityId = returnEntityId;
     this.loading = true;
     this.error = null;
     try {
       const [providers, item, detail] = await Promise.all([
         fetchPluginProviders(),
-        addIdentifyQueueItem(entityId),
+        options.openExistingOnly
+          ? fetchIdentifyQueueItem(entityId).catch(async () => addIdentifyQueueItem(entityId))
+          : addIdentifyQueueItem(entityId),
         fetchEntityDetail(entityId),
       ]);
       const hideNsfw = this.#getHideNsfw();
@@ -196,6 +203,10 @@ export class IdentifyStore {
       }
       const mapped = queueItemFromApi(item, undefined, detail);
       this.#upsertQueueItem(mapped);
+      if (options.openExistingOnly && isActiveQueueState(mapped.state)) {
+        this.reviewResolvedQueueItem(mapped);
+        return mapped;
+      }
       return await this.#autoIdentifyQueueItem(mapped) ?? mapped;
     } catch (err) {
       this.error = readError(err);
@@ -693,6 +704,10 @@ function entityCardFromQueueItem(item: ApiIdentifyQueueItem): EntityCard {
 
 function shouldResetScrollForView(view: IdentifyView): boolean {
   return view.kind === "review-parent" || view.kind === "review-child";
+}
+
+function isActiveQueueState(state: IdentifyQueueState): boolean {
+  return state !== "done" && state !== "deleted";
 }
 
 function shouldFallbackToTitleSearch(

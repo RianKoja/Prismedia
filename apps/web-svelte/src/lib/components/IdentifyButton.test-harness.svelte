@@ -3,9 +3,9 @@
   import IdentifyButton from "./IdentifyButton.svelte";
 
   interface Props {
-    entityKind: "video_series" | "video_movie" | "video_episode" | "book";
+    entityKind?: string;
     entityId: string;
-    title: string;
+    title?: string;
     label?: string;
   }
 

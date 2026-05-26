@@ -21,6 +21,7 @@
   import type { EntityThumbnailCard } from "$lib/entities/entity-thumbnail";
   import EntityDetail, { type EntityMetadataUpdateRequest } from "$lib/components/entities/EntityDetail.svelte";
   import EntityGrid from "$lib/components/entities/EntityGrid.svelte";
+  import IdentifyButton from "$lib/components/IdentifyButton.svelte";
   import { redirectHiddenEntityNotFound } from "$lib/nsfw/hidden-entity";
   import { useNsfw } from "$lib/nsfw/store.svelte";
   import { useAppChrome } from "$lib/stores/app-chrome.svelte";
@@ -148,6 +149,10 @@
           {#if dates.length > 0}<span class="meta-sep"></span>{/if}
           <span class="meta-item">{relatedCards.length} {relatedCards.length === 1 ? "title" : "titles"}</span>
         {/if}
+      {/snippet}
+
+      {#snippet extraActions()}
+        <IdentifyButton entityId={card.entity.id} entityKind={card.entity.kind} />
       {/snippet}
     </EntityDetail>
 

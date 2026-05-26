@@ -23,6 +23,7 @@
     type EntityMetadataUpdateRequest,
   } from "$lib/components/entities/EntityDetail.svelte";
   import EntityGrid from "$lib/components/entities/EntityGrid.svelte";
+  import IdentifyButton from "$lib/components/IdentifyButton.svelte";
   import MetadataCard from "$lib/components/MetadataCard.svelte";
   import { redirectHiddenEntityNotFound } from "$lib/nsfw/hidden-entity";
   import { useNsfw } from "$lib/nsfw/store.svelte";
@@ -172,6 +173,10 @@
           <span class="meta-sep"></span>
           <span class="meta-item">{date.value}</span>
         {/each}
+      {/snippet}
+
+      {#snippet extraActions()}
+        <IdentifyButton entityId={card.entity.id} entityKind={card.entity.kind} />
       {/snippet}
 
       {#snippet afterBody()}

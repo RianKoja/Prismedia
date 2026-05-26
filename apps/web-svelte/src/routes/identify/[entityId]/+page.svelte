@@ -40,7 +40,9 @@
 
   onMount(async () => {
     const returnId = page.url.searchParams.get("returnId") ?? page.url.searchParams.get("quid");
-    const item = await store.seedEntity(entityId, returnId);
+    const item = await store.seedEntity(entityId, returnId, {
+      openExistingOnly: page.url.searchParams.get("queued") === "1",
+    });
     if (item?.provider) {
       selectedProviderId = item.provider;
     }

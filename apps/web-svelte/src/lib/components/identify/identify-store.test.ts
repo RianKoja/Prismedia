@@ -7,6 +7,7 @@ import { MAIN_SCROLL_TOP_EVENT } from "$lib/stores/main-scroll";
 const fetchPluginProviders = vi.fn();
 const fetchIdentifyQueue = vi.fn();
 const fetchIdentifyEntity = vi.fn();
+const fetchIdentifyQueueItem = vi.fn();
 const addIdentifyQueueItem = vi.fn();
 const searchIdentifyQueueItem = vi.fn();
 
@@ -17,6 +18,7 @@ vi.mock("$lib/api/identify", async (importOriginal) => {
     fetchPluginProviders: (...args: unknown[]) => fetchPluginProviders(...args),
     fetchIdentifyQueue: (...args: unknown[]) => fetchIdentifyQueue(...args),
     fetchIdentifyEntity: (...args: unknown[]) => fetchIdentifyEntity(...args),
+    fetchIdentifyQueueItem: (...args: unknown[]) => fetchIdentifyQueueItem(...args),
     addIdentifyQueueItem: (...args: unknown[]) => addIdentifyQueueItem(...args),
     searchIdentifyQueueItem: (...args: unknown[]) => searchIdentifyQueueItem(...args),
   };
@@ -27,11 +29,13 @@ describe("IdentifyStore", () => {
     fetchPluginProviders.mockReset();
     fetchIdentifyQueue.mockReset();
     fetchIdentifyEntity.mockReset();
+    fetchIdentifyQueueItem.mockReset();
     addIdentifyQueueItem.mockReset();
     searchIdentifyQueueItem.mockReset();
     fetchPluginProviders.mockResolvedValue([]);
     fetchIdentifyQueue.mockResolvedValue([]);
     fetchIdentifyEntity.mockResolvedValue(null);
+    fetchIdentifyQueueItem.mockResolvedValue(queueItem("video-1"));
     addIdentifyQueueItem.mockResolvedValue(queueItem("video-1"));
     searchIdentifyQueueItem.mockResolvedValue(queueItem("video-1", { state: "search" }));
   });
@@ -153,6 +157,25 @@ describe("IdentifyStore", () => {
 
     expect(addIdentifyQueueItem).toHaveBeenCalledWith("video-1");
     expect(searchIdentifyQueueItem).toHaveBeenCalledWith("video-1", "tmdb", undefined);
+    expect(queued?.state).toBe("proposal");
+    expect(store.view.kind).toBe("review-parent");
+  });
+
+  it("opens an existing queued item without enqueueing or searching again", async () => {
+    const store = new IdentifyStore();
+    fetchIdentifyQueueItem.mockResolvedValue(queueItem("video-1", {
+      state: "proposal",
+      provider: "tmdb",
+      proposal: proposal("tmdb:movie:123", { targetKind: "video", title: "Friendship" }),
+    }));
+    fetchIdentifyEntity.mockResolvedValue(detail("video-1", { kind: "video", title: "Friendship" }));
+    fetchIdentifyQueue.mockResolvedValue([]);
+
+    const queued = await store.seedEntity("video-1", "video-1", { openExistingOnly: true });
+
+    expect(fetchIdentifyQueueItem).toHaveBeenCalledWith("video-1");
+    expect(addIdentifyQueueItem).not.toHaveBeenCalled();
+    expect(searchIdentifyQueueItem).not.toHaveBeenCalled();
     expect(queued?.state).toBe("proposal");
     expect(store.view.kind).toBe("review-parent");
   });

@@ -359,7 +359,7 @@
 
       {#snippet extraActions()}
         {#if book}
-        <IdentifyButton entityId={bookId} />
+        <IdentifyButton entityId={card.entity.id} entityKind={card.entity.kind} />
         {#if readerPageCount > 0}
           <button type="button" class="reader-action" onclick={openSelectedReader}>
             <Play class="h-3.5 w-3.5" />

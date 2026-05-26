@@ -185,6 +185,14 @@ export function fetchIdentifyProviders(kind?: string): Promise<PluginProvider[]>
   return apiJson(`/identify/providers${query({ kind })}`);
 }
 
+export function providerCanIdentifyKind(provider: PluginProvider, kind: string): boolean {
+  const normalizedKind = kind.toLowerCase();
+  return provider.installed &&
+    provider.enabled &&
+    provider.missingAuthKeys.length === 0 &&
+    provider.supports.some((support) => support.entityKind.toLowerCase() === normalizedKind);
+}
+
 export function identifyEntity(
   entityId: string,
   provider: string,
@@ -222,6 +230,17 @@ export function addIdentifyQueueItem(entityId: string): Promise<IdentifyQueueIte
 
 export function fetchIdentifyQueueItem(entityId: string): Promise<IdentifyQueueItem> {
   return apiJson(`/identify/queue/entities/${entityId}`);
+}
+
+export async function fetchOptionalIdentifyQueueItem(entityId: string): Promise<IdentifyQueueItem | null> {
+  const response = await fetch(apiPath(`/identify/queue/entities/${entityId}`));
+  if (response.status === 404) return null;
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(body || `API ${response.status}: ${response.statusText}`);
+  }
+
+  return (await response.json()) as IdentifyQueueItem;
 }
 
 export function searchIdentifyQueueItem(

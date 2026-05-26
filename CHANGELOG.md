@@ -44,6 +44,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - Updated web app manifest and mobile browser metadata for home-screen installation and browser UI theme colors.
 
 ### Fixed
+- Fixed detail-page Identify actions so already-queued entities show a pending review state, open the existing queue item, and expose ready providers for people and studios.
 - Fixed Identify queue accepts so scoped child proposals cannot overwrite the root entity under review.
 - Fixed manual Identify title searches so stale provider IDs already saved on an entity cannot override the user's search text.
 - Fixed regenerated audio waveform files being hidden behind the browser's cached waveform JSON.

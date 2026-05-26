@@ -667,7 +667,7 @@
       {/snippet}
 
       {#snippet extraActions()}
-        <IdentifyButton entityId={videoId} />
+        <IdentifyButton entityId={card.entity.id} entityKind={card.entity.kind} />
       {/snippet}
 
       {#snippet sectionContent(section)}

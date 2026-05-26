@@ -268,7 +268,7 @@
       {/snippet}
 
       {#snippet extraActions()}
-        <IdentifyButton entityId={page.params.id ?? ""} />
+        <IdentifyButton entityId={card.entity.id} entityKind={card.entity.kind} />
       {/snippet}
 
       {#snippet sectionContent(section)}
