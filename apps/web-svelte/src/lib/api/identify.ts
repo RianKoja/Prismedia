@@ -1,5 +1,5 @@
-import { apiPath } from "$lib/api/orval-fetch";
-import type { EntityCard, EntityDetailCard, EntityListResponse } from "$lib/api/prismedia";
+import { fetchApi, apiPath } from "$lib/api/orval-fetch";
+import type { EntityCard, EntityDetailCard, EntityListResponse, EntityMetadataFlagsPatch } from "$lib/api/prismedia";
 
 export interface PluginEntitySupport {
   entityKind: string;
@@ -58,11 +58,7 @@ export interface CreditPatch {
   sortOrder?: number | null;
 }
 
-export interface EntityMetadataFlagsPatch {
-  isFavorite?: boolean | null;
-  isNsfw?: boolean | null;
-  isOrganized?: boolean | null;
-}
+export type { EntityMetadataFlagsPatch };
 
 export interface EntityMetadataPatch {
   title?: string | null;
@@ -131,24 +127,6 @@ export interface IdentifyQueueItem {
   completedAt?: string | null;
 }
 
-async function apiJson<T>(path: string, init?: RequestInit): Promise<T> {
-  const headers = new Headers(init?.headers);
-  if (init?.body && !headers.has("Content-Type")) {
-    headers.set("Content-Type", "application/json");
-  }
-
-  const response = await fetch(apiPath(path), { ...init, headers });
-  if (!response.ok) {
-    const body = await response.text();
-    throw new Error(body || `API ${response.status}: ${response.statusText}`);
-  }
-
-  if (response.status === 204) {
-    return undefined as T;
-  }
-
-  return (await response.json()) as T;
-}
 
 function query(params: Record<string, string | number | boolean | null | undefined>): string {
   const search = new URLSearchParams();
@@ -160,29 +138,29 @@ function query(params: Record<string, string | number | boolean | null | undefin
 }
 
 export function fetchPluginProviders(): Promise<PluginProvider[]> {
-  return apiJson("/plugins");
+  return fetchApi("/plugins");
 }
 
 export function installPlugin(provider: string): Promise<PluginProvider> {
-  return apiJson(`/plugins/${provider}`, { method: "POST" });
+  return fetchApi(`/plugins/${provider}`, { method: "POST" });
 }
 
 export function removePlugin(provider: string): Promise<void> {
-  return apiJson(`/plugins/${provider}`, { method: "DELETE" });
+  return fetchApi(`/plugins/${provider}`, { method: "DELETE" });
 }
 
 export function savePluginAuth(
   provider: string,
   values: Record<string, string | null>,
 ): Promise<void> {
-  return apiJson(`/plugins/${provider}/auth`, {
+  return fetchApi(`/plugins/${provider}/auth`, {
     method: "PUT",
     body: JSON.stringify({ values }),
   });
 }
 
 export function fetchIdentifyProviders(kind?: string): Promise<PluginProvider[]> {
-  return apiJson(`/identify/providers${query({ kind })}`);
+  return fetchApi(`/identify/providers${query({ kind })}`);
 }
 
 export function providerCanIdentifyKind(provider: PluginProvider, kind: string): boolean {
@@ -198,14 +176,14 @@ export function identifyEntity(
   provider: string,
   identifyQuery?: IdentifyQuery,
 ): Promise<EntityMetadataProposal> {
-  return apiJson(`/identify/entities/${entityId}`, {
+  return fetchApi(`/identify/entities/${entityId}`, {
     method: "POST",
     body: JSON.stringify({ provider, query: identifyQuery ?? null }),
   });
 }
 
 export function fetchIdentifyEntity(entityId: string): Promise<EntityDetailCard> {
-  return apiJson(`/entities/${entityId}`);
+  return fetchApi(`/entities/${entityId}`);
 }
 
 export function applyIdentifyProposal(
@@ -214,22 +192,22 @@ export function applyIdentifyProposal(
   selectedFields: string[],
   selectedImages?: Record<string, string | null>,
 ): Promise<EntityCard> {
-  return apiJson(`/identify/entities/${entityId}/apply`, {
+  return fetchApi(`/identify/entities/${entityId}/apply`, {
     method: "POST",
     body: JSON.stringify({ proposal, selectedFields, selectedImages }),
   });
 }
 
 export function fetchIdentifyQueue(includeCompleted = false, hideNsfw?: boolean): Promise<IdentifyQueueItem[]> {
-  return apiJson(`/identify/queue${query({ includeCompleted, hideNsfw })}`);
+  return fetchApi(`/identify/queue${query({ includeCompleted, hideNsfw })}`);
 }
 
 export function addIdentifyQueueItem(entityId: string): Promise<IdentifyQueueItem> {
-  return apiJson(`/identify/queue/entities/${entityId}`, { method: "POST" });
+  return fetchApi(`/identify/queue/entities/${entityId}`, { method: "POST" });
 }
 
 export function fetchIdentifyQueueItem(entityId: string): Promise<IdentifyQueueItem> {
-  return apiJson(`/identify/queue/entities/${entityId}`);
+  return fetchApi(`/identify/queue/entities/${entityId}`);
 }
 
 export async function fetchOptionalIdentifyQueueItem(entityId: string): Promise<IdentifyQueueItem | null> {
@@ -248,7 +226,7 @@ export function searchIdentifyQueueItem(
   provider: string,
   identifyQuery?: IdentifyQuery,
 ): Promise<IdentifyQueueItem> {
-  return apiJson(`/identify/queue/entities/${entityId}/search`, {
+  return fetchApi(`/identify/queue/entities/${entityId}/search`, {
     method: "POST",
     body: JSON.stringify({ provider, query: identifyQuery ?? null }),
   });
@@ -260,14 +238,14 @@ export function applyIdentifyQueueItem(
   selectedFields: string[],
   selectedImages?: Record<string, string | null>,
 ): Promise<IdentifyQueueItem> {
-  return apiJson(`/identify/queue/entities/${entityId}/apply`, {
+  return fetchApi(`/identify/queue/entities/${entityId}/apply`, {
     method: "POST",
     body: JSON.stringify({ proposal, selectedFields, selectedImages }),
   });
 }
 
 export function deleteIdentifyQueueItem(entityId: string): Promise<IdentifyQueueItem> {
-  return apiJson(`/identify/queue/entities/${entityId}`, { method: "DELETE" });
+  return fetchApi(`/identify/queue/entities/${entityId}`, { method: "DELETE" });
 }
 
 export function startBulkIdentify(
@@ -275,23 +253,23 @@ export function startBulkIdentify(
   entityIds: string[],
   identifyQuery?: IdentifyQuery,
 ): Promise<IdentifyBulkSession> {
-  return apiJson("/identify/bulk", {
+  return fetchApi("/identify/bulk", {
     method: "POST",
     body: JSON.stringify({ provider, entityIds, query: identifyQuery ?? null }),
   });
 }
 
 export function fetchBulkIdentifySession(sessionId: string): Promise<IdentifyBulkSession> {
-  return apiJson(`/identify/bulk/${sessionId}`);
+  return fetchApi(`/identify/bulk/${sessionId}`);
 }
 
 export function closeBulkIdentifySession(sessionId: string): Promise<void> {
-  return apiJson(`/identify/bulk/${sessionId}`, { method: "DELETE" });
+  return fetchApi(`/identify/bulk/${sessionId}`, { method: "DELETE" });
 }
 
 export function fetchIdentifyEntities(
   kind: string,
   search?: string,
 ): Promise<EntityListResponse> {
-  return apiJson(`/entities${query({ kind, query: search })}`);
+  return fetchApi(`/entities${query({ kind, query: search })}`);
 }
