@@ -9,7 +9,7 @@
     updateEntityMetadata,
     type AudioLibraryDetail,
   } from "$lib/api/prismedia";
-  import { apiAssetUrl } from "$lib/api/orval-fetch";
+  import { assetUrl } from "$lib/api/orval-fetch";
   import type { AudioTrackListItemDto } from "@prismedia/contracts";
   import { getCapability } from "$lib/api/capabilities";
   import {
@@ -75,7 +75,7 @@
   const coverUrl = $derived.by(() => {
     if (!library) return undefined;
     const images = getCapability(library.capabilities, "images");
-    return apiAssetUrl(images?.coverUrl ?? images?.thumbnailUrl);
+    return assetUrl(images?.coverUrl ?? images?.thumbnailUrl) || undefined;
   });
 
   onMount(() => {

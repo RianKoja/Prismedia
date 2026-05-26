@@ -14,7 +14,7 @@
   } from "@lucide/svelte";
   import { cn } from "@prismedia/ui-svelte";
   import { formatDuration, type AudioTrackListItemDto } from "@prismedia/contracts";
-  import { apiAssetUrl } from "$lib/api/orval-fetch";
+  import { apiAssetUrl, assetUrl } from "$lib/api/orval-fetch";
   import AudioWaveformFilmstrip from "./AudioWaveformFilmstrip.svelte";
 
   type RepeatMode = "off" | "all" | "one";
@@ -238,9 +238,11 @@
       return;
     }
 
+    // Waveform files are served by the static-files middleware at /assets/,
+    // NOT through the /api/ prefix, so use assetUrl() (bare path) here.
     const waveformUrl =
-      (activeTrack.waveformPath ? apiAssetUrl(activeTrack.waveformPath) : null) ??
-      apiAssetUrl(`/assets/audio-tracks/${activeTrack.id}/waveform.json`);
+      (activeTrack.waveformPath ? assetUrl(activeTrack.waveformPath) : null) ||
+      assetUrl(`/assets/audio-tracks/${activeTrack.id}/waveform.json`);
     if (!waveformUrl) {
       waveformData = null;
       return;

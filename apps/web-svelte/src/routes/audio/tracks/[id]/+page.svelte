@@ -10,7 +10,7 @@
     updateEntityRating,
     type AudioTrackDetail,
   } from "$lib/api/prismedia";
-  import { apiAssetUrl } from "$lib/api/orval-fetch";
+  import { assetUrl } from "$lib/api/orval-fetch";
   import { getCapability } from "$lib/api/capabilities";
   import {
     toggleOptimisticEntityFlag,
@@ -96,7 +96,7 @@
         fetchEntityThumbnails([nextTrack.parentEntityId])
           .then((thumbs) => {
             const parentThumb = thumbs[0];
-            parentCoverUrl = apiAssetUrl(parentThumb?.coverUrl) ?? undefined;
+            parentCoverUrl = assetUrl(parentThumb?.coverUrl) || undefined;
           })
           .catch(() => {});
       }
