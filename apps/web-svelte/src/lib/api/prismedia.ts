@@ -110,6 +110,7 @@ import type {
   VideoSeriesDetail as GeneratedVideoSeriesDetail,
   VideoSeasonDetail as GeneratedVideoSeasonDetail,
 } from "./generated/model";
+import { requestInit, unwrapGenerated, type RequestOptions as GeneratedRequestOptions } from "$lib/api/generated-response";
 import { fetchApi, jellyfinApiPath, apiPath, uploadFile } from "./orval-fetch";
 import type { EntityFileRoleCode } from "$lib/entities/entity-codes";
 
@@ -342,9 +343,7 @@ export interface JellyfinPlaybackSessionRequest {
   IsMuted?: boolean | null;
 }
 
-export interface RequestOptions {
-  signal?: AbortSignal;
-}
+export type RequestOptions = GeneratedRequestOptions;
 
 export interface EntityMetadataUpdateOptions extends RequestOptions {
   kind?: string | null;
@@ -375,36 +374,6 @@ export interface EntityMetadataPatch {
 export interface EntityMetadataUpdateRequest {
   fields: string[];
   patch: EntityMetadataPatch;
-}
-
-function requestInit(options?: RequestOptions): RequestInit | undefined {
-  return options?.signal ? { signal: options.signal } : undefined;
-}
-
-
-function problemMessage(data: unknown): string | null {
-  if (data && typeof data === "object") {
-    const record = data as Record<string, unknown>;
-    if (typeof record.message === "string") return record.message;
-    if (typeof record.error === "string") return record.error;
-    if (typeof record.detail === "string") return record.detail;
-    if (typeof record.title === "string") return record.title;
-  }
-
-  if (typeof data === "string" && data.trim()) return data;
-  return null;
-}
-
-function unwrapGenerated<T>(
-  response: { data: unknown; status: number },
-  fallback: string,
-  okStatuses: readonly number[] = [200],
-): T {
-  if (!okStatuses.includes(response.status)) {
-    throw new Error(problemMessage(response.data) ?? fallback);
-  }
-
-  return response.data as T;
 }
 
 function toNumber(value: number | string | null | undefined): number | null {
