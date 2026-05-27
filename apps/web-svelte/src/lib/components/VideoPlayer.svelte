@@ -1,30 +1,10 @@
 <script module lang="ts">
-  export interface VideoPlayerHandle {
-    seekTo: (time: number) => void;
-    seekBy: (delta: number) => void;
-    toggleMute: () => void;
-    togglePlay: () => void;
-  }
-
-  export interface ActiveCue {
-    start: number;
-    end: number;
-    text: string;
-  }
-
-  export interface VideoPlayerMarker {
-    id: string;
-    time: number;
-    endTime?: number | null;
-    title: string;
-  }
-
-  export interface VideoPlayerAudioTrack {
-    id: string;
-    streamIndex: number;
-    label: string;
-    selected: boolean;
-  }
+  export type {
+    ActiveCue,
+    VideoPlayerAudioTrack,
+    VideoPlayerHandle,
+    VideoPlayerMarker,
+  } from "./video-player-types";
 </script>
 
 <script lang="ts">
@@ -105,6 +85,23 @@
     languageLabel,
     rangeProgress,
   } from "./video-player-format";
+  import {
+    GOOGLE_CAST_SENDER_URL,
+    HLS_RETRY_AFTER_SECONDS,
+    MARKER_CHAPTERS_TRACK_ID,
+    PLAYBACK_RATES,
+    type ActiveCue,
+    type AudioTrackOption,
+    type CastWindow,
+    type HlsStatus,
+    type PlaybackMode,
+    type QualityMode,
+    type QualityOption,
+    type SettingsView,
+    type VideoPlayerAudioTrack,
+    type VideoPlayerHandle,
+    type VideoPlayerMarker,
+  } from "./video-player-types";
   import AssSubtitleOverlay from "./AssSubtitleOverlay.svelte";
   import FilmStrip from "./FilmStrip.svelte";
 
@@ -147,34 +144,6 @@
     handle?: VideoPlayerHandle;
   }
 
-  type PlaybackMode = "direct" | "hls";
-  type QualityMode = "direct" | "auto" | number;
-  type SettingsView = "root" | "quality" | "speed" | "audio" | "captions" | "subtitle-style";
-  type HlsStatus = {
-    state: "idle" | "pending" | "ready" | "error";
-    error?: string | null;
-  };
-  type CastWindow = Window &
-    typeof globalThis & {
-      chrome?: { cast?: { isAvailable?: boolean } };
-      cast?: { framework?: unknown };
-      __onGCastApiAvailable?: (isAvailable: boolean) => void;
-    };
-
-  interface QualityOption {
-    value: QualityMode;
-    label: string;
-  }
-
-  interface AudioTrackOption {
-    id: string;
-    index: number;
-    streamIndex: number | null;
-    label: string;
-    selected: boolean;
-    source: "native" | "external";
-  }
-
   let {
     src,
     directSrc,
@@ -209,12 +178,6 @@
     autoRepeat = false,
     handle = $bindable(),
   }: Props = $props();
-
-  const PLAYBACK_RATES = [0.75, 1, 1.25, 1.5, 2];
-  const HLS_RETRY_AFTER_SECONDS = 2;
-  const MARKER_CHAPTERS_TRACK_ID = "prismedia-marker-chapters";
-  const GOOGLE_CAST_SENDER_URL =
-    "https://www.gstatic.com/cv/js/sender/v1/cast_sender.js?loadCastFramework=1";
 
   let containerEl: HTMLDivElement | undefined = $state();
   let player: MediaPlayerElement | undefined = $state();
