@@ -1407,7 +1407,7 @@
   }
 
   .page-size-menu-item.is-active {
-    background: linear-gradient(90deg, rgba(196, 154, 90, 0.15), transparent);
+    background: linear-gradient(90deg, var(--color-accent-overlay-subtle), transparent);
     color: var(--color-text-accent, #f2c26a);
   }
 

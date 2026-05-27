@@ -2502,7 +2502,7 @@
   }
 
   .player-settings-option.is-active {
-    background: rgba(196, 154, 90, 0.16);
+    background: var(--color-accent-overlay-subtle);
     border-color: var(--color-border-accent-strong, rgba(196, 154, 90, 0.50));
     box-shadow: 0 0 0 1px rgba(196, 154, 90, 0.20), 0 0 8px rgba(196, 154, 90, 0.10);
     color: var(--color-accent-100);

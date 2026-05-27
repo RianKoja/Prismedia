@@ -9,7 +9,7 @@ describe("book progress card styling", () => {
     expect(source).toContain("border-radius: var(--radius-md");
     expect(source).toContain("var(--color-overlay-glass)");
     expect(source).toContain("var(--shadow-elevated)");
-    expect(source).toContain("backdrop-filter: blur(16px)");
+    expect(source).toContain("backdrop-filter: blur(var(--glass-blur-md))");
     expect(source).toContain(".progress-track");
     expect(source).toContain("border-radius: var(--radius-xs");
     expect(source).not.toContain("background: var(--color-glass-1");

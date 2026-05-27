@@ -243,7 +243,7 @@
 
   .credit-chip:hover {
     color: var(--color-text-accent, #c49a5a);
-    border-color: rgba(196, 154, 90, 0.35);
+    border-color: var(--color-accent-overlay-medium);
   }
 
   @media (min-width: 640px) {

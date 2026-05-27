@@ -112,12 +112,12 @@
   .tab.is-active::before {
     background: linear-gradient(
       to right,
-      rgba(196, 154, 90, 0.05),
-      rgba(196, 154, 90, 0.5) 50%,
-      rgba(196, 154, 90, 0.05)
+      var(--color-accent-overlay-faint),
+      var(--color-accent-overlay-strong) 50%,
+      var(--color-accent-overlay-faint)
     );
     box-shadow:
-      0 0 8px rgba(196, 154, 90, 0.3),
+      0 0 8px var(--color-accent-overlay-light),
       0 0 16px rgba(196, 154, 90, 0.1);
   }
 

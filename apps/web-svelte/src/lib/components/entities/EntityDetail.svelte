@@ -1669,8 +1669,8 @@
 
   .entity-detail {
     --detail-accent: #c49a5a;
-    --detail-accent-muted: rgba(196, 154, 90, 0.35);
-    --detail-accent-glow: rgba(196, 154, 90, 0.15);
+    --detail-accent-muted: var(--color-accent-overlay-medium);
+    --detail-accent-glow: var(--color-accent-overlay-subtle);
     --detail-surface: var(--color-surface-2, #101420);
     --detail-surface-raised: var(--color-surface-3, #151a28);
     --detail-border: var(--color-border, #1c2235);
@@ -1679,7 +1679,7 @@
     --detail-text-muted: var(--color-text-muted, #8a93a6);
     --detail-text-disabled: var(--color-text-disabled, #4a5260);
     --detail-glass: rgba(12, 15, 21, 0.72);
-    --detail-glass-blur: 12px;
+    --detail-glass-blur: var(--glass-blur-sm);
     --hero-banner-max-height: clamp(13rem, 36vw, 20rem);
     --hero-lower-overlap: clamp(-3.75rem, -6vw, -2rem);
 

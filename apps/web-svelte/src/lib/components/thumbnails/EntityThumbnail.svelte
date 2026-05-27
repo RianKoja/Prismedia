@@ -840,7 +840,7 @@
     height: 3.5rem;
     border: 1px solid rgb(242 194 106 / 0.25);
     background: rgb(0 0 0 / 0.3);
-    backdrop-filter: blur(4px);
+    backdrop-filter: blur(var(--glass-blur-xs));
     box-shadow:
       inset 0 1px 0 rgb(255 255 255 / 0.08),
       0 0 24px rgb(0 0 0 / 0.35);

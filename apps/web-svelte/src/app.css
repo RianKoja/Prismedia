@@ -100,7 +100,15 @@
   --color-overlay-glass-accent: rgba(36, 30, 18, 0.6);
   --color-white-overlay: rgba(255, 255, 255, 0.08);
 
+  /* ── Brass Accent Overlays ── */
+  --color-accent-overlay-faint: rgba(196, 154, 90, 0.08);
+  --color-accent-overlay-subtle: rgba(196, 154, 90, 0.15);
+  --color-accent-overlay-light: rgba(196, 154, 90, 0.25);
+  --color-accent-overlay-medium: rgba(196, 154, 90, 0.35);
+  --color-accent-overlay-strong: rgba(196, 154, 90, 0.50);
+
   /* ── Glass Blur Scale ── */
+  --glass-blur-xs: 4px;
   --glass-blur-sm: 12px;
   --glass-blur-md: 16px;
   --glass-blur-lg: 24px;
@@ -751,7 +759,7 @@
     background: rgba(255, 255, 255, 0.1);
     box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.5);
     overflow: hidden;
-    backdrop-filter: blur(4px);
+    backdrop-filter: blur(var(--glass-blur-xs));
   }
 
   .meter-fill {

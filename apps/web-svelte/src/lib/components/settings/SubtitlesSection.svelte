@@ -268,14 +268,14 @@
 
   .settings-menu-option:hover,
   .settings-menu-option:focus-visible {
-    border-color: rgba(196, 154, 90, 0.46);
+    border-color: var(--color-accent-overlay-strong);
     color: var(--color-text-primary, #f2eed8);
     outline: none;
   }
 
   .settings-menu-option.is-active {
-    background: rgba(196, 154, 90, 0.14);
-    border-color: rgba(196, 154, 90, 0.42);
+    background: var(--color-accent-overlay-subtle);
+    border-color: var(--color-accent-overlay-strong);
     color: var(--color-text-primary, #f2eed8);
   }
 
@@ -337,7 +337,7 @@
     background: var(--color-accent-400, #d4a55f);
     border: 1px solid rgba(0, 0, 0, 0.45);
     border-radius: 0;
-    box-shadow: 0 0 12px rgba(196, 154, 90, 0.34);
+    box-shadow: 0 0 12px var(--color-accent-overlay-medium);
     height: 0.95rem;
     width: 0.52rem;
   }
@@ -346,7 +346,7 @@
     background: var(--color-accent-400, #d4a55f);
     border: 1px solid rgba(0, 0, 0, 0.45);
     border-radius: 0;
-    box-shadow: 0 0 12px rgba(196, 154, 90, 0.34);
+    box-shadow: 0 0 12px var(--color-accent-overlay-medium);
     height: 0.95rem;
     width: 0.52rem;
   }

@@ -550,8 +550,8 @@
       var(--color-overlay-glass);
     color: var(--color-text-muted, #8a93a6);
     box-shadow: var(--shadow-elevated);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
+    backdrop-filter: blur(var(--glass-blur-md));
+    -webkit-backdrop-filter: blur(var(--glass-blur-md));
   }
 
   .progress-section::before {
