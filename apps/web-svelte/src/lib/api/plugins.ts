@@ -14,7 +14,7 @@ import type {
   StashBoxTagResultDto,
   StashIdEntryDto,
 } from "@prismedia/contracts";
-import { apiPath } from "$lib/api/orval-fetch";
+import { fetchApi } from "$lib/api/orval-fetch";
 
 export type ScraperPackage = ScraperPackageDto;
 export type CommunityIndexEntry = CommunityIndexEntryDto;
@@ -51,28 +51,6 @@ export interface PluginExecuteResult {
   action: string;
 }
 
-async function apiJson<T>(path: string, init?: RequestInit): Promise<T> {
-  const headers = new Headers(init?.headers);
-  if (init?.body && !headers.has("Content-Type")) {
-    headers.set("Content-Type", "application/json");
-  }
-
-  const response = await fetch(apiPath(path), {
-    ...init,
-    headers,
-  });
-
-  if (!response.ok) {
-    const message = await response.text();
-    throw new Error(message || `API ${response.status}: ${response.statusText}`);
-  }
-
-  if (response.status === 204) {
-    return undefined as T;
-  }
-
-  return (await response.json()) as T;
-}
 
 function query(params: Record<string, string | number | boolean | null | undefined>): string {
   const search = new URLSearchParams();
@@ -86,26 +64,26 @@ function query(params: Record<string, string | number | boolean | null | undefin
 export function fetchCommunityIndex(
   force = false,
 ): Promise<{ entries: CommunityIndexEntry[] }> {
-  return apiJson(`/scrapers/index${force ? "?force=true" : ""}`);
+  return fetchApi(`/scrapers/index${force ? "?force=true" : ""}`);
 }
 
 export function fetchInstalledScrapers(): Promise<{ packages: ScraperPackage[] }> {
-  return apiJson("/scrapers/packages");
+  return fetchApi("/scrapers/packages");
 }
 
 export function installScraper(packageId: string): Promise<ScraperPackage> {
-  return apiJson("/scrapers/packages", {
+  return fetchApi("/scrapers/packages", {
     method: "POST",
     body: JSON.stringify({ packageId }),
   });
 }
 
 export function uninstallScraper(id: string): Promise<{ ok: true }> {
-  return apiJson(`/scrapers/packages/${id}`, { method: "DELETE" });
+  return fetchApi(`/scrapers/packages/${id}`, { method: "DELETE" });
 }
 
 export function toggleScraper(id: string, enabled: boolean): Promise<ScraperPackage> {
-  return apiJson(`/scrapers/packages/${id}`, {
+  return fetchApi(`/scrapers/packages/${id}`, {
     method: "PATCH",
     body: JSON.stringify({ enabled }),
   });
@@ -124,7 +102,7 @@ export function scrapeVideo(
   action?: string;
   triedActions?: string[];
 }> {
-  return apiJson(`/scrapers/${scraperId}/scrape`, {
+  return fetchApi(`/scrapers/${scraperId}/scrape`, {
     method: "POST",
     body: JSON.stringify({
       videoId,
@@ -141,7 +119,7 @@ export function fetchScrapeResults(params?: {
   limit?: number;
   offset?: number;
 }): Promise<{ results: ScrapeResult[]; total: number; limit: number; offset: number }> {
-  return apiJson(`/scrapers/results${query(params ?? {})}`);
+  return fetchApi(`/scrapers/results${query(params ?? {})}`);
 }
 
 const SCRAPE_RESULTS_PAGE_SIZE = 500;
@@ -170,7 +148,7 @@ export async function fetchAllScrapeResults(params?: {
 }
 
 export function fetchScrapeResult(id: string): Promise<ScrapeResult> {
-  return apiJson(`/scrapers/results/${id}`);
+  return fetchApi(`/scrapers/results/${id}`);
 }
 
 export function acceptScrapeResult(
@@ -178,7 +156,7 @@ export function acceptScrapeResult(
   fields?: string[],
   options?: { excludePerformers?: string[]; excludeTags?: string[] },
 ): Promise<{ ok: true; videoId: string }> {
-  return apiJson(`/scrapers/results/${id}/accept`, {
+  return fetchApi(`/scrapers/results/${id}/accept`, {
     method: "POST",
     body: JSON.stringify({
       fields,
@@ -189,11 +167,11 @@ export function acceptScrapeResult(
 }
 
 export function rejectScrapeResult(id: string): Promise<{ ok: true }> {
-  return apiJson(`/scrapers/results/${id}/reject`, { method: "POST" });
+  return fetchApi(`/scrapers/results/${id}/reject`, { method: "POST" });
 }
 
 export function fetchStashBoxEndpoints(): Promise<{ endpoints: StashBoxEndpoint[] }> {
-  return apiJson("/stashbox-endpoints");
+  return fetchApi("/stashbox-endpoints");
 }
 
 export function createStashBoxEndpoint(data: {
@@ -201,7 +179,7 @@ export function createStashBoxEndpoint(data: {
   endpoint: string;
   apiKey: string;
 }): Promise<StashBoxEndpoint> {
-  return apiJson("/stashbox-endpoints", {
+  return fetchApi("/stashbox-endpoints", {
     method: "POST",
     body: JSON.stringify(data),
   });
@@ -211,20 +189,20 @@ export function updateStashBoxEndpoint(
   id: string,
   data: { name?: string; endpoint?: string; apiKey?: string; enabled?: boolean },
 ): Promise<StashBoxEndpoint> {
-  return apiJson(`/stashbox-endpoints/${id}`, {
+  return fetchApi(`/stashbox-endpoints/${id}`, {
     method: "PATCH",
     body: JSON.stringify(data),
   });
 }
 
 export function deleteStashBoxEndpoint(id: string): Promise<{ ok: true }> {
-  return apiJson(`/stashbox-endpoints/${id}`, { method: "DELETE" });
+  return fetchApi(`/stashbox-endpoints/${id}`, { method: "DELETE" });
 }
 
 export function testStashBoxEndpoint(
   id: string,
 ): Promise<{ valid: boolean; error?: string }> {
-  return apiJson(`/stashbox-endpoints/${id}/test`, { method: "POST" });
+  return fetchApi(`/stashbox-endpoints/${id}/test`, { method: "POST" });
 }
 
 export function identifyViaStashBox(
@@ -237,7 +215,7 @@ export function identifyViaStashBox(
   message?: string;
   triedMethods?: string[];
 }> {
-  return apiJson(`/stashbox-endpoints/${endpointId}/identify`, {
+  return fetchApi(`/stashbox-endpoints/${endpointId}/identify`, {
     method: "POST",
     body: JSON.stringify({ videoId }),
   });
@@ -251,21 +229,21 @@ export function identifyPerformerViaStashBox(
   result?: null;
   message?: string;
 }> {
-  return apiJson(`/stashbox-endpoints/${endpointId}/identify-performer`, {
+  return fetchApi(`/stashbox-endpoints/${endpointId}/identify-performer`, {
     method: "POST",
     body: JSON.stringify({ performerId }),
   });
 }
 
 export function fetchMetadataProviders(): Promise<{ providers: MetadataProvider[] }> {
-  return apiJson("/metadata-providers");
+  return fetchApi("/metadata-providers");
 }
 
 export function fetchStashIds(
   entityType: string,
   entityId: string,
 ): Promise<{ stashIds: StashIdEntry[] }> {
-  return apiJson(`/stash-ids${query({ entityType, entityId })}`);
+  return fetchApi(`/stash-ids${query({ entityType, entityId })}`);
 }
 
 export function createStashId(data: {
@@ -274,21 +252,21 @@ export function createStashId(data: {
   stashBoxEndpointId: string;
   stashId: string;
 }): Promise<StashIdEntry> {
-  return apiJson("/stash-ids", {
+  return fetchApi("/stash-ids", {
     method: "POST",
     body: JSON.stringify(data),
   });
 }
 
 export function deleteStashId(id: string): Promise<{ ok: true }> {
-  return apiJson(`/stash-ids/${id}`, { method: "DELETE" });
+  return fetchApi(`/stash-ids/${id}`, { method: "DELETE" });
 }
 
 export function lookupStudioViaStashBox(
   endpointId: string,
   lookupQuery: string,
 ): Promise<{ studio: StashBoxStudioResult | null }> {
-  return apiJson(`/stashbox-endpoints/${endpointId}/lookup/studio`, {
+  return fetchApi(`/stashbox-endpoints/${endpointId}/lookup/studio`, {
     method: "POST",
     body: JSON.stringify({ query: lookupQuery }),
   });
@@ -298,7 +276,7 @@ export function lookupTagViaStashBox(
   endpointId: string,
   lookupQuery: string,
 ): Promise<{ tags: StashBoxTagResult[] }> {
-  return apiJson(`/stashbox-endpoints/${endpointId}/lookup/tag`, {
+  return fetchApi(`/stashbox-endpoints/${endpointId}/lookup/tag`, {
     method: "POST",
     body: JSON.stringify({ query: lookupQuery }),
   });
@@ -311,7 +289,7 @@ export function lookupPerformerViaStashBox(
   performers: NormalizedPerformerScrapeResult[];
   rawPerformers: unknown[];
 }> {
-  return apiJson(`/stashbox-endpoints/${endpointId}/lookup/performer`, {
+  return fetchApi(`/stashbox-endpoints/${endpointId}/lookup/performer`, {
     method: "POST",
     body: JSON.stringify({ query: lookupQuery }),
   });
@@ -320,38 +298,38 @@ export function lookupPerformerViaStashBox(
 export function fetchPrismediaPluginIndex(
   options: { refresh?: boolean } = {},
 ): Promise<PrismediaPluginIndexEntry[]> {
-  return apiJson(`/plugins/prismedia-index${options.refresh ? "?refresh=1" : ""}`);
+  return fetchApi(`/plugins/prismedia-index${options.refresh ? "?refresh=1" : ""}`);
 }
 
 export function fetchPluginUpdates(
   options: { refresh?: boolean } = {},
 ): Promise<PluginUpdateStatus[]> {
-  return apiJson(`/plugins/check-updates${options.refresh ? "?refresh=1" : ""}`);
+  return fetchApi(`/plugins/check-updates${options.refresh ? "?refresh=1" : ""}`);
 }
 
 export function installPrismediaPlugin(
   pluginId: string,
   options: { localPath?: string; zipUrl?: string; sha256?: string },
 ): Promise<{ ok: boolean; pluginId: string }> {
-  return apiJson("/plugins/packages", {
+  return fetchApi("/plugins/packages", {
     method: "POST",
     body: JSON.stringify({ pluginId, ...options }),
   });
 }
 
 export function fetchInstalledPlugins(): Promise<InstalledPlugin[]> {
-  return apiJson("/plugins/packages");
+  return fetchApi("/plugins/packages");
 }
 
 export function togglePlugin(id: string, enabled: boolean): Promise<{ ok: boolean }> {
-  return apiJson(`/plugins/packages/${id}`, {
+  return fetchApi(`/plugins/packages/${id}`, {
     method: "PATCH",
     body: JSON.stringify({ enabled }),
   });
 }
 
 export function uninstallPlugin(id: string): Promise<{ ok: boolean }> {
-  return apiJson(`/plugins/packages/${id}`, { method: "DELETE" });
+  return fetchApi(`/plugins/packages/${id}`, { method: "DELETE" });
 }
 
 export function acceptPluginResult(
@@ -359,7 +337,7 @@ export function acceptPluginResult(
   fields?: string[],
   selectedImages?: Record<string, string | null | undefined>,
 ): Promise<{ ok: boolean }> {
-  return apiJson(`/plugins/results/${resultId}/accept`, {
+  return fetchApi(`/plugins/results/${resultId}/accept`, {
     method: "POST",
     body: JSON.stringify({ fields, selectedImages }),
   });
@@ -371,7 +349,7 @@ export function executePlugin(
   input?: Record<string, unknown>,
   options?: { saveResult?: boolean; entityId?: string },
 ): Promise<PluginExecuteResult> {
-  return apiJson(`/plugins/${pluginDbId}/execute`, {
+  return fetchApi(`/plugins/${pluginDbId}/execute`, {
     method: "POST",
     body: JSON.stringify({ action, input, ...options }),
   });
@@ -382,7 +360,7 @@ export function savePluginAuthKey(
   authKey: string,
   value: string,
 ): Promise<{ ok: boolean }> {
-  return apiJson(`/plugins/packages/${pluginDbId}/auth/${authKey}`, {
+  return fetchApi(`/plugins/packages/${pluginDbId}/auth/${authKey}`, {
     method: "PUT",
     body: JSON.stringify({ value }),
   });

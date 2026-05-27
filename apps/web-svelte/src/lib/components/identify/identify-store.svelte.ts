@@ -1,5 +1,5 @@
-import { getContext, setContext } from "svelte";
 import { goto } from "$app/navigation";
+import { createContext } from "$lib/utils/context";
 import {
   addIdentifyQueueItem,
   applyIdentifyQueueItem,
@@ -61,15 +61,9 @@ export interface IdentifyKindInfo {
   hasProvider: boolean;
 }
 
-const CONTEXT_KEY = Symbol("identify-store");
-
-export function setIdentifyStore(store: IdentifyStore): void {
-  setContext(CONTEXT_KEY, store);
-}
-
-export function useIdentifyStore(): IdentifyStore {
-  return getContext<IdentifyStore>(CONTEXT_KEY);
-}
+const identifyStoreContext = createContext<IdentifyStore>("IdentifyStore");
+export const setIdentifyStore = identifyStoreContext.provide;
+export const useIdentifyStore = identifyStoreContext.use;
 
 export class IdentifyStore {
   #getHideNsfw: () => boolean;

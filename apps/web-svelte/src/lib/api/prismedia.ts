@@ -380,10 +380,6 @@ function requestInit(options?: RequestOptions): RequestInit | undefined {
   return options?.signal ? { signal: options.signal } : undefined;
 }
 
-type GeneratedResponse<T> = {
-  data: T;
-  status: number;
-};
 
 function problemMessage(data: unknown): string | null {
   if (data && typeof data === "object") {
@@ -399,7 +395,7 @@ function problemMessage(data: unknown): string | null {
 }
 
 function unwrapGenerated<T>(
-  response: GeneratedResponse<T>,
+  response: { data: unknown; status: number },
   fallback: string,
   okStatuses: readonly number[] = [200],
 ): T {
@@ -407,7 +403,7 @@ function unwrapGenerated<T>(
     throw new Error(problemMessage(response.data) ?? fallback);
   }
 
-  return response.data;
+  return response.data as T;
 }
 
 function toNumber(value: number | string | null | undefined): number | null {
@@ -483,13 +479,9 @@ export function fetchEntities(
   options?: RequestOptions,
 ): Promise<EntityListResponse> {
   // Cast: hideNsfw is accepted by the backend but not yet in the generated OpenAPI type.
-  return listEntities(params as Record<string, string | boolean | undefined>, requestInit(options)).then((response) => {
-    if (response.status !== 200) {
-      throw new Error(response.data.message);
-    }
-
-    return response.data;
-  });
+  return listEntities(params as Record<string, string | boolean | undefined>, requestInit(options)).then((r) =>
+    unwrapGenerated(r, "Failed to list entities"),
+  );
 }
 
 export async function fetchEntityThumbnails(
@@ -504,13 +496,9 @@ export async function fetchEntityThumbnails(
 }
 
 export function fetchEntity(id: string, options?: RequestOptions): Promise<EntityCardFull> {
-  return getEntity(id, undefined, requestInit(options)).then((response) => {
-    if (response.status !== 200) {
-      throw new Error(response.data.message);
-    }
-
-    return response.data;
-  });
+  return getEntity(id, undefined, requestInit(options)).then((r) =>
+    unwrapGenerated(r, `Failed to fetch entity ${id}`),
+  );
 }
 
 export function fetchVideos(
@@ -523,13 +511,9 @@ export function fetchVideo(
   id: string,
   options?: RequestOptions,
 ): Promise<VideoDetail> {
-  return getVideo(id, undefined, requestInit(options)).then((response) => {
-    if (response.status !== 200) {
-      throw new Error(response.data.message);
-    }
-
-    return response.data;
-  });
+  return getVideo(id, undefined, requestInit(options)).then((r) =>
+    unwrapGenerated(r, `Failed to fetch video ${id}`),
+  );
 }
 
 export async function fetchJellyfinPlaybackInfo(
@@ -592,13 +576,9 @@ export function fetchSeries(
   id: string,
   options?: RequestOptions,
 ): Promise<VideoSeriesDetail> {
-  return getVideoSeries(id, undefined, requestInit(options)).then((response) => {
-    if (response.status !== 200) {
-      throw new Error(response.data.message);
-    }
-
-    return response.data;
-  });
+  return getVideoSeries(id, undefined, requestInit(options)).then((r) =>
+    unwrapGenerated(r, `Failed to fetch series ${id}`),
+  );
 }
 
 export function fetchSeason(
@@ -606,13 +586,9 @@ export function fetchSeason(
   seasonId: string,
   options?: RequestOptions,
 ): Promise<VideoSeasonDetail> {
-  return getVideoSeason(seriesId, seasonId, undefined, requestInit(options)).then((response) => {
-    if (response.status !== 200) {
-      throw new Error(response.data.message);
-    }
-
-    return response.data;
-  });
+  return getVideoSeason(seriesId, seasonId, undefined, requestInit(options)).then((r) =>
+    unwrapGenerated(r, `Failed to fetch season ${seasonId}`),
+  );
 }
 
 export function fetchImages(options?: RequestOptions): Promise<MediaListResponse> {
@@ -636,59 +612,51 @@ export function fetchAudioTracks(options?: RequestOptions): Promise<MediaListRes
 }
 
 export function fetchImage(id: string, options?: RequestOptions): Promise<ImageDetail> {
-  return getImage(id, undefined, requestInit(options)).then((response) => {
-    if (response.status !== 200) throw new Error(response.data.message);
-    return response.data;
-  });
+  return getImage(id, undefined, requestInit(options)).then((r) =>
+    unwrapGenerated(r, `Failed to fetch image ${id}`),
+  );
 }
 
 export function fetchGallery(id: string, options?: RequestOptions): Promise<GalleryDetail> {
-  return getGallery(id, undefined, requestInit(options)).then((response) => {
-    if (response.status !== 200) throw new Error(response.data.message);
-    return response.data;
-  });
+  return getGallery(id, undefined, requestInit(options)).then((r) =>
+    unwrapGenerated(r, `Failed to fetch gallery ${id}`),
+  );
 }
 
 export function fetchBook(id: string, options?: RequestOptions): Promise<BookDetail> {
-  return getBook(id, undefined, requestInit(options)).then((response) => {
-    if (response.status !== 200) throw new Error(response.data.message);
-    return response.data;
-  });
+  return getBook(id, undefined, requestInit(options)).then((r) =>
+    unwrapGenerated(r, `Failed to fetch book ${id}`),
+  );
 }
 
 export function fetchAudioLibrary(id: string, options?: RequestOptions): Promise<AudioLibraryDetail> {
-  return getAudioLibrary(id, undefined, requestInit(options)).then((response) => {
-    if (response.status !== 200) throw new Error(response.data.message);
-    return response.data;
-  });
+  return getAudioLibrary(id, undefined, requestInit(options)).then((r) =>
+    unwrapGenerated(r, `Failed to fetch audio library ${id}`),
+  );
 }
 
 export function fetchAudioTrack(id: string, options?: RequestOptions): Promise<AudioTrackDetail> {
-  return getAudioTrack(id, undefined, requestInit(options)).then((response) => {
-    if (response.status !== 200) throw new Error(response.data.message);
-    return response.data;
-  });
+  return getAudioTrack(id, undefined, requestInit(options)).then((r) =>
+    unwrapGenerated(r, `Failed to fetch audio track ${id}`),
+  );
 }
 
 export function fetchPerson(id: string, options?: RequestOptions): Promise<PersonDetail> {
-  return getPerson(id, undefined, requestInit(options)).then((response) => {
-    if (response.status !== 200) throw new Error(response.data.message);
-    return response.data;
-  });
+  return getPerson(id, undefined, requestInit(options)).then((r) =>
+    unwrapGenerated(r, `Failed to fetch person ${id}`),
+  );
 }
 
 export function fetchStudio(id: string, options?: RequestOptions): Promise<StudioDetail> {
-  return getStudio(id, undefined, requestInit(options)).then((response) => {
-    if (response.status !== 200) throw new Error(response.data.message);
-    return response.data;
-  });
+  return getStudio(id, undefined, requestInit(options)).then((r) =>
+    unwrapGenerated(r, `Failed to fetch studio ${id}`),
+  );
 }
 
 export function fetchTag(id: string, options?: RequestOptions): Promise<TagDetail> {
-  return getTag(id, undefined, requestInit(options)).then((response) => {
-    if (response.status !== 200) throw new Error(response.data.message);
-    return response.data;
-  });
+  return getTag(id, undefined, requestInit(options)).then((r) =>
+    unwrapGenerated(r, `Failed to fetch tag ${id}`),
+  );
 }
 
 export function fetchPeople(options?: RequestOptions): Promise<TaxonomyListResponse> {
@@ -704,10 +672,9 @@ export function fetchTags(options?: RequestOptions): Promise<TaxonomyListRespons
 }
 
 export function fetchCollection(id: string, options?: RequestOptions): Promise<CollectionDetail> {
-  return getCollection(id, undefined, requestInit(options)).then((response) => {
-    if (response.status !== 200) throw new Error(response.data.message);
-    return response.data;
-  });
+  return getCollection(id, undefined, requestInit(options)).then((r) =>
+    unwrapGenerated(r, `Failed to fetch collection ${id}`),
+  );
 }
 
 export function fetchCollections(options?: RequestOptions): Promise<CollectionListResponse> {
@@ -781,7 +748,7 @@ export async function updateEntityPlayback(
     { signal: options?.signal },
   );
   return unwrapGenerated(
-    response as unknown as GeneratedResponse<EntityCard>,
+    response,
     `Failed to update playback for ${id}`,
   ) as unknown as EntityCard;
 }
@@ -835,19 +802,19 @@ async function writeEntityMarker(
     : undefined;
   if (method === "POST" && payload) {
     return unwrapGenerated(
-      await createEntityMarkerRequest(id, markerPayload!, requestOptions) as unknown as GeneratedResponse<EntityCard>,
+      await createEntityMarkerRequest(id, markerPayload!, requestOptions),
       fallback,
     ) as unknown as EntityCard;
   }
   if (method === "PATCH" && markerId && payload) {
     return unwrapGenerated(
-      await updateEntityMarkerRequest(id, markerId, markerPayload!, requestOptions) as unknown as GeneratedResponse<EntityCard>,
+      await updateEntityMarkerRequest(id, markerId, markerPayload!, requestOptions),
       fallback,
     ) as unknown as EntityCard;
   }
   if (method === "DELETE" && markerId) {
     return unwrapGenerated(
-      await deleteEntityMarkerRequest(id, markerId, requestOptions) as unknown as GeneratedResponse<EntityCard>,
+      await deleteEntityMarkerRequest(id, markerId, requestOptions),
       fallback,
     ) as unknown as EntityCard;
   }
@@ -894,7 +861,7 @@ export async function createJob(
 ): Promise<JobCreateResponse> {
   const response = await createJobRequest(type, requestInit(options));
   return unwrapGenerated(
-    response as unknown as GeneratedResponse<JobCreateResponse>,
+    response,
     `Failed to queue ${type}`,
     [200, 202],
   );
@@ -906,7 +873,7 @@ export async function cancelJobs(
 ): Promise<JobCancelResponse> {
   const response = await cancelJobsRequest(type ? { type } : undefined, requestInit(options));
   return unwrapGenerated(
-    response as unknown as GeneratedResponse<JobCancelResponse>,
+    response,
     "Failed to cancel jobs",
   );
 }
@@ -917,7 +884,7 @@ export async function cancelJobRun(
 ): Promise<JobCancelResponse> {
   const response = await cancelJobRunRequest(id, requestInit(options));
   return unwrapGenerated(
-    response as unknown as GeneratedResponse<JobCancelResponse>,
+    response,
     "Failed to cancel job",
   );
 }
@@ -928,13 +895,13 @@ export async function clearJobFailures(
 ): Promise<JobFailureClearResponse> {
   const response = await clearJobFailuresRequest(type ? { type } : undefined, requestInit(options));
   return unwrapGenerated(
-    response as unknown as GeneratedResponse<JobFailureClearResponse>,
+    response,
     "Failed to clear job failures",
   );
 }
 
 export async function fetchSettings(options?: RequestOptions): Promise<SettingsResponse> {
-  const response = unwrapGenerated(await getSettings(requestInit(options)), "Failed to load settings");
+  const response = unwrapGenerated<GeneratedSettingsCatalogResponse>(await getSettings(requestInit(options)), "Failed to load settings");
   return normalizeSettingsCatalog(response);
 }
 
@@ -942,8 +909,8 @@ export async function fetchSetting(
   key: string,
   options?: RequestOptions,
 ): Promise<SettingDescriptor> {
-  const response = unwrapGenerated(
-    await getSettingRequest(key, requestInit(options)) as unknown as GeneratedResponse<GeneratedSettingDescriptor>,
+  const response = unwrapGenerated<GeneratedSettingDescriptor>(
+    await getSettingRequest(key, requestInit(options)),
     "Failed to load setting",
   );
   return normalizeSettingDescriptor(response);
@@ -971,12 +938,12 @@ export async function updateSetting(
   value: SettingValue,
   options?: RequestOptions,
 ): Promise<SettingDescriptor> {
-  const response = unwrapGenerated(
+  const response = unwrapGenerated<GeneratedSettingDescriptor>(
     await updateSettingRequest(
       key,
       { value } as unknown as Parameters<typeof updateSettingRequest>[1],
       requestInit(options),
-    ) as unknown as GeneratedResponse<GeneratedSettingDescriptor>,
+    ),
     "Failed to save setting",
   );
   return normalizeSettingDescriptor(response);
@@ -986,11 +953,11 @@ export async function updateSettings(
   values: Record<string, SettingValue>,
   options?: RequestOptions,
 ): Promise<SettingsCatalogResponse> {
-  const response = unwrapGenerated(
+  const response = unwrapGenerated<GeneratedSettingsCatalogResponse>(
     await updateSettingsRequest(
       { values } as unknown as Parameters<typeof updateSettingsRequest>[0],
       requestInit(options),
-    ) as unknown as GeneratedResponse<GeneratedSettingsCatalogResponse>,
+    ),
     "Failed to save settings",
   );
   return normalizeSettingsCatalog(response);
@@ -1000,8 +967,8 @@ export async function resetSetting(
   key: string,
   options?: RequestOptions,
 ): Promise<SettingDescriptor> {
-  const response = unwrapGenerated(
-    await resetSettingRequest(key, requestInit(options)) as unknown as GeneratedResponse<GeneratedSettingDescriptor>,
+  const response = unwrapGenerated<GeneratedSettingDescriptor>(
+    await resetSettingRequest(key, requestInit(options)),
     "Failed to reset setting",
   );
   return normalizeSettingDescriptor(response);
@@ -1049,7 +1016,7 @@ export async function updateLibraryRoot(
     requestInit(options),
   );
   return unwrapGenerated(
-    response as unknown as GeneratedResponse<LibraryRoot>,
+    response,
     "Failed to update library root",
   );
 }
@@ -1060,7 +1027,7 @@ export async function deleteLibraryRoot(
 ): Promise<{ ok: true }> {
   const response = await deleteLibraryRootRequest(id, requestInit(options));
   return unwrapGenerated(
-    response as unknown as GeneratedResponse<{ ok: true }>,
+    response,
     "Failed to remove library root",
   );
 }
@@ -1200,16 +1167,14 @@ export interface EntityRefreshResponse {
   alreadyPending: boolean;
 }
 
-export async function refreshEntity(
+export function refreshEntity(
   entityId: string,
   options?: RequestOptions,
 ): Promise<EntityRefreshResponse> {
-  const response = await fetch(`/api/entities/${entityId}/refresh`, {
+  return fetchApi<EntityRefreshResponse>(`/entities/${entityId}/refresh`, {
     method: "POST",
     signal: options?.signal,
   });
-  if (!response.ok) throw new Error(`Failed to queue entity refresh: ${response.status}`);
-  return response.json();
 }
 
 export async function rebuildPreviews(
@@ -1217,7 +1182,7 @@ export async function rebuildPreviews(
 ): Promise<BulkJobResponse> {
   const response = await rebuildPreviewsRequest({ signal: options?.signal });
   return unwrapGenerated(
-    response as unknown as GeneratedResponse<BulkJobResponse>,
+    response,
     "Failed to queue preview rebuild",
   );
 }
@@ -1227,7 +1192,7 @@ export async function backfillFingerprints(
 ): Promise<BulkJobResponse> {
   const response = await backfillFingerprintsRequest({ signal: options?.signal });
   return unwrapGenerated(
-    response as unknown as GeneratedResponse<BulkJobResponse>,
+    response,
     "Failed to queue fingerprint backfill",
   );
 }
