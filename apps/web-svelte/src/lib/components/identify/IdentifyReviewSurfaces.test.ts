@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/svelte";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { EntityMetadataPatch, EntityMetadataProposal } from "$lib/api/identify";
-import type { EntityCard, EntityDetailCard } from "$lib/api/prismedia";
+import type { EntityCard as EntityDetailCard, EntityThumbnail as EntityCard } from "$lib/api/generated/model";
 import IdentifyReviewChild from "./IdentifyReviewChild.svelte";
 import IdentifyReviewParent from "./IdentifyReviewParent.svelte";
 

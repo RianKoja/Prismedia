@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { EntityMetadataProposal } from "$lib/api/identify";
-import type { EntityDetailCard } from "$lib/api/prismedia";
+import type { EntityCard as EntityDetailCard } from "$lib/api/generated/model";
 import {
   buildRootReviewApplyPayload,
   buildProposalForApply,

@@ -12,7 +12,6 @@ import {
   relationshipProposals,
   scopedCreditForProposal,
 } from "$lib/components/identify-review";
-import type { EntityCard } from "$lib/api/prismedia";
 
 export function roleLabel(credit: CreditPatch | null | undefined): string {
   const role = credit?.role?.trim();

@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from "@testing-library/svelte";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import IdentifyKindTab from "./IdentifyKindTab.svelte";
-import type { EntityCard } from "$lib/api/prismedia";
+import type { EntityThumbnail as EntityCard } from "$lib/api/generated/model";
 
 const fetchIdentifyEntities = vi.fn();
 const goto = vi.fn();

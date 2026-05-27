@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/svelte";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { EntityCard } from "$lib/api/prismedia";
+import type { EntityThumbnail as EntityCard } from "$lib/api/generated/model";
 import IdentifyReviewChoice from "./IdentifyReviewChoice.svelte";
 
 const store = vi.hoisted(() => ({
