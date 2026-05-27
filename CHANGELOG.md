@@ -48,6 +48,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - Updated web app manifest and mobile browser metadata for home-screen installation and browser UI theme colors.
 
 ### Fixed
+- Fixed dynamic collection rule previews so NSFW, organized, favorite, and rating rules use the current entity schema.
 - Fixed dynamic collection rule previews so series entities can match universal filters such as title rules.
 - Fixed the New Collection route so it opens the collection editor instead of the route-not-found payload.
 - Fixed collection playlist advancement so videos, audio tracks, static images, and video-backed images all notify the shell when they complete.

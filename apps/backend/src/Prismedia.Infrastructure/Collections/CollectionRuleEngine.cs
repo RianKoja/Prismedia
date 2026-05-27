@@ -34,12 +34,10 @@ public sealed class CollectionRuleEngine(PrismediaDbContext db) : ICollectionRul
 
         foreach (var kind in TargetKinds) {
             var kindCode = EntityKindRegistry.ToCode(kind);
-            var ctx = new SqlBuildContext();
-            var whereFragment = TranslateNode(group, kindCode, ctx);
-            if (whereFragment is null) continue;
+            var query = BuildQuery(group, kindCode);
+            if (query is null) continue;
 
-            var sql = BuildQuery(kindCode, whereFragment, ctx);
-            var ids = await ExecuteQueryAsync(sql, ctx.Parameters, cancellationToken);
+            var ids = await ExecuteQueryAsync(query.Value.Sql, query.Value.Parameters, cancellationToken);
 
             foreach (var id in ids)
                 results.Add(new CollectionRuleMatch(kind, id));
@@ -48,7 +46,13 @@ public sealed class CollectionRuleEngine(PrismediaDbContext db) : ICollectionRul
         return results;
     }
 
-    private static string BuildQuery(string kindCode, string whereFragment, SqlBuildContext ctx) {
+    internal (string Sql, List<NpgsqlParameter> Parameters)? BuildQuery(CollectionRuleGroup group, string kindCode) {
+        var ctx = new SqlBuildContext();
+        var whereFragment = TranslateNode(group, kindCode, ctx);
+        return whereFragment is null ? null : (BuildSql(kindCode, whereFragment, ctx), ctx.Parameters);
+    }
+
+    private static string BuildSql(string kindCode, string whereFragment, SqlBuildContext ctx) {
         var sb = new System.Text.StringBuilder();
         sb.AppendLine("SELECT DISTINCT e.id FROM entities e");
 
@@ -121,10 +125,10 @@ public sealed class CollectionRuleEngine(PrismediaDbContext db) : ICollectionRul
 
         return condition.Field switch {
             "title" => TranslateScalar("e.title", condition.Operator, condition.Value, ctx),
-            "rating" => TranslateJoinedScalar("entity_ratings", "r", "value", condition, ctx),
+            "rating" => TranslateScalar("e.rating_value", condition.Operator, condition.Value, ctx),
             "date" => TranslateDateField(condition, ctx),
-            "organized" => TranslateFlag("is_organized", condition.Operator, ctx),
-            "isNsfw" => TranslateFlag("is_nsfw", condition.Operator, ctx),
+            "organized" => TranslateFlag("is_organized", condition.Operator),
+            "isNsfw" => TranslateFlag("is_nsfw", condition.Operator),
             "tags" => TranslateRelation("tags", "tag", condition, ctx),
             "performers" => TranslateRelation("cast", "person", condition, ctx),
             "studio" => TranslateStudioRelation(condition, ctx),
@@ -143,7 +147,7 @@ public sealed class CollectionRuleEngine(PrismediaDbContext db) : ICollectionRul
             "imageCount" => TranslateChildCount(condition, kindCode, ctx),
             "format" => TranslateTechnical("format", condition, ctx),
             "createdAt" => TranslateScalar("e.created_at", condition.Operator, condition.Value, ctx),
-            "interactive" => TranslateFlag("is_favorite", condition.Operator, ctx),
+            "interactive" => TranslateFlag("is_favorite", condition.Operator),
             _ => null
         };
     }
@@ -182,15 +186,6 @@ public sealed class CollectionRuleEngine(PrismediaDbContext db) : ICollectionRul
         };
     }
 
-    // ── Joined capability table fields ──
-
-    private string? TranslateJoinedScalar(
-        string table, string alias, string column,
-        CollectionRuleCondition condition, SqlBuildContext ctx) {
-        ctx.EnsureJoin($"LEFT JOIN {table} {alias} ON {alias}.entity_id = e.id");
-        return TranslateScalar($"{alias}.{column}", condition.Operator, condition.Value, ctx);
-    }
-
     private string? TranslateTechnical(string column, CollectionRuleCondition condition, SqlBuildContext ctx) {
         ctx.EnsureJoin("LEFT JOIN entity_technical t ON t.entity_id = e.id");
         return TranslateScalar($"t.{column}", condition.Operator, condition.Value, ctx);
@@ -201,11 +196,10 @@ public sealed class CollectionRuleEngine(PrismediaDbContext db) : ICollectionRul
         return TranslateScalar($"COALESCE(pb.{column}, 0)", condition.Operator, condition.Value, ctx);
     }
 
-    private string? TranslateFlag(string column, string op, SqlBuildContext ctx) {
-        ctx.EnsureJoin("LEFT JOIN entity_flags f ON f.entity_id = e.id");
+    private static string? TranslateFlag(string column, string op) {
         return op switch {
-            "is_true" => $"COALESCE(f.{column}, false) = true",
-            "is_false" => $"COALESCE(f.{column}, false) = false",
+            "is_true" => $"e.{column} = true",
+            "is_false" => $"e.{column} = false",
             _ => null
         };
     }
