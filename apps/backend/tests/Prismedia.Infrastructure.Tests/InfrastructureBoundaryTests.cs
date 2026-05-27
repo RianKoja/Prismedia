@@ -68,6 +68,59 @@ public sealed class InfrastructureBoundaryTests {
         });
     }
 
+    [Fact]
+    public void ApiEndpointInfrastructureImportsDoNotGrow() {
+        var allowed = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "apps/backend/src/Prismedia.Api/Endpoints/AudioTracks/AudioTrackEndpoints.cs",
+            "apps/backend/src/Prismedia.Api/Endpoints/Identify/IdentifyEntityEndpoints.cs",
+            "apps/backend/src/Prismedia.Api/Endpoints/Identify/IdentifyProviderEndpoints.cs",
+            "apps/backend/src/Prismedia.Api/Endpoints/Identify/IdentifyQueueEndpoints.cs",
+            "apps/backend/src/Prismedia.Api/Endpoints/Plugins/PluginEndpoints.cs"
+        };
+
+        var actual = FilesContaining(
+                "apps/backend/src/Prismedia.Api/Endpoints",
+                "using Prismedia.Infrastructure")
+            .ToArray();
+
+        var unexpected = actual
+            .Where(path => !allowed.Contains(path))
+            .ToArray();
+
+        Assert.Empty(unexpected);
+    }
+
+    [Fact]
+    public void ContractDomainImportsDoNotGrow() {
+        var allowed = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "apps/backend/src/Prismedia.Contracts/Entities/Capabilities/Identity/LinksCapability.cs",
+            "apps/backend/src/Prismedia.Contracts/Entities/Capabilities/Library/FilesCapability.cs"
+        };
+
+        var actual = FilesContaining(
+                "apps/backend/src/Prismedia.Contracts",
+                "using Prismedia.Domain")
+            .ToArray();
+
+        var unexpected = actual
+            .Where(path => !allowed.Contains(path))
+            .ToArray();
+
+        Assert.Empty(unexpected);
+    }
+
+    private static IEnumerable<string> FilesContaining(string relativeDirectory, string text) {
+        var root = Path.GetDirectoryName(RepoPath("package.json")) ??
+            throw new DirectoryNotFoundException("Could not resolve repository root.");
+        var directory = Path.Combine(root, relativeDirectory);
+        return Directory.GetFiles(directory, "*.cs", SearchOption.AllDirectories)
+            .Where(file => File.ReadAllText(file).Contains(text, StringComparison.Ordinal))
+            .Select(file => Path.GetRelativePath(root, file).Replace('\\', '/'))
+            .OrderBy(path => path, StringComparer.Ordinal);
+    }
+
     private static string ReadRepoFile(string relativePath) => File.ReadAllText(RepoPath(relativePath));
 
     private static string RepoPath(string relativePath) {
