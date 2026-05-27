@@ -13,9 +13,6 @@
     KeyRound,
     Loader2,
     Package,
-    Pencil,
-    Plug,
-    Plus,
     RefreshCw,
     Save,
     Search,
@@ -28,6 +25,7 @@
   } from "@lucide/svelte";
   import { Badge, Button } from "@prismedia/ui-svelte";
   import PluginPageShell from "./PluginPageShell.svelte";
+  import StashBoxEndpointsTab from "./StashBoxEndpointsTab.svelte";
   import type { PluginTabDefinition, PluginsTab } from "./plugin-page-types";
   import { useNsfw } from "$lib/nsfw/store.svelte";
   import { entityTerms } from "$lib/terminology";
@@ -1423,189 +1421,22 @@
 
     <!-- STASHBOX ENDPOINTS TAB -->
     {#if tab === "stashbox" && !isSfw}
-      <section class="space-y-2">
-        <div class="flex items-center justify-between px-1">
-          <p class="text-text-muted text-[0.72rem]">
-            Connect to StashDB, ThePornDB, FansDB, and other Stash-Box protocol servers
-          </p>
-          <Button
-            variant="ghost"
-            size="sm"
-            onclick={openAddStashBox}
-            class="h-auto gap-1 px-2 py-1 text-[0.68rem] text-text-accent hover:bg-accent-950/60"
-          >
-            {#snippet children()}<Plus class="h-3 w-3" />Add Endpoint{/snippet}
-          </Button>
-        </div>
-
-        {#if stashBoxEndpoints.length === 0 && !showStashBoxForm}
-          <div class="empty-rack-slot p-6 text-center">
-            <Plug class="h-8 w-8 text-text-disabled mx-auto mb-3" />
-            <p class="text-[0.75rem] text-text-disabled">
-              No endpoints configured. Add one to enable fingerprint-based identification.
-            </p>
-          </div>
-        {/if}
-
-        {#each stashBoxEndpoints as ep (ep.id)}
-          {@const tr = sbTestResult}
-          <div class="surface-card no-lift p-3.5">
-            <div class="flex items-center justify-between gap-3">
-              <div class="min-w-0 flex-1">
-                <div class="flex items-center gap-2 flex-wrap">
-                  <span class="text-[0.82rem] font-medium truncate">{ep.name}</span>
-                  <span class="tag-chip text-[0.55rem] bg-status-error/10 text-status-error-text border border-status-error/20">NSFW</span>
-                  {#if !ep.enabled}
-                    <Badge>
-                      {#snippet children()}Disabled{/snippet}
-                    </Badge>
-                  {/if}
-                  {#if tr && tr.id === ep.id}
-                    <Badge variant={tr.valid ? "success" : "error"}>
-                      {#snippet children()}
-                        {#if tr.valid}
-                          <Check class="h-2.5 w-2.5" />Connected
-                        {:else}
-                          <AlertCircle class="h-2.5 w-2.5" />{tr.error ?? "Failed"}
-                        {/if}
-                      {/snippet}
-                    </Badge>
-                  {/if}
-                </div>
-                <p class="text-[0.65rem] text-text-disabled truncate mt-0.5">
-                  {ep.endpoint} · Key: {ep.apiKeyPreview}
-                </p>
-              </div>
-              <div class="flex items-center gap-1 shrink-0">
-                <button
-                  onclick={() => void testEndpoint(ep)}
-                  disabled={sbTesting === ep.id}
-                  aria-label="Test connection"
-                  class="p-1.5 rounded-xs text-text-muted transition-colors hover:bg-surface-2 hover:text-text-primary"
-                >
-                  {#if sbTesting === ep.id}
-                    <Loader2 class="h-3.5 w-3.5 animate-spin text-accent-400" />
-                  {:else}
-                    <RefreshCw class="h-3.5 w-3.5" />
-                  {/if}
-                </button>
-                <button
-                  onclick={() => openEditStashBox(ep)}
-                  aria-label="Edit"
-                  class="p-1.5 rounded-xs text-text-muted transition-colors hover:bg-surface-2 hover:text-text-primary"
-                >
-                  <Pencil class="h-3.5 w-3.5" />
-                </button>
-                <button
-                  onclick={() => void toggleEndpointEnabled(ep)}
-                  aria-label={ep.enabled ? "Disable" : "Enable"}
-                  class="p-1.5 rounded-xs text-text-muted transition-colors hover:bg-surface-2 hover:text-text-primary"
-                >
-                  {#if ep.enabled}
-                    <ToggleRight class="h-3.5 w-3.5 text-text-accent" />
-                  {:else}
-                    <ToggleLeft class="h-3.5 w-3.5" />
-                  {/if}
-                </button>
-                <button
-                  onclick={() => void deleteEndpoint(ep)}
-                  aria-label="Remove"
-                  class="p-1.5 rounded-xs text-text-muted transition-colors hover:bg-status-error/10 hover:text-status-error-text"
-                >
-                  <Trash2 class="h-3.5 w-3.5" />
-                </button>
-              </div>
-            </div>
-          </div>
-        {/each}
-
-        {#if showStashBoxForm}
-          <div class="surface-well space-y-3 border border-border-accent/30 p-4">
-            <div class="flex items-center justify-between">
-              <h4 class="text-[0.78rem] font-medium">
-                {editingStashBox ? "Edit Endpoint" : "Add Stash-Box Endpoint"}
-              </h4>
-              <button
-                onclick={() => (showStashBoxForm = false)}
-                aria-label="Close"
-                class="p-1 text-text-disabled transition-colors hover:text-text-muted"
-              >
-                <X class="h-3.5 w-3.5" />
-              </button>
-            </div>
-            <div class="grid gap-2.5">
-              <div>
-                <label for="sb-name" class="text-[0.65rem] text-text-disabled block mb-1">Name</label>
-                <input
-                  id="sb-name"
-                  type="text"
-                  bind:value={sbName}
-                  placeholder="StashDB"
-                  class="control-input py-1.5"
-                />
-              </div>
-              <div>
-                <label for="sb-endpoint" class="text-[0.65rem] text-text-disabled block mb-1">GraphQL Endpoint</label>
-                <input
-                  id="sb-endpoint"
-                  type="text"
-                  bind:value={sbEndpoint}
-                  placeholder="https://stashdb.org/graphql"
-                  class="control-input py-1.5"
-                />
-                <div class="flex gap-1.5 mt-1.5 flex-wrap">
-                  {#each [{ label: "StashDB", url: "https://stashdb.org/graphql" }, { label: "FansDB", url: "https://fansdb.cc/graphql" }, { label: "PMVStash", url: "https://pmvstash.org/graphql" }, { label: "ThePornDB", url: "https://theporndb.net/graphql" }] as preset (preset.url)}
-                    <button
-                      onclick={() => {
-                        sbEndpoint = preset.url;
-                        if (!sbName) sbName = preset.label;
-                      }}
-                      class="border border-border-subtle rounded-xs px-1.5 py-0.5 text-[0.6rem] text-text-disabled transition-colors hover:border-border-default hover:text-text-muted"
-                    >
-                      {preset.label}
-                    </button>
-                  {/each}
-                </div>
-              </div>
-              <div>
-                <label for="sb-apikey" class="text-[0.65rem] text-text-disabled block mb-1">
-                  API Key
-                  {#if editingStashBox}
-                    <span class="text-text-disabled">(leave blank to keep current)</span>
-                  {/if}
-                </label>
-                <input
-                  id="sb-apikey"
-                  type="password"
-                  bind:value={sbApiKey}
-                  placeholder={editingStashBox ? "••••••••" : "Paste your API key"}
-                  class="control-input py-1.5 font-mono"
-                />
-              </div>
-            </div>
-            <div class="flex items-center justify-end gap-2 pt-1">
-              <Button variant="ghost" size="sm" onclick={() => (showStashBoxForm = false)} class="h-auto px-3 py-1.5 text-[0.72rem]">
-                {#snippet children()}Cancel{/snippet}
-              </Button>
-              <Button
-                variant="primary"
-                size="sm"
-                disabled={sbSaving || !sbName || !sbEndpoint}
-                onclick={() => void saveStashBox()}
-                class="h-auto gap-1.5 px-3 py-1.5 text-[0.72rem]"
-              >
-                {#snippet children()}
-                  {#if sbSaving}
-                    <Loader2 class="h-3 w-3 animate-spin" />
-                  {:else}
-                    <Save class="h-3 w-3" />
-                  {/if}
-                  {editingStashBox ? "Update" : "Save"}
-                {/snippet}
-              </Button>
-            </div>
-          </div>
-        {/if}
-      </section>
+      <StashBoxEndpointsTab
+        bind:apiKey={sbApiKey}
+        bind:endpoint={sbEndpoint}
+        bind:name={sbName}
+        bind:showForm={showStashBoxForm}
+        editingEndpoint={editingStashBox}
+        endpoints={stashBoxEndpoints}
+        onAdd={openAddStashBox}
+        onDelete={(endpoint) => void deleteEndpoint(endpoint)}
+        onEdit={openEditStashBox}
+        onSave={() => void saveStashBox()}
+        onTest={(endpoint) => void testEndpoint(endpoint)}
+        onToggleEnabled={(endpoint) => void toggleEndpointEnabled(endpoint)}
+        saving={sbSaving}
+        testingId={sbTesting}
+        testResult={sbTestResult}
+      />
     {/if}
 </PluginPageShell>
