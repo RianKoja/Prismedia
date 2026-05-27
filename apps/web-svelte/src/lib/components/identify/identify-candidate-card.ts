@@ -1,9 +1,17 @@
-import type { EntitySearchCandidate } from "$lib/api/identify";
 import type { EntityThumbnailCard, EntityThumbnailMetaItem } from "$lib/entities/entity-thumbnail";
 
 const PROVIDER_PRIORITY = ["tmdb", "imdb", "tvdb", "musicbrainz", "stash"] as const;
 
-function normalizeProviderEntries(candidate: EntitySearchCandidate): Array<[string, string]> {
+export interface IdentifySearchCandidateView {
+  externalIds?: Record<string, string> | null;
+  title: string;
+  year?: number | string | null;
+  overview?: string | null;
+  posterUrl?: string | null;
+  popularity?: number | string | null;
+}
+
+function normalizeProviderEntries(candidate: IdentifySearchCandidateView): Array<[string, string]> {
   return Object.entries(candidate.externalIds ?? {})
     .filter((entry): entry is [string, string] => Boolean(entry[0]) && Boolean(entry[1]))
     .sort(([leftProvider], [rightProvider]) => {
@@ -33,7 +41,7 @@ function formatPopularity(value: number): string {
 }
 
 /** Builds a stable local-only identity for a provider search candidate. */
-export function identifyCandidateKey(candidate: EntitySearchCandidate, index: number): string {
+export function identifyCandidateKey(candidate: IdentifySearchCandidateView, index: number): string {
   const providerEntry = normalizeProviderEntries(candidate)[0];
   if (providerEntry) {
     return `${providerEntry[0]}:${providerEntry[1]}`;
@@ -50,7 +58,7 @@ function candidateAspectRatio(entityKind: string): EntityThumbnailCard["aspectRa
 
 /** Converts an identify search result into the shared list thumbnail view model. */
 export function identifyCandidateToThumbnailCard(
-  candidate: EntitySearchCandidate,
+  candidate: IdentifySearchCandidateView,
   entityKind: string,
   index: number,
 ): EntityThumbnailCard {

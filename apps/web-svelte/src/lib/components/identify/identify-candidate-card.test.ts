@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { EntitySearchCandidate } from "$lib/api/identify";
+import type { EntitySearchCandidate } from "$lib/api/generated/model";
 
 import {
 	identifyCandidateKey,

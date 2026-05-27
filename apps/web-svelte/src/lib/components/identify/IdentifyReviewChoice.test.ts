@@ -1,6 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/svelte";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { EntitySearchCandidate } from "$lib/api/identify";
 import type { EntityCard } from "$lib/api/prismedia";
 import IdentifyReviewChoice from "./IdentifyReviewChoice.svelte";
 
@@ -86,7 +85,7 @@ function entity(): EntityCard {
   };
 }
 
-function searchCandidate(): EntitySearchCandidate {
+function searchCandidate() {
   return {
     externalIds: { tmdb: "271267" },
     overview: "A family man investigates a far-reaching conspiracy.",
