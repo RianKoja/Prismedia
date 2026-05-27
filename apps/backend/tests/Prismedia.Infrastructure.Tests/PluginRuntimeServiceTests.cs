@@ -119,6 +119,22 @@ public sealed class PluginRuntimeServiceTests : IDisposable {
     }
 
     [Fact]
+    public void CredentialResolverReadsCanonicalEnvironmentAliases() {
+        const string envName = "PRISMEDIA_PLUGIN_TMDB_API_KEY";
+        var previous = Environment.GetEnvironmentVariable(envName);
+        try {
+            Environment.SetEnvironmentVariable(envName, "env-secret");
+
+            var value = PluginCredentialResolver.ResolveEnvironmentCredential("tmdb", "apiKey");
+
+            Assert.Equal("env-secret", value);
+            Assert.True(PluginCredentialResolver.HasEnvironmentCredential("tmdb", "apiKey"));
+        } finally {
+            Environment.SetEnvironmentVariable(envName, previous);
+        }
+    }
+
+    [Fact]
     public async Task ProcessRunnerWritesRequestFileAndReadsStdoutResponse() {
         var executor = new CapturingProcessExecutor();
         var runner = new DotnetPluginProcessRunner(
