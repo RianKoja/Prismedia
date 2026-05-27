@@ -81,7 +81,7 @@ public sealed class LibraryScanPersistenceService(PrismediaDbContext db) : ILibr
             .Select(file => new { file.EntityId, file.Path })
             .ToArrayAsync(cancellationToken);
         var excludedEntityIds = sourceRows
-            .Where(file => excludedPaths.Any(excluded => IsPathCoveredByExclusion(file.Path, excluded)))
+            .Where(file => excludedPaths.Any(excluded => LibraryScanPathRules.IsPathCoveredByExclusion(file.Path, excluded)))
             .Select(file => file.EntityId)
             .Distinct()
             .ToArray();
@@ -117,7 +117,7 @@ public sealed class LibraryScanPersistenceService(PrismediaDbContext db) : ILibr
             EntityId = id,
             Role = EntityFileRole.Source,
             Path = filePath,
-            SizeBytes = TryGetFileSize(filePath),
+            SizeBytes = LibraryScanFileSystem.TryGetFileSize(filePath),
             CreatedAt = now,
             UpdatedAt = now
         });
@@ -242,7 +242,7 @@ public sealed class LibraryScanPersistenceService(PrismediaDbContext db) : ILibr
             EntityId = id,
             Role = EntityFileRole.Source,
             Path = filePath,
-            SizeBytes = TryGetFileSize(filePath),
+            SizeBytes = LibraryScanFileSystem.TryGetFileSize(filePath),
             CreatedAt = now,
             UpdatedAt = now
         });
@@ -316,7 +316,7 @@ public sealed class LibraryScanPersistenceService(PrismediaDbContext db) : ILibr
             EntityId = id,
             Role = EntityFileRole.Source,
             Path = sourcePath,
-            SizeBytes = TryGetFileSize(sourcePath),
+            SizeBytes = LibraryScanFileSystem.TryGetFileSize(sourcePath),
             CreatedAt = now,
             UpdatedAt = now
         });
@@ -464,7 +464,7 @@ public sealed class LibraryScanPersistenceService(PrismediaDbContext db) : ILibr
                 .ToListAsync(cancellationToken);
 
             videoIds.AddRange(sourceFiles
-                .Where(file => IsPathUnderRoot(file.Path, rootPath))
+                .Where(file => LibraryScanPathRules.IsPathUnderRoot(file.Path, rootPath))
                 .Select(file => file.EntityId));
         }
 
@@ -612,7 +612,7 @@ public sealed class LibraryScanPersistenceService(PrismediaDbContext db) : ILibr
                 EntityId = id,
                 Role = EntityFileRole.Source,
                 Path = item.FilePath,
-                SizeBytes = TryGetFileSize(item.FilePath),
+                SizeBytes = LibraryScanFileSystem.TryGetFileSize(item.FilePath),
                 CreatedAt = now,
                 UpdatedAt = now
             });
@@ -1054,7 +1054,7 @@ public sealed class LibraryScanPersistenceService(PrismediaDbContext db) : ILibr
         existing.EntityFileId = sourceFileId;
         existing.Container = source.Container ?? existing.Container;
         existing.Name = Path.GetFileName(path);
-        existing.SizeBytes = source.SizeBytes ?? existing.SizeBytes ?? TryGetFileSize(path);
+        existing.SizeBytes = source.SizeBytes ?? existing.SizeBytes ?? LibraryScanFileSystem.TryGetFileSize(path);
         existing.DurationSeconds = source.DurationSeconds ?? existing.DurationSeconds;
         existing.BitRate = source.BitRate ?? existing.BitRate;
         existing.VideoCodec = source.VideoCodec ?? existing.VideoCodec;
@@ -1415,50 +1415,10 @@ public sealed class LibraryScanPersistenceService(PrismediaDbContext db) : ILibr
             .ToListAsync(cancellationToken);
 
         return sourceFiles
-            .Where(file => IsDirectChildPath(file.Path, rootPath))
+            .Where(file => LibraryScanPathRules.IsDirectChildPath(file.Path, rootPath))
             .Select(file => file.EntityId)
             .Distinct()
             .ToList();
-    }
-
-    private static bool IsDirectChildPath(string path, string parentPath) {
-        var normalizedPath = NormalizePath(path);
-        var normalizedParent = NormalizePath(parentPath);
-
-        if (string.IsNullOrWhiteSpace(normalizedPath) || string.IsNullOrWhiteSpace(normalizedParent)) {
-            return false;
-        }
-
-        var directory = Path.GetDirectoryName(normalizedPath)?.Replace('\\', '/').TrimEnd('/');
-        return string.Equals(directory, normalizedParent, StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static bool IsPathUnderRoot(string path, string rootPath) {
-        var normalizedPath = NormalizePath(path);
-        var normalizedRoot = NormalizePath(rootPath);
-
-        if (string.IsNullOrWhiteSpace(normalizedPath) || string.IsNullOrWhiteSpace(normalizedRoot)) {
-            return false;
-        }
-
-        return normalizedPath.Equals(normalizedRoot, StringComparison.OrdinalIgnoreCase) ||
-            normalizedPath.StartsWith(normalizedRoot + "/", StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static bool IsPathCoveredByExclusion(string path, string excludedPath) {
-        var normalizedPath = NormalizePath(path);
-        var normalizedExcluded = NormalizePath(excludedPath);
-
-        return normalizedPath.Equals(normalizedExcluded, StringComparison.OrdinalIgnoreCase) ||
-            normalizedPath.StartsWith(normalizedExcluded + "/", StringComparison.OrdinalIgnoreCase) ||
-            normalizedPath.StartsWith(normalizedExcluded + "::", StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static string NormalizePath(string path) =>
-        path.Replace('\\', '/').TrimEnd('/');
-
-    private static long? TryGetFileSize(string path) {
-        try { return new FileInfo(path).Length; } catch { return null; }
     }
 
     /// <inheritdoc />
