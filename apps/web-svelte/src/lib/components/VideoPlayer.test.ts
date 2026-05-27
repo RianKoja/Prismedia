@@ -437,20 +437,22 @@ describe("VideoPlayer", () => {
   });
 
   it("uses VidStack chapter sliders for marker sections instead of custom marker ticks", async () => {
-    const source = await readFile("src/lib/components/VideoPlayer.svelte", "utf8");
+    const source = await readFile("src/lib/components/VideoTimeline.svelte", "utf8");
+    const playerSource = await readFile("src/lib/components/VideoPlayer.svelte", "utf8");
 
-    expect(source).toContain('import "vidstack/player/ui";');
+    expect(playerSource).toContain('import "vidstack/player/ui";');
     expect(source).toContain("<media-time-slider");
     expect(source).toContain("<media-slider-chapters>");
-    expect(source).toContain('kind: "chapters"');
+    expect(playerSource).toContain('kind: "chapters"');
     expect(source).not.toContain('data-testid="video-progress-marker"');
   });
 
   it("renders playback and buffer progress from the native video clock", async () => {
-    const source = await readFile("src/lib/components/VideoPlayer.svelte", "utf8");
+    const source = await readFile("src/lib/components/VideoTimeline.svelte", "utf8");
+    const playerSource = await readFile("src/lib/components/VideoPlayer.svelte", "utf8");
 
-    expect(source).toContain("playbackProgressPercent");
-    expect(source).toContain("bufferedProgressPercent");
+    expect(playerSource).toContain("playbackProgressPercent");
+    expect(playerSource).toContain("bufferedProgressPercent");
     expect(source).toContain('style:--prismedia-slider-fill={`${playbackProgressPercent}%`}');
     expect(source).toContain('style:--prismedia-buffer-progress={`${bufferedProgressPercent}%`}');
     expect(source).toContain('class="video-slider-native-progress is-buffered"');
@@ -459,7 +461,7 @@ describe("VideoPlayer", () => {
   });
 
   it("keeps minimal lightbox progress visible at the bottom edge", async () => {
-    const source = await readFile("src/lib/components/VideoPlayer.svelte", "utf8");
+    const source = await readFile("src/lib/components/VideoTimeline.svelte", "utf8");
 
     expect(source).toContain('!fullChrome && "is-minimal-progress"');
     expect(source).toContain('!fullChrome || showControls ? "opacity-100" : "opacity-0"');
