@@ -9,7 +9,6 @@
     Save,
     ShieldAlert,
     SlidersHorizontal,
-    Timer,
     Type,
     XCircle,
     Zap,
@@ -34,11 +33,9 @@
   import EntityGrid from "$lib/components/entities/EntityGrid.svelte";
   import TextAreaField from "$lib/components/forms/TextAreaField.svelte";
   import TextField from "$lib/components/forms/TextField.svelte";
-  import ToggleChip from "$lib/components/forms/ToggleChip.svelte";
   import { entityCardToThumbnailCard } from "$lib/entities/entity-grid";
   import type { EntityThumbnailCard } from "$lib/entities/entity-thumbnail";
   import { useAppChrome } from "$lib/stores/app-chrome.svelte";
-  import { durationToSeconds } from "$lib/utils/format";
   import ConditionBuilder from "./ConditionBuilder.svelte";
 
   interface Props {
@@ -65,8 +62,6 @@
   let description = $state("");
   let mode = $state<CollectionMode>("manual");
   let coverMode = $state<CollectionCoverMode>("mosaic");
-  let slideshowDurationSeconds = $state(5);
-  let slideshowAutoAdvance = $state(true);
   let isNsfw = $state(false);
   let ruleTree = $state<CollectionRuleGroup>({ ...EMPTY_COLLECTION_RULE, children: [] });
   let saving = $state(false);
@@ -82,9 +77,6 @@
   const canSave = $derived(title.trim().length > 0 && !saving);
   const hasConditions = $derived(ruleTree.children.length > 0);
   const rulesReady = $derived(allConditionsRunnable(ruleTree));
-  const modeSummary = $derived(
-    mode === "manual" ? "Hand curated" : mode === "dynamic" ? "Auto generated" : "Rules plus pins",
-  );
   const previewSummary = $derived.by(() => {
     if (!hasConditions) return "Add rules to preview";
     if (!rulesReady) return "Fill in rule values";
@@ -160,8 +152,6 @@
       description = "";
       mode = "manual";
       coverMode = "mosaic";
-      slideshowDurationSeconds = 5;
-      slideshowAutoAdvance = true;
       isNsfw = false;
       ruleTree = { ...EMPTY_COLLECTION_RULE, children: [] };
       resetPreview();
@@ -172,8 +162,6 @@
     description = getDescription(collection.capabilities) ?? "";
     mode = normalizeMode(collection.mode);
     coverMode = normalizeCoverMode(collection.coverMode);
-    slideshowDurationSeconds = durationToSeconds(collection.slideshowDuration) ?? 5;
-    slideshowAutoAdvance = collection.slideshowAutoAdvance ?? true;
     isNsfw = hasNsfw(collection.capabilities);
     ruleTree = parseRuleTree(collection.ruleTreeJson);
   });
@@ -235,8 +223,6 @@
       ruleTreeJson: showRules ? JSON.stringify(ruleTree) : null,
       coverMode,
       coverItemId: collection?.coverItemId ?? null,
-      slideshowDurationSeconds: Math.max(1, Math.floor(slideshowDurationSeconds || 5)),
-      slideshowAutoAdvance,
       isNsfw,
     };
   }
@@ -372,29 +358,75 @@
       <aside class="grid content-start gap-4 border-t border-border-subtle bg-surface-1/40 p-4 sm:p-5 lg:border-l lg:border-t-0">
         <div class="flex items-center justify-between gap-3">
           <h2 class="text-kicker m-0 flex items-center gap-1.5">
-            <Timer class="h-3 w-3" /> Playback
+            <SlidersHorizontal class="h-3 w-3" /> Settings
           </h2>
-          <span class="rounded-xs border border-border-subtle bg-surface-2 px-2 py-1 font-mono text-[0.62rem] uppercase tracking-wider text-text-disabled">
-            Slideshow
-          </span>
         </div>
-        <div class="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-2">
-          <TextField
-            value={String(slideshowDurationSeconds)}
-            onChange={(value) => (slideshowDurationSeconds = Number(value))}
-            label="Timer (s)"
-            type="number"
-            min={1}
-            max={3600}
+        <div class="grid gap-2">
+          <h3 class="text-kicker m-0 flex items-center gap-1.5">
+            <FolderPlus class="h-3 w-3" /> Cover
+          </h3>
+          <div class="grid grid-cols-2 gap-1.5" role="radiogroup" aria-label="Cover mode">
+            {#each coverModes as cm (cm.value)}
+              {@const active = coverMode === cm.value}
+              <button
+                type="button"
+                role="radio"
+                aria-checked={active}
+                disabled={saving}
+                onclick={() => (coverMode = cm.value)}
+                class={cn(
+                  "inline-flex h-8 items-center justify-center gap-1.5 rounded-xs border px-3 text-[0.7rem] font-medium transition-all",
+                  "disabled:cursor-not-allowed disabled:opacity-50",
+                  active
+                    ? "border-border-accent-strong bg-accent-950/30 text-text-accent shadow-[0_0_10px_rgba(242,194,106,0.10)]"
+                    : "border-border-subtle bg-surface-2 text-text-muted hover:border-border-default hover:text-text-primary",
+                )}
+              >
+                <FolderPlus class="h-3 w-3" />
+                {cm.label}
+              </button>
+            {/each}
+          </div>
+        </div>
+        <div class="grid gap-2">
+          <h3 class="text-kicker m-0 flex items-center gap-1.5">
+            <ShieldAlert class="h-3 w-3" /> Visibility
+          </h3>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={isNsfw}
+            aria-label="Mark collection as NSFW"
             disabled={saving}
-          />
-          <ToggleChip
-            value={slideshowAutoAdvance}
-            onChange={(value) => (slideshowAutoAdvance = value)}
-            onLabel="Auto"
-            offLabel="Manual"
-            disabled={saving}
-          />
+            onclick={() => (isNsfw = !isNsfw)}
+            class={cn(
+              "flex h-9 items-center justify-between rounded-xs border px-3 text-[0.78rem] transition-all",
+              "disabled:cursor-not-allowed disabled:opacity-50",
+              isNsfw
+                ? "border-error/40 bg-error-muted/60 text-error-text shadow-[0_0_12px_rgba(220,80,80,0.18)]"
+                : "border-border-subtle bg-surface-2 text-text-muted hover:border-border-default hover:text-text-primary",
+            )}
+          >
+            <span>NSFW</span>
+            <span
+              aria-hidden="true"
+              class={cn(
+                "relative h-4 w-8 rounded-full border transition-all",
+                isNsfw
+                  ? "border-error/50 bg-error/20"
+                  : "border-border-subtle bg-surface-1",
+              )}
+            >
+              <span
+                class={cn(
+                  "absolute top-1/2 h-3 w-3 -translate-y-1/2 rounded-full transition-all",
+                  isNsfw
+                    ? "left-[1.05rem] bg-error-text shadow-[0_0_8px_rgba(255,128,111,0.35)]"
+                    : "left-0.5 bg-text-disabled",
+                )}
+              ></span>
+            </span>
+          </button>
         </div>
       </aside>
     </div>
@@ -404,41 +436,6 @@
     <div class="flex flex-wrap items-center justify-between gap-3">
       <div>
         <p class="text-kicker m-0">Collection Mode</p>
-        <p class="m-0 mt-1 text-[0.72rem] font-mono uppercase tracking-wider text-text-disabled">
-          {modeSummary}
-        </p>
-      </div>
-      <div class="flex flex-wrap items-center gap-2">
-        <div class="grid grid-cols-2 gap-1.5" role="radiogroup" aria-label="Cover mode">
-          {#each coverModes as cm (cm.value)}
-            {@const active = coverMode === cm.value}
-            <button
-              type="button"
-              role="radio"
-              aria-checked={active}
-              disabled={saving}
-              onclick={() => (coverMode = cm.value)}
-              class={cn(
-                "inline-flex h-8 items-center justify-center gap-1.5 rounded-xs border px-3 text-[0.7rem] font-medium transition-all",
-                "disabled:cursor-not-allowed disabled:opacity-50",
-                active
-                  ? "border-border-accent-strong bg-accent-950/30 text-text-accent shadow-[0_0_10px_rgba(242,194,106,0.10)]"
-                  : "border-border-subtle bg-surface-2 text-text-muted hover:border-border-default hover:text-text-primary",
-              )}
-            >
-              <FolderPlus class="h-3 w-3" />
-              {cm.label}
-            </button>
-          {/each}
-        </div>
-        <ToggleChip
-          value={isNsfw}
-          onChange={(value) => (isNsfw = value)}
-          onLabel="NSFW"
-          offLabel="SFW"
-          variant="warning"
-          disabled={saving}
-        />
       </div>
     </div>
 

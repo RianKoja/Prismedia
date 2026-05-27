@@ -1,6 +1,6 @@
 export type CollectionMode = "manual" | "dynamic" | "hybrid";
 export type CollectionCoverMode = "mosaic" | "custom" | "item";
-export type CollectionEntityType = "video" | "gallery" | "image" | "book" | "audio-track";
+export type CollectionEntityType = "video" | "video-series" | "gallery" | "image" | "book" | "audio-track";
 export type CollectionItemSource = "manual" | "dynamic";
 
 // ─── Collection Rule Tree ──────────────────────────────────────

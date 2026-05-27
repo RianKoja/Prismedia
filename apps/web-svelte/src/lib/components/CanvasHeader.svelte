@@ -206,8 +206,8 @@
       onclick={() => search.openPalette()}
       class={cn(
         "group flex items-center justify-center sm:justify-between w-8 sm:w-64 px-0 sm:px-3 py-1.5 rounded-sm",
-        "bg-transparent sm:bg-surface-1 border border-transparent sm:border-border-default sm:border-t-[rgba(0,0,0,0.6)]",
-        "sm:shadow-[inset_0_2px_6px_rgba(0,0,0,0.5)]",
+        "bg-transparent sm:bg-surface-1 border border-transparent sm:border-border-default",
+        "sm:shadow-[var(--shadow-well)]",
         "text-text-muted hover:text-text-primary sm:hover:border-border-accent focus-visible:border-border-accent-strong focus-visible:shadow-focus-accent",
         "transition-all duration-fast cursor-text select-none outline-none",
       )}

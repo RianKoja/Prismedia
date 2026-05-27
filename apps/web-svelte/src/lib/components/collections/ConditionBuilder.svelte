@@ -1,5 +1,22 @@
 <script lang="ts">
-  import { ChevronDown, Plus, SlidersHorizontal, Trash2 } from "@lucide/svelte";
+  import {
+    BookOpen,
+    Calendar,
+    ChevronDown,
+    Film,
+    FolderOpen,
+    Hash,
+    Image as ImageIcon,
+    Images,
+    Link2,
+    ListChecks,
+    Music,
+    Plus,
+    ToggleRight,
+    Type as TypeIcon,
+    X,
+  } from "@lucide/svelte";
+  import type { Component } from "svelte";
   import { cn } from "@prismedia/ui-svelte";
   import {
     COLLECTION_RULE_FIELDS,
@@ -19,12 +36,31 @@
 
   let { rule, onChange, disabled = false }: Props = $props();
 
-  const entityKinds: { value: CollectionEntityType; label: string }[] = [
-    { value: "video", label: "Video" },
-    { value: "gallery", label: "Gallery" },
-    { value: "image", label: "Image" },
-    { value: "book", label: "Book" },
-    { value: "audio-track", label: "Audio" },
+  const entityKinds: { value: CollectionEntityType; label: string; icon: Component }[] = [
+    { value: "video", label: "Video", icon: Film },
+    { value: "video-series", label: "Series", icon: FolderOpen },
+    { value: "gallery", label: "Gallery", icon: Images },
+    { value: "image", label: "Image", icon: ImageIcon },
+    { value: "book", label: "Book", icon: BookOpen },
+    { value: "audio-track", label: "Audio", icon: Music },
+  ];
+
+  const fieldTypeMeta: Record<
+    CollectionRuleFieldDef["fieldType"],
+    { icon: Component; label: string }
+  > = {
+    text: { icon: TypeIcon, label: "Text" },
+    number: { icon: Hash, label: "Number" },
+    date: { icon: Calendar, label: "Date" },
+    boolean: { icon: ToggleRight, label: "Boolean" },
+    enum: { icon: ListChecks, label: "Enum" },
+    relation: { icon: Link2, label: "Relation" },
+  };
+
+  const logicOptions: { value: CollectionRuleGroup["operator"]; label: string }[] = [
+    { value: "and", label: "All" },
+    { value: "or", label: "Any" },
+    { value: "not", label: "None" },
   ];
 
   const conditions = $derived(
@@ -51,7 +87,7 @@
           entityTypes: [],
           field: field.field,
           operator: field.operators[0],
-          value: "",
+          value: defaultValue(field, field.operators[0]),
         },
       ],
     });
@@ -83,46 +119,17 @@
     });
   }
 
+  function isNullaryOp(op: CollectionOperator): boolean {
+    return op === "is_null" || op === "is_not_null" || op === "is_true" || op === "is_false";
+  }
+
   function defaultValue(field: CollectionRuleFieldDef, operator: CollectionOperator): CollectionConditionValue {
-    if (operator === "is_null" || operator === "is_not_null" || operator === "is_true" || operator === "is_false") {
-      return null;
-    }
+    if (isNullaryOp(operator)) return null;
     if (operator === "between") return [0, 0];
     if (operator === "in" || operator === "not_in") return [];
     if (field.fieldType === "number") return 0;
     if (field.fieldType === "boolean") return true;
     return "";
-  }
-
-  function valueText(value: CollectionConditionValue): string {
-    if (Array.isArray(value)) return value.join(", ");
-    if (value === null || value === undefined) return "";
-    return String(value);
-  }
-
-  function parseValue(field: CollectionRuleFieldDef, operator: CollectionOperator, raw: string): CollectionConditionValue {
-    const trimmed = raw.trim();
-    if (operator === "is_null" || operator === "is_not_null" || operator === "is_true" || operator === "is_false") {
-      return null;
-    }
-    if (operator === "between") {
-      const [min, max] = trimmed.split(",").map((part) => Number(part.trim()));
-      return [Number.isFinite(min) ? min : 0, Number.isFinite(max) ? max : 0];
-    }
-    if (operator === "in" || operator === "not_in") {
-      return trimmed
-        .split(",")
-        .map((part) => part.trim())
-        .filter(Boolean);
-    }
-    if (field.fieldType === "number") {
-      const value = Number(trimmed);
-      return Number.isFinite(value) ? value : 0;
-    }
-    if (field.fieldType === "boolean") {
-      return trimmed === "true";
-    }
-    return trimmed;
   }
 
   function toggleEntityType(index: number, kind: CollectionEntityType) {
@@ -134,159 +141,330 @@
     });
   }
 
-  const selectClasses = cn(
-    "min-w-0 w-full appearance-none border border-border-subtle bg-surface-2 px-2.5 py-2 pr-7 text-[0.78rem] text-text-primary",
-    "shadow-[inset_0_2px_8px_rgba(0,0,0,0.30)] transition-colors outline-none",
-    "focus:border-border-accent focus:shadow-[inset_0_2px_8px_rgba(0,0,0,0.30),0_0_0_1px_rgba(242,194,106,0.35),0_0_8px_rgba(242,194,106,0.15)]",
+  function getStringValue(value: CollectionConditionValue): string {
+    if (value === null || value === undefined) return "";
+    if (Array.isArray(value)) return "";
+    return String(value);
+  }
+
+  function getNumberValue(value: CollectionConditionValue): number {
+    if (typeof value === "number") return value;
+    if (typeof value === "string") {
+      const n = Number(value);
+      return Number.isFinite(n) ? n : 0;
+    }
+    return 0;
+  }
+
+  function getBetweenValues(value: CollectionConditionValue): [string, string] {
+    if (Array.isArray(value) && value.length === 2) {
+      return [String(value[0] ?? ""), String(value[1] ?? "")];
+    }
+    return ["", ""];
+  }
+
+  function getMultiValues(value: CollectionConditionValue): string {
+    if (Array.isArray(value)) return (value as string[]).join(", ");
+    return "";
+  }
+
+  function parseBetween(field: CollectionRuleFieldDef, min: string, max: string): CollectionConditionValue {
+    if (field.fieldType === "date") {
+      return [Number(new Date(min)) || 0, Number(new Date(max)) || 0];
+    }
+    return [Number(min) || 0, Number(max) || 0];
+  }
+
+  function parseMultiValue(raw: string): string[] {
+    return raw
+      .split(",")
+      .map((part) => part.trim())
+      .filter(Boolean);
+  }
+
+  const controlClasses = cn(
+    "min-w-0 w-full appearance-none rounded-xs border border-border-subtle bg-surface-2",
+    "h-8 px-2 pr-6 text-[0.75rem] text-text-primary",
+    "shadow-[inset_0_1px_4px_rgba(0,0,0,0.25)] outline-none transition-colors",
+    "focus:border-border-accent focus:shadow-[inset_0_1px_4px_rgba(0,0,0,0.25),0_0_0_1px_rgba(242,194,106,0.2)]",
     "disabled:cursor-not-allowed disabled:opacity-50",
   );
 
-  const inputClasses = cn(
-    "min-w-0 w-full border border-border-subtle bg-surface-2 px-2.5 py-2 text-[0.78rem] text-text-primary",
-    "shadow-[inset_0_2px_8px_rgba(0,0,0,0.30)] transition-colors outline-none placeholder:text-text-disabled",
-    "focus:border-border-accent focus:shadow-[inset_0_2px_8px_rgba(0,0,0,0.30),0_0_0_1px_rgba(242,194,106,0.35),0_0_8px_rgba(242,194,106,0.15)]",
+  const valueClasses = cn(
+    "min-w-0 w-full rounded-xs border border-border-subtle bg-surface-2",
+    "h-8 px-2 text-[0.75rem] text-text-primary",
+    "shadow-[inset_0_1px_4px_rgba(0,0,0,0.25)] outline-none transition-colors placeholder:text-text-disabled",
+    "focus:border-border-accent focus:shadow-[inset_0_1px_4px_rgba(0,0,0,0.25),0_0_0_1px_rgba(242,194,106,0.2)]",
     "disabled:cursor-not-allowed disabled:opacity-50",
   );
 </script>
 
-<div class="surface-well p-4 space-y-3">
-  <!-- Header -->
-  <div class="flex items-center justify-between gap-4 flex-wrap">
-    <div>
-      <p class="text-kicker mb-1">Dynamic Match</p>
-      <h3 class="m-0 font-heading text-[0.95rem] text-text-primary flex items-center gap-2">
-        <SlidersHorizontal class="h-4 w-4 text-text-muted" />
-        Filter Rules
-      </h3>
-    </div>
-    <div class="relative inline-flex items-center gap-2">
-      <span class="text-kicker">Match</span>
-      <div class="relative">
-        <select
-          value={rule.operator}
+<div class="flex flex-col gap-3">
+  <!-- Logic selector: segmented control reading as a sentence -->
+  <div class="flex items-center gap-2.5 flex-wrap text-[0.78rem] text-text-secondary">
+    <span class="font-medium text-text-primary">Match</span>
+    <div
+      role="radiogroup"
+      aria-label="Rule combination logic"
+      class="inline-flex rounded-sm border border-border-subtle bg-surface-2 p-0.5 shadow-[inset_0_1px_3px_rgba(0,0,0,0.25)]"
+    >
+      {#each logicOptions as opt (opt.value)}
+        {@const active = rule.operator === opt.value}
+        <button
+          type="button"
+          role="radio"
+          aria-checked={active}
           {disabled}
-          onchange={(e) => updateGroup({ operator: (e.currentTarget as HTMLSelectElement).value as CollectionRuleGroup["operator"] })}
-          class={selectClasses}
+          onclick={() => updateGroup({ operator: opt.value })}
+          class={cn(
+            "rounded-xs px-3 py-1 text-[0.7rem] font-semibold uppercase tracking-[0.12em] transition-all",
+            "disabled:cursor-not-allowed disabled:opacity-50",
+            active
+              ? "bg-gradient-to-b from-accent-900/60 to-accent-950/60 text-text-accent shadow-[inset_0_0_0_1px_rgba(242,194,106,0.45),0_0_12px_rgba(242,194,106,0.18)]"
+              : "text-text-disabled hover:text-text-muted",
+          )}
         >
-          <option value="and">all rules</option>
-          <option value="or">any rule</option>
-          <option value="not">not these rules</option>
-        </select>
-        <ChevronDown class="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 h-3 w-3 text-text-muted" />
-      </div>
+          {opt.label}
+        </button>
+      {/each}
     </div>
+    <span>of these conditions</span>
+    <span class="ml-auto text-[0.65rem] font-mono uppercase tracking-wider text-text-disabled">
+      {conditions.length} {conditions.length === 1 ? "rule" : "rules"}
+    </span>
   </div>
 
   <!-- Rule list -->
   {#if conditions.length > 0}
-    <div class="grid gap-2">
+    <div class="flex flex-col gap-2">
       {#each conditions as condition, i (i)}
         {@const field = fieldFor(condition)}
-        {@const isNullary = ["is_null", "is_not_null", "is_true", "is_false"].includes(condition.operator)}
-        <article class="border border-border-subtle bg-surface-1 p-3 space-y-2.5 transition-colors hover:border-border-default">
+        {@const isNullary = isNullaryOp(condition.operator)}
+        {@const isBetween = condition.operator === "between"}
+        {@const isMulti = condition.operator === "in" || condition.operator === "not_in"}
+        {@const TypeMetaIcon = fieldTypeMeta[field.fieldType].icon}
+        <article
+          class="group rounded-sm border border-border-subtle bg-surface-1/50 overflow-hidden transition-colors hover:border-border-default focus-within:border-border-accent/60"
+        >
           <!-- Controls row -->
-          <div class="grid gap-2 grid-cols-1 sm:grid-cols-[minmax(9rem,1fr)_minmax(8rem,0.85fr)_minmax(10rem,1fr)_auto]">
-            <div class="relative">
-              <select
-                aria-label="Rule field"
-                value={condition.field}
-                {disabled}
-                onchange={(e) => setField(i, (e.currentTarget as HTMLSelectElement).value)}
-                class={selectClasses}
+          <div class="flex items-stretch gap-2 p-2 pr-1.5">
+            <!-- Rule rail: number + type badge -->
+            <div class="flex items-center gap-1.5 shrink-0 pl-0.5 pt-1">
+              <span class="text-[0.6rem] font-mono text-text-disabled/60 tabular-nums select-none w-3 text-right">
+                {i + 1}
+              </span>
+              <div
+                title={fieldTypeMeta[field.fieldType].label}
+                class="inline-flex h-6 w-6 items-center justify-center rounded-xs border border-border-accent/30 bg-accent-950/30 shadow-[inset_0_1px_2px_rgba(0,0,0,0.3)]"
               >
-                {#each COLLECTION_RULE_FIELDS as option (option.field)}
-                  <option value={option.field}>{option.label}</option>
-                {/each}
-              </select>
-              <ChevronDown class="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 h-3 w-3 text-text-muted" />
+                <TypeMetaIcon class="h-3 w-3 text-text-accent" />
+              </div>
             </div>
 
-            <div class="relative">
-              <select
-                aria-label="Rule operator"
-                value={condition.operator}
-                {disabled}
-                onchange={(e) => setOperator(i, (e.currentTarget as HTMLSelectElement).value)}
-                class={selectClasses}
-              >
-                {#each field.operators as operator (operator)}
-                  <option value={operator}>{operator.replaceAll("_", " ")}</option>
-                {/each}
-              </select>
-              <ChevronDown class="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 h-3 w-3 text-text-muted" />
+            <!-- Field + operator + value -->
+            <div class="grid grid-cols-1 sm:grid-cols-[1.1fr_0.75fr_1.4fr] gap-1.5 flex-1 min-w-0 items-start">
+              <!-- Field selector -->
+              <div class="relative">
+                <select
+                  aria-label="Rule field"
+                  value={condition.field}
+                  {disabled}
+                  onchange={(e) => setField(i, (e.currentTarget as HTMLSelectElement).value)}
+                  class={controlClasses}
+                >
+                  {#each COLLECTION_RULE_FIELDS as option (option.field)}
+                    <option value={option.field}>{option.label}</option>
+                  {/each}
+                </select>
+                <ChevronDown class="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 h-2.5 w-2.5 text-text-muted" />
+              </div>
+
+              <!-- Operator selector -->
+              <div class="relative">
+                <select
+                  aria-label="Rule operator"
+                  value={condition.operator}
+                  {disabled}
+                  onchange={(e) => setOperator(i, (e.currentTarget as HTMLSelectElement).value)}
+                  class={controlClasses}
+                >
+                  {#each field.operators as operator (operator)}
+                    <option value={operator}>{operator.replaceAll("_", " ")}</option>
+                  {/each}
+                </select>
+                <ChevronDown class="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 h-2.5 w-2.5 text-text-muted" />
+              </div>
+
+              <!-- Value editor (contextual) -->
+              {#if isNullary}
+                <div class="hidden sm:flex items-center h-8 px-2 text-[0.7rem] font-mono uppercase tracking-wide text-text-disabled/70 italic">
+                  no value
+                </div>
+              {:else if isBetween}
+                {@const [minVal, maxVal] = getBetweenValues(condition.value)}
+                <div class="grid grid-cols-[1fr_auto_1fr] items-center gap-1.5">
+                  <input
+                    aria-label="Range minimum"
+                    type={field.fieldType === "date" ? "date" : "number"}
+                    value={minVal}
+                    placeholder="min"
+                    {disabled}
+                    oninput={(e) => {
+                      const next = (e.currentTarget as HTMLInputElement).value;
+                      updateCondition(i, { value: parseBetween(field, next, maxVal) });
+                    }}
+                    class={valueClasses}
+                  />
+                  <span class="text-[0.65rem] font-mono uppercase text-text-disabled select-none">to</span>
+                  <input
+                    aria-label="Range maximum"
+                    type={field.fieldType === "date" ? "date" : "number"}
+                    value={maxVal}
+                    placeholder="max"
+                    {disabled}
+                    oninput={(e) => {
+                      const next = (e.currentTarget as HTMLInputElement).value;
+                      updateCondition(i, { value: parseBetween(field, minVal, next) });
+                    }}
+                    class={valueClasses}
+                  />
+                </div>
+              {:else if isMulti}
+                <input
+                  aria-label="Multi value (comma separated)"
+                  value={getMultiValues(condition.value)}
+                  placeholder={field.enumValues ? field.enumValues.join(", ") : "value, value, …"}
+                  {disabled}
+                  oninput={(e) =>
+                    updateCondition(i, {
+                      value: parseMultiValue((e.currentTarget as HTMLInputElement).value),
+                    })}
+                  class={valueClasses}
+                />
+              {:else if field.fieldType === "date"}
+                <input
+                  aria-label="Date value"
+                  type="date"
+                  value={getStringValue(condition.value)}
+                  {disabled}
+                  oninput={(e) =>
+                    updateCondition(i, { value: (e.currentTarget as HTMLInputElement).value })}
+                  class={valueClasses}
+                />
+              {:else if field.fieldType === "number"}
+                <input
+                  aria-label="Number value"
+                  type="number"
+                  value={getNumberValue(condition.value)}
+                  placeholder="0"
+                  {disabled}
+                  oninput={(e) => {
+                    const raw = (e.currentTarget as HTMLInputElement).value;
+                    const num = Number(raw);
+                    updateCondition(i, { value: Number.isFinite(num) ? num : 0 });
+                  }}
+                  class={valueClasses}
+                />
+              {:else if field.fieldType === "enum" && field.enumValues}
+                <div class="relative">
+                  <select
+                    aria-label="Enum value"
+                    value={getStringValue(condition.value)}
+                    {disabled}
+                    onchange={(e) =>
+                      updateCondition(i, { value: (e.currentTarget as HTMLSelectElement).value })}
+                    class={controlClasses}
+                  >
+                    <option value="" disabled>Select…</option>
+                    {#each field.enumValues as enumVal (enumVal)}
+                      <option value={enumVal}>{enumVal}</option>
+                    {/each}
+                  </select>
+                  <ChevronDown class="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 h-2.5 w-2.5 text-text-muted" />
+                </div>
+              {:else}
+                <input
+                  aria-label="Text value"
+                  type="text"
+                  value={getStringValue(condition.value)}
+                  placeholder="Value"
+                  {disabled}
+                  oninput={(e) =>
+                    updateCondition(i, { value: (e.currentTarget as HTMLInputElement).value })}
+                  class={valueClasses}
+                />
+              {/if}
             </div>
 
-            {#if !isNullary}
-              <input
-                aria-label="Rule value"
-                value={valueText(condition.value)}
-                placeholder={field.enumValues ? field.enumValues.join(", ") : (condition.operator === "between" ? "min, max" : "Value")}
-                {disabled}
-                oninput={(e) =>
-                  updateCondition(i, {
-                    value: parseValue(field, condition.operator, (e.currentTarget as HTMLInputElement).value),
-                  })}
-                class={inputClasses}
-              />
-            {:else}
-              <div class="hidden sm:block"></div>
-            {/if}
-
+            <!-- Remove button -->
             <button
               type="button"
-              aria-label="Remove rule"
-              title="Remove rule"
+              aria-label="Remove condition"
+              title="Remove condition"
               {disabled}
               onclick={() => removeCondition(i)}
               class={cn(
-                "inline-flex w-full sm:w-9 h-9 items-center justify-center border border-border-subtle bg-surface-2 text-text-muted transition-colors",
-                "hover:border-error/50 hover:text-error-text hover:bg-error-muted/20",
+                "shrink-0 self-start inline-flex items-center justify-center w-8 h-8 rounded-xs text-text-disabled/50 transition-colors",
+                "hover:text-error-text hover:bg-error-muted/10",
                 "disabled:cursor-not-allowed disabled:opacity-50",
               )}
             >
-              <Trash2 class="h-3.5 w-3.5" />
+              <X class="h-3.5 w-3.5" />
             </button>
           </div>
 
-          <!-- Entity type chips -->
-          <div class="flex flex-wrap items-center gap-1.5">
-            <span class="text-kicker mr-1">Types</span>
+          <!-- Entity type toggles -->
+          <div
+            class="flex items-center gap-1 border-t border-border-subtle/40 bg-surface-1/30 py-1.5 px-2.5"
+            style="padding-left: 3.5rem"
+          >
+            <span class="text-[0.58rem] font-semibold uppercase tracking-[0.14em] text-text-disabled/70 mr-2">
+              Apply to
+            </span>
             {#each entityKinds as kind (kind.value)}
               {@const active = condition.entityTypes.length === 0 || condition.entityTypes.includes(kind.value)}
+              {@const KindIcon = kind.icon}
               <button
                 type="button"
                 {disabled}
                 aria-pressed={active}
+                title={kind.label}
                 onclick={() => toggleEntityType(i, kind.value)}
                 class={cn(
-                  "px-2 py-1 text-[0.68rem] font-medium border transition-all duration-fast",
+                  "inline-flex items-center gap-1 rounded-xs px-1.5 py-0.5 text-[0.58rem] font-semibold uppercase tracking-wider border transition-all",
                   "disabled:cursor-not-allowed disabled:opacity-50",
                   active
-                    ? "border-border-accent bg-accent-950/40 text-text-accent shadow-[0_0_10px_rgba(242,194,106,0.10)]"
-                    : "border-border-subtle bg-surface-2 text-text-disabled hover:text-text-muted hover:border-border-default",
+                    ? "border-border-accent/50 bg-accent-950/30 text-text-accent"
+                    : "border-transparent bg-transparent text-text-disabled/60 hover:text-text-muted hover:border-border-subtle",
                 )}
               >
-                {kind.label}
+                <KindIcon class="h-2.5 w-2.5" />
+                <span>{kind.label}</span>
               </button>
             {/each}
           </div>
         </article>
       {/each}
     </div>
+  {:else}
+    <div class="rounded-sm border border-dashed border-border-subtle bg-surface-1/30 px-4 py-6 text-center">
+      <p class="m-0 text-[0.78rem] text-text-muted">No conditions yet</p>
+      <p class="m-0 mt-1 text-[0.7rem] text-text-disabled">Add a rule below to begin filtering</p>
+    </div>
   {/if}
 
-  <!-- Add rule -->
+  <!-- Add condition -->
   <button
     type="button"
     {disabled}
     onclick={addCondition}
     class={cn(
-      "inline-flex items-center gap-1.5 border border-dashed border-border-subtle bg-transparent px-3 py-2 text-[0.78rem] text-text-muted transition-all",
+      "self-start inline-flex items-center gap-1.5 rounded-sm border border-dashed border-border-subtle bg-transparent px-3 py-1.5 text-[0.72rem] text-text-muted transition-all",
       "hover:border-border-accent hover:text-text-accent hover:bg-accent-950/10",
       "disabled:cursor-not-allowed disabled:opacity-50",
     )}
   >
-    <Plus class="h-3.5 w-3.5" />
-    Add Rule
+    <Plus class="h-3 w-3" />
+    Add condition
   </button>
 </div>

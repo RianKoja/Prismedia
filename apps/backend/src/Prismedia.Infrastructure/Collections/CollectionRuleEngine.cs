@@ -23,7 +23,7 @@ public sealed class CollectionRuleEngine(PrismediaDbContext db) : ICollectionRul
     };
 
     private static readonly EntityKind[] TargetKinds =
-        [EntityKind.Video, EntityKind.Gallery, EntityKind.Image, EntityKind.Book, EntityKind.AudioTrack];
+        [EntityKind.Video, EntityKind.VideoSeries, EntityKind.Gallery, EntityKind.Image, EntityKind.Book, EntityKind.AudioTrack];
 
     public async Task<IReadOnlyList<CollectionRuleMatch>> EvaluateAsync(
         string ruleTreeJson, CancellationToken cancellationToken) {

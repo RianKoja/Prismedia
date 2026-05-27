@@ -26,7 +26,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - Added a worker status badge to Job Control so stalled queues show when the background worker is offline.
 
 ### Changed
-- Refined the collection editor layout with a cleaner header, combined identity and playback panel, and rule previews shown through the shared entity grid.
+- Refined the collection editor layout with a cleaner header, focused settings panel, and rule previews shown through the shared entity grid.
 - Image and audio scans now keep root-level loose files standalone while turning folders into nested galleries and audio libraries.
 - Mobile entity grids now default unsaved thumbnail sizing to the largest card size while preserving saved user choices.
 - Relationship people sections now use contextual labels such as People, Artists, and Performers outside video cast and crew pages.
@@ -48,6 +48,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - Updated web app manifest and mobile browser metadata for home-screen installation and browser UI theme colors.
 
 ### Fixed
+- Fixed dynamic collection rule previews so series entities can match universal filters such as title rules.
 - Fixed the New Collection route so it opens the collection editor instead of the route-not-found payload.
 - Fixed collection playlist advancement so videos, audio tracks, static images, and video-backed images all notify the shell when they complete.
 - Fixed detail-page Identify actions so already-queued entities show a pending review state, open the existing queue item, and expose ready providers for people and studios.

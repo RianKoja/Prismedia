@@ -7,6 +7,9 @@ export function getEntityHref(item: CollectionItem, from?: string): string {
     case "video":
       base = `/videos/${item.entityId}`;
       break;
+    case "video-series":
+      base = `/series/${item.entityId}`;
+      break;
     case "gallery":
       base = `/galleries/${item.entityId}`;
       break;

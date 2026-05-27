@@ -160,6 +160,30 @@ public sealed class CollectionCommandServiceTests {
         Assert.Equal(visibleId, Assert.Single(preview.Sample).EntityId);
     }
 
+    [Fact]
+    public async Task PreviewRulesIncludesSeriesMatchesForUniversalFilters() {
+        await using var db = CreateContext();
+        var seriesId = SeedEntity(db, EntityKindRegistry.VideoSeries.Code, "The Chair Company");
+        await db.SaveChangesAsync();
+        var ruleEngine = new FakeCollectionRuleEngine([
+            new CollectionRuleMatch(EntityKind.VideoSeries, seriesId),
+        ]);
+        var service = CreateService(db, ruleEngine);
+
+        var preview = await service.PreviewRulesAsync(
+            new CollectionRulePreviewRequest(
+                """{"type":"group","operator":"and","children":[{"type":"condition","entityTypes":[],"field":"title","operator":"contains","value":"Chair"}]}"""),
+            hideNsfw: false,
+            CancellationToken.None);
+
+        Assert.NotNull(preview);
+        Assert.Equal(1, preview.Total);
+        Assert.Equal(1, preview.ByType["video-series"]);
+        var item = Assert.Single(preview.Sample);
+        Assert.Equal("video-series", item.EntityType);
+        Assert.Equal(seriesId, item.EntityId);
+    }
+
     private const string EmptyRuleJson = """{"type":"group","operator":"and","children":[]}""";
 
     private static CollectionCommandService CreateService(
