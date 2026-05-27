@@ -58,7 +58,6 @@
     hlsStatusUrlForSrc,
   } from "$lib/player/video-player-load";
   import {
-    captionClassName,
     pickPreferredSubtitleTrack,
     readLocalSubtitleAppearance,
     resolveSubtitleAppearance,
@@ -90,10 +89,10 @@
     type VideoPlayerHandle,
     type VideoPlayerMarker,
   } from "./video-player-types";
-  import AssSubtitleOverlay from "./AssSubtitleOverlay.svelte";
   import FilmStrip from "./FilmStrip.svelte";
   import VideoSettingsMenu from "./VideoSettingsMenu.svelte";
   import VideoStatusBar from "./VideoStatusBar.svelte";
+  import VideoSubtitleOverlay from "./VideoSubtitleOverlay.svelte";
   import VideoTimeline from "./VideoTimeline.svelte";
   import VideoTransportControls from "./VideoTransportControls.svelte";
 
@@ -350,6 +349,9 @@
     if (!track.sourceUrl) return null;
     return track;
   });
+  const showTextSubtitleCue = $derived(
+    Boolean(activeCueText && !isAssTrackActive(activeSubtitleId, subtitleTracks)),
+  );
 
   function initialPlaybackMode(): PlaybackMode {
     if (defaultPlaybackMode === "hls") return "hls";
@@ -1479,34 +1481,13 @@
       </div>
     {/if}
 
-    {#if assTrackForRender}
-      {#key assTrackForRender.id}
-        <AssSubtitleOverlay
-          videoEl={videoEl ?? null}
-          sourceUrl={assTrackForRender.sourceUrl ?? ""}
-          opacity={appearance.opacity}
-        />
-      {/key}
-    {/if}
-
-    {#if activeCueText && !isAssTrackActive(activeSubtitleId, subtitleTracks)}
-      <div
-        class="pointer-events-none absolute inset-x-0 flex justify-center px-4"
-        style:top="{appearance.positionPercent}%"
-        style:transform="translateY(-100%)"
-        style:opacity={appearance.opacity}
-      >
-        <div
-          class={cn(
-            captionClassName(appearance.style),
-            "max-w-[86%] whitespace-pre-line text-center font-medium leading-snug",
-          )}
-          style:font-size="{appearance.fontScale * 1.05}rem"
-        >
-          {activeCueText}
-        </div>
-      </div>
-    {/if}
+    <VideoSubtitleOverlay
+      {activeCueText}
+      {appearance}
+      assTrack={assTrackForRender}
+      showTextCue={showTextSubtitleCue}
+      videoEl={videoEl ?? null}
+    />
 
     {#if fullChrome}
       <VideoStatusBar
