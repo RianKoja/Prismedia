@@ -8,9 +8,9 @@
     ChevronDown,
     Layers,
     Loader2,
-    Pencil,
     Plus,
     RefreshCw,
+    SlidersHorizontal,
     Trash2,
     X,
   } from "@lucide/svelte";
@@ -286,11 +286,11 @@
         {@const dangerClass = "inline-flex w-[2.35rem] h-[2.35rem] items-center justify-center rounded-xs border border-border-subtle bg-[rgb(17_22_29/0.72)] text-text-muted backdrop-blur-[12px] transition-all hover:border-error/50 hover:text-error-text hover:shadow-[0_0_18px_rgb(255_128_111/0.12)] disabled:cursor-not-allowed disabled:opacity-40"}
         <a
           class={actionClass}
-          aria-label="Edit collection"
-          title="Edit collection"
+          aria-label="Edit collection rules"
+          title="Edit collection rules"
           href={`/collections/${card.entity.id}/edit`}
         >
-          <Pencil class="h-4 w-4" />
+          <SlidersHorizontal class="h-4 w-4" />
         </a>
         {#if canRefreshRules}
           <button
