@@ -283,6 +283,9 @@ function Showcase() {
                   item.portrait ? styles.showcaseFramePortrait : ''
                 }`}
               >
+                <div className={styles.windowDots} aria-hidden>
+                  <span /><span /><span />
+                </div>
                 <img src={useBaseUrl(item.image)} alt={item.alt} loading="lazy" />
               </div>
             </article>
@@ -293,14 +296,27 @@ function Showcase() {
   );
 }
 
+function SectionDivider() {
+  return (
+    <div className={styles.sectionDivider} aria-hidden>
+      <span className={styles.sectionDividerDot} />
+    </div>
+  );
+}
+
 function CtaBlock() {
   return (
     <section className={styles.cta}>
       <div className={`container ${styles.ctaInner}`}>
-        <div>
-          <Heading as="h2" className={styles.ctaTitle}>
-            Run it on your own hardware
-          </Heading>
+        <Heading as="h2" className={styles.ctaTitle}>
+          Run it on your own hardware
+        </Heading>
+        <p className={styles.ctaSubtext}>
+          Mount your media, expose one port, and you are running.
+          No cloud accounts, no API keys, no external dependencies.
+        </p>
+        <div className={styles.ctaCode}>
+          <kbd>docker pull ghcr.io/pauljoda/prismedia:latest</kbd>
         </div>
         <div className={styles.ctaActions}>
           <Link className={styles.primaryAction} to="/docs/users/quick-start">
@@ -336,8 +352,11 @@ export default function Home(): ReactNode {
       <main>
         <CapabilityStrip />
         <Pathways />
+        <SectionDivider />
         <Features />
+        <SectionDivider />
         <Showcase />
+        <SectionDivider />
         <CtaBlock />
       </main>
     </Layout>

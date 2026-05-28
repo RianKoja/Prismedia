@@ -13,6 +13,12 @@
       "runtimeExecutable": "tail",
       "runtimeArgs": ["-f", "/dev/null"],
       "port": 8008
+    },
+    {
+      "name": "docs",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@prismedia/documentation-site", "start", "--port", "3333"],
+      "port": 3333
     }
   ]
 }

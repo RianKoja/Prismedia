@@ -145,6 +145,7 @@
 
 html {
   background: var(--prismedia-bg);
+  scroll-behavior: smooth;
 }
 
 body {
@@ -893,8 +894,9 @@ button[class*='copyButton_']:hover {
 
 .footer {
   border-top: 1px solid var(--prismedia-border-accent);
-  background: linear-gradient(180deg, var(--prismedia-bg), #04050a);
-  padding: 3rem 0 2rem;
+  background:
+    linear-gradient(180deg, var(--prismedia-bg), #04050a);
+  padding: 4rem 0 2.5rem;
   position: relative;
 }
 
@@ -909,6 +911,18 @@ button[class*='copyButton_']:hover {
   opacity: 0.55;
 }
 
+.footer::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 200px;
+  background:
+    radial-gradient(600px 200px at 50% 0%, rgba(196, 154, 90, 0.06), transparent 70%);
+  pointer-events: none;
+}
+
 .footer__title {
   font-family: var(--ifm-heading-font-family);
   font-weight: 700;
@@ -917,21 +931,36 @@ button[class*='copyButton_']:hover {
   text-transform: uppercase;
   color: var(--prismedia-brass-300);
   margin-bottom: 0.8rem;
+  position: relative;
+}
+
+.footer__title::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: -4px;
+  width: 20px;
+  height: 1px;
+  background: var(--prismedia-brass-600);
+  opacity: 0.6;
 }
 
 .footer__link-item {
   color: var(--prismedia-text-muted);
-  transition: color 140ms ease;
+  transition: color 140ms ease, text-shadow 140ms ease;
 }
 .footer__link-item:hover {
   color: var(--prismedia-brass-300);
+  text-shadow: 0 0 12px rgba(196, 154, 90, 0.25);
 }
 
 .footer__copyright {
   color: var(--prismedia-text-disabled);
   font-family: var(--ifm-font-family-monospace);
   font-size: 0.75rem;
-  margin-top: 1.5rem;
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--prismedia-border-subtle);
 }
 
 /* -----------------------------------------------------------------------------
@@ -977,6 +1006,46 @@ button[class*='copyButton_']:hover {
   .theme-doc-markdown h2 {
     font-size: 1.4rem;
   }
+}
+
+/* Mobile TOC collapsible */
+.theme-doc-toc-mobile {
+  background: var(--prismedia-glass-2);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--prismedia-border-default);
+  border-radius: var(--prismedia-radius-md);
+  margin-bottom: 1.5rem;
+  overflow: hidden;
+}
+
+.theme-doc-toc-mobile button {
+  font-family: var(--ifm-heading-font-family);
+  font-weight: 700;
+  font-size: 0.82rem;
+  letter-spacing: 0.02em;
+  color: var(--prismedia-text-primary);
+  padding: 0.75rem 1rem;
+}
+
+.theme-doc-toc-mobile ul {
+  border-top: 1px solid var(--prismedia-border-subtle);
+  padding: 0.5rem 0.75rem;
+}
+
+.theme-doc-toc-mobile .table-of-contents__link {
+  font-size: 0.84rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: var(--prismedia-radius-xs);
+  display: block;
+}
+
+.theme-doc-toc-mobile .table-of-contents__link:hover {
+  background: rgba(196, 154, 90, 0.06);
+}
+
+.theme-doc-toc-mobile .table-of-contents__link--active {
+  background: rgba(196, 154, 90, 0.08);
 }
 
 /* -----------------------------------------------------------------------------

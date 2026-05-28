@@ -264,6 +264,15 @@
   border: 1px solid rgba(148, 158, 178, 0.11);
   border-radius: var(--prismedia-radius-xs);
   background: rgba(16, 20, 32, 0.48);
+  transition: border-color 180ms ease, color 180ms ease, box-shadow 180ms ease,
+    background 180ms ease;
+}
+
+.stripList li:hover {
+  color: var(--prismedia-brass-300);
+  border-color: rgba(196, 154, 90, 0.35);
+  background: rgba(196, 154, 90, 0.06);
+  box-shadow: 0 0 12px rgba(196, 154, 90, 0.12);
 }
 
 /* -----------------------------------------------------------------------------
@@ -325,8 +334,22 @@
   border-radius: var(--prismedia-radius-md);
   color: var(--prismedia-text-secondary);
   text-decoration: none;
-  transition: background 240ms ease, box-shadow 240ms ease, color 200ms ease;
+  transition: background 240ms ease, box-shadow 240ms ease, color 200ms ease,
+    border-color 240ms ease, transform 200ms ease;
   overflow: hidden;
+}
+
+.pathItem::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 1rem;
+  right: 1rem;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--prismedia-brass), transparent);
+  opacity: 0;
+  transition: opacity 280ms ease;
+  z-index: 1;
 }
 
 .pathItem::after {
@@ -342,7 +365,13 @@
 .pathItem:hover {
   color: var(--prismedia-text-primary);
   text-decoration: none;
-  box-shadow: inset 0 0 0 1px rgba(196, 154, 90, 0.45);
+  border-color: rgba(196, 154, 90, 0.3);
+  box-shadow: 0 0 0 1px rgba(196, 154, 90, 0.15), 0 8px 32px rgba(0, 0, 0, 0.3);
+  transform: translateY(-2px);
+}
+
+.pathItem:hover::before {
+  opacity: 0.6;
 }
 
 .pathItem:hover::after {
@@ -426,12 +455,20 @@
 .featureCard {
   background: linear-gradient(170deg, var(--prismedia-surface-2) 0%, var(--prismedia-surface-1) 100%);
   border: 1px solid var(--prismedia-border-default);
+  border-left: 2px solid transparent;
   border-radius: var(--prismedia-radius-md);
   padding: 1.5rem 1.4rem;
   display: flex;
   flex-direction: column;
   gap: 0.7rem;
   min-height: 220px;
+  transition: border-color 200ms ease, box-shadow 200ms ease, transform 200ms ease;
+}
+
+.featureCard:hover {
+  border-left-color: var(--prismedia-brass-600);
+  box-shadow: inset 2px 0 0 0 rgba(196, 154, 90, 0.3), 0 4px 20px rgba(0, 0, 0, 0.25);
+  transform: translateY(-1px);
 }
 
 .featureKicker {
@@ -520,6 +557,25 @@
   border-radius: var(--prismedia-radius-lg);
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(196, 154, 90, 0.12);
   overflow: hidden;
+  transition: box-shadow 300ms ease, transform 300ms ease;
+}
+
+.showcaseFrame:hover {
+  box-shadow: 0 32px 72px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(196, 154, 90, 0.2),
+    0 0 40px rgba(196, 154, 90, 0.08);
+  transform: translateY(-3px);
+}
+
+.showcaseFrame::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 32px;
+  background: linear-gradient(180deg, rgba(7, 8, 11, 0.95), rgba(7, 8, 11, 0.85));
+  border-bottom: 1px solid var(--prismedia-border-subtle);
+  z-index: 2;
 }
 
 .showcaseFrame::after {
@@ -535,11 +591,82 @@
   display: block;
   width: 100%;
   height: auto;
+  margin-top: 32px;
 }
 
 .showcaseFramePortrait {
   max-width: 320px;
   margin: 0 auto;
+}
+
+/* -----------------------------------------------------------------------------
+ * Window chrome dots for showcase frames
+ * ---------------------------------------------------------------------------*/
+
+.windowDots {
+  position: absolute;
+  top: 9px;
+  left: 12px;
+  display: flex;
+  gap: 6px;
+  z-index: 3;
+}
+
+.windowDots span {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--prismedia-text-disabled);
+  opacity: 0.5;
+}
+
+.windowDots span:first-child {
+  background: #a84850;
+  opacity: 0.7;
+}
+
+.windowDots span:nth-child(2) {
+  background: #b09040;
+  opacity: 0.7;
+}
+
+.windowDots span:nth-child(3) {
+  background: #4e8a62;
+  opacity: 0.7;
+}
+
+/* -----------------------------------------------------------------------------
+ * Section divider
+ * ---------------------------------------------------------------------------*/
+
+.sectionDivider {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  padding: 0;
+  margin: 0;
+}
+
+.sectionDivider::before,
+.sectionDivider::after {
+  content: '';
+  flex: 1;
+  max-width: 200px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--prismedia-border-accent));
+}
+
+.sectionDivider::after {
+  background: linear-gradient(90deg, var(--prismedia-border-accent), transparent);
+}
+
+.sectionDividerDot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--prismedia-brass-600);
+  box-shadow: 0 0 8px rgba(196, 154, 90, 0.4);
 }
 
 /* -----------------------------------------------------------------------------
@@ -565,10 +692,10 @@
 .ctaInner {
   position: relative;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: space-between;
+  text-align: center;
   gap: 2rem;
-  flex-wrap: wrap;
 }
 
 .ctaTitle {
@@ -582,10 +709,43 @@
   max-width: 28ch;
 }
 
+.ctaSubtext {
+  margin: 0;
+  color: var(--prismedia-text-muted);
+  font-size: 1rem;
+  line-height: 1.6;
+  max-width: 50ch;
+}
+
 .ctaActions {
   display: flex;
   gap: 0.75rem;
   flex-wrap: wrap;
+  justify-content: center;
+}
+
+.ctaCode {
+  margin-top: 0.5rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.65rem 1.2rem;
+  background: linear-gradient(160deg, var(--prismedia-surface-2) 0%, var(--prismedia-surface-1) 100%);
+  border: 1px solid var(--prismedia-border-default);
+  border-radius: var(--prismedia-radius-sm);
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.82rem;
+  color: var(--prismedia-text-muted);
+  user-select: all;
+}
+
+.ctaCode kbd {
+  color: var(--prismedia-brass-300);
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: inherit;
+  font-size: inherit;
 }
 
 /* -----------------------------------------------------------------------------
@@ -613,7 +773,7 @@
   }
 
   .metaRow {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 0.9rem;
   }
 
@@ -645,8 +805,12 @@
   }
 
   .ctaInner {
-    flex-direction: column;
     align-items: flex-start;
+    text-align: left;
+  }
+
+  .ctaActions {
+    justify-content: flex-start;
   }
 }
 
@@ -662,5 +826,13 @@
 
   .showcase {
     padding: 3rem 0;
+  }
+
+  .metaRow {
+    grid-template-columns: 1fr;
+  }
+
+  .ctaCode {
+    font-size: 0.74rem;
   }
 }
