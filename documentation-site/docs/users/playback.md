@@ -1,7 +1,7 @@
 ---
 sidebar_position: 5
 title: Playback And Reading
-description: Video, subtitles, image lightbox, book reader, audio, markers, and resume.
+description: Video, subtitles, image lightbox, book reader, audio, and resume.
 ---
 
 # Playback And Reading
@@ -18,7 +18,7 @@ Video detail pages include:
 
 - Direct and HLS playback options.
 - Trickplay thumbnails for timeline scrubbing.
-- Markers and custom preview frames.
+- Custom preview frames.
 - Subtitle track management.
 - Dockable transcripts.
 - Metadata, artwork, ratings, related entities, files, and provider IDs.
@@ -58,8 +58,8 @@ Audio libraries show album-style track lists and nested sub-libraries. Tracks ha
 
 The player stays docked while you browse, supports shuffle and queue navigation, and keeps progress state on tracks.
 
-## Markers and resume
+## Resume state
 
-Videos and audio tracks can carry time-stamped markers. Books and comics save reading progress. Video and audio playback progress is tracked so you can resume from where you stopped.
+Books and comics save reading progress. Video and audio playback progress is tracked so you can resume from where you stopped.
 
 User progress is library state, not file metadata; rescans should not erase it.

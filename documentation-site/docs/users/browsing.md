@@ -41,7 +41,7 @@ The reader opens as a focused route with paged and vertical reading modes, resum
 
 ## Audio
 
-Audio libraries are folder-backed groups of tracks. Library detail pages show sub-libraries, album-style track lists, cover art, ratings, markers, and linked metadata. Starting a track opens a persistent player that survives navigation.
+Audio libraries are folder-backed groups of tracks. Library detail pages show sub-libraries, album-style track lists, cover art, ratings, resume state, and linked metadata. Starting a track opens a persistent player that survives navigation.
 
 ![Audio](/img/screenshots/audio.png)
 

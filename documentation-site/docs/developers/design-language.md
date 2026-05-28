@@ -10,7 +10,7 @@ Prismedia follows **Prism Noir Luxe**: a dark, refined media-console interface f
 
 ## Principles
 
-- **Controlled radii.** Use the shared radius scale from `radius-xs: 4px` through `radius-2xl: 24px`. Subtle softening is intentional; bubbly pills are not.
+- **Controlled radii.** Use the shared radius scale from `radius-xs: 4px` through `radius-2xl: 24px`. Sharp default corners are never intentional; bubbly pills are not.
 - **Material base, glass overlay.** Solid dark surfaces are the page structure. Glass is reserved for floating, interactive, or transient layers.
 - **Brass is state.** Brass (`#f2c26a` / `#d59a2a`) marks active, selected, focused, and important state. It should glow, not sit as flat decoration.
 - **Mobile first.** Touch layouts come first; desktop expands them.
@@ -38,9 +38,9 @@ Prismedia follows **Prism Noir Luxe**: a dark, refined media-console interface f
 | Token | Value | Use |
 | --- | --- | --- |
 | `radius-xs` | `4px` | Small chips and inline badges. |
-| `radius-sm` | `6px` | Cards, buttons, inputs. |
+| `radius-sm` | `6px` | Items, buttons, inputs. |
 | `radius-md` | `10px` | Panels and modals. |
-| `radius-lg` | `14px` | Large cards and drawers. |
+| `radius-lg` | `14px` | Large panels and drawers. |
 | `radius-xl` | `18px` | Hero sections and large feature panels. |
 | `radius-2xl` | `24px` | Full-bleed media containers. |
 
@@ -57,14 +57,14 @@ border-radius: var(--radius-md);
 box-shadow: var(--shadow-panel);
 ```
 
-### Glass card
+### Glass panel
 
 ```css
 background: var(--color-overlay-glass);
 backdrop-filter: blur(12px);
 border: 1px solid var(--border-default);
 border-radius: var(--radius-sm);
-box-shadow: var(--shadow-card);
+box-shadow: var(--shadow-panel);
 ```
 
 ### Active state
@@ -82,7 +82,7 @@ Before shipping a UI change:
 1. Check the smallest supported mobile viewport.
 2. Check desktop density and scanability.
 3. Confirm primary actions work without hover.
-4. Confirm text fits inside controls and cards.
+4. Confirm text fits inside controls and panels.
 5. Confirm active/focus state is not color-only.
 6. Confirm radii come from the shared scale.
 7. Confirm the page does not read as generic SaaS or unmodified shadcn defaults.

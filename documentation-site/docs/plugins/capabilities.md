@@ -12,7 +12,7 @@ The full type lives at `packages/plugins/src/types.ts:46-94`.
 
 ```ts
 export interface PluginCapabilities {
-  // Video (scene)
+  // Video
   videoByURL?: boolean;
   videoByFragment?: boolean;
   videoByName?: boolean;
@@ -34,7 +34,7 @@ export interface PluginCapabilities {
   audioByFragment?: boolean;
   audioLibraryByName?: boolean;
 
-  // Performer
+  // People (Stash-compatible performer contract)
   performerByURL?: boolean;
   performerByFragment?: boolean;
   performerByName?: boolean;
@@ -63,7 +63,7 @@ Declare only what your plugin can actually answer. The engine uses the map to fi
 
 ## The capability matrix
 
-### Video (scene-style) lookups
+### Video lookups
 
 | Action | Input fields used | Returns | When it fires |
 | --- | --- | --- | --- |
@@ -97,13 +97,13 @@ The cascade pattern: a `folderByName` returns a `seriesExternalId`, then `folder
 | `audioByFragment` | (provider-specific) | `NormalizedAudioTrackResult` |
 | `audioLibraryByName` | `name` | `NormalizedAudioLibraryResult` |
 
-### Performer
+### People compatibility
 
 | Action | Input | Returns |
 | --- | --- | --- |
-| `performerByURL` | `url` | Performer result (Stash-compat shape). |
-| `performerByName` | `name` | Performer result. |
-| `performerByFragment` | `name` | Performer result. |
+| `performerByURL` | `url` | Person result through the Stash-compatible performer shape. |
+| `performerByName` | `name` | Person result through the compatibility shape. |
+| `performerByFragment` | `name` | Person result through the compatibility shape. |
 
 ### Movie
 
@@ -356,12 +356,12 @@ The `*Candidates` arrays let the user pick the poster/backdrop they want from mu
 
 When the user accepts a result, the .NET backend walks the tree and creates missing entities by name:
 
-1. **Performers** — created by name; **not** deduplicated against existing.
+1. **People** — created from `performerNames`; **not** deduplicated against existing.
 2. **Tags** — created by name; **deduplicated case-insensitively**.
 3. **Studios** — created by name; **not** deduplicated.
 4. **Images** — chosen poster/backdrop/still URLs downloaded to local cache, paths linked to the entity.
 
-If you don't want a performer to be created, omit it from `performerNames`. If you want to be sure a performer matches an existing one, return the canonical spelling — name matching is exact (case-sensitive for performers, case-insensitive for tags).
+If you don't want a person to be created, omit it from `performerNames`. If you want to be sure a person matches an existing one, return the canonical spelling — name matching is exact for people and case-insensitive for tags.
 
 ## A worked example: TMDB series cascade
 
@@ -374,6 +374,6 @@ User clicks **Identify** on a series:
 5. TMDB returns `NormalizedSeriesResult` with `seasons[].episodes[]` filled in for every season.
 6. Cascade drawer renders: series header, per-season sections, per-episode rows.
 7. User picks posters / backdrops, ticks per-field checkboxes, hits **Apply cascade**.
-8. Engine writes `video_series`, `video_seasons`, `video_episodes`, links performers/tags/studios, downloads chosen images, and marks every applied row as `accepted` in `scrape_results`.
+8. Engine writes `video_series`, `video_seasons`, `video_episodes`, links people/tags/studios, downloads chosen images, and marks every applied row as `accepted` in `scrape_results`.
 
 That's it. The plugin's only job was steps 1–5 — return the right shape.

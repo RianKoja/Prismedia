@@ -66,6 +66,14 @@
   --prismedia-glow-full: 0 0 0 1px rgba(196, 154, 90, 0.6), 0 0 16px rgba(196, 154, 90, 0.3),
     0 0 32px rgba(196, 154, 90, 0.1);
 
+  /* Geometry */
+  --prismedia-radius-xs: 4px;
+  --prismedia-radius-sm: 6px;
+  --prismedia-radius-md: 10px;
+  --prismedia-radius-lg: 14px;
+  --prismedia-radius-xl: 18px;
+  --prismedia-radius-2xl: 24px;
+
   /* Infima primary scale (drives links, sidebar active, etc.) */
   --ifm-color-primary: #f2c26a;
   --ifm-color-primary-dark: #d59a2a;
@@ -99,12 +107,12 @@
   --ifm-code-font-size: 92%;
 
   /* Geometry - controlled Prism Noir Luxe radii */
-  --ifm-global-radius: 10px;
-  --ifm-button-border-radius: 6px;
-  --ifm-pagination-nav-border-radius: 10px;
-  --ifm-breadcrumb-border-radius: 6px;
-  --ifm-alert-border-radius: 10px;
-  --ifm-card-border-radius: 10px;
+  --ifm-global-radius: var(--prismedia-radius-md);
+  --ifm-button-border-radius: var(--prismedia-radius-sm);
+  --ifm-pagination-nav-border-radius: var(--prismedia-radius-md);
+  --ifm-breadcrumb-border-radius: var(--prismedia-radius-sm);
+  --ifm-alert-border-radius: var(--prismedia-radius-md);
+  --ifm-card-border-radius: var(--prismedia-radius-md);
 
   /* Chrome */
   --ifm-navbar-height: 60px;
@@ -177,6 +185,74 @@ body {
   color: var(--prismedia-text-primary);
 }
 
+/* Common Docusaurus controls */
+.button,
+.card,
+.dropdown__menu,
+.dropdown__link,
+.navbar__toggle,
+.navbar-sidebar__close,
+.navbar__items .clean-btn,
+.tabs__item,
+.theme-doc-version-badge,
+.theme-doc-footer-tags-row a,
+.tag {
+  border-radius: var(--prismedia-radius-sm);
+}
+
+.dropdown__menu {
+  background: var(--prismedia-glass-2);
+  border: 1px solid var(--prismedia-border-default);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+.dropdown__link {
+  color: var(--prismedia-text-secondary);
+}
+
+.dropdown__link:hover {
+  background: rgba(196, 154, 90, 0.08);
+  color: var(--prismedia-brass-300);
+}
+
+.navbar__items .clean-btn:hover,
+.navbar__toggle:hover,
+.navbar-sidebar__close:hover {
+  background: rgba(196, 154, 90, 0.08);
+}
+
+.tabs {
+  border-bottom: 1px solid var(--prismedia-border-subtle);
+}
+
+.tabs__item {
+  color: var(--prismedia-text-muted);
+  border-bottom: 0;
+}
+
+.tabs__item--active,
+.tabs__item:hover {
+  color: var(--prismedia-brass-300);
+  background: rgba(196, 154, 90, 0.08);
+  box-shadow: inset 0 -2px 0 var(--prismedia-brass);
+}
+
+.theme-doc-markdown details,
+details[class*='details_'] {
+  background: linear-gradient(160deg, var(--prismedia-surface-2), var(--prismedia-surface-1));
+  border: 1px solid var(--prismedia-border-default);
+  border-radius: var(--prismedia-radius-md);
+  overflow: hidden;
+}
+
+.theme-doc-markdown summary {
+  color: var(--prismedia-text-primary);
+  font-family: var(--ifm-heading-font-family);
+  font-weight: 700;
+}
+
 /* -----------------------------------------------------------------------------
  * Navbar
  * ---------------------------------------------------------------------------*/
@@ -197,6 +273,8 @@ body {
   height: 100vh;
   background: linear-gradient(180deg, var(--prismedia-surface-1), var(--prismedia-bg));
   border-right: 1px solid var(--prismedia-border-accent);
+  border-radius: 0 var(--prismedia-radius-lg) var(--prismedia-radius-lg) 0;
+  overflow: hidden;
 }
 
 .navbar-sidebar__brand {
@@ -218,6 +296,7 @@ body {
   text-transform: uppercase;
   letter-spacing: 0.1em;
   border-bottom: 1px solid var(--prismedia-border-subtle);
+  border-radius: var(--prismedia-radius-sm);
 }
 
 .navbar-sidebar .menu__link {
@@ -290,6 +369,7 @@ body {
   padding: 0.45rem 0.75rem;
   color: var(--prismedia-text-secondary);
   position: relative;
+  border-radius: var(--prismedia-radius-sm);
   transition: color 140ms ease, background-color 140ms ease;
 }
 .menu__link:hover {
@@ -308,12 +388,14 @@ body {
   top: 0.35rem;
   bottom: 0.35rem;
   width: 2px;
+  border-radius: var(--prismedia-radius-xs);
   background: var(--prismedia-brass);
   box-shadow: 0 0 10px rgba(196, 154, 90, 0.55), 0 0 22px rgba(196, 154, 90, 0.25);
 }
 
 .menu__caret {
   background: transparent;
+  border-radius: var(--prismedia-radius-sm);
 }
 .menu__caret:hover {
   background: rgba(196, 154, 90, 0.05);
@@ -404,13 +486,36 @@ body {
 /* Lists */
 .theme-doc-markdown ul,
 .theme-doc-markdown ol {
-  padding-left: 1.4rem;
+  list-style: none;
+  padding-left: 1rem;
+  margin-left: 0;
+  border-left: 1px solid var(--prismedia-border-subtle);
 }
 .theme-doc-markdown li {
+  position: relative;
   margin: 0.35rem 0;
 }
-.theme-doc-markdown li::marker {
-  color: var(--prismedia-brass);
+
+.theme-doc-markdown ol {
+  counter-reset: prismedia-list;
+}
+
+.theme-doc-markdown ol > li {
+  counter-increment: prismedia-list;
+  padding-left: 1.7rem;
+}
+
+.theme-doc-markdown ol > li::before {
+  content: counter(prismedia-list, decimal-leading-zero);
+  position: absolute;
+  left: -0.2rem;
+  top: 0.1rem;
+  min-width: 1.35rem;
+  color: var(--prismedia-brass-300);
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
 }
 
 /* Inline links */
@@ -443,6 +548,7 @@ body {
 code {
   background: rgba(196, 154, 90, 0.08);
   border: 1px solid rgba(196, 154, 90, 0.18);
+  border-radius: var(--prismedia-radius-xs);
   color: var(--prismedia-brass-300);
   font-family: var(--ifm-font-family-monospace);
   font-size: 0.85em;
@@ -463,7 +569,9 @@ a code {
 pre {
   background: linear-gradient(160deg, var(--prismedia-surface-2) 0%, var(--prismedia-surface-1) 100%) !important;
   border: 1px solid var(--prismedia-border-subtle);
+  border-radius: var(--prismedia-radius-md);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03), 0 4px 24px rgba(0, 0, 0, 0.4);
+  overflow: hidden;
 }
 
 .prism-code {
@@ -491,6 +599,7 @@ button[class*='copyButton_'] {
   background: rgba(196, 154, 90, 0.12) !important;
   color: var(--prismedia-brass-300) !important;
   border: 1px solid rgba(196, 154, 90, 0.2) !important;
+  border-radius: var(--prismedia-radius-sm) !important;
   transition: background 140ms ease, box-shadow 140ms ease;
 }
 button[class*='copyButton_']:hover {
@@ -507,6 +616,7 @@ button[class*='copyButton_']:hover {
   background: var(--prismedia-surface-2);
   border: 1px solid var(--prismedia-border-default);
   border-left-width: 3px;
+  border-radius: var(--prismedia-radius-md);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
   padding: 1rem 1.1rem;
   color: var(--prismedia-text-secondary);
@@ -592,8 +702,11 @@ button[class*='copyButton_']:hover {
   margin: 1.5rem 0;
   background: linear-gradient(160deg, var(--prismedia-surface-2) 0%, var(--prismedia-surface-1) 100%);
   border: 1px solid var(--prismedia-border-subtle);
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
+  border-radius: var(--prismedia-radius-md);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  overflow: hidden;
 }
 
 .theme-doc-markdown th {
@@ -607,6 +720,7 @@ button[class*='copyButton_']:hover {
   padding: 0.85rem 1rem;
   text-align: left;
   border-bottom: 1px solid var(--prismedia-border-accent);
+  border-top: 0;
 }
 
 .theme-doc-markdown td {
@@ -614,6 +728,14 @@ button[class*='copyButton_']:hover {
   border-top: 1px solid var(--prismedia-border-subtle);
   color: var(--prismedia-text-secondary);
   vertical-align: top;
+}
+
+.theme-doc-markdown th:first-child {
+  border-top-left-radius: var(--prismedia-radius-md);
+}
+
+.theme-doc-markdown th:last-child {
+  border-top-right-radius: var(--prismedia-radius-md);
 }
 
 .theme-doc-markdown tr:nth-child(2n) td {
@@ -627,6 +749,7 @@ button[class*='copyButton_']:hover {
 .theme-doc-markdown blockquote {
   background: linear-gradient(180deg, rgba(196, 154, 90, 0.06), transparent);
   border-left: 3px solid var(--prismedia-brass-600);
+  border-radius: var(--prismedia-radius-md);
   padding: 0.9rem 1.1rem;
   color: var(--prismedia-text-muted);
   font-style: normal;
@@ -644,6 +767,7 @@ button[class*='copyButton_']:hover {
 .theme-doc-markdown img {
   max-width: 100%;
   border: 1px solid var(--prismedia-border-accent);
+  border-radius: var(--prismedia-radius-lg);
   box-shadow: 0 12px 50px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(196, 154, 90, 0.1);
   display: block;
   margin: 1.5rem auto;
@@ -663,6 +787,7 @@ button[class*='copyButton_']:hover {
 .table-of-contents__link {
   color: var(--prismedia-text-muted);
   padding: 0.3rem 0;
+  border-radius: var(--prismedia-radius-xs);
   transition: color 140ms ease;
 }
 
@@ -680,9 +805,10 @@ button[class*='copyButton_']:hover {
   content: '';
   position: absolute;
   left: -17px;
-  top: 0.6rem;
-  width: 6px;
-  height: 6px;
+  top: 0.45rem;
+  width: 2px;
+  height: 1.1rem;
+  border-radius: var(--prismedia-radius-xs);
   background: var(--prismedia-brass);
   box-shadow: 0 0 10px rgba(196, 154, 90, 0.7), 0 0 18px rgba(196, 154, 90, 0.3);
 }
@@ -701,6 +827,7 @@ button[class*='copyButton_']:hover {
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border: 1px solid var(--prismedia-border-default);
+  border-radius: var(--prismedia-radius-md);
   padding: 1rem 1.2rem;
   transition: border-color 160ms ease, box-shadow 160ms ease;
 }
@@ -814,6 +941,7 @@ button[class*='copyButton_']:hover {
 .navbar__search-input {
   background: var(--prismedia-surface-1);
   border: 1px solid var(--prismedia-border-default);
+  border-radius: var(--prismedia-radius-sm);
   color: var(--prismedia-text-primary);
 }
 .navbar__search-input:focus {
@@ -852,7 +980,7 @@ button[class*='copyButton_']:hover {
 }
 
 /* -----------------------------------------------------------------------------
- * Brass keyframe — optional pulse for active markers
+ * Brass keyframe — optional pulse for active signals
  * ---------------------------------------------------------------------------*/
 
 @keyframes prismedia-glow-pulse {

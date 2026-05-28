@@ -121,7 +121,7 @@ The **Files** workspace mirrors watched library roots and gives you practical fi
 
 ### Playback And Reading
 
-Videos stream directly when the browser can play them and fall back to on-demand HLS when they need transcoding. Detail pages include subtitles, transcript management, trickplay previews, markers, metadata editing, and artwork controls.
+Videos stream directly when the browser can play them and fall back to on-demand HLS when they need transcoding. Detail pages include subtitles, transcript management, trickplay previews, resume state, metadata editing, and artwork controls.
 
 Books and comics open in a dedicated reader with paged and vertical reading modes. Images and galleries use a lightbox with metadata and linked entities. Audio libraries provide album-style track lists, waveforms, and a persistent player.
 

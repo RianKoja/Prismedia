@@ -6,7 +6,7 @@ description: What plugins are, the three runtimes, and how they fit into the ide
 
 # Plugin System Overview
 
-Prismedia's metadata is **plugin-driven**. Posters, descriptions, performers, studios, tags, episode breakdowns — none of it is hard-coded. Every provider is a plugin with a manifest, a declared capability set, and an execution envelope.
+Prismedia's metadata is **plugin-driven**. Posters, descriptions, people, studios, tags, episode breakdowns — none of it is hard-coded. Every provider is a plugin with a manifest, a declared capability set, and an execution envelope.
 
 This page is the bird's-eye view: what kinds of plugins exist, how they relate, and what to read next.
 
@@ -81,7 +81,7 @@ plugin → normalized result
        → scrape_results row written (status = pending,
                                      proposed_* fields populated)
        → user reviews in the cascade drawer
-       → on Accept: missing performers/tags/studios created,
+       → on Accept: missing people/tags/studios created,
                     images downloaded to /data/cache/metadata/,
                     entity row updated, status = accepted
 ```

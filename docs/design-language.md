@@ -8,7 +8,7 @@ The aesthetic is a refined industrial control room — Blackmagic DaVinci Resolv
 
 ## Core Principles
 
-- **Controlled radii.** Tight, consistent radii from a unified scale (`XS 4px` through `2XL 24px`). Subtle softening, never bubbly. No default rounded corners from component libraries.
+- **Controlled radii.** Tight, consistent radii from a unified scale (`XS 4px` through `2XL 24px`). Sharp default corners and bubbly pills are both off-language.
 - **Material base, glass overlay.** Base surfaces are solid dark material layers. Floating and interactive elements use glass (backdrop-blur + semi-transparent fill) layered above them.
 - **Color as signal.** Accent colors appear only on active, selected, or critical states. When they appear, they glow.
 - **Gradient fills for depth.** Subtle linear gradients distinguish surface planes. No flat solid fills on containers.
@@ -28,17 +28,17 @@ Base surfaces are solid, near-black. Subtle linear gradients move from top-left 
 |-------------|------------|-----------|-----------------------------------------|
 | `bg`        | `#07080b`  | Noir      | Page root, outermost background         |
 | `surface-1` | `#0b0e12`  | Obsidian  | Sidebar, inset wells, recessed areas    |
-| `surface-2` | `#11161d`  | Graphite  | Cards, panels, primary containers       |
+| `surface-2` | `#11161d`  | Graphite  | Panels and primary containers           |
 | `surface-3` | `#202734`  | Slate Glass | Elevated panels, drawers              |
 | `surface-4` | `#2a3038`  | Carbon    | Tooltips, dropdowns, contextual overlays|
 
 ### Glass Layers — Floating Surfaces
 
-Glass layers sit above material surfaces. They require `backdrop-filter: blur()` and a semi-transparent fill. Use glass for anything that floats above the base content layer: interactive cards, modals, command palettes, sheets.
+Glass layers sit above material surfaces. They require `backdrop-filter: blur()` and a semi-transparent fill. Use glass for anything that floats above the base content layer: interactive media items, modals, command palettes, sheets.
 
 | Token     | Fill                          | Blur  | Usage                                  |
 |-----------|-------------------------------|-------|----------------------------------------|
-| `glass-1` | `rgba(17, 22, 29, 0.72)`     | `12px`| Media cards, interactive list items    |
+| `glass-1` | `rgba(17, 22, 29, 0.72)`     | `12px`| Media items, interactive list items    |
 | `glass-2` | `rgba(17, 22, 29, 0.80)`     | `16px`| Command palette, floating panels       |
 | `glass-3` | `rgba(17, 22, 29, 0.92)`     | `24px`| Sheets, drawers, full-screen overlays  |
 
@@ -126,7 +126,7 @@ Four font voices loaded via `@fontsource` packages:
 | Voice   | Font           | Usage                                          |
 |---------|----------------|------------------------------------------------|
 | Display | Cinzel         | Brand display text, cinematic headings         |
-| Heading | Geist Sans     | Product headings, section headers, card titles |
+| Heading | Geist Sans     | Product headings, section headers, item titles |
 | Body    | Inter Variable | Body copy, descriptions, form labels           |
 | Utility | JetBrains Mono | Metadata, timestamps, file paths, durations, counters |
 
@@ -168,7 +168,7 @@ box-shadow: var(--shadow-panel);
 
 The machined bevel (inset top/left highlights) reads as a lit panel edge — a material signal without fake 3D.
 
-### Glass Card (media card, interactive list item)
+### Glass Panel (media item, interactive list item)
 
 ```css
 background: var(--color-overlay-glass);
@@ -176,13 +176,13 @@ backdrop-filter: blur(12px);
 -webkit-backdrop-filter: blur(12px);
 border: 1px solid var(--border-default);
 border-radius: var(--radius-sm);
-box-shadow: var(--shadow-card);
+box-shadow: var(--shadow-panel);
 transition: border-color 180ms var(--ease-mechanical),
             box-shadow   180ms var(--ease-mechanical);
 
 /* Hover */
 border-color: var(--border-accent);
-box-shadow: var(--shadow-card-hover);
+box-shadow: var(--shadow-panel-hover);
 
 /* Selected / Active */
 border-color: var(--border-accent-strong);
@@ -220,12 +220,11 @@ Controlled radii from a unified scale. Subtle softening that maintains the indus
 | Token        | Value    | Usage                                    |
 |--------------|----------|------------------------------------------|
 | `radius-xs`  | `4px`    | Small chips, badges, inline elements     |
-| `radius-sm`  | `6px`    | Cards, inputs, buttons                   |
+| `radius-sm`  | `6px`    | Items, inputs, buttons                   |
 | `radius-md`  | `10px`   | Panels, modals, primary containers       |
-| `radius-lg`  | `14px`   | Large cards, drawers                     |
+| `radius-lg`  | `14px`   | Large panels and drawers                 |
 | `radius-xl`  | `18px`   | Hero sections, feature panels            |
 | `radius-2xl` | `24px`   | Full-bleed containers                    |
-| `radius-full`| `9999px` | Pills, toggles, circular indicators      |
 
 ### Spacing Grid
 
@@ -346,7 +345,7 @@ Motion is precise and deliberate — like instrumentation in a darkened control 
 
 ### LED Status Indicators
 
-Small squares with controlled radius (`radius-xs`). Glow via `box-shadow` using status colors. Colors: success green (active), warning amber (queued/warning), error red (failed), info blue (paused), brass (highlighted), phosphor (digital signal). `led-pulse` animation for processing/loading state.
+Soft signal indicators with controlled radius (`radius-xs`). Glow via `box-shadow` using status colors. Colors: success green (active), warning amber (queued/warning), error red (failed), info blue (paused), brass (highlighted), phosphor (digital signal). `led-pulse` animation for processing/loading state.
 
 ### Selection State
 
@@ -362,7 +361,7 @@ Height: 3px. Controlled radius. Fill: accent selection gradient (`accent-700` �
 
 ### Separator
 
-`1px solid var(--border-subtle)`. Clean, hard horizontal rule. Vertical separators use the same token.
+`1px solid var(--border-subtle)`. Clean horizontal rule with subtle glow only when it communicates state. Vertical separators use the same token.
 
 ---
 
@@ -375,5 +374,5 @@ Height: 3px. Controlled radius. Fill: accent selection gradient (`accent-700` �
 - **No hover-only primary actions.** Everything reachable by tap on mobile.
 - **No decorative glow** — glow appears only on selected, active, or processing states. Never for style alone.
 - **No bounce or spring easing.** All motion uses mechanical or standard bezier curves.
-- **No oversized empty cards on mobile** — density is maintained across breakpoints.
+- **No oversized empty panels on mobile** — density is maintained across breakpoints.
 - **No bubbly or pill-shaped containers** — radii stay tight and controlled from the scale.

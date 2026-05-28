@@ -45,7 +45,7 @@ The review surface shows what will change before anything is saved:
 - Child items such as seasons, episodes, chapters, or related entities.
 - Existing vs proposed values.
 
-You can walk into child proposals, disable relationship cards, choose artwork, and accept only when the proposal looks right.
+You can walk into child proposals, disable relationship proposals, choose artwork, and accept only when the proposal looks right.
 
 ## Bulk identify
 
