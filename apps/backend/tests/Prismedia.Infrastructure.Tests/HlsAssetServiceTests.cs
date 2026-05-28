@@ -224,7 +224,7 @@ public sealed class HlsAssetServiceTests : IDisposable {
 
         Assert.NotNull(asset);
         var metadata = await File.ReadAllTextAsync(Path.Combine(virtualRoot, "metadata.json"));
-        Assert.Contains("\"FormatVersion\": 8", metadata);
+        Assert.Contains("\"FormatVersion\": 9", metadata);
         Assert.False(File.Exists(Path.Combine(virtualRoot, "v", "720p", "seg_00000.ts")));
     }
 
@@ -499,7 +499,7 @@ public sealed class HlsAssetServiceTests : IDisposable {
     }
 
     [Fact]
-    public async Task FarVirtualSegmentCancelsOtherActiveRenditionsForSameAudioTrack() {
+    public async Task FarVirtualSegmentDoesNotCancelOtherActiveRenditionsForSameAudioTrack() {
         var videoId = Guid.Parse("eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee");
         var sourcePath = Path.Combine(_cacheRoot, "source.mkv");
         await File.WriteAllTextAsync(sourcePath, "source");
@@ -522,9 +522,11 @@ public sealed class HlsAssetServiceTests : IDisposable {
 
         var farSegment = await service.GetAssetAsync(videoId, "v/720kbps/seg_00020.ts", null, CancellationToken.None)
             .WaitAsync(TimeSpan.FromSeconds(5));
-        var replacedInitialSegment = await initialSegment.WaitAsync(TimeSpan.FromSeconds(5));
+        process.ReleaseInitialGeneration();
+        var completedInitialSegment = await initialSegment.WaitAsync(TimeSpan.FromSeconds(5));
 
-        Assert.Null(replacedInitialSegment);
+        Assert.NotNull(completedInitialSegment);
+        Assert.Equal("seg_00000.ts", Path.GetFileName(completedInitialSegment.Path));
         Assert.NotNull(farSegment);
         Assert.Equal("seg_00020.ts", Path.GetFileName(farSegment.Path));
         Assert.Contains(process.ArgumentHistory, arguments =>
@@ -560,6 +562,7 @@ public sealed class HlsAssetServiceTests : IDisposable {
         await process.InitialGenerationStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
         await sessions.CancelAsync("session-1", CancellationToken.None);
+        process.ReleaseInitialGeneration();
         var cancelledSegment = await initialSegment.WaitAsync(TimeSpan.FromSeconds(5));
 
         Assert.Null(cancelledSegment);
@@ -722,6 +725,53 @@ public sealed class HlsAssetServiceTests : IDisposable {
             argument.Contains("zscale=t=linear", StringComparison.Ordinal) &&
             argument.Contains("tonemap=tonemap=hable", StringComparison.Ordinal) &&
             argument.Contains("format=yuv420p", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task VirtualSegmentsRetryToneMappedSourcesWithBasicSoftwareOutputWhenFilterIsMissing() {
+        var videoId = Guid.Parse("d9d9d9d9-d9d9-d9d9-d9d9-d9d9d9d9d9d9");
+        var sourcePath = Path.Combine(_cacheRoot, "dovi-profile-eight-missing-filter-source.mkv");
+        await File.WriteAllTextAsync(sourcePath, "source");
+        var process = new MissingToneMapFilterThenWritingProcessExecutor();
+        var service = new HlsAssetService(
+            new HlsAssetServiceOptions(_cacheRoot, HlsTranscoderProfile.Software),
+            new FakeVideoSourceService(new VideoSourceFile(
+                videoId,
+                sourcePath,
+                "video/x-matroska",
+                false,
+                DurationSeconds: 180,
+                Width: 3840,
+                Height: 1920,
+                Streams:
+                [
+                    new(0, "Video", "hevc", null, "Video", 3840, 1920, 24, null, null, null, true, false) {
+                        PixelFormat = "yuv420p10le",
+                        ColorTransfer = "smpte2084",
+                        ColorPrimaries = "bt2020",
+                        ColorSpace = "bt2020nc",
+                        DvProfile = 8,
+                        DvLevel = 6,
+                        RpuPresentFlag = true,
+                        BlPresentFlag = true,
+                        DvBlSignalCompatibilityId = 1
+                    }
+                ])),
+            process,
+            NullLogger<HlsAssetService>.Instance);
+
+        var segment = await service.GetAssetAsync(videoId, "v/8mbps/seg_00000.ts", null, CancellationToken.None);
+
+        Assert.NotNull(segment);
+        Assert.Equal(2, process.ArgumentHistory.Count);
+        Assert.Contains(process.ArgumentHistory[0], argument =>
+            argument.Contains("zscale=t=linear", StringComparison.Ordinal) &&
+            argument.Contains("tonemap=tonemap=hable", StringComparison.Ordinal));
+        Assert.Contains(process.ArgumentHistory[1], argument =>
+            argument.Contains("scale=w=-2:h=1080", StringComparison.Ordinal) &&
+            argument.Contains("format=yuv420p", StringComparison.Ordinal));
+        Assert.DoesNotContain(process.ArgumentHistory[1], argument => argument.Contains("tonemap", StringComparison.Ordinal));
+        Assert.True(File.Exists(segment.Path));
     }
 
     [Fact]
@@ -898,6 +948,32 @@ public sealed class HlsAssetServiceTests : IDisposable {
             IReadOnlyDictionary<string, string>? environment,
             CancellationToken cancellationToken) =>
             Task.FromResult(new ProcessExecutionResult(1, string.Empty, "No such filter: 'tonemapx'"));
+    }
+
+    private sealed class MissingToneMapFilterThenWritingProcessExecutor : ProcessExecutor {
+        public List<IReadOnlyList<string>> ArgumentHistory { get; } = [];
+
+        public override async Task<ProcessExecutionResult> RunAsync(
+            string fileName,
+            IReadOnlyList<string> arguments,
+            IReadOnlyDictionary<string, string>? environment,
+            CancellationToken cancellationToken) {
+            ArgumentHistory.Add(arguments);
+            if (arguments.Any(argument => argument.Contains("tonemap", StringComparison.Ordinal))) {
+                return new ProcessExecutionResult(1, string.Empty, "No such filter: 'zscale'");
+            }
+
+            var outputPath = arguments[^1];
+            Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
+            var segmentPatternIndex = arguments.ToList().IndexOf("-hls_segment_filename");
+            if (segmentPatternIndex >= 0 && segmentPatternIndex < arguments.Count - 1) {
+                var segmentPattern = arguments[segmentPatternIndex + 1];
+                await File.WriteAllTextAsync(segmentPattern.Replace("%05d", "00000"), "segment", cancellationToken);
+            }
+
+            await File.WriteAllTextAsync(outputPath, "playlist", cancellationToken);
+            return new ProcessExecutionResult(0, string.Empty, string.Empty);
+        }
     }
 
     private sealed class WritesOnlyNextSegmentProcessExecutor : ProcessExecutor {

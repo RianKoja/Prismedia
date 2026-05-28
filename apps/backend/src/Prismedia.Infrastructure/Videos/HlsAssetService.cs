@@ -15,7 +15,7 @@ namespace Prismedia.Infrastructure.Videos;
 /// </summary>
 public sealed class HlsAssetService : IHlsAssetService {
     private const int SegmentDurationSeconds = 6;
-    private const int VirtualCacheFormatVersion = 8;
+    private const int VirtualCacheFormatVersion = 9;
     private const int ActiveGenerationReuseWindowSegments = 12;
     private static readonly TimeSpan SegmentPollInterval = TimeSpan.FromMilliseconds(100);
     private static readonly ConcurrentDictionary<string, VirtualRenditionGeneration> ActiveRenditions = new();
@@ -279,7 +279,7 @@ public sealed class HlsAssetService : IHlsAssetService {
         var generationStartSegment = PrerollSegmentIndex(segmentIndex);
         var generation = FindActiveRenditionGeneration(id, rendition, audioCacheKey, segmentIndex);
         if (generation is null) {
-            CancelActiveAudioGenerations(id, audioCacheKey);
+            CancelActiveRenditionGenerations(id, audioCacheKey, rendition);
             generation = StartVirtualRenditionGeneration(id, source, rendition, audioCacheKey, audioStreamIndex, generationStartSegment);
         }
 
@@ -317,10 +317,11 @@ public sealed class HlsAssetService : IHlsAssetService {
         return File.Exists(stagedPath) && new FileInfo(stagedPath).Length > 0;
     }
 
-    private static void CancelActiveAudioGenerations(
+    private static void CancelActiveRenditionGenerations(
         Guid id,
-        string audioCacheKey) {
-        var prefix = $"{id}/{audioCacheKey}/";
+        string audioCacheKey,
+        VirtualHlsRendition rendition) {
+        var prefix = $"{id}/{audioCacheKey}/{rendition.Name}/";
         CancelActiveGenerationsByPrefix(prefix);
     }
 
@@ -444,6 +445,33 @@ public sealed class HlsAssetService : IHlsAssetService {
                         segmentPattern,
                         HlsTranscoderProfile.Software,
                         transcoderOptions.VaapiDevice),
+                    environment: null,
+                    cancellationToken);
+            }
+
+            if (result.ExitCode != 0 &&
+                effectiveTranscoderProfile == HlsTranscoderProfile.Software &&
+                NeedsToneMapping(source) &&
+                IsMissingVideoFilterError(result.StandardError)) {
+                _logger?.LogWarning(
+                    "Virtual HLS tone mapping failed for {VideoId} rendition {Rendition}; retrying with basic software SDR output. Error: {Error}",
+                    id,
+                    rendition.Name,
+                    result.StandardError);
+
+                ResetStagingDirectory(stagingDirectory);
+                result = await _processes.RunAsync(
+                    transcoderOptions.FfmpegPath,
+                    VirtualRenditionArguments(
+                        source,
+                        rendition,
+                        audioStreamIndex,
+                        startSegment,
+                        playlistPath,
+                        segmentPattern,
+                        HlsTranscoderProfile.Software,
+                        transcoderOptions.VaapiDevice,
+                        enableToneMapping: false),
                     environment: null,
                     cancellationToken);
             }
@@ -690,7 +718,8 @@ public sealed class HlsAssetService : IHlsAssetService {
         string playlistPath,
         string segmentPattern,
         HlsTranscoderProfile transcoderProfile,
-        string vaapiDevice) {
+        string vaapiDevice,
+        bool enableToneMapping = true) {
         var gop = Math.Max(1, (int)Math.Ceiling(SegmentDurationSeconds * (source.FrameRate ?? 24)));
         var startSeconds = startSegment * SegmentDurationSeconds;
         var arguments = new List<string>
@@ -718,7 +747,7 @@ public sealed class HlsAssetService : IHlsAssetService {
             "-1"
         ]);
 
-        arguments.AddRange(VideoFilterArguments(source, rendition, transcoderProfile));
+        arguments.AddRange(VideoFilterArguments(source, rendition, transcoderProfile, enableToneMapping));
 
         arguments.AddRange(
         [
@@ -780,8 +809,9 @@ public sealed class HlsAssetService : IHlsAssetService {
     private static IReadOnlyList<string> VideoFilterArguments(
         VideoSourceFile source,
         VirtualHlsRendition rendition,
-        HlsTranscoderProfile transcoderProfile) {
-        if (NeedsToneMapping(source)) {
+        HlsTranscoderProfile transcoderProfile,
+        bool enableToneMapping = true) {
+        if (enableToneMapping && NeedsToneMapping(source)) {
             return
             [
                 "-vf",
@@ -998,6 +1028,10 @@ public sealed class HlsAssetService : IHlsAssetService {
         return stream?.DvProfile is 5 ||
             stream?.DvBlSignalCompatibilityId is 0;
     }
+
+    private static bool IsMissingVideoFilterError(string standardError) =>
+        standardError.Contains("No such filter", StringComparison.OrdinalIgnoreCase) ||
+        standardError.Contains("Filter not found", StringComparison.OrdinalIgnoreCase);
 
     private static VideoSourceStream? PrimaryVideoStream(VideoSourceFile source) =>
         source.Streams?

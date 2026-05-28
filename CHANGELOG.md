@@ -60,6 +60,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - Fixed book detail pages so empty chapter sections are omitted and chapter cards use the shared radius scale.
 - Fixed the changelog dialog title so it matches the sidebar brand typography.
 - Fixed Dolby Vision Profile 8 adaptive playback so compatible HDR sources use the standard HDR tone-mapping path.
+- Fixed adaptive HLS segment generation on ffmpeg builds that do not include HDR tone-mapping filters.
 - Fixed the library loading animation so its pulsing field and rings render as circles.
 - Simplified library index page headers so they show only the section icon and title.
 - Fixed provider-applied Studio artwork so identified channel/studio relationship metadata can save both logo thumbnails and header backdrops.
