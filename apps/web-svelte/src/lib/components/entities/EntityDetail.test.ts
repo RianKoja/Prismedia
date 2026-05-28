@@ -599,14 +599,18 @@ describe("EntityDetail", () => {
       { label: "tmdb: 418214", url: "https://www.themoviedb.org/tv/418214", provider: "tmdb" },
     ];
 
-    render(EntityDetail, {
+    const { container } = render(EntityDetail, {
       props: {
         card,
         tabs: [{ id: "links", label: "Links", sections: ["links"] }],
       },
     });
+    const metadataCardSource = readFileSync("src/lib/components/MetadataCard.svelte", "utf8");
 
     expect(screen.getByText("Links & Provider IDs")).toBeInTheDocument();
+    expect(container.querySelector(".metadata-card-capped")).toBeInTheDocument();
+    expect(metadataCardSource).toContain("max-height: var(--metadata-card-max-height, 24rem);");
+    expect(metadataCardSource).toContain("overflow-y: auto;");
     expect(screen.getByText("URLs")).toBeInTheDocument();
     expect(screen.getByText("themoviedb.org")).toBeInTheDocument();
     expect(screen.getByText("https://www.themoviedb.org/tv/271267")).toBeInTheDocument();

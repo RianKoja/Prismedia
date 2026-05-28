@@ -628,7 +628,7 @@
 
 {#snippet linksSection()}
   {#if card.links.length > 0}
-    <MetadataCard title="Links & Provider IDs" icon={Link} wide>
+    <MetadataCard title="Links & Provider IDs" icon={Link} wide capped>
       {#if urlLinks.length > 0}
         <div class="link-group">
           <div class="link-group-label">URLs</div>

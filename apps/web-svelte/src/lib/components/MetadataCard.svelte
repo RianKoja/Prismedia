@@ -14,12 +14,13 @@
     rows?: MetadataRow[];
     children?: Snippet;
     wide?: boolean;
+    capped?: boolean;
   }
 
-  let { title, icon: Icon, rows, children, wide = false }: Props = $props();
+  let { title, icon: Icon, rows, children, wide = false, capped = false }: Props = $props();
 </script>
 
-<div class="metadata-card" class:metadata-card-wide={wide}>
+<div class="metadata-card" class:metadata-card-wide={wide} class:metadata-card-capped={capped}>
   <h3 class="metadata-card-title">
     {#if Icon}
       <Icon class="h-3.5 w-3.5" />
@@ -51,6 +52,12 @@
     background: var(--color-surface-2, #11161d);
   }
 
+  .metadata-card-capped {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    max-height: var(--metadata-card-max-height, 24rem);
+  }
+
   .metadata-card-title {
     display: flex;
     align-items: center;
@@ -66,6 +73,14 @@
 
   .metadata-card-body {
     min-width: 0;
+  }
+
+  .metadata-card-capped .metadata-card-body {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding-right: 0.25rem;
+    scrollbar-gutter: stable;
   }
 
   .metadata-card-rows {
