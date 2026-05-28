@@ -28,5 +28,5 @@ Long-running media work belongs in `apps/backend/src/Prismedia.Worker` and share
 .NET application/infrastructure services. Job state is represented in the
 database through Prismedia-owned tables such as `job_runs`.
 
-Do not add a TypeScript worker, pg-boss wrappers, or `@prismedia/app-core` queue
-helpers.
+Do not add a TypeScript worker, a second queue runtime, or `@prismedia/app-core`
+queue helpers.

@@ -1,97 +1,70 @@
 ---
 sidebar_position: 2
 title: First Boot
-description: From a fresh container to a scanned library.
+description: Add your first library root, scan it, and verify the result.
 ---
 
 # First Boot
 
-This page walks through what happens the first time you open Prismedia: adding library roots, kicking off the first scan, and verifying it landed.
+After the container starts, Prismedia needs one watched library root. A root is a folder inside the container, usually somewhere under `/media`, plus the media types you want scanned from that folder.
 
 ## 1. Open the app
 
-After `docker compose up -d` completes, open [http://localhost:8008](http://localhost:8008). A fresh install opens to an empty dashboard with no library roots.
+Open [http://localhost:8008](http://localhost:8008). In local development, Vite is usually [http://localhost:5173](http://localhost:5173) and proxies to the API.
 
-If you're upgrading an existing install instead of starting fresh, read [Upgrading](./upgrading.md) first.
+## 2. Add a watched root
 
-## 2. Add a library root
+Go to **Settings -> Watched Libraries**.
 
-Open **Settings** (sidebar bottom-left) and find the **Watched Libraries** card.
+![Settings](/img/screenshots/settings.png)
 
-![Settings — Watched Libraries panel](/img/screenshots/settings.png)
+Add a root such as `/media`, `/media/videos`, or `/media/books`.
 
-Click **Add library root** and fill in:
+Choose the scan toggles that match the folder:
 
-| Field | Meaning |
+| Toggle | Scans |
 | --- | --- |
-| **Path** | A path **inside the container**, e.g. `/media/movies`. |
-| **Label** | Optional friendly name shown in the UI. |
-| **Recursive** | Walk subdirectories. Almost always **on**. |
-| **Scan videos / images / audio** | Independent scan-type flags. Pick what's in this root. |
-| **NSFW** | Mark every entity discovered under this root as NSFW. |
+| **Videos** | Video files, movies, series, seasons, and episodes. |
+| **Images** | Loose image files. |
+| **Galleries** | Folders of images and animated media. |
+| **Books** | `.cbz` and `.zip` comic/book archives. |
+| **Audio** | Audio library folders and tracks. |
 
-Repeat for each root you want Prismedia to watch. The path you enter is the path the container sees, **not** the host path — so if you mounted `/srv/movies:/media/movies`, the root path is `/media/movies`.
+Use separate roots when different folders need different scan behavior.
 
-:::tip
-Read [Library Organization](./library-organization.md) before scanning. The depth of files under a root determines whether they become **movies**, **flat-series episodes**, or **seasoned-series episodes**. Adjusting after the fact means a rescan and re-identify pass.
-:::
+## 3. Run the first scan
 
-## 3. Configure global library settings
+Open **Jobs**, find the library scan action, and run it. You can also rescan a specific root or folder from the **Files** workspace.
 
-The other panels on the Settings page govern how scans behave and what gets generated. Sensible defaults are set out of the box; the ones worth thinking about up front:
+![Jobs](/img/screenshots/jobs.png)
 
-| Setting | Default | What to consider |
-| --- | --- | --- |
-| **Auto-scan enabled** | off | Turn on once your library layout is stable. |
-| **Scan interval (minutes)** | 60 | Frequency of recurring scans. |
-| **Auto-generate previews** | on | Required for HLS playback to feel snappy. |
-| **Generate trickplay** | on | Sprite sheet for hover-scrub on the timeline. |
-| **Background worker concurrency** | 1 | Bump for faster generation, costs CPU. |
-| **Default playback mode** | direct | Switch to `hls` if your clients can't seek directly. |
+The worker will enqueue follow-up jobs for probing, thumbnails, waveforms, sprites, subtitles, HLS assets, pHashes, and metadata imports as needed.
 
-The full reference is in [Settings](./settings.md). Defaults are fine for a first scan.
+## 4. Verify in Browse and Files
 
-## 4. Run the first scan
+Use the browse pages for catalog views:
 
-Open the **Operations** page (sidebar → **Jobs**) — this is where you watch and trigger background work.
+- **Videos** and **Series**
+- **Images** and **Galleries**
+- **Books**
+- **Audio**
+- **People**, **Studios**, and **Tags**
+- **Collections**
 
-![Operations — Jobs dashboard](/img/screenshots/jobs.png)
+Use **Files** when you want to inspect the source folder layout, linked entities, exclusions, and file operations.
 
-The page is grouped into queues by concern:
+![Files](/img/screenshots/files.png)
 
-- **Library scans** — discover files in your roots
-- **Library maintenance** — clean up generated assets
-- **Video media pipeline** — probe, fingerprint, preview, sprites, HLS prep
-- **Metadata import** — apply scrape/identify results
-- **Gallery image pipeline** — image fingerprints, thumbnails
-- **Audio pipeline** — probe, fingerprint, waveform
+## 5. Set visibility
 
-Find the **Library scan** queue card and click **Run**. The card shows live counts of running, backlog, and failed jobs. As the scan finds files, the **Video media pipeline** queues will fill in behind it (probe → fingerprint → preview).
+Prismedia is designed for private LAN use, but some libraries may still contain content you do not want shown by default. Mark roots or entities as NSFW when appropriate and control visibility from **Settings -> Content Visibility**.
 
-You don't need to watch all of it — the worker handles things. Watch for **Failures**: any non-zero count means a file couldn't be processed. Click in for the full error.
+Visibility is enforced across browse pages, search, files, identify, jobs context, and relationship rails.
 
-:::info
-On a large library the first scan can take a long time — gigabytes of preview clips and trickplay sprites get generated. You can keep using the app while this runs; the dashboard and library pages update as previews land.
-:::
+## 6. Identify metadata
 
-## 5. Verify
+Open **Identify** when you want provider metadata. Add entities to the queue, run providers, review the proposal, and accept only the fields and artwork you want.
 
-Hop to **Videos** in the sidebar. You should see your scanned files with:
+![Identify](/img/screenshots/identify.png)
 
-- Thumbnails (placeholder gradient if previews are still pending)
-- Resolution, codec, and duration metadata from `ffprobe`
-- An **S01E03** badge on episodes (when season + episode numbers were parsed from the filename)
-
-Hover a thumbnail to scrub through trickplay sprites. Click to open the detail page and play.
-
-## 6. Identify (optional but recommended)
-
-Filenames give you titles and episode numbers, but not posters, descriptions, performers, or studios. That's what **Identify** does.
-
-The fastest path: open **Identify** in the sidebar, choose the **Videos** or **Series** tab, pick a provider (TMDB, TVDB, MusicBrainz, a Stash community scraper, or a StashBox endpoint depending on what's installed), and click **Run**. Each row gets one or more candidate matches; you accept or reject per row, or **Auto-accept** singletons.
-
-The full workflow is in [Identify & Scrape](./identify-and-scrape.md), including the cascade flow that maps a series to its seasons and episodes in one pass.
-
----
-
-You're up. The next pages cover what's where in the UI ([Browsing](./browsing.md)), how playback and the lightbox work ([Playback](./playback.md)), and how Identify actually flows ([Identify & Scrape](./identify-and-scrape.md)).
+Provider setup lives in **Plugins**.

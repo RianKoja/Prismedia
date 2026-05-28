@@ -1,4 +1,4 @@
-import type {ReactNode} from 'react';
+import type {CSSProperties, ReactNode} from 'react';
 import Link from '@docusaurus/Link';
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
 import useBaseUrl from '@docusaurus/useBaseUrl';
@@ -10,25 +10,25 @@ import styles from './index.module.css';
 const CAPABILITIES = [
   'Videos',
   'Series',
-  'Movies',
   'Comics',
   'Manga',
   'Books',
   'Galleries',
   'Images',
   'Audio',
-  'Performers',
+  'People',
   'Studios',
   'Tags',
   'Plugins',
+  'Files',
 ];
 
 const FEATURES = [
   {
-    kicker: 'Reading',
-    title: 'Comics, manga, and books',
+    kicker: 'Files',
+    title: 'Manage the source library',
     body:
-      'cbz/zip archives, image folders, and book files scan as organized series. Natural page order, ComicInfo metadata, reading progress, and a dedicated paged or webtoon reader — all in the same library as your videos.',
+      'Browse watched roots, inspect linked entities, upload, create folders, rename, move, rescan, exclude, and delete from one focused file manager.',
   },
   {
     kicker: 'Streaming',
@@ -40,13 +40,13 @@ const FEATURES = [
     kicker: 'Audio',
     title: 'Your music collection, organized',
     body:
-      'Albums, tracks, cover art, waveforms, performer and studio linking. The same metadata pipeline as every other media type, with shuffle and a built-in player.',
+      'Albums, tracks, cover art, waveforms, people and studio linking. The same metadata pipeline as every other media type, with shuffle and a built-in player.',
   },
   {
     kicker: 'Metadata',
-    title: 'Plugin-powered identification',
+    title: 'Reviewable identification',
     body:
-      'TypeScript and Python plugins expose providers for movies, series, comics, performers, galleries, and audio. One identify engine covers your entire library.',
+      'A durable Identify queue lets you run providers, compare proposals, choose artwork, walk child records, and accept only what belongs in your library.',
   },
   {
     kicker: 'Operations',
@@ -56,9 +56,9 @@ const FEATURES = [
   },
   {
     kicker: 'Library',
-    title: 'Folders are the schema',
+    title: 'Collections are simple groupings',
     body:
-      'Movies, flat series, and seasoned series are inferred from your folder depth. Sidecars and sidecar metadata merge cleanly without overwriting your edits.',
+      'Create manual, dynamic, or hybrid collections as organizational views over videos, series, galleries, images, books, and audio tracks.',
   },
   {
     kicker: 'Deploy',
@@ -80,21 +80,21 @@ const SHOWCASE = [
     title: 'Rich video playback, start to finish.',
     body:
       'HLS adaptive streaming, trickplay frame strip, multi-language subtitles with a dockable transcript panel, and inline metadata editing — all in one page.',
-    image: '/img/screenshots/scene-detail.png',
+    image: '/img/screenshots/video-detail.png',
     alt: 'Video detail page with player and transcript',
   },
   {
-    title: 'Comics and books organized for reading.',
+    title: 'Files and catalog views stay connected.',
     body:
-      'Archive chapters and image folders scan into organized series. Natural page order, read/unread progress, and a dedicated reader with paged or webtoon mode.',
-    image: '/img/screenshots/gallery-detail.png',
-    alt: 'Gallery detail page',
+      'Move between watched folders, linked entities, scan exclusions, and catalog metadata without leaving the app.',
+    image: '/img/screenshots/files.png',
+    alt: 'Files workspace',
   },
   {
     title: 'Mobile is first-class, not a fallback.',
     body:
       'Browse, search, read, and play from any phone on your network. Every view is designed for touch before it scales up to desktop.',
-    image: '/img/screenshots/mobile-scene-detail.png',
+    image: '/img/screenshots/mobile-video-detail.png',
     alt: 'Prismedia on mobile',
     portrait: true,
   },
@@ -104,7 +104,7 @@ function Hero() {
   const dashboardUrl = useBaseUrl('/img/screenshots/dashboard.png');
 
   return (
-    <header className={styles.hero}>
+    <header className={styles.hero} style={{'--hero-image': `url(${dashboardUrl})`} as CSSProperties}>
       <div className={styles.heroBackdrop} aria-hidden />
       <div className={styles.heroGrid} aria-hidden />
       <div className={styles.heroVignette} aria-hidden />
@@ -120,8 +120,8 @@ function Hero() {
           </Heading>
           <p className={styles.heroSubtitle}>
             Prismedia is a self-hosted media library for videos, comics, books, audio,
-            and galleries — organized, searchable, and playable from any device on
-            your network. Everything runs in a single Docker container on your hardware.
+            galleries, and files. It is organized, searchable, playable from any device
+            on your network, and shipped as one Docker image.
           </p>
           <div className={styles.actions}>
             <Link className={styles.primaryAction} to="/docs/users/quick-start">
@@ -135,7 +135,7 @@ function Hero() {
           <dl className={styles.metaRow}>
             <div>
               <dt>Media types</dt>
-              <dd>Video · Comics · Books · Audio · Galleries</dd>
+              <dd>Video · Images · Books · Audio · Files</dd>
             </div>
             <div>
               <dt>Footprint</dt>
@@ -146,23 +146,6 @@ function Hero() {
               <dd>Open source</dd>
             </div>
           </dl>
-        </div>
-        <div className={styles.heroVisual} aria-hidden>
-          <div className={styles.heroFrame}>
-            <div className={styles.heroChrome}>
-              <span />
-              <span />
-              <span />
-              <em>prismedia.local:8008</em>
-            </div>
-            <img
-              src={dashboardUrl}
-              alt=""
-              loading="eager"
-              className={styles.heroScreenshot}
-            />
-          </div>
-          <div className={styles.heroGlow} />
         </div>
       </div>
     </header>
@@ -214,8 +197,8 @@ function Pathways() {
             <span className={styles.pathKicker}>02 · Extend it</span>
             <strong className={styles.pathTitle}>Build a metadata plugin</strong>
             <p className={styles.pathBody}>
-              Write providers in TypeScript or Python to identify videos, comics,
-              performers, audio, and more. The community scraper index is built in.
+              Write providers in TypeScript or Python to identify videos, books,
+              people, audio, and more. Stash-compatible scraper packages can be adapted.
             </p>
             <span className={styles.pathCta}>
               Build plugins
@@ -226,7 +209,7 @@ function Pathways() {
             <span className={styles.pathKicker}>03 · Understand it</span>
             <strong className={styles.pathTitle}>Explore the architecture</strong>
             <p className={styles.pathBody}>
-              SvelteKit, the worker, Postgres, and the shared packages. How code
+              Svelte, the .NET worker, Postgres, and the shared packages. How code
               moves from the UI all the way to the database and job queue.
             </p>
             <span className={styles.pathCta}>
@@ -275,7 +258,7 @@ function Showcase() {
         <div className={styles.sectionHeader}>
           <p className={styles.kicker}>The interface</p>
           <Heading as="h2" className={styles.sectionTitle}>
-            Dark Room — sharp edges, brass on signal, glass when it floats.
+            Prism Noir Luxe: controlled radii, brass on signal, glass when it floats.
           </Heading>
           <p className={styles.sectionLead}>
             The whole UI follows one design language. Read the{' '}

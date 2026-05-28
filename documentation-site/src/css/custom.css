@@ -1,5 +1,5 @@
 /* =============================================================================
- * Prismedia Documentation — Dark Room theme
+ * Prismedia Documentation - Prism Noir Luxe theme
  * Implements the design language at docs/design-language.md against Docusaurus.
  * ============================================================================= */
 
@@ -28,11 +28,11 @@
   --prismedia-glass-3: rgba(21, 26, 40, 0.92);
 
   /* Brass accent */
-  --prismedia-brass: #c49a5a;
-  --prismedia-brass-300: #e0c48e;
-  --prismedia-brass-400: #d4af74;
-  --prismedia-brass-600: #7a5e2c;
-  --prismedia-brass-700: #5a4620;
+  --prismedia-brass: #f2c26a;
+  --prismedia-brass-300: #f7dfa0;
+  --prismedia-brass-400: #f5d48a;
+  --prismedia-brass-600: #d59a2a;
+  --prismedia-brass-700: #7a5e20;
 
   /* Text */
   --prismedia-text-primary: #f2eed8;
@@ -67,13 +67,13 @@
     0 0 32px rgba(196, 154, 90, 0.1);
 
   /* Infima primary scale (drives links, sidebar active, etc.) */
-  --ifm-color-primary: #c49a5a;
-  --ifm-color-primary-dark: #b48748;
-  --ifm-color-primary-darker: #a97e42;
-  --ifm-color-primary-darkest: #805d2f;
-  --ifm-color-primary-light: #d0ab70;
-  --ifm-color-primary-lighter: #d9b981;
-  --ifm-color-primary-lightest: #efd6aa;
+  --ifm-color-primary: #f2c26a;
+  --ifm-color-primary-dark: #d59a2a;
+  --ifm-color-primary-darker: #7a5e20;
+  --ifm-color-primary-darkest: #4a3818;
+  --ifm-color-primary-light: #f5d48a;
+  --ifm-color-primary-lighter: #f7dfa0;
+  --ifm-color-primary-lightest: #faecc0;
 
   /* Infima base */
   --ifm-background-color: var(--prismedia-bg);
@@ -98,13 +98,13 @@
   --ifm-heading-font-weight: 700;
   --ifm-code-font-size: 92%;
 
-  /* Geometry — sharp corners everywhere */
-  --ifm-global-radius: 0;
-  --ifm-button-border-radius: 0;
-  --ifm-pagination-nav-border-radius: 0;
-  --ifm-breadcrumb-border-radius: 0;
-  --ifm-alert-border-radius: 0;
-  --ifm-card-border-radius: 0;
+  /* Geometry - controlled Prism Noir Luxe radii */
+  --ifm-global-radius: 10px;
+  --ifm-button-border-radius: 6px;
+  --ifm-pagination-nav-border-radius: 10px;
+  --ifm-breadcrumb-border-radius: 6px;
+  --ifm-alert-border-radius: 10px;
+  --ifm-card-border-radius: 10px;
 
   /* Chrome */
   --ifm-navbar-height: 60px;
@@ -129,14 +129,6 @@
 [data-theme='dark'] {
   --ifm-background-color: var(--prismedia-bg);
   --ifm-background-surface-color: var(--prismedia-surface-1);
-}
-
-/* -----------------------------------------------------------------------------
- * Sharp corners — no exceptions
- * ---------------------------------------------------------------------------*/
-
-* {
-  border-radius: 0 !important;
 }
 
 /* -----------------------------------------------------------------------------

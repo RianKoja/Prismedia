@@ -1,84 +1,67 @@
 ---
 sidebar_position: 1
 title: About Prismedia
-sidebar_label: About Prismedia
-description: A private, self-hosted home for your entire media collection — videos, comics, books, galleries, and audio.
+description: What Prismedia is, what it manages, and how the pieces fit together.
 ---
 
-# Prismedia
+# About Prismedia
 
-**A private screening room for your entire library.**
+Prismedia is a private, self-hosted media library for a trusted user or household on a private LAN. It is video-first, but images, galleries, books, comics, audio, people, studios, tags, and collections are first-class library entities.
 
-Prismedia is a self-hosted media library that brings your videos, movies, TV series, comics, manga, books, image galleries, and audio into one organized, searchable interface — running entirely on your own hardware, on your own network.
-
-There are no cloud accounts, no subscriptions, and no data leaves your home. Everything runs inside a single Docker container. You provide the media; Prismedia handles the rest.
+It ships as one Docker image. PostgreSQL 16, ffmpeg, the .NET API, the .NET worker, and the static Svelte frontend all run together behind port `8008`.
 
 ![Prismedia dashboard](/img/screenshots/dashboard.png)
 
-## What Prismedia manages
+## What it is for
 
-| Media type | What you get |
+- Keeping a local media library organized without handing library state to a cloud service.
+- Browsing videos, series, images, galleries, books, comics, audio, and related metadata from one app.
+- Managing files and scan exclusions from the browser when your media mount is writable.
+- Running local background work for scans, probes, thumbnails, sprites, HLS, subtitles, identify, imports, and collection refreshes.
+- Using plugin and Stash-compatible metadata workflows while keeping Prismedia's schema independent.
+
+## Main workspaces
+
+| Workspace | Purpose |
 | --- | --- |
-| **Videos & Movies** | HLS adaptive streaming, on-demand transcoding, trickplay sprites, frame-strip scrubbing, markers. |
-| **TV Series** | Season and episode organization inferred from your folder layout, with full metadata and per-episode progress. |
-| **Comics & Manga** | cbz/zip archives and image folders organized into series, with natural page order, ComicInfo metadata, reading progress, and a dedicated paged or webtoon reader. |
-| **Books** | Your reading collection alongside every other media type — browsable, searchable, and readable from any device. |
-| **Image Galleries** | Folder-based and archive-based galleries with grid and lightbox modes, ratings, tags, and performer/studio linking. |
-| **Audio** | Albums, tracks, cover art, waveforms, performer and studio linking, shuffle, and a built-in player. |
-| **Performers, Studios & Tags** | Rich cross-referenced entities that span every media type — link a performer to their videos, audio, and galleries from one profile. |
+| **Dashboard** | Recent media, library counts, queue state, and release/update notices. |
+| **Browse** | Videos, series, images, galleries, books, audio, people, studios, tags, and collections. |
+| **Files** | Watched-root file tree with open, upload, new folder, rename, move, rescan, exclude, and delete actions. |
+| **Identify** | Durable review queue for provider matches and metadata proposals. |
+| **Plugins** | Native plugins, Stash-compatible scrapers, and StashBox endpoints. |
+| **Jobs** | Worker heartbeat, active queues, recent work, failures, and manual queue actions. |
+| **Settings** | Library roots, visibility, playback, subtitles, generation, worker, storage, and diagnostics. |
 
-## How it works
+## Design direction
 
-1. **Run the Docker image** — PostgreSQL, ffmpeg, and the web server ship as one container. No external dependencies.
-2. **Mount your media** — point one or more directories at `/media` and register them as library roots in Settings.
-3. **Scan** — Prismedia walks your library, fingerprints files, generates thumbnails and previews, and organizes everything into the appropriate library type.
-4. **Identify** — run the identify engine to pull in metadata from plugins and scrapers. Titles, cover art, cast, ratings, and descriptions fill in automatically.
-5. **Browse and play** — open the app from any browser on your local network.
+Prismedia follows **Prism Noir Luxe**: dark material layers, glass for floating and interactive surfaces, controlled radii, brass glow for active state, and dense layouts that remain touch-friendly.
 
-## Key capabilities
+The design language is documented in [Design Language](./developers/design-language.md).
 
-### Metadata, everywhere
+## Runtime model
 
-Every entity — video, comic, book, audio track, performer, studio — carries the same rich metadata surface: title, cover art, description, ratings, tags, and provenance. Plugin-powered providers handle identification automatically, with Stash-compatible scrapers and StashDB endpoints supported natively.
+```text
+Browser / LAN
+    |
+    | HTTP :8008
+    v
+.NET API
+    |-- serves /api/*
+    |-- serves the built Svelte app
+    |-- streams direct files and HLS assets
+    |-- applies EF Core migrations
+    |
+    +--> PostgreSQL 16
+    |
+    +--> .NET worker
+         scans, probes, previews, HLS, subtitles, identify, imports
+```
 
-### Mobile-first
+The frontend is a client only. Public HTTP contracts live in the .NET backend and the Svelte app prefers generated OpenAPI clients.
 
-Every view is designed for a phone first. Browse, search, play, and read from any device on your network. Touch targets, gesture navigation, and bottom navigation are designed before the desktop expansion — not bolted on after.
+## What to read next
 
-### One container
-
-PostgreSQL 16, ffmpeg, audiowaveform, and the background worker all run inside one Docker image. Mount `/data` for application state, mount your media under `/media`, expose port `8008`, and you're running. No environment variables required.
-
-### Plugin system
-
-Extend Prismedia with TypeScript or Python plugins that add metadata providers, scrapers, and identify sources. The community scraper index is built in — browse, install, and enable scrapers directly from the Settings page.
-
-### Background jobs you can see
-
-Scanning, probing, transcoding, and scraping all happen as background jobs. The Operations dashboard shows every running and queued job in real time so you always know what the system is doing.
-
----
-
-## Get started
-
-### New to Prismedia?
-
-Start with the [Quick Start](./users/quick-start.md) guide. It walks through the one-command Docker install, volume setup, and first boot in about five minutes. Then read [First Boot](./users/first-boot.md) before pointing it at a real library.
-
-### Coming from Stash?
-
-Prismedia supports native StashDB endpoints and is compatible with community Stash scrapers. See [Stash Compatibility](./plugins/stash-compat.md) for migration guidance.
-
-### Want to write a plugin?
-
-Start at [Plugins · Overview](./plugins/overview.md). The [Manifest](./plugins/manifest.md) and [Capabilities](./plugins/capabilities.md) pages are the reference; the [TypeScript](./plugins/typescript-plugin.md) and [Python](./plugins/python-plugin.md) guides walk through real plugins end-to-end.
-
-### Want to understand the code?
-
-Start at [Architecture](./developers/architecture.md). [Monorepo Layout](./developers/monorepo.md), [Database](./developers/database.md), and [API & Jobs](./developers/api-and-jobs.md) drill into each layer.
-
----
-
-:::tip Version 1 baseline
-Prismedia 1.0 starts from the current application model. Pre-release schema experiments are folded into the initial database shape instead of shipping as upgrade paths.
-:::
+- [Quick Start](./users/quick-start.md) gets the container running.
+- [First Boot](./users/first-boot.md) walks through the first library scan.
+- [Browsing The Library](./users/browsing.md) explains the main app surfaces.
+- [Library Organization](./users/library-organization.md) describes how folder layout becomes media structure.

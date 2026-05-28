@@ -1,184 +1,74 @@
-# pHash Contribution Pipeline
+# pHash Contribution
 
-Prismedia identifies scenes against [StashDB](https://stashdb.org), ThePornDB, and
-other StashBox-protocol servers using perceptual hashes (pHash), along with MD5
-and OpenSubtitles (oshash) file hashes. This document explains how hashes are
-generated, how contribution works, and why we share Stash's exact pipeline.
+Perceptual hashes (pHash) let Prismedia identify a video against StashBox-protocol community indexes by content rather than by name. Prismedia's pHash pipeline intentionally matches Stash's pipeline so values cluster with the existing fingerprint database.
 
-## Why contribute fingerprints?
+## Why compatibility matters
 
-`submitFingerprint` is **not** a metadata edit channel — StashDB has a separate
-scene-edit/vote system for that. It does exactly one thing: associates a local
-file hash with a known remote scene ID so the community index grows.
+The point of a pHash is that two encodings of the same video can produce the same hash. If Prismedia computed a slightly different value, identify-by-fingerprint would become less useful.
 
-The value of that is:
+The implementation matches Stash's video pHash flow:
 
-1. **Coverage for re-encodes.** `md5` and `oshash` are byte-exact — any
-   re-encode, container swap, or trim breaks them. `phash` is perceptual — it
-   survives recompression, resolution changes, and minor trims. StashDB's phash
-   index is only as good as what people contribute. When you submit your copy's
-   phash, the next user with a different re-encode of the same scene gets an
-   automatic match instead of having to search by title.
-2. **Strengthening weak matches.** If you identified a scene via title search
-   (not fingerprint), StashDB has zero fingerprints linking your copy to that
-   scene. Submitting turns "had to search by title" into "auto-matches next
-   time" for everyone with a similar file.
+- Frame selection.
+- ffmpeg seek strategy.
+- Frame scale.
+- 5 by 5 montage layout.
+- Hash function.
+- Lowercase 16-character hex format.
 
-## Pipeline
+The helper source lives in `infra/phash/main.go`.
 
-### Perceptual hash generation
+## Generation summary
 
-The worker computes pHashes via the bundled `prismedia-phash` Go helper. The
-pipeline matches Stash's `pkg/hash/videophash/phash.go` step-for-step — any
-divergence would produce hashes that do not cluster with existing community
-fingerprints.
+1. Sample 25 frames evenly from the source duration.
+2. Use ffmpeg input seek and scale each frame to width `160`.
+3. Compose a 5 by 5 montage of the sampled frames.
+4. Run `goimagehash.PerceptionHash`.
+5. Store the resulting hash on the video fingerprint record.
 
-```
-1. For i in [0, 25):
-     time = 0.05*duration + i * (0.9*duration/25)
-   Frame 0 lands at 5% of duration, frame 24 lands at 91.4%.
+The unified Docker image builds the helper and copies it to `/usr/local/bin/prismedia-phash`. In development, set `PRISMEDIA_PHASH_BIN` if the helper is not on `PATH`.
 
-2. ffmpeg -ss <time> -i <file> -frames:v 1 \
-          -vf scale=160:-2 -c:v bmp -f rawvideo -
-   (Input seek — `-ss` BEFORE `-i` — is load-bearing. Output seek
-    picks different frames and breaks compatibility.)
+## When pHash is computed
 
-3. Paste all 25 frames into a 5×5 NRGBA montage via
-   github.com/disintegration/imaging. Canvas size is (W*5) × (H*5)
-   from the first decoded frame — a 16:9 source yields an 800×450
-   montage, NOT 800×800. Stash preserves aspect ratio; so do we.
+- During scan/probe work when pHash generation is enabled.
+- During preview or generated-asset rebuilds that refresh video fingerprints.
+- During explicit pHash backfill diagnostics.
 
-4. goimagehash.PerceptionHash(montage) → uint64
+If the helper binary is missing, the worker logs a warning and skips pHash for that item. Other scan and playback behavior continues.
 
-5. Format as a lowercase 16-character hex string.
+## Contribution flow
+
+```text
+Identify -> Accept StashBox match -> Link remote record -> Submit fingerprints
 ```
 
-Source: `infra/phash/main.go`. Built statically in a `golang:1.23-alpine`
-stage inside `infra/docker/unified.Dockerfile` and `infra/docker/worker.Dockerfile`,
-copied into the runtime image at `/usr/local/bin/prismedia-phash`, with
-`PRISMEDIA_PHASH_BIN` pre-set. The worker's `computePhash` helper in
-`@prismedia/media-core` shells out to it with `-file` and `-duration`, validates
-the 16-char hex output, and returns `null` on `ENOENT` so dev machines without
-the binary keep running.
+Accepting a StashBox-origin match records the remote link and can queue fingerprint submission for available algorithms such as MD5, OpenSubtitles hash, and pHash. Submission attempts are logged for auditing and troubleshooting.
 
-### Worker integration
+## Build locally
 
-The .NET fingerprint job reads the
-`generation.generatePhash` app setting. When enabled and the scene has a known
-duration, it runs `computePhash(filePath, duration)` after md5/oshash and
-writes the result to `scenes.phash`.
-
-The same processor accepts a `phashOnly: true` flag on the job payload. When
-set, it skips md5/oshash and only refreshes the phash — which is how
-`POST /jobs/phash-backfill` reuses the existing queue to populate hashes for
-every scene that has a duration but no stored phash.
-
-### Contribution flow
-
-```
- Identify → Accept → Auto-link → Submit
-  (scene)   (apply   (stash_ids) (fingerprint
-             metadata)             _submissions)
+```bash
+cd infra/phash
+go mod tidy
+go build -o prismedia-phash .
 ```
 
-1. **Identify**: `POST /stashbox-endpoints/:id/identify` checks for an
-   existing `stash_ids` row for the target endpoint first (short-circuit by
-   known remote ID). If none exists, it falls through to the fingerprint
-   cascade (oshash → md5 → phash) and then title search. The result lands in
-   `scrape_results` with `matchType: "stashid" | "fingerprint" | "title"`.
-2. **Accept**: `POST /scrapers/results/:id/accept` applies the proposed
-   metadata inside a transaction. When the result came from a StashBox endpoint,
-   it also inserts a `stash_ids` row linking the local scene to its remote
-   scene ID (`onConflictDoNothing`). This is what makes the scene contributable.
-3. **Contribute**: `POST /stashbox-endpoints/:id/submit-fingerprints` loads the
-   scene and its linked `stash_ids` row, then calls `submitFingerprint` once
-   per present algorithm (md5/oshash/phash). Refuses with 400 if `duration <= 0`
-   — Stash does the same. Each call is recorded in `fingerprint_submissions`,
-   upserted on the `(scene, endpoint, algorithm, hash)` unique index.
-4. **Bulk contribution**: The web pHashes tab iterates over `(scene, endpoint)`
-   pairs sequentially so the per-endpoint rate limiter holds.
+Run it directly:
 
-### GraphQL mutation
-
-Matches upstream stash-box schema exactly:
-
-```graphql
-mutation SubmitFingerprint($input: FingerprintSubmission!) {
-  submitFingerprint(input: $input)
-}
-
-input FingerprintSubmission {
-  scene_id: ID!
-  fingerprint: FingerprintInput!
-  unmatch: Boolean
-}
-
-input FingerprintInput {
-  hash: String!
-  algorithm: FingerprintAlgorithm!  # MD5 | OSHASH | PHASH
-  duration: Int!                    # seconds, rounded
-}
+```bash
+./prismedia-phash /path/to/video.mkv
 ```
-
-The client lives in `packages/stash-compat/src/stashbox/client.ts`. Duration
-is rounded with `Math.round(scene.duration)` at call time and clamped to a
-minimum of 1 — StashBox rejects zero.
-
-## Rate limiting
-
-Every `StashBoxClient` instance has an internal token bucket at 240 requests
-per minute (Stash's default). Previously, each API route handler `new`-ed a
-fresh client per request, so the bucket was effectively reset on every call
-and bulk operations could blow right through the limit.
-
-The fix lives in the .NET StashBox runtime: a process-wide
-Map keyed by endpoint UUID that hands out a cached client via
-`getStashBoxClient(ep)`. Rate limiting now holds across concurrent requests
-and across the lifetime of the .NET API process. PATCH/DELETE handlers
-call `invalidateStashBoxClient(id)` so credential changes take effect
-immediately.
 
 ## Troubleshooting
 
-### `prismedia-phash` is not on PATH
+**pHash generation skipped** means the binary was not found. Use the unified Docker image, put the helper on `PATH`, or set `PRISMEDIA_PHASH_BIN`.
 
-The worker logs a warning and skips phash generation gracefully. You can:
+**Hashes do not match a community index** usually means the helper or ffmpeg behavior drifted. Compare `infra/phash/main.go` against the Stash video pHash implementation before changing constants.
 
-- Use the unified Docker image, which bundles the binary at
-  `/usr/local/bin/prismedia-phash`.
-- Build it locally: `cd infra/phash && go mod tidy && go build -o prismedia-phash .`
-  then put the binary somewhere on `$PATH` or point `$PRISMEDIA_PHASH_BIN` at it.
+**Slow generation** is expected for large sources because the helper seeks and decodes multiple frames. Keep pHash concurrency conservative on small disks.
 
-### StashDB returns false from `submitFingerprint`
-
-The API response records `status: "error"` with the endpoint's message in
-`fingerprint_submissions.error`. Common causes:
-
-- The remote scene ID is stale (scene was merged or deleted upstream).
-  Re-run identify — the short-circuit will fall through to the cascade.
-- The duration in the payload disagrees with what StashDB has by more than a
-  few seconds. Re-probe the scene to refresh `scenes.duration`.
-- API key does not have contribute permission on the target endpoint.
-
-### "Scene is not linked" (404 on submit-fingerprints)
-
-The scene has no `stash_ids` row for the target endpoint. Either:
-
-- Run `Identify` and accept a match (auto-creates the link), or
-- Open the pHashes tab and use the "Add link" chip to paste the remote
-  scene UUID manually.
-
-### Hashes don't match StashDB's index
-
-`pkg/hash/videophash/phash.go` is the source of truth. If you suspect
-Prismedia's output has drifted, diff `infra/phash/main.go` against it — every
-constant (`screenshotWidth=160`, `columns=5`, `rows=5`, step formula, ffmpeg
-seek-order, scale filter, montage library, hash algorithm) is load-bearing.
-Do not "clean up" any of them.
+**Submission failures** usually come from endpoint credentials, endpoint rate limits, stale remote IDs, or endpoint support for a subset of fingerprint algorithms.
 
 ## References
 
 - Stash source: `pkg/hash/videophash/phash.go`, `pkg/stashbox/scene.go`
-- StashDB guidelines: <https://guidelines.stashdb.org/docs/faq_getting-started/stashdb/whats-a-phash/>
+- StashDB pHash FAQ: <https://guidelines.stashdb.org/docs/faq_getting-started/stashdb/whats-a-phash/>
 - StashDB contribution guide: <https://guidelines.stashdb.org/docs/faq_getting-started/stashdb/contributing-to-stashdb/>
-- Hacker Factor perceptual hashing primer: <https://hackerfactor.com/blog/index.php%3F/archives/432-Looks-Like-It.html>

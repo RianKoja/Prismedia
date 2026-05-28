@@ -96,9 +96,9 @@ services:
 
 If `PRISMEDIA_SECRET` changes between restarts, encrypted values become unreadable and you'll have to re-enter every API key.
 
-## Looking up performers
+## Looking up people
 
-The StashBox protocol also supports performer lookup. The dedicated route `/api/stashbox-endpoints/[id]/lookup/performer` is used by the **Performers identify** flow when StashBox is selected as provider. The cascade drawer renders performer candidates the same way it renders video candidates.
+The StashBox protocol also supports performer lookup. Prismedia maps those results into person entities, and the dedicated route `/api/stashbox-endpoints/[id]/lookup/performer` is used by the **People identify** flow when StashBox is selected as provider. The review surface renders person candidates the same way it renders video candidates.
 
 ## Disabling without deleting
 

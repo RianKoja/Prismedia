@@ -156,7 +156,7 @@ this order (later sources override earlier ones for fields they provide):
    and episode numbers.
 2. **JSON sidecar** — `<filename>.info.json` next to the video. Lower
    priority than NFO. Provides title, details, date, studio, rating,
-   tags, performers, urls.
+   tags, people, urls.
 3. **NFO sidecar** — `<filename>.nfo` next to the video. Highest
    priority. Provides title, plot, aired date, studio, rating, tags,
    genres, urls.

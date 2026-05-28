@@ -1,139 +1,70 @@
 ---
 sidebar_position: 7
-title: Operations & Jobs
-description: The Job Control dashboard — what's running, what's queued, what failed, and how to run things manually.
+title: Jobs And Operations
+description: Worker status, queues, scans, failures, and maintenance.
 ---
 
-# Operations & Jobs
+# Jobs And Operations
 
-Almost everything in Prismedia is asynchronous. Scans, probes, fingerprints, previews, HLS transcodes, identify runs, image thumbnails, audio waveforms — they're all jobs handled by the .NET background worker. The **Operations** page (sidebar → **Jobs**) is your window into that work.
+The Jobs page shows what Prismedia is doing in the background. It is the first place to check when a scan, thumbnail, identify run, HLS render, subtitle extraction, or import feels slow.
 
-![Operations dashboard](/img/screenshots/jobs.png)
+![Jobs](/img/screenshots/jobs.png)
 
-## The four-up overview
+## Worker status
 
-The top of the page is a 2×2 stat grid:
+The worker heartbeat badge tells you whether the .NET worker is online. If the API is running but the worker is offline, the app can still browse existing data, but queued work will not move.
 
-| Stat | Meaning |
+## Queue families
+
+| Queue | Typical work |
 | --- | --- |
-| **Running** | Jobs currently being processed by the worker. |
-| **Backlog** | Jobs waiting in pg-boss queues, including delayed retries. |
-| **Failures** | Failed job-runs that haven't been cleared. |
-| **Retained Done** | Recently-finished jobs kept in the `job_runs` ledger, plus the auto-scan schedule. |
+| **Library scan** | Walk watched roots, classify files, remove missing files. |
+| **Media probe** | Read technical metadata, duration, dimensions, codecs, audio info. |
+| **Preview** | Generate thumbnails, sprites, waveforms, and preview assets. |
+| **HLS** | Create adaptive playback assets on demand. |
+| **Subtitles** | Extract embedded subtitles and normalize tracks. |
+| **Identify** | Provider searches, bulk identify, proposal hydration. |
+| **Collections** | Refresh dynamic and hybrid collection rules. |
+| **Maintenance** | Cleanup and diagnostic backfills. |
 
-These numbers refresh every 5 seconds. Hit **Refresh** for an immediate update.
+## Running a scan
 
-## Queues, grouped by concern
+You can run a scan from:
 
-Below the overview, queues are grouped into sections so you can find what you need without scanning a long list:
+- **Jobs**, for a general library scan.
+- **Settings -> Watched Libraries**, for root-level management.
+- **Files**, for a specific root, folder, or file context.
 
-| Section | Queues |
-| --- | --- |
-| **Library scans** | `library-scan`, `gallery-scan`, `audio-scan` |
-| **Library maintenance** | `library-maintenance` (move assets, dedupe paths) |
-| **Video media pipeline** | `media-probe`, `fingerprint`, `preview`, `extract-subtitles` |
-| **Metadata import** | `metadata-import` (apply identify results) |
-| **Gallery image pipeline** | `image-thumbnail`, `image-fingerprint` |
-| **Audio pipeline** | `audio-probe`, `audio-fingerprint`, `audio-waveform` |
-| **Collections** | `collection-refresh` (re-evaluate dynamic rules) |
-
-Each queue card shows:
-
-- The queue name and a one-line description
-- Live counts: running, backlog, failed
-- **Run** button — enqueue pending work for this queue
-- **Cancel** button — cancel everything currently in this queue
-- **Clear failures** button — clear the failed-job list for this queue
-
-## Live work
-
-Below the queue grid, a **Live Work** section lists individual active jobs:
-
-- Job type (e.g. "Generate video preview")
-- Progress bar where the worker reports progress
-- Per-job **Cancel** button
-- Section-level **Kill all** button when there's anything running
-
-This is where you watch a long-running scan happen.
+Scans are idempotent. They pick up new files, update file metadata, and remove catalog rows for files that disappeared from disk. User edits, ratings, visibility, relationships, and progress are preserved unless an explicit action changes them.
 
 ## Failures
 
-Failed jobs land in the **Failures** section with their full error message. Use this to triage:
+Open failure rows to read the error message. Common causes:
 
-- Common case: a corrupt file. The relevant job logs the file path; you can open it on disk and decide whether to fix or remove.
-- Generation issues: a missing codec, an unreadable container, ffmpeg crash. The error is verbatim from the worker.
+- A bad or unsupported media file.
+- A media path that no longer exists.
+- A read-only mount for an operation that needs write access.
+- Disk full under `/data`.
+- Plugin or endpoint network/API errors.
+- Missing local helper tools in development.
 
-Click **Clear all** (global or per-queue) to acknowledge failures and remove them from the active list. The job-run rows stay in the database (status `failed`) for forensic reading, just not in the dashboard count.
+After fixing the cause, retry the action or rescan. Clearing failures hides acknowledged rows from the dashboard; it does not erase historical database records.
 
-## Recently finished
+## Stuck work
 
-A retained list of recently-completed jobs at the bottom. Useful when you want to confirm "yes, that scan finished" or check timing.
+If work appears stuck:
 
-## Running a scan manually
+1. Check the worker heartbeat.
+2. Read the active queue row for the target label and message.
+3. Check container logs with `docker compose logs prismedia --tail 200`.
+4. Restart the container if the worker was killed mid-job.
 
-Even with auto-scan enabled, you'll often want to kick off a scan explicitly — after adding files, after tweaking a library root, or after an upgrade that asks you to rebuild metadata.
-
-1. Open Operations.
-2. Find the **Library scan** queue card.
-3. Click **Run**.
-
-The card shows "Enqueued N, skipped M" — N new scan jobs were created (one per enabled scan type per library root); M were already pending. The scan jobs flow into the worker, discover files, and enqueue the downstream pipeline jobs (probe → fingerprint → preview).
-
-Galleries and audio have their own scan buttons in the same way (`gallery-scan`, `audio-scan`).
-
-## Killing runaway work
-
-Two scopes:
-
-| Action | Scope |
-| --- | --- |
-| **Cancel** on a queue card | All jobs in that queue (running + waiting). |
-| **Kill all** in the Live Work header | Every running job, all queues. |
-| **Cancel** on an individual job | Just that one job. |
-
-Cancelled jobs land in the failures list with status `cancelled` — useful trail when you want to know what got stopped.
-
-## Auto-scan
-
-The **Retained Done** stat shows your auto-scan schedule next to the count. Configure it in **Settings → Watched Libraries**:
-
-- **Auto-scan enabled** — toggle.
-- **Scan interval (minutes)** — frequency. Default 60.
-
-When enabled, the worker schedules library scans on the configured cadence. Auto-scan runs the **Library scan** queue with the same effect as clicking Run manually.
+Running jobs from an old worker process are recovered when the worker restarts.
 
 ## Worker concurrency
 
-Each queue has a per-queue concurrency setting. By default, every queue runs one job at a time — Prismedia prefers steady throughput over maximizing parallel CPU on a single user's box.
+The worker concurrency setting is global. Raising it can speed up independent jobs, but it may also increase disk, CPU, and ffmpeg pressure. Keep it modest on small NAS or single-board systems.
 
-To allow more parallelism, raise **Background worker concurrency** in **Settings → Watched Libraries**. The setting is a global multiplier applied to each queue's base concurrency, capped between 1 and 16.
+## Generated storage
 
-Heavier setting = more wall-clock progress, more CPU use, more I/O contention. Pick what your hardware can carry.
-
-## NSFW visibility
-
-When NSFW mode is **Off**, jobs targeting NSFW entities are hidden from every list on this page. They still run; they just don't appear in the dashboard. Switch NSFW mode to **Show** to see everything.
-
-## Where this data lives
-
-If you want to read job state outside the UI:
-
-- `job_runs` table — the source of truth for the dashboard. One row per job execution (id, queueName, bullmqJobId, status, targetType, targetId, targetLabel, progress, attempts, payload, error, startedAt, finishedAt).
-- job internals — don't edit queue/job tables directly; use the Operations page or .NET API.
-
-```sql
--- Recent failures across all queues
-SELECT queue_name, target_label, error, finished_at
-FROM job_runs
-WHERE status = 'failed'
-ORDER BY finished_at DESC
-LIMIT 20;
-```
-
-## When the dashboard is misleading
-
-A handful of things to know:
-
-- **Long-running jobs** (e.g. a 4K video preview generation) won't show progress unless the underlying job emits it. The job is fine; the bar just stays at 0%.
-- **Backlog jumps** after a fresh scan are normal — discovering files cascades into many downstream jobs.
-- **Failure counts** include retries that exhausted their attempts, not transient errors. pg-boss retries with exponential backoff up to ~15 attempts before marking a job permanently failed.
+Generated assets live under `/data`: thumbnails, HLS renditions, waveform data, sprites, extracted subtitles, and plugin artwork. Settings includes diagnostics and rebuild actions for generated storage when assets need to be refreshed.

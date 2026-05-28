@@ -1,5 +1,5 @@
 /* =============================================================================
- * Prismedia homepage — Dark Room composition
+ * Prismedia homepage - Prism Noir Luxe composition
  * ============================================================================= */
 
 /* -----------------------------------------------------------------------------
@@ -107,18 +107,23 @@
   position: relative;
   overflow: hidden;
   background: var(--prismedia-bg);
-  padding: 6rem 0 5rem;
+  min-height: calc(100vh - var(--ifm-navbar-height));
+  padding: 7rem 0 6rem;
   border-bottom: 1px solid var(--prismedia-border-subtle);
+  display: flex;
+  align-items: center;
 }
 
 .heroBackdrop {
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(900px 500px at 18% 12%, rgba(196, 154, 90, 0.22), transparent 65%),
-    radial-gradient(700px 400px at 85% 78%, rgba(68, 120, 168, 0.16), transparent 65%),
-    radial-gradient(500px 300px at 60% 50%, rgba(122, 94, 44, 0.14), transparent 65%),
+    linear-gradient(90deg, rgba(7, 8, 11, 0.98) 0%, rgba(7, 8, 11, 0.88) 42%, rgba(7, 8, 11, 0.42) 100%),
+    linear-gradient(180deg, rgba(7, 8, 11, 0.08) 0%, rgba(7, 8, 11, 0.82) 100%),
+    var(--hero-image),
     var(--prismedia-bg);
+  background-size: cover;
+  background-position: center;
   pointer-events: none;
 }
 
@@ -136,21 +141,21 @@
 .heroVignette {
   position: absolute;
   inset: 0;
-  background: linear-gradient(180deg, transparent 60%, var(--prismedia-bg));
+  background:
+    radial-gradient(900px 500px at 18% 22%, rgba(196, 154, 90, 0.2), transparent 65%),
+    linear-gradient(180deg, transparent 72%, var(--prismedia-bg));
   pointer-events: none;
 }
 
 .heroInner {
   position: relative;
-  display: grid;
-  grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
-  gap: 4rem;
-  align-items: center;
+  display: block;
 }
 
 .heroCopy {
   position: relative;
   z-index: 2;
+  max-width: 720px;
 }
 
 .heroTitle {
@@ -174,7 +179,7 @@
 }
 
 .heroSubtitle {
-  max-width: 540px;
+  max-width: 650px;
   margin: 1.4rem 0 0;
   color: var(--prismedia-text-secondary);
   font-size: 1.08rem;
@@ -188,7 +193,7 @@
   margin: 2.5rem 0 0;
   padding: 1rem 0 0;
   border-top: 1px solid var(--prismedia-border-subtle);
-  max-width: 540px;
+  max-width: 650px;
 }
 
 .metaRow div {
@@ -662,28 +667,15 @@
  * ---------------------------------------------------------------------------*/
 
 @media (max-width: 1180px) {
-  .heroInner {
-    grid-template-columns: 1fr;
-    gap: 3rem;
-  }
-
-  .heroVisual {
-    max-width: 620px;
-    margin: 0 auto;
-  }
-
-  .heroFrame {
-    transform: none;
-  }
-
-  .heroFrame:hover {
-    transform: none;
+  .heroBackdrop {
+    background-position: 60% center;
   }
 }
 
 @media (max-width: 996px) {
   .hero {
-    padding: 4.5rem 0 3.5rem;
+    min-height: 720px;
+    padding: 4.5rem 0 5rem;
   }
 
   .heroTitle {

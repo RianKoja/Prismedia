@@ -124,7 +124,7 @@ services:
 
 ## Jobs are stuck "running" forever
 
-- The worker may have crashed or been killed mid-job. Restart the container; on next boot, stuck jobs are reaped by pg-boss after their lease expires.
+- The worker may have crashed or been killed mid-job. Restart the container; on next boot, stale running jobs are recovered after their lease expires.
 - The `job_runs` row's `started_at` minus `now()` tells you how long it's been "running". If it's hours and the queue is otherwise idle, the job is orphaned — cancel it from the Operations page.
 
 ## "Failures" count keeps growing
@@ -161,24 +161,16 @@ Open issues at [github.com/pauljoda/Prismedia/issues](https://github.com/pauljod
 
 ```sql
 -- Recent failures
-SELECT queue_name, target_label, error, finished_at
-FROM job_runs WHERE status = 'failed'
+SELECT type, target_label, message, finished_at
+FROM job_runs
+WHERE status = 'failed'
 ORDER BY finished_at DESC LIMIT 20;
 
 -- Longest-running jobs (active or finished)
-SELECT queue_name, target_label, finished_at - started_at AS duration
-FROM job_runs WHERE finished_at IS NOT NULL
+SELECT type, target_label, finished_at - started_at AS duration
+FROM job_runs
+WHERE finished_at IS NOT NULL
 ORDER BY duration DESC LIMIT 20;
-
--- Videos missing fingerprints
-SELECT id, file_path FROM video_episodes WHERE oshash IS NULL OR md5 IS NULL;
-SELECT id, file_path FROM video_movies   WHERE oshash IS NULL OR md5 IS NULL;
-
--- Videos missing thumbnails
-SELECT id, file_path FROM video_episodes WHERE thumbnail_path IS NULL;
-
--- Plugin auth (encrypted; just to confirm the row exists)
-SELECT plugin_id, auth_key, length(encrypted_value) FROM plugin_auth;
 
 -- Cache footprint by entity (run against /data via du)
 -- du -sh /data/cache/hls/* | sort -h | tail -20

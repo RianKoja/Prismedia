@@ -53,7 +53,7 @@ pnpm docs:dev                            # this site
 
 ## The commit policy
 
-The CLAUDE.md "Commit & Changelog Policy" is the source of truth; the highlights:
+The repository contract in `AGENTS.md` is the source of truth; the highlights:
 
 - **Commit after every set of changes.** Don't batch; small reviewable commits are the norm.
 - **Update `CHANGELOG.md` with every commit** under `## [Unreleased]`, grouped by Keep a Changelog sections (`Added` / `Changed` / `Fixed` / `Removed` / `Docs`).
