@@ -14,6 +14,20 @@ namespace Prismedia.Infrastructure.Persistence.Migrations
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.CreateTable(
+                name: "app_settings",
+                columns: table => new
+                {
+                    key = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
+                    value_json = table.Column<string>(type: "jsonb", nullable: false),
+                    created_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    updated_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_app_settings", x => x.key);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "database_backups",
                 columns: table => new
                 {
@@ -97,60 +111,6 @@ namespace Prismedia.Infrastructure.Persistence.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "library_settings",
-                columns: table => new
-                {
-                    id = table.Column<Guid>(type: "uuid", nullable: false),
-                    auto_scan_enabled = table.Column<bool>(type: "boolean", nullable: false),
-                    scan_interval_minutes = table.Column<int>(type: "integer", nullable: false),
-                    auto_generate_metadata = table.Column<bool>(type: "boolean", nullable: false),
-                    auto_generate_fingerprints = table.Column<bool>(type: "boolean", nullable: false),
-                    generate_phash = table.Column<bool>(type: "boolean", nullable: false),
-                    auto_generate_preview = table.Column<bool>(type: "boolean", nullable: false),
-                    generate_trickplay = table.Column<bool>(type: "boolean", nullable: false),
-                    trickplay_interval_seconds = table.Column<int>(type: "integer", nullable: false),
-                    preview_clip_duration_seconds = table.Column<int>(type: "integer", nullable: false),
-                    thumbnail_quality = table.Column<int>(type: "integer", nullable: false),
-                    trickplay_quality = table.Column<int>(type: "integer", nullable: false),
-                    background_worker_concurrency = table.Column<int>(type: "integer", nullable: false),
-                    nsfw_lan_auto_enable = table.Column<bool>(type: "boolean", nullable: false),
-                    hide_nsfw = table.Column<bool>(type: "boolean", nullable: false),
-                    metadata_storage_dedicated = table.Column<bool>(type: "boolean", nullable: false),
-                    subtitles_auto_enable = table.Column<bool>(type: "boolean", nullable: false),
-                    subtitles_preferred_languages = table.Column<string>(type: "text", nullable: false),
-                    audio_preferred_languages = table.Column<string>(type: "text", nullable: false),
-                    subtitle_style = table.Column<string>(type: "text", nullable: false),
-                    subtitle_font_scale = table.Column<float>(type: "real", nullable: false),
-                    subtitle_position_percent = table.Column<float>(type: "real", nullable: false),
-                    subtitle_opacity = table.Column<float>(type: "real", nullable: false),
-                    default_playback_mode = table.Column<string>(type: "text", nullable: false),
-                    show_cast_controls = table.Column<bool>(type: "boolean", nullable: false),
-                    hls_transcoder_profile = table.Column<string>(type: "text", nullable: false, defaultValue: "Software"),
-                    hls_ffmpeg_path = table.Column<string>(type: "text", nullable: false, defaultValue: "ffmpeg"),
-                    hls_vaapi_device = table.Column<string>(type: "text", nullable: false, defaultValue: "/dev/dri/renderD128"),
-                    created_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
-                    updated_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_library_settings", x => x.id);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "media_file_ignores",
-                columns: table => new
-                {
-                    path = table.Column<string>(type: "text", nullable: false),
-                    entity_kind_code = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
-                    reason = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
-                    created_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_media_file_ignores", x => x.path);
-                });
-
-            migrationBuilder.CreateTable(
                 name: "provider_configs",
                 columns: table => new
                 {
@@ -191,6 +151,10 @@ namespace Prismedia.Infrastructure.Persistence.Migrations
                     title = table.Column<string>(type: "character varying(512)", maxLength: 512, nullable: false),
                     parent_entity_id = table.Column<Guid>(type: "uuid", nullable: true),
                     sort_order = table.Column<int>(type: "integer", nullable: true),
+                    rating_value = table.Column<int>(type: "integer", nullable: true),
+                    is_favorite = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    is_nsfw = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    is_organized = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
                     created_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     updated_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     deleted_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true)
@@ -198,6 +162,7 @@ namespace Prismedia.Infrastructure.Persistence.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_entities", x => x.id);
+                    table.CheckConstraint("ck_entities_rating", "rating_value IS NULL OR (rating_value >= 0 AND rating_value <= 5)");
                     table.ForeignKey(
                         name: "FK_entities_entities_parent_entity_id",
                         column: x => x.parent_entity_id,
@@ -210,6 +175,29 @@ namespace Prismedia.Infrastructure.Persistence.Migrations
                         principalTable: "entity_kinds",
                         principalColumn: "code",
                         onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "media_file_ignores",
+                columns: table => new
+                {
+                    library_root_id = table.Column<Guid>(type: "uuid", nullable: false),
+                    path = table.Column<string>(type: "text", nullable: false),
+                    kind = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false, defaultValue: "file"),
+                    entity_kind_code = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
+                    reason = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
+                    created_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    updated_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_media_file_ignores", x => new { x.library_root_id, x.path });
+                    table.ForeignKey(
+                        name: "FK_media_file_ignores_library_roots_library_root_id",
+                        column: x => x.library_root_id,
+                        principalTable: "library_roots",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Cascade);
                 });
 
             migrationBuilder.CreateTable(
@@ -330,8 +318,6 @@ namespace Prismedia.Infrastructure.Persistence.Migrations
                     rule_tree_json = table.Column<string>(type: "jsonb", nullable: true),
                     cover_mode = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
                     cover_item_entity_id = table.Column<Guid>(type: "uuid", nullable: true),
-                    slideshow_duration_seconds = table.Column<int>(type: "integer", nullable: false),
-                    slideshow_auto_advance = table.Column<bool>(type: "boolean", nullable: false),
                     last_refreshed_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true)
                 },
                 constraints: table =>
@@ -483,27 +469,6 @@ namespace Prismedia.Infrastructure.Persistence.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "entity_flags",
-                columns: table => new
-                {
-                    entity_id = table.Column<Guid>(type: "uuid", nullable: false),
-                    is_favorite = table.Column<bool>(type: "boolean", nullable: false),
-                    is_nsfw = table.Column<bool>(type: "boolean", nullable: false),
-                    is_organized = table.Column<bool>(type: "boolean", nullable: false),
-                    updated_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_entity_flags", x => x.entity_id);
-                    table.ForeignKey(
-                        name: "FK_entity_flags_entities_entity_id",
-                        column: x => x.entity_id,
-                        principalTable: "entities",
-                        principalColumn: "id",
-                        onDelete: ReferentialAction.Cascade);
-                });
-
-            migrationBuilder.CreateTable(
                 name: "entity_lifetimes",
                 columns: table => new
                 {
@@ -622,26 +587,6 @@ namespace Prismedia.Infrastructure.Persistence.Migrations
                         onDelete: ReferentialAction.SetNull);
                     table.ForeignKey(
                         name: "FK_entity_progress_entities_entity_id",
-                        column: x => x.entity_id,
-                        principalTable: "entities",
-                        principalColumn: "id",
-                        onDelete: ReferentialAction.Cascade);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "entity_ratings",
-                columns: table => new
-                {
-                    entity_id = table.Column<Guid>(type: "uuid", nullable: false),
-                    value = table.Column<int>(type: "integer", nullable: false),
-                    updated_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_entity_ratings", x => x.entity_id);
-                    table.CheckConstraint("ck_entity_ratings_value", "value >= 0 AND value <= 5");
-                    table.ForeignKey(
-                        name: "FK_entity_ratings_entities_entity_id",
                         column: x => x.entity_id,
                         principalTable: "entities",
                         principalColumn: "id",
@@ -856,6 +801,34 @@ namespace Prismedia.Infrastructure.Persistence.Migrations
                         principalTable: "library_roots",
                         principalColumn: "id",
                         onDelete: ReferentialAction.SetNull);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "identify_queue_items",
+                columns: table => new
+                {
+                    id = table.Column<Guid>(type: "uuid", nullable: false),
+                    entity_id = table.Column<Guid>(type: "uuid", nullable: false),
+                    state = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false),
+                    provider_code = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: true),
+                    action = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
+                    query_json = table.Column<string>(type: "jsonb", nullable: true),
+                    candidates_json = table.Column<string>(type: "jsonb", nullable: true),
+                    proposal_json = table.Column<string>(type: "jsonb", nullable: true),
+                    error = table.Column<string>(type: "text", nullable: true),
+                    created_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    updated_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    completed_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_identify_queue_items", x => x.id);
+                    table.ForeignKey(
+                        name: "FK_identify_queue_items_entities_entity_id",
+                        column: x => x.entity_id,
+                        principalTable: "entities",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Cascade);
                 });
 
             migrationBuilder.CreateTable(
@@ -1271,6 +1244,17 @@ namespace Prismedia.Infrastructure.Persistence.Migrations
                 column: "library_root_id");
 
             migrationBuilder.CreateIndex(
+                name: "IX_identify_queue_items_entity_id",
+                table: "identify_queue_items",
+                column: "entity_id",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_identify_queue_items_state_updated_at",
+                table: "identify_queue_items",
+                columns: new[] { "state", "updated_at" });
+
+            migrationBuilder.CreateIndex(
                 name: "IX_identify_results_entity_id_status",
                 table: "identify_results",
                 columns: new[] { "entity_id", "status" });
@@ -1345,6 +1329,9 @@ namespace Prismedia.Infrastructure.Persistence.Migrations
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropTable(
+                name: "app_settings");
+
+            migrationBuilder.DropTable(
                 name: "audio_library_details");
 
             migrationBuilder.DropTable(
@@ -1381,9 +1368,6 @@ namespace Prismedia.Infrastructure.Persistence.Migrations
                 name: "entity_file_fingerprints");
 
             migrationBuilder.DropTable(
-                name: "entity_flags");
-
-            migrationBuilder.DropTable(
                 name: "entity_lifetimes");
 
             migrationBuilder.DropTable(
@@ -1397,9 +1381,6 @@ namespace Prismedia.Infrastructure.Persistence.Migrations
 
             migrationBuilder.DropTable(
                 name: "entity_progress");
-
-            migrationBuilder.DropTable(
-                name: "entity_ratings");
 
             migrationBuilder.DropTable(
                 name: "entity_relationship_links");
@@ -1426,13 +1407,13 @@ namespace Prismedia.Infrastructure.Persistence.Migrations
                 name: "gallery_details");
 
             migrationBuilder.DropTable(
+                name: "identify_queue_items");
+
+            migrationBuilder.DropTable(
                 name: "identify_results");
 
             migrationBuilder.DropTable(
                 name: "job_runs");
-
-            migrationBuilder.DropTable(
-                name: "library_settings");
 
             migrationBuilder.DropTable(
                 name: "media_file_ignores");

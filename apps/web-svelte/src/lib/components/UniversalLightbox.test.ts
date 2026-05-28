@@ -104,7 +104,7 @@ describe("UniversalLightbox", () => {
     expect(onIndexChange).toHaveBeenCalledWith(0);
   });
 
-  it("reports rating hotkeys without rendering the legacy info sidebar", async () => {
+  it("reports rating hotkeys without rendering inline detail controls", async () => {
     const onRatingChange = vi.fn();
     render(UniversalLightboxHarness, {
       props: { entities: [still], initialIndex: 0, onClose: vi.fn(), onRatingChange },

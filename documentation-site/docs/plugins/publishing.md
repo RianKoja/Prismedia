@@ -138,7 +138,7 @@ Bump rules:
 | Bump | When |
 | --- | --- |
 | **PATCH** | Bug fixes, no API change. |
-| **MINOR** | New capability declared, additional optional auth field, backwards-compatible behavior change. |
+| **MINOR** | New capability declared, additional optional auth field, non-breaking behavior change. |
 | **MAJOR** | Capability removed, auth field renamed, breaking output shape change. |
 
 Pre-release suffixes (`0.4.0-beta.1`) work; the UI treats them as available updates from a pre-release tag if present.

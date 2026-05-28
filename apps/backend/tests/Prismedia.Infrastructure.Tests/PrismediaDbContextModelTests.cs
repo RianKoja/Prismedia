@@ -172,11 +172,8 @@ public sealed class PrismediaDbContextModelTests {
         using var db = CreateContext();
         var migrations = db.GetService<IMigrationsAssembly>().Migrations.Keys.ToArray();
 
-        Assert.Contains(migrations, migration =>
-            migration.EndsWith("InitialPrismediaSchema", StringComparison.Ordinal));
-        Assert.Contains(migrations, migration =>
-            migration.EndsWith("CentralizedSettingsRegistry", StringComparison.Ordinal));
-        Assert.Equal(migrations.Order(StringComparer.Ordinal), migrations);
+        var migration = Assert.Single(migrations);
+        Assert.EndsWith("InitialPrismediaSchema", migration, StringComparison.Ordinal);
     }
 
     [Theory]

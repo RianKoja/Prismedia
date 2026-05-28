@@ -100,7 +100,7 @@ Repositories are for loading and saving write models. Read-heavy screens can que
 - Do not return EF row types or domain entities from HTTP endpoints.
 - DTOs are shaped for the client and may flatten, group, omit, or rename data.
 - Generated OpenAPI TypeScript types are the frontend source of truth.
-- `@prismedia/contracts` remains frontend compatibility only while surfaces migrate.
+- `@prismedia/contracts` owns frontend-only helpers and plugin protocol types; it must not shadow API DTOs that are available through generated OpenAPI clients.
 
 ## Frontend Rules
 
@@ -159,6 +159,6 @@ Backend work is done when:
 - Use-case orchestration lives in `Prismedia.Application` or an intentional infrastructure adapter for technical workflows.
 - EF mapping, migrations, and SQL live in `Prismedia.Infrastructure`.
 - API endpoints expose DTOs from `Prismedia.Contracts`.
-- Frontend code consumes generated API clients or compatibility DTOs during migration.
+- Frontend code consumes generated API clients for HTTP contracts and keeps package-level helper types frontend-only.
 - Tests cover domain rules, application orchestration, infrastructure persistence, or API behavior according to the risk of the change.
 - The changelog includes a concise user-facing entry when the change is release-note-worthy.

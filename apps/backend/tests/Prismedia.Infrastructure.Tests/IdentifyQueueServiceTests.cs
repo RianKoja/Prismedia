@@ -56,20 +56,20 @@ public sealed class IdentifyQueueServiceTests : IDisposable {
     }
 
     [Fact]
-    public async Task SearchAsyncNormalizesLegacyProviderCandidateFields() {
+    public async Task SearchAsyncStoresProviderCandidateFields() {
         await using var db = CreateContext();
         var entityId = Guid.Parse("22222222-2222-2222-2222-222222222223");
         SeedProvider(db);
-        SeedEntity(db, entityId, "video", "Legacy Candidate Movie");
+        SeedEntity(db, entityId, "video", "Candidate Movie");
         await db.SaveChangesAsync();
-        var service = CreateQueueService(db, new LegacyCandidateProcessExecutor(), _tempRoot);
+        var service = CreateQueueService(db, new CanonicalCandidateProcessExecutor(), _tempRoot);
         await service.AddAsync(entityId, CancellationToken.None);
 
-        var item = await service.SearchAsync(entityId, new IdentifyQueueSearchRequest("tmdb", new IdentifyQuery("Legacy Candidate", null, null)), hideNsfw: false, CancellationToken.None);
+        var item = await service.SearchAsync(entityId, new IdentifyQueueSearchRequest("tmdb", new IdentifyQuery("Candidate", null, null)), hideNsfw: false, CancellationToken.None);
 
         var candidate = Assert.Single(item.Candidates);
-        Assert.Equal("Legacy Candidate Movie", candidate.Title);
-        Assert.Equal("Description from an older plugin contract.", candidate.Overview);
+        Assert.Equal("Candidate Movie", candidate.Title);
+        Assert.Equal("Candidate overview from the provider.", candidate.Overview);
         Assert.Equal("https://image.example.test/poster.jpg", candidate.PosterUrl);
         Assert.Equal(8.75m, candidate.Popularity);
     }
@@ -514,7 +514,7 @@ public sealed class IdentifyQueueServiceTests : IDisposable {
         }
     }
 
-    private sealed class LegacyCandidateProcessExecutor : ProcessExecutor {
+    private sealed class CanonicalCandidateProcessExecutor : ProcessExecutor {
         public override Task<ProcessExecutionResult> RunAsync(
             string fileName,
             IReadOnlyList<string> arguments,
@@ -527,15 +527,12 @@ public sealed class IdentifyQueueServiceTests : IDisposable {
                     proposal = (object?)null,
                     candidates = new[] {
                         new {
-                            candidateId = "tmdb:movie:987",
                             externalIds = new Dictionary<string, string> { ["tmdb"] = "987" },
-                            title = "Legacy Candidate Movie",
-                            description = "Description from an older plugin contract.",
-                            thumbnailUrl = "https://image.example.test/poster.jpg",
+                            title = "Candidate Movie",
+                            overview = "Candidate overview from the provider.",
+                            posterUrl = "https://image.example.test/poster.jpg",
                             year = 2025,
-                            source = "TMDB",
-                            confidence = 8.75m,
-                            matchReason = "title-search"
+                            popularity = 8.75m
                         }
                     }
                 },

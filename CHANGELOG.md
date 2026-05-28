@@ -39,8 +39,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - Updated detail edit forms so flags match the shared field label language and metadata examples stay entity-neutral.
 - Bulk identify now runs as a durable background job instead of an ephemeral in-memory session, so progress survives app restarts and results feed directly into the identify review queue.
 - Standardized all API error responses to use the `ApiProblem` format with consistent `code` and `message` fields.
-- Removed development-only links from app navigation.
-- Removed collection playback controls and global collection queue behavior so collections stay purely organizational.
+- Reset the v1 database migration history to a single initial schema that matches the current product model.
+- Removed the development-only route shell so the app surface only exposes production routes.
 - Removed the summary stats cards from the Identify dashboard so the page starts with actionable queue content.
 - Removed the redundant plugin inventory panel from the Identify dashboard.
 - Simplified the Identify dashboard header by removing the redundant manual refresh action.
@@ -73,13 +73,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - Fixed regenerated audio waveform files being hidden behind the browser's cached waveform JSON.
 - Fixed audio scan preview checks so audio tracks look for waveform assets instead of thumbnail assets.
 - Fixed audio track row numbering so zero-based structural order is displayed as human-friendly track numbers.
-- Restored audio library hero playback actions, moved sub-libraries above track lists, improved mobile track rows, and matched the waveform renderer to the legacy player visuals.
+- Restored audio library hero playback actions, moved sub-libraries above track lists, improved mobile track rows, and matched the waveform renderer to the shared player visuals.
 - Fixed studio, person, tag, collection, image, and audio detail routes so page wrappers no longer add their own padding or width constraints around EntityDetail.
 - Fixed core entity rating and flag saves so shallow child entities keep their parent and sort order instead of disappearing from custom child lists after refresh.
 - Fixed Identify review navigation so queue review breadcrumbs live in the app shell and selected artwork previews update parent and relationship cards after walking into nested reviews.
 - Fixed audio library editing so track row renames save from the custom track list, track actions have a right-edge menu, header artwork upload no longer overlaps empty hero titles, and ratings persist through the shared entity rating endpoint.
 - Fixed audio waveform scrubbing so long tracks render as a scrolling strip under the fixed playhead instead of compressing the full waveform into the visible player.
-- Fixed audio waveform fallback rendering so old positive-only waveform cache files stay visible while newer regenerated waveforms use signed peaks.
 - Fixed audio player artwork and waveform presentation so compact covers render without extra thumbnail chrome, stale malformed waveforms are ignored, and the main play button uses the accent treatment.
 - Fixed audio playback in Chrome for source codecs browsers cannot play directly, reset seeking when tracks advance, and made player artwork reuse the shared entity thumbnail renderer.
 - Fixed audio player playback polish so track ratings save on the 0-5 scale, audio library track rows can be rated directly, waveform generation preserves binary sample data, and the player progress bar stays inside its shell.
@@ -155,3 +154,4 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ### Docs
 - Clarified the Docker quick start so it describes the .NET API serving the built Svelte UI and uses 1.0.0-based image tag examples.
+- Removed stale implementation planning artifacts from the docs tree.

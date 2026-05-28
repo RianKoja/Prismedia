@@ -17,10 +17,4 @@ describe("image detail route layout", () => {
     expect(source).toContain("<EntityDetail");
     expect(source).not.toContain("showHero={false}");
   });
-
-  it("keeps collection playback wiring out of the lightbox route", async () => {
-    const source = await readFile("src/routes/images/[id]/+page.svelte", "utf8");
-
-    expect(source).toContain("<UniversalLightbox");
-  });
 });

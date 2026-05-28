@@ -1087,15 +1087,9 @@ public sealed class HlsAssetService : IHlsAssetService {
         return new HlsAssetServiceOptions(
             _options.CacheRoot,
             HlsTranscoderProfiles.ParseOrDefault(settings.TranscoderProfile, _options.TranscoderProfile),
-            ResolveConfiguredFfmpegPath(settings.FfmpegPath, _options.FfmpegPath),
+            string.IsNullOrWhiteSpace(settings.FfmpegPath) ? _options.FfmpegPath : settings.FfmpegPath.Trim(),
             string.IsNullOrWhiteSpace(settings.VaapiDevice) ? _options.VaapiDevice : settings.VaapiDevice.Trim());
     }
-
-    private static string ResolveConfiguredFfmpegPath(string? savedPath, string defaultPath) =>
-        string.IsNullOrWhiteSpace(savedPath) ||
-        string.Equals(savedPath.Trim(), "ffmpeg", StringComparison.OrdinalIgnoreCase)
-            ? defaultPath
-            : savedPath.Trim();
 
     private static void ResetStagingDirectory(string stagingDirectory) {
         if (Directory.Exists(stagingDirectory)) {

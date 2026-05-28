@@ -681,8 +681,9 @@ public sealed class EntityMetadataApplyServiceTests {
                         Credits = [new CreditPatch("Returning Actor", "person", "Character", 0)]
                     },
                     Images: [],
-                    Children: [duplicatePersonChild, duplicatePersonChild],
-                    Candidates: [])
+                    Children: [],
+                    Candidates: [],
+                    Relationships: [duplicatePersonChild, duplicatePersonChild])
             ],
             Candidates: []);
 

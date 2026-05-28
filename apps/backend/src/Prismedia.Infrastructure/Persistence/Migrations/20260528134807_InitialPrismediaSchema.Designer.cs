@@ -12,8 +12,8 @@ using Prismedia.Infrastructure.Persistence;
 namespace Prismedia.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(PrismediaDbContext))]
-    [Migration("20260527212451_SimplifyCollectionDetails")]
-    partial class SimplifyCollectionDetails
+    [Migration("20260528134807_InitialPrismediaSchema")]
+    partial class InitialPrismediaSchema
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)

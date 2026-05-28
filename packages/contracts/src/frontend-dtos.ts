@@ -441,11 +441,10 @@ export interface ScrapeResultDto {
   proposedSeriesResult: unknown | null;
   proposedAudioResult: unknown | null;
   /**
-   * Typed payload for the new cascade review flow (Plan C /
-   * Plan D). Plugins that implement `seriesCascade`, `movieByName`,
-   * `episodeBy*` etc. write their discriminated
-   * `{ kind, movie | series | episode }` result here; the cascade
-   * review drawer discriminates on the shape of this field.
+   * Typed payload for cascade review flows. Plugins that implement
+   * `seriesCascade`, `movieByName`, `episodeBy*` etc. write their
+   * discriminated `{ kind, movie | series | episode }` result here;
+   * the cascade review drawer discriminates on the shape of this field.
    */
   proposedResult: unknown | null;
   /**

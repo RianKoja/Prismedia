@@ -20,7 +20,7 @@ The repo is a pnpm + turbo monorepo plus a .NET backend solution.
 
 | Package | What lives there |
 | --- | --- |
-| `@prismedia/contracts` | Frontend compatibility constants and helper types while surfaces migrate fully to generated .NET OpenAPI models. |
+| `@prismedia/contracts` | Frontend-only constants, media helpers, and plugin protocol types shared by the Svelte app and TypeScript plugin tooling. |
 | `@prismedia/media-core` | Frontend/shared media helpers that do not own server behavior. |
 | `@prismedia/plugins` | Plugin manifest parsing, runtime helper contracts, and result normalization helpers. |
 | `@prismedia/stash-compat` | Stash-compat YAML scraper adapter and StashBox GraphQL client. |

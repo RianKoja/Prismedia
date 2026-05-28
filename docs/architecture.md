@@ -45,7 +45,7 @@ The backend architecture contract lives in [backend-architecture-contract.md](ba
 
 ### packages/contracts
 
-- frontend compatibility constants and helper types
+- frontend-only constants, media helpers, and plugin protocol types
 - server contracts live in `apps/backend/src/Prismedia.Contracts`
 
 ### packages/ui-svelte

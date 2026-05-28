@@ -58,7 +58,7 @@ public sealed class PluginRuntimeServiceTests : IDisposable {
     }
 
     [Fact]
-    public async Task CatalogReusesAliasedProviderCredentialKeysForAuthFields() {
+    public async Task CatalogUsesManifestCredentialKeysForAuthFields() {
         var pluginDir = Path.Combine(_tempRoot, "tmdb");
         Directory.CreateDirectory(pluginDir);
         await File.WriteAllTextAsync(
@@ -102,8 +102,8 @@ public sealed class PluginRuntimeServiceTests : IDisposable {
         db.ProviderCredentials.Add(new ProviderCredentialRow {
             Id = Guid.NewGuid(),
             ProviderConfigId = config.Id,
-            CredentialKey = "TMDB_API_KEY",
-            EncryptedValue = "aliased-secret",
+            CredentialKey = "apiKey",
+            EncryptedValue = "stored-secret",
             CreatedAt = now,
             UpdatedAt = now
         });
@@ -115,11 +115,11 @@ public sealed class PluginRuntimeServiceTests : IDisposable {
 
         Assert.True(provider.Installed);
         Assert.Empty(provider.MissingAuthKeys);
-        Assert.Equal("aliased-secret", auth["apiKey"]);
+        Assert.Equal("stored-secret", auth["apiKey"]);
     }
 
     [Fact]
-    public void CredentialResolverReadsCanonicalEnvironmentAliases() {
+    public void CredentialResolverReadsCanonicalEnvironmentVariable() {
         const string envName = "PRISMEDIA_PLUGIN_TMDB_API_KEY";
         var previous = Environment.GetEnvironmentVariable(envName);
         try {

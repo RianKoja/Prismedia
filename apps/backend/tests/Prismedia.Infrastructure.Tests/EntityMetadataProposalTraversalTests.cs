@@ -20,7 +20,7 @@ public sealed class EntityMetadataProposalTraversalTests {
     }
 
     [Fact]
-    public void RelationshipsMergeExplicitRelationshipsAndLegacyRelationshipChildren() {
+    public void RelationshipsUseExplicitRelationshipPayloadOnly() {
         var duplicateRelationship = Proposal("person-1", "person");
         var proposal = Proposal(
             "root",
@@ -30,6 +30,7 @@ public sealed class EntityMetadataProposalTraversalTests {
                 Proposal("season-1", "video-season")
             ],
             relationships: [
+                duplicateRelationship,
                 duplicateRelationship,
                 Proposal("studio-1", "studio")
             ]);

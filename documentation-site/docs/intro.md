@@ -79,6 +79,6 @@ Start at [Architecture](./developers/architecture.md). [Monorepo Layout](./devel
 
 ---
 
-:::tip Pre-1.0 note
-Prismedia is under active development. We do not maintain backwards-compatibility shims between schema breaks. When something destructive changes, a one-time gate in the UI explains what's happening and asks for consent before proceeding. The [Upgrading](./users/upgrading.md) page covers the policy.
+:::tip Version 1 baseline
+Prismedia 1.0 starts from the current application model. Pre-release schema experiments are folded into the initial database shape instead of shipping as upgrade paths.
 :::

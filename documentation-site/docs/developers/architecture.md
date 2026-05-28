@@ -42,7 +42,7 @@ caught up yet.
 | `packages/media-core` | Frontend/shared media helpers that do not own server behavior. |
 | `packages/plugins` | Plugin manifest parsing and runtime helper contracts. |
 | `packages/stash-compat` | Stash import adapters and normalizers. |
-| `packages/contracts` | Frontend compatibility constants and helper types; .NET contracts are the server source of truth. |
+| `packages/contracts` | Frontend-only constants, media helpers, and plugin protocol types; .NET contracts are the server source of truth. |
 
 ## Rules
 

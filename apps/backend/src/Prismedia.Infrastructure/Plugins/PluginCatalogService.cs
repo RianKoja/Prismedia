@@ -70,7 +70,7 @@ public sealed class PluginCatalogService : IPluginCatalogService {
             .GroupBy(row => row.ProviderCode, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(
                 group => group.Key,
-                group => group.Select(row => row.CredentialKey).ToHashSet(StringComparer.OrdinalIgnoreCase),
+                group => group.Select(row => row.CredentialKey).ToHashSet(StringComparer.Ordinal),
                 StringComparer.OrdinalIgnoreCase);
 
         return descriptors
@@ -80,7 +80,7 @@ public sealed class PluginCatalogService : IPluginCatalogService {
                 keys ??= [];
                 var missing = descriptor.Manifest.Auth
                     .Where(field => field.Required &&
-                        !PluginCredentialResolver.HasCredentialForField(keys, descriptor.Manifest.Id, field.Key) &&
+                        !PluginCredentialResolver.HasCredentialForField(keys, field.Key) &&
                         !PluginCredentialResolver.HasEnvironmentCredential(descriptor.Manifest.Id, field.Key))
                     .Select(field => field.Key)
                     .ToArray();
@@ -224,18 +224,13 @@ public sealed class PluginCatalogService : IPluginCatalogService {
             .AsNoTracking()
             .FirstOrDefaultAsync(row => row.ProviderCode == manifest.Id && row.Enabled, cancellationToken);
         var stored = config is null
-            ? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            ? new Dictionary<string, string>(StringComparer.Ordinal)
             : await _db.ProviderCredentials
                 .AsNoTracking()
                 .Where(row => row.ProviderConfigId == config.Id)
-                .ToDictionaryAsync(row => row.CredentialKey, row => row.EncryptedValue, StringComparer.OrdinalIgnoreCase, cancellationToken);
+                .ToDictionaryAsync(row => row.CredentialKey, row => row.EncryptedValue, StringComparer.Ordinal, cancellationToken);
 
         foreach (var field in manifest.Auth) {
-            if (!stored.ContainsKey(field.Key) &&
-                PluginCredentialResolver.TryResolveStoredCredential(stored, manifest.Id, field.Key, out var aliasedValue)) {
-                stored[field.Key] = aliasedValue;
-            }
-
             var value = PluginCredentialResolver.ResolveEnvironmentCredential(manifest.Id, field.Key);
             if (!string.IsNullOrWhiteSpace(value)) {
                 stored[field.Key] = value;

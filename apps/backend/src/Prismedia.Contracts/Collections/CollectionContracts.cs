@@ -88,7 +88,7 @@ public sealed record CollectionItemDetail(
     EntityThumbnail Entity);
 
 /// <summary>Ordered collection item response.</summary>
-/// <param name="Items">Collection items in playback/display order.</param>
+/// <param name="Items">Collection items in display order.</param>
 public sealed record CollectionItemsResponse(IReadOnlyList<CollectionItemDetail> Items);
 
 /// <summary>

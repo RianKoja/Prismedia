@@ -1,9 +1,4 @@
 <script lang="ts">
-  // TODO(refactor): split into per-tab routes (`installed/`,
-  // `prismedia-index/`, `stash-index/`, `stashbox/`) under a tab-shell
-  // `+layout.svelte`. Deferred because each tab carries install /
-  // uninstall / auth-key / endpoint-edit flows that need browser QA
-  // before the seams are safe to cut.
   import { onMount } from "svelte";
   import InstalledPluginsTab from "./InstalledPluginsTab.svelte";
   import PluginPageShell from "./PluginPageShell.svelte";

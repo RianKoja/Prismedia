@@ -65,7 +65,7 @@ export type {
 export * from "./subtitles";
 export * from "./library";
 export * from "./playback";
-export * from "./legacy-dtos";
+export * from "./frontend-dtos";
 export * from "./external-ids";
 
 export type {
