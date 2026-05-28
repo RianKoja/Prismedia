@@ -453,6 +453,9 @@
 <style>
   .files-page {
     display: grid;
+    width: calc(100% + 2.5rem);
+    max-width: calc(100% + 2.5rem);
+    min-width: 0;
     min-height: 0;
     overflow: hidden;
     background: var(--color-bg);

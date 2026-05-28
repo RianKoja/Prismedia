@@ -285,6 +285,9 @@
 <style>
   .detail-pane {
     display: grid;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
     min-height: 0;
     grid-template-rows: auto auto 1fr;
     overflow: hidden;
@@ -296,6 +299,7 @@
     display: flex;
     align-items: center;
     gap: 0.5rem;
+    min-width: 0;
     border-bottom: 1px solid var(--color-border-subtle);
     padding: 0.5rem 0.75rem;
     background: var(--color-surface-1);
@@ -312,6 +316,7 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    overflow-wrap: anywhere;
     color: var(--color-text-primary);
     font-family: var(--font-body);
     font-size: 0.82rem;
@@ -324,6 +329,7 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    overflow-wrap: anywhere;
     color: var(--color-text-disabled);
     font-family: var(--font-mono);
     font-size: 0.68rem;
@@ -351,14 +357,23 @@
     display: flex;
     align-items: center;
     gap: 1px;
+    min-width: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
     border-bottom: 1px solid var(--color-border-subtle);
     padding: 0.25rem 0.5rem;
     background: var(--color-surface-1);
+    scrollbar-width: none;
+  }
+
+  .detail-toolbar::-webkit-scrollbar {
+    display: none;
   }
 
   .detail-toolbar button {
     display: inline-flex;
     align-items: center;
+    flex: 0 0 auto;
     gap: 0.3rem;
     min-height: 1.65rem;
     padding: 0.2rem 0.5rem;
@@ -386,7 +401,8 @@
   }
 
   .toolbar-spacer {
-    flex: 1;
+    flex: 1 0 0;
+    min-width: 0.25rem;
   }
 
   .hidden-input {
@@ -395,6 +411,9 @@
 
   .detail-body {
     overflow-y: auto;
+    overflow-x: hidden;
+    min-width: 0;
+    max-width: 100%;
     padding: 0.75rem;
     display: flex;
     flex-direction: column;
@@ -413,6 +432,8 @@
 
   .properties-card {
     display: grid;
+    min-width: 0;
+    max-width: 100%;
     gap: 0.75rem;
     border: 1px solid var(--color-border-subtle);
     border-radius: var(--radius-sm);
@@ -431,11 +452,15 @@
 
   .linked-grid {
     margin: 0 -0.75rem;
+    min-width: 0;
+    max-width: calc(100% + 1.5rem);
     padding: 0.25rem 0.5rem;
   }
 
   .preview {
     display: grid;
+    min-width: 0;
+    max-width: 100%;
     min-height: 12rem;
     border: 1px solid var(--color-border-subtle);
     border-radius: var(--radius-sm);
@@ -460,7 +485,10 @@
 
   .preview pre {
     margin: 0;
-    overflow: auto;
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: hidden;
+    overflow-y: auto;
     max-height: 40vh;
     padding: 0.6rem;
     color: var(--color-text-secondary);
@@ -468,6 +496,8 @@
     font-size: 0.72rem;
     line-height: 1.55;
     white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    word-break: break-word;
   }
 
   .state-panel {
@@ -494,6 +524,21 @@
       grid-template-columns: minmax(10rem, 13rem) minmax(0, 1fr);
       gap: 0.65rem;
       align-items: start;
+    }
+  }
+
+  @media (max-width: 767px) {
+    .detail-header {
+      align-items: flex-start;
+    }
+
+    .title-lockup h1 {
+      display: -webkit-box;
+      text-overflow: clip;
+      white-space: normal;
+      line-clamp: 2;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
     }
   }
 </style>
