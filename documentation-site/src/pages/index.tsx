@@ -104,8 +104,7 @@ function Hero() {
   const dashboardUrl = useBaseUrl('/img/screenshots/dashboard.png');
 
   return (
-    <header className={styles.hero} style={{'--hero-image': `url(${dashboardUrl})`} as CSSProperties}>
-      <div className={styles.heroBackdrop} aria-hidden />
+    <header className={styles.hero}>
       <div className={styles.heroGrid} aria-hidden />
       <div className={styles.heroVignette} aria-hidden />
       <div className={`container ${styles.heroInner}`}>
@@ -114,14 +113,13 @@ function Hero() {
             <span className={styles.led} aria-hidden /> Self-hosted media library
           </p>
           <Heading as="h1" className={styles.heroTitle}>
-            A private home for your
-            <br />
+            A private home for your{' '}
             <span className={styles.heroAccent}>entire</span> collection.
           </Heading>
           <p className={styles.heroSubtitle}>
-            Prismedia is a self-hosted media library for videos, comics, books, audio,
-            galleries, and files. It is organized, searchable, playable from any device
-            on your network, and shipped as one Docker image.
+            Videos, comics, books, audio, galleries, and files — organized,
+            searchable, and playable from any device on your network. One Docker
+            image. No cloud. No configuration.
           </p>
           <div className={styles.actions}>
             <Link className={styles.primaryAction} to="/docs/users/quick-start">
@@ -146,6 +144,14 @@ function Hero() {
               <dd>Open source</dd>
             </div>
           </dl>
+        </div>
+        <div className={styles.heroVisual}>
+          <div className={styles.heroFrame}>
+            <div className={styles.windowDots} aria-hidden>
+              <span /><span /><span />
+            </div>
+            <img src={dashboardUrl} alt="Prismedia dashboard" loading="eager" />
+          </div>
         </div>
       </div>
     </header>
