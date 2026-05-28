@@ -405,6 +405,8 @@ public sealed class PluginCatalogService : IPluginCatalogService {
             return [];
         } catch (IOException) {
             return [];
+        } catch (Exception ex) when (ex is not OperationCanceledException) {
+            return [];
         }
     }
 

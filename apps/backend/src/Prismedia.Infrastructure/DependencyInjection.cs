@@ -109,19 +109,16 @@ public static class DependencyInjection {
             cacheDir,
             ResolveCurrentVersion(configuration, pathBase),
             ResolvePluginIndexUrl(configuration)));
-        services.AddSingleton(new HttpClient());
         services.AddSingleton<DotnetPluginProcessRunner>();
         services.AddScoped(provider => new PluginCatalogService(
             provider.GetRequiredService<PrismediaDbContext>(),
-            provider.GetRequiredService<PluginCatalogOptions>(),
-            provider.GetRequiredService<HttpClient>()));
+            provider.GetRequiredService<PluginCatalogOptions>()));
         services.AddScoped<IPluginCatalogService>(provider =>
             provider.GetRequiredService<PluginCatalogService>());
         services.AddScoped<IdentifyMatchHintResolver>();
         services.AddScoped(provider => new EntityMetadataApplyService(
             provider.GetRequiredService<PrismediaDbContext>(),
-            new PluginArtworkServiceOptions(cacheDir),
-            provider.GetService<HttpClient>()));
+            new PluginArtworkServiceOptions(cacheDir)));
         services.AddScoped<IEntityMetadataPatchService>(provider =>
             provider.GetRequiredService<EntityMetadataApplyService>());
         services.AddScoped<IdentifyPluginService>();

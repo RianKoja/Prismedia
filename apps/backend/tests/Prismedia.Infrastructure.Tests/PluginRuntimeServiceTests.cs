@@ -292,6 +292,45 @@ public sealed class PluginRuntimeServiceTests : IDisposable {
     }
 
     [Fact]
+    public async Task CatalogDoesNotCrashWhenRemoteIndexRequestFailsInsideHttpClient() {
+        var pluginDir = Path.Combine(_tempRoot, "local");
+        Directory.CreateDirectory(pluginDir);
+        await File.WriteAllTextAsync(
+            Path.Combine(pluginDir, "manifest.json"),
+            """
+            {
+              "manifestVersion": 1,
+              "apiTags": ["prismedia"],
+              "id": "local",
+              "name": "Local",
+              "version": "1.0.0",
+              "runtime": "dotnet-process",
+              "entry": "Local.dll",
+              "compat": {
+                "pluginApiMin": "1.0.0",
+                "pluginApiMax": null,
+                "prismediaMin": "1.0.0",
+                "prismediaMax": null
+              },
+              "auth": [],
+              "supports": [
+                { "entityKind": "video", "actions": ["search"] }
+              ]
+            }
+            """);
+        await using var db = CreateContext();
+        var catalog = new PluginCatalogService(
+            db,
+            new PluginCatalogOptions([_tempRoot], _tempRoot, "1.0.0", "https://plugins.example.test/index.yml"),
+            new HttpClient(new ThrowingHttpMessageHandler(new NullReferenceException("simulated internal transport failure"))));
+
+        var providers = await catalog.ListProvidersAsync(CancellationToken.None);
+
+        var provider = Assert.Single(providers);
+        Assert.Equal("local", provider.Id);
+    }
+
+    [Fact]
     public void CredentialResolverReadsCanonicalEnvironmentVariable() {
         const string envName = "PRISMEDIA_PLUGIN_TMDB_API_KEY";
         var previous = Environment.GetEnvironmentVariable(envName);
@@ -1431,5 +1470,18 @@ public sealed class PluginRuntimeServiceTests : IDisposable {
                 Content = new ByteArrayContent(body)
             });
         }
+    }
+
+    private sealed class ThrowingHttpMessageHandler : HttpMessageHandler {
+        private readonly Exception _exception;
+
+        public ThrowingHttpMessageHandler(Exception exception) {
+            _exception = exception;
+        }
+
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken) =>
+            Task.FromException<HttpResponseMessage>(_exception);
     }
 }
