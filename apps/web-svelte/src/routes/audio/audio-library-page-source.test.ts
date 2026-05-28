@@ -15,4 +15,12 @@ describe("audio library page", () => {
     expect(pageSource).toContain("{shufflePlayKey}");
     expect(pageSource.indexOf("Sub-Libraries")).toBeLessThan(pageSource.lastIndexOf("<AudioTrackList"));
   });
+
+  it("adds bottom clearance when the floating audio player is present", () => {
+    const pageSource = source();
+
+    expect(pageSource).toContain("detail-page has-audio-player");
+    expect(pageSource).toContain(".detail-page.has-audio-player");
+    expect(pageSource).toContain("padding-bottom");
+  });
 });
