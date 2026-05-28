@@ -80,7 +80,11 @@
 
   const card = $derived.by((): EntityDetailCardFull | null => {
     if (!collection) return null;
-    return entityCardToDetailCard(collection);
+    const detailCard = entityCardToDetailCard(collection);
+    return {
+      ...detailCard,
+      posterCard: collectionPosterCard(detailCard),
+    };
   });
   const canManuallyCurate = $derived(collection?.mode !== "dynamic");
   const canRefreshRules = $derived(collection?.mode === "dynamic" || collection?.mode === "hybrid");
@@ -147,6 +151,41 @@
     if (!collection) return;
     await updateEntityMetadata(collection.id, request, { kind: collection.kind });
     await loadCollection();
+  }
+
+  function collectionPosterCard(detailCard: EntityDetailCardFull): EntityThumbnailCard | null {
+    if (detailCard.posterCard?.cover) return detailCard.posterCard;
+
+    const cardsWithCovers = itemCards.filter((item) => item.cover);
+    if (cardsWithCovers.length === 0) return detailCard.posterCard;
+
+    const selectedItem = collection?.coverItemId
+      ? cardsWithCovers.find((item) => item.entity.id === collection?.coverItemId)
+      : null;
+    const primaryItem = selectedItem ?? cardsWithCovers[0];
+
+    if (collection?.coverMode === "item") {
+      return {
+        ...primaryItem,
+        hover: { kind: "none" },
+        href: undefined,
+      };
+    }
+
+    const mosaicAssets = cardsWithCovers
+      .map((item) => item.cover)
+      .filter((cover): cover is NonNullable<EntityThumbnailCard["cover"]> => Boolean(cover))
+      .slice(0, 5);
+
+    return {
+      ...(detailCard.posterCard ?? primaryItem),
+      cover: primaryItem.cover,
+      fit: "cover",
+      hover: mosaicAssets.length > 1
+        ? { kind: "image-sequence", assets: mosaicAssets }
+        : { kind: "none" },
+      href: undefined,
+    };
   }
 
   async function searchAddableEntities(query: string): Promise<EntityPickerItem[]> {

@@ -54,7 +54,7 @@
 
   const coverModes: { value: CollectionCoverMode; label: string }[] = [
     { value: "mosaic", label: "Mosaic" },
-    { value: "item", label: "Single Item" },
+    { value: "item", label: "Standard" },
   ];
 
   let hydratedId = $state<string | null>(null);

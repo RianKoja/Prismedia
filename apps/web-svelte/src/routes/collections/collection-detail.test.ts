@@ -63,8 +63,19 @@ describe("collection detail route", () => {
 
     expect(editorSource).toContain("Collection Mode");
     expect(editorSource).toContain("Cover");
+    expect(editorSource).toContain('label: "Standard"');
     expect(editorSource).not.toContain("Mark collection as NSFW");
     expect(editorSource).not.toContain("> Visibility");
     expect(editorSource.indexOf("Collection Mode")).toBeLessThan(editorSource.indexOf("Rule Editor"));
+  });
+
+  it("derives collection hero artwork from member thumbnails when no custom cover exists", async () => {
+    const detailSource = await readFile("src/routes/collections/[id]/+page.svelte", "utf8");
+
+    expect(detailSource).toContain("collectionPosterCard");
+    expect(detailSource).toContain("detailCard.posterCard?.cover");
+    expect(detailSource).toContain("cardsWithCovers");
+    expect(detailSource).toContain('collection?.coverMode === "item"');
+    expect(detailSource).toContain('kind: "image-sequence"');
   });
 });

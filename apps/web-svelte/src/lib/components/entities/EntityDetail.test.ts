@@ -99,6 +99,17 @@ describe("EntityDetail", () => {
     }
   });
 
+  it("owns shared hero metadata separators and mobile action compaction", () => {
+    const source = readFileSync("src/lib/components/entities/EntityDetail.svelte", "utf8");
+
+    expect(source).toContain(":global(.meta-sep)");
+    expect(source).toContain("margin: 0 0.5rem;");
+    expect(source).toContain("@media (max-width: 480px)");
+    expect(source).toContain(".action-btn span");
+    expect(source).toContain("display: none;");
+    expect(source).not.toContain("flex-direction: column;\n      align-items: flex-start;");
+  });
+
   it("renders detail poster artwork through the shared thumbnail component", () => {
     const card = buildCard();
     card.poster = { src: "/covers/book.jpg", alt: "Cover" };
