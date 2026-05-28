@@ -37,6 +37,8 @@ Clicking an image opens the universal lightbox with navigation, zoom, metadata, 
 
 Books are scanned from `.cbz` and `.zip` archives. A standalone archive becomes a single book; archives in a folder can become chapters, volumes, and long-running comic or manga series.
 
+![Book detail with comic reading progress](/img/screenshots/books.png)
+
 The reader opens as a focused route with paged and vertical reading modes, resume state, chapter navigation, and mobile-friendly controls.
 
 ## Audio

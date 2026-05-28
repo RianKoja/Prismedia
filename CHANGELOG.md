@@ -154,6 +154,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 ### Removed
 
 ### Docs
+- Added a books and comics browsing screenshot to show book detail progress, resume, and volume context.
 - Updated the subtitle view options screenshot and related playback/settings copy.
 - Removed development-server language from user setup docs and clarified that release images serve the built web app from the .NET API.
 - Tightened the documentation site theme so docs pages follow Prism Noir Luxe radii, surfaces, lists, screenshots, and content language consistently.
