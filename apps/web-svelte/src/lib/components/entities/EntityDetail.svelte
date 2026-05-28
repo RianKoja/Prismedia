@@ -1623,6 +1623,12 @@
     z-index: 3;
   }
 
+  .hero[data-hero-mode="image"] .hero-content {
+    /* The lower hero overlaps the banner; add that overlap back so the poster
+       keeps the same visible breathing room above and below. */
+    padding-top: calc(1.5rem - var(--hero-lower-overlap));
+  }
+
   /* ── Poster / cover ────────────────────────────────────── */
 
   .poster-frame {
@@ -1826,6 +1832,10 @@
       gap: 0.85rem;
       padding: 1.25rem;
       padding-top: 1.75rem;
+    }
+
+    .hero[data-hero-mode="image"] .hero-content {
+      padding-top: calc(1.25rem - var(--hero-lower-overlap));
     }
 
     [data-poster-size="small"] .poster-frame { --poster-width: min(10rem, 68vw); }
@@ -2633,6 +2643,10 @@
     .hero-content {
       padding: 2rem;
       padding-top: 3rem;
+    }
+
+    .hero[data-hero-mode="image"] .hero-content {
+      padding-top: calc(2rem - var(--hero-lower-overlap));
     }
 
     [data-poster-size="small"] .poster-frame { --poster-width: 6rem; }

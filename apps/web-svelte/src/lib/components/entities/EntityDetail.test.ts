@@ -126,6 +126,15 @@ describe("EntityDetail", () => {
     }
   });
 
+  it("keeps image hero poster padding even after banner overlap", () => {
+    const source = readFileSync("src/lib/components/entities/EntityDetail.svelte", "utf8");
+
+    expect(source).toContain('.hero[data-hero-mode="image"] .hero-content');
+    expect(source).toContain("padding-top: calc(1.5rem - var(--hero-lower-overlap));");
+    expect(source).toContain("padding-top: calc(1.25rem - var(--hero-lower-overlap));");
+    expect(source).toContain("padding-top: calc(2rem - var(--hero-lower-overlap));");
+  });
+
   it("owns shared hero metadata separators and mobile action compaction", () => {
     const source = readFileSync("src/lib/components/entities/EntityDetail.svelte", "utf8");
     const appStyles = readFileSync("src/app.css", "utf8");
