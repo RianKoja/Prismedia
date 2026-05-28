@@ -37,6 +37,8 @@
   let searchYear = $state("");
   let searching = $state(false);
   let rescanning = $state(false);
+  let checkingCandidateKey = $state<string | null>(null);
+  let checkingCandidateTitle = $state<string | null>(null);
   let searchedCandidates = $state<EntitySearchCandidate[] | null>(null);
   const localCandidates = $derived(searchedCandidates ?? candidates);
 
@@ -74,19 +76,28 @@
     }
   }
 
-  function pickCandidate(candidate: EntitySearchCandidate) {
+  async function pickCandidate(candidate: EntitySearchCandidate, candidateKey: string) {
     if (!defaultProvider || store.identifyingId !== null) return;
-    void store.identifyWithCandidate(entity, defaultProvider.id, candidate);
+    checkingCandidateKey = candidateKey;
+    checkingCandidateTitle = candidate.title;
+    try {
+      await store.identifyWithCandidate(entity, defaultProvider.id, candidate);
+    } finally {
+      if (checkingCandidateKey === candidateKey) {
+        checkingCandidateKey = null;
+        checkingCandidateTitle = null;
+      }
+    }
   }
 
   function candidateActionLabel(candidate: EntitySearchCandidate): string {
     return `Use ${candidate.title}${candidate.year ? ` (${candidate.year})` : ""}`;
   }
 
-  function handleCandidateKeydown(event: KeyboardEvent, candidate: EntitySearchCandidate) {
+  function handleCandidateKeydown(event: KeyboardEvent, candidate: EntitySearchCandidate, candidateKey: string) {
     if (event.key !== "Enter" && event.key !== " ") return;
     event.preventDefault();
-    pickCandidate(candidate);
+    void pickCandidate(candidate, candidateKey);
   }
 </script>
 
@@ -190,11 +201,18 @@
     <header class="flex items-center gap-2.5 border-b border-border-subtle bg-surface-2 px-3.5 py-2.5">
       <span class="text-kicker text-text-accent">Candidates</span>
       <span class="font-mono text-[0.7rem] text-text-muted">{localCandidates.length} found</span>
+      {#if checkingCandidateTitle}
+        <span class="hidden font-mono text-[0.7rem] text-text-muted md:inline">
+          Checking {checkingCandidateTitle}; large trees can take a while.
+        </span>
+      {/if}
     </header>
     <div class="flex flex-col gap-2.5 p-3.5">
       {#each localCandidates as candidate, i (identifyCandidateKey(candidate, i))}
+        {@const candidateKey = identifyCandidateKey(candidate, i)}
         {@const card = identifyCandidateToThumbnailCard(candidate, entity.kind, i)}
         {@const hasCover = Boolean(candidate.posterUrl)}
+        {@const isChecking = checkingCandidateKey === candidateKey}
         <div
           class={cn(
             "identify-candidate-card relative grid cursor-pointer gap-3 rounded-sm border border-border-subtle bg-surface-1 p-2.5 text-left shadow-well transition-all hover:border-border-accent hover:bg-surface-2 hover:shadow-[0_0_20px_rgba(242,194,106,0.08)] focus-visible:border-border-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent-500/60",
@@ -207,8 +225,8 @@
           tabindex={store.identifyingId !== null ? -1 : 0}
           aria-label={candidateActionLabel(candidate)}
           aria-disabled={store.identifyingId !== null}
-          onclick={() => pickCandidate(candidate)}
-          onkeydown={(event) => handleCandidateKeydown(event, candidate)}
+          onclick={() => void pickCandidate(candidate, candidateKey)}
+          onkeydown={(event) => handleCandidateKeydown(event, candidate, candidateKey)}
         >
           {#if i === 0}
             <div class="absolute left-4 top-4 z-10">
@@ -249,7 +267,7 @@
           </div>
 
           <div class="flex items-center self-stretch pl-1 text-text-accent">
-            {#if store.identifyingId !== null}
+            {#if isChecking}
               <Loader2 class="h-4 w-4 animate-spin" />
             {:else}
               <ChevronRight class="h-4 w-4" />

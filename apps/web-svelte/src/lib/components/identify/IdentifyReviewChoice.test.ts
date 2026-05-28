@@ -1,5 +1,6 @@
-import { fireEvent, render, screen } from "@testing-library/svelte";
+import { fireEvent, render, screen, waitFor } from "@testing-library/svelte";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { EntitySearchCandidate } from "$lib/api/identify-types";
 import type { EntityThumbnail as EntityCard } from "$lib/api/generated/model";
 import IdentifyReviewChoice from "./IdentifyReviewChoice.svelte";
 
@@ -50,6 +51,33 @@ describe("IdentifyReviewChoice", () => {
 
     expect(store.identifyWithCandidate).toHaveBeenCalledWith(entity(), "tmdb", candidate);
   });
+
+  it("shows loading only on the selected candidate while a tree is being checked", async () => {
+    let resolveIdentify: () => void = () => undefined;
+    store.identifyWithCandidate.mockReturnValue(new Promise<void>((resolve) => {
+      resolveIdentify = resolve;
+    }));
+
+    const { container } = render(IdentifyReviewChoice, {
+      props: {
+        entity: entity(),
+        candidates: [
+          searchCandidate(),
+          searchCandidate({ externalIds: { tmdb: "2" }, title: "Other Match" }),
+        ],
+      },
+    });
+
+    await fireEvent.click(screen.getByRole("button", { name: "Use Other Match (2025)" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Checking Other Match; large trees can take a while.")).toBeInTheDocument();
+      expect(container.querySelectorAll(".animate-spin")).toHaveLength(1);
+    });
+
+    resolveIdentify();
+    await waitFor(() => expect(container.querySelector(".animate-spin")).toBeNull());
+  });
 });
 
 function provider() {
@@ -85,7 +113,7 @@ function entity(): EntityCard {
   };
 }
 
-function searchCandidate() {
+function searchCandidate(overrides: Partial<EntitySearchCandidate> = {}): EntitySearchCandidate {
   return {
     externalIds: { tmdb: "271267" },
     overview: "A family man investigates a far-reaching conspiracy.",
@@ -93,5 +121,6 @@ function searchCandidate() {
     posterUrl: "https://image.tmdb.org/t/p/w500/poster.jpg",
     title: "The Chair Company",
     year: 2025,
+    ...overrides,
   };
 }
