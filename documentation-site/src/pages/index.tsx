@@ -109,9 +109,16 @@ function Hero() {
       <div className={styles.heroVignette} aria-hidden />
       <div className={`container ${styles.heroInner}`}>
         <div className={styles.heroCopy}>
-          <p className={styles.kicker}>
-            <span className={styles.led} aria-hidden /> Self-hosted media library
-          </p>
+          <div className={styles.heroBrand}>
+            <img
+              src={useBaseUrl('/img/logo.png')}
+              alt=""
+              className={styles.heroLogo}
+              width={72}
+              height={72}
+            />
+            <span className={styles.heroWordmark}>Prismedia</span>
+          </div>
           <Heading as="h1" className={styles.heroTitle}>
             A private home for your{' '}
             <span className={styles.heroAccent}>entire</span> collection.
