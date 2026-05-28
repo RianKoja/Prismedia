@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/svelte";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import IdentifyButtonHarness from "./IdentifyButton.test-harness.svelte";
 import type { IdentifyQueueItem, PluginProvider } from "$lib/api/identify-types";
+import UseIdentifyDetailActionHarness from "./use-identify-detail-action.test-harness.svelte";
 
 const goto = vi.fn();
 const fetchIdentifyProviders = vi.fn();
@@ -20,7 +20,7 @@ vi.mock("$lib/api/identify-client", async (importOriginal) => {
   };
 });
 
-describe("IdentifyButton", () => {
+describe("useIdentifyDetailAction", () => {
   beforeEach(() => {
     goto.mockReset();
     fetchIdentifyProviders.mockReset();
@@ -32,7 +32,7 @@ describe("IdentifyButton", () => {
   it("opens an existing queue review instead of starting a new identify flow", async () => {
     fetchOptionalIdentifyQueueItem.mockResolvedValue(queueItem("person-1", { state: "proposal" }));
 
-    render(IdentifyButtonHarness, {
+    render(UseIdentifyDetailActionHarness, {
       props: {
         entityId: "person-1",
         entityKind: "person",
@@ -46,10 +46,10 @@ describe("IdentifyButton", () => {
     expect(goto).toHaveBeenCalledWith("/identify/person-1?returnId=person-1&queued=1");
   });
 
-  it("hides identify when no ready provider supports the entity kind", async () => {
+  it("hides the detail action when no ready provider supports the entity kind", async () => {
     fetchIdentifyProviders.mockResolvedValue([provider("video")]);
 
-    render(IdentifyButtonHarness, {
+    render(UseIdentifyDetailActionHarness, {
       props: {
         entityId: "person-1",
         entityKind: "person",
@@ -60,8 +60,8 @@ describe("IdentifyButton", () => {
     expect(screen.queryByRole("button")).toBeNull();
   });
 
-  it("keeps the identify label accessible while rendering icon-only on mobile", async () => {
-    render(IdentifyButtonHarness, {
+  it("shows a plain identify action when a provider supports the entity kind", async () => {
+    render(UseIdentifyDetailActionHarness, {
       props: {
         entityId: "person-1",
         entityKind: "person",
@@ -69,22 +69,6 @@ describe("IdentifyButton", () => {
     });
 
     const button = await screen.findByRole("button", { name: "Identify" });
-    const label = await screen.findByText("Identify");
-
-    expect(button.className).toContain("entity-action-button");
-    expect(label.className).toContain("entity-action-button-label");
-  });
-
-  it("allows person identify when a registered provider supports people", async () => {
-    render(IdentifyButtonHarness, {
-      props: {
-        entityId: "person-1",
-        entityKind: "person",
-      },
-    });
-
-    const button = await screen.findByRole("button", { name: "Identify" });
-    await waitFor(() => expect(button).not.toBeDisabled());
     await fireEvent.click(button);
 
     expect(goto).toHaveBeenCalledWith("/identify/person-1?returnId=person-1");

@@ -1,5 +1,5 @@
 import { goto } from "$app/navigation";
-import { Clock3, Loader2, ScanSearch } from "@lucide/svelte";
+import { Clock3, ScanSearch } from "@lucide/svelte";
 import {
   fetchIdentifyProviders,
   fetchOptionalIdentifyQueueItem,
@@ -17,27 +17,16 @@ export function useIdentifyDetailAction(
   entityKind: () => string | null | undefined,
 ): { readonly action: EntityDetailActionButton | null } {
   let queuedItem: IdentifyQueueItem | null = $state(null);
-  let hasReadyProvider = $state(true);
+  let hasReadyProvider = $state(false);
   let loading = $state(false);
   let lastLoadKey = "";
 
   const isQueued = $derived.by(() => queuedItem !== null && isActiveQueueState(queuedItem.state));
-  const disabled = $derived(loading || (!isQueued && !hasReadyProvider));
-  const label = $derived(
-    loading
-      ? "Checking"
-      : isQueued
-        ? "Pending Review"
-        : hasReadyProvider
-          ? "Identify"
-          : "No Provider",
-  );
+  const label = $derived(isQueued ? "Pending Review" : "Identify");
   const title = $derived(
     isQueued
       ? "Open pending Identify review"
-      : hasReadyProvider
-        ? "Queue Identify review"
-        : `No enabled Identify provider supports ${entityKind() ?? "this entity"}`,
+      : "Queue Identify review",
   );
 
   $effect(() => {
@@ -45,6 +34,7 @@ export function useIdentifyDetailAction(
     const kind = entityKind();
     if (!id) {
       queuedItem = null;
+      hasReadyProvider = false;
       loading = false;
       lastLoadKey = "";
       return;
@@ -67,16 +57,15 @@ export function useIdentifyDetailAction(
 
   const action = $derived.by((): EntityDetailActionButton | null => {
     const id = entityId();
-    if (!id) return null;
+    if (!id || loading || (!isQueued && !hasReadyProvider)) return null;
 
     return {
       id: "identify",
       label,
-      icon: loading ? Loader2 : isQueued ? Clock3 : ScanSearch,
-      iconClass: loading ? "h-3.5 w-3.5 animate-spin" : "h-3.5 w-3.5",
+      icon: isQueued ? Clock3 : ScanSearch,
+      iconClass: "h-3.5 w-3.5",
       title,
       ariaLabel: label,
-      disabled,
       active: isQueued,
       onClick: () => navigate(id),
     };
@@ -90,11 +79,11 @@ export function useIdentifyDetailAction(
     queuedItem = queueItem;
     hasReadyProvider = kind
       ? (providers ?? []).some((provider) => providerCanIdentifyKind(provider, kind))
-      : true;
+      : false;
   }
 
   function navigate(id: string) {
-    if (disabled) return;
+    if (!isQueued && !hasReadyProvider) return;
     const params = new URLSearchParams({ returnId: id });
     if (isQueued) params.set("queued", "1");
     void goto(`/identify/${id}?${params.toString()}`);

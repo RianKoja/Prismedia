@@ -69,6 +69,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - Fixed dynamic collection rule previews so series entities can match universal filters such as title rules.
 - Fixed the New Collection route so it opens the collection editor instead of the route-not-found payload.
 - Fixed detail-page Identify actions so already-queued entities show a pending review state, open the existing queue item, and expose ready providers for people and studios.
+- Fixed detail-page Identify actions so unsupported entity kinds hide the action instead of showing checking or no-provider states.
 - Fixed Identify queue accepts so scoped child proposals cannot overwrite the root entity under review.
 - Fixed manual Identify title searches so stale provider IDs already saved on an entity cannot override the user's search text.
 - Fixed regenerated audio waveform files being hidden behind the browser's cached waveform JSON.
