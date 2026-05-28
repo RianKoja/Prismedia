@@ -256,6 +256,48 @@ public sealed class EfEntityReadServiceTests {
     }
 
     [Fact]
+    public async Task ListAsyncPrefersLogoOverBackdropForThumbnailCover() {
+        await using var db = CreateContext();
+        var studioId = Guid.Parse("16161616-1616-1616-1616-161616161616");
+        var now = DateTimeOffset.UtcNow;
+        db.Entities.Add(new EntityRow {
+            Id = studioId,
+            KindCode = EntityKindRegistry.Studio.Code,
+            Title = "GameChops",
+            CreatedAt = now,
+            UpdatedAt = now
+        });
+        db.EntityFiles.AddRange(
+            new EntityFileRow {
+                Id = Guid.NewGuid(),
+                EntityId = studioId,
+                Role = EntityFileRole.Backdrop,
+                Path = "/assets/plugins/artwork/gamechops/banner.webp",
+                Source = "custom",
+                CreatedAt = now,
+                UpdatedAt = now
+            },
+            new EntityFileRow {
+                Id = Guid.NewGuid(),
+                EntityId = studioId,
+                Role = EntityFileRole.Logo,
+                Path = "/assets/plugins/artwork/gamechops/logo.webp",
+                Source = "custom",
+                CreatedAt = now.AddSeconds(1),
+                UpdatedAt = now.AddSeconds(1)
+            });
+        await db.SaveChangesAsync();
+
+        var repository = new EfEntityRepository(db, EntityMappers.Kinds(db), EntityMappers.Capabilities(db));
+        var service = new EfEntityReadService(db, repository, EntityMappers.Kinds(db));
+
+        var result = await service.ListAsync(EntityKindRegistry.Studio.Code, null, null, null, null, CancellationToken.None);
+        var item = Assert.Single(result.Items);
+
+        Assert.Equal("/assets/plugins/artwork/gamechops/logo.webp", item.CoverUrl);
+    }
+
+    [Fact]
     public async Task ListAsyncProjectsVideoTechnicalMetadataAsThumbnailMeta() {
         await using var db = CreateContext();
         var videoId = Guid.Parse("55555555-5555-5555-5555-555555555555");

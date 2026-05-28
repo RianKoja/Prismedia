@@ -10,6 +10,7 @@
   import { fetchIdentifyEntities } from "$lib/api/identify-client";
   import type { EntityCard } from "$lib/api/entities";
   import type { EntityThumbnailCard } from "$lib/entities/entity-thumbnail";
+  import IdentifyProviderSelect from "./IdentifyProviderSelect.svelte";
   import { useIdentifyStore } from "./identify-store.svelte";
   import { entityKindIcon } from "./identify-icons";
 
@@ -121,27 +122,13 @@
       </button>
     </div>
 
-    {#if kindProviders.length > 1}
-      <div class="flex items-center gap-1 rounded-xs border border-border-subtle bg-surface-2 p-0.5">
-        {#each kindProviders as provider (provider.id)}
-          <button
-            type="button"
-            class={cn(
-              "rounded-xs px-2 py-1 font-mono text-[0.68rem] transition-colors",
-              activeProviderId === provider.id
-                ? "bg-accent-950/40 text-text-accent"
-                : "text-text-muted hover:text-text-primary",
-            )}
-            onclick={() => (selectedProviderId = provider.id)}
-          >
-            {provider.name}
-          </button>
-        {/each}
-      </div>
-    {:else if activeProvider}
-      <span class="rounded-xs border border-border-accent bg-accent-950/30 px-2 py-0.5 font-mono text-[0.66rem] text-text-accent">
-        {activeProvider.name}
-      </span>
+    {#if kindProviders.length > 0}
+      <IdentifyProviderSelect
+        providers={kindProviders}
+        selectedId={activeProviderId}
+        onChange={(providerId) => (selectedProviderId = providerId)}
+        compact
+      />
     {/if}
 
     <div class="flex-1"></div>

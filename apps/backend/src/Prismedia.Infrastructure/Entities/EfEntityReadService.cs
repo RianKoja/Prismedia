@@ -305,19 +305,39 @@ public sealed class EfEntityReadService : IEntityReadService {
                 file.Role == EntityFileRole.Cover ||
                 file.Role == EntityFileRole.Logo ||
                 file.Role == EntityFileRole.Backdrop)
-            .OrderBy(file => file.Source == "custom" ||
-                file.Path.Contains("/custom/artwork/") ||
-                file.Path.Contains("/plugins/artwork/") ? -1 :
-                file.Role == EntityFileRole.Thumbnail ? 0 :
-                file.Role == EntityFileRole.Poster ? 1 :
-                file.Role == EntityFileRole.Cover ? 2 :
-                file.Role == EntityFileRole.Logo ? 3 : 4)
-            .ThenBy(file => file.CreatedAt)
             .ToArrayAsync(cancellationToken);
 
         return covers
             .GroupBy(file => file.EntityId)
-            .ToDictionary(group => group.Key, group => group.First().Path);
+            .ToDictionary(
+                group => group.Key,
+                group => group
+                    .OrderBy(file => CoverSourcePriority(file.Role, file.Source, file.Path))
+                    .ThenBy(file => CoverRolePriority(file.Role))
+                    .ThenBy(file => file.CreatedAt)
+                    .First()
+                    .Path);
+    }
+
+    private static int CoverRolePriority(EntityFileRole role) =>
+        role switch {
+            EntityFileRole.Thumbnail => 0,
+            EntityFileRole.Poster => 1,
+            EntityFileRole.Cover => 2,
+            EntityFileRole.Logo => 3,
+            _ => 4
+        };
+
+    private static int CoverSourcePriority(EntityFileRole role, string? source, string path) {
+        if (role == EntityFileRole.Backdrop) {
+            return 2;
+        }
+
+        return source == "custom" ||
+            path.Contains("/custom/artwork/", StringComparison.OrdinalIgnoreCase) ||
+            path.Contains("/plugins/artwork/", StringComparison.OrdinalIgnoreCase)
+                ? 0
+                : 1;
     }
 
     private static IReadOnlyList<EntityThumbnailMeta> ProjectThumbnailMeta(

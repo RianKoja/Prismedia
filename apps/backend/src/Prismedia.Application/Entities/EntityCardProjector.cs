@@ -199,8 +199,8 @@ public static class EntityCardProjector {
         var assets = entity.EntityFiles
             .Where(file => file.Role is EntityFileRole.Thumbnail or EntityFileRole.Poster
                 or EntityFileRole.Cover or EntityFileRole.Backdrop or EntityFileRole.Logo)
-            .OrderBy(file => file.Role switch {
-                _ when IsCustomPath(file.Path) => -1,
+            .OrderBy(file => ImageSourcePriority(file.Role, file.Path))
+            .ThenBy(file => file.Role switch {
                 EntityFileRole.Thumbnail => 0,
                 EntityFileRole.Poster => 1,
                 EntityFileRole.Cover => 2,
@@ -234,8 +234,8 @@ public static class EntityCardProjector {
         var cover = entity.EntityFiles
             .Where(file => file.Role is EntityFileRole.Thumbnail or EntityFileRole.Poster
                 or EntityFileRole.Cover or EntityFileRole.Backdrop or EntityFileRole.Logo)
-            .OrderBy(file => file.Role switch {
-                _ when IsCustomPath(file.Path) => -1,
+            .OrderBy(file => ImageSourcePriority(file.Role, file.Path))
+            .ThenBy(file => file.Role switch {
                 EntityFileRole.Thumbnail => 0,
                 EntityFileRole.Poster => 1,
                 EntityFileRole.Cover => 2,
@@ -265,6 +265,9 @@ public static class EntityCardProjector {
     private static bool IsCustomPath(string path) =>
         path.Contains("/custom/artwork/", StringComparison.OrdinalIgnoreCase) ||
         path.Contains("/plugins/artwork/", StringComparison.OrdinalIgnoreCase);
+
+    private static int ImageSourcePriority(EntityFileRole role, string path) =>
+        role == EntityFileRole.Backdrop ? 2 : IsCustomPath(path) ? 0 : 1;
 
     private static ContractEntityDate ToContractDate(DomainEntityDate date) =>
         new(date.Code, date.Value, date.SortableValue, date.Precision);

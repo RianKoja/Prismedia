@@ -12,7 +12,7 @@
     ScanSearch,
     X,
   } from "@lucide/svelte";
-  import { cn } from "@prismedia/ui-svelte";
+  import IdentifyProviderSelect from "$lib/components/identify/IdentifyProviderSelect.svelte";
   import IdentifyReviewChoice from "$lib/components/identify/IdentifyReviewChoice.svelte";
   import IdentifyReviewParent from "$lib/components/identify/IdentifyReviewParent.svelte";
   import IdentifyReviewChild from "$lib/components/identify/IdentifyReviewChild.svelte";
@@ -207,22 +207,11 @@
       </header>
       <div class="flex flex-col gap-4 p-4">
         {#if providers.length > 0}
-          <div class="flex items-center gap-1 rounded-xs border border-border-subtle bg-surface-2 p-0.5">
-            {#each providers as provider (provider.id)}
-              <button
-                type="button"
-                class={cn(
-                  "rounded-xs px-2.5 py-1 font-mono text-[0.72rem] transition-colors",
-                  activeProviderId === provider.id
-                    ? "bg-accent-950/40 text-text-accent"
-                    : "text-text-muted hover:text-text-primary",
-                )}
-                onclick={() => (selectedProviderId = provider.id)}
-              >
-                {provider.name}
-              </button>
-            {/each}
-          </div>
+          <IdentifyProviderSelect
+            {providers}
+            selectedId={activeProviderId}
+            onChange={(providerId) => (selectedProviderId = providerId)}
+          />
           <div class="flex flex-wrap items-center gap-2">
             <input
               type="text"
