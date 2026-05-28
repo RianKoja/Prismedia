@@ -15,7 +15,7 @@ namespace Prismedia.Infrastructure.Videos;
 /// </summary>
 public sealed class HlsAssetService : IHlsAssetService {
     private const int SegmentDurationSeconds = 6;
-    private const int VirtualCacheFormatVersion = 7;
+    private const int VirtualCacheFormatVersion = 8;
     private const int ActiveGenerationReuseWindowSegments = 12;
     private static readonly TimeSpan SegmentPollInterval = TimeSpan.FromMilliseconds(100);
     private static readonly ConcurrentDictionary<string, VirtualRenditionGeneration> ActiveRenditions = new();
@@ -996,8 +996,7 @@ public sealed class HlsAssetService : IHlsAssetService {
     private static bool RequiresDolbyVisionToneMapping(VideoSourceFile source) {
         var stream = PrimaryVideoStream(source);
         return stream?.DvProfile is 5 ||
-            stream?.DvBlSignalCompatibilityId is 0 ||
-            VideoPlaybackRangePolicy.Classify(stream).VideoRangeType.Equals("DOVI", StringComparison.OrdinalIgnoreCase);
+            stream?.DvBlSignalCompatibilityId is 0;
     }
 
     private static VideoSourceStream? PrimaryVideoStream(VideoSourceFile source) =>

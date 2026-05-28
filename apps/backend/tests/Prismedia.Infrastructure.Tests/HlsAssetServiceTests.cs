@@ -224,7 +224,7 @@ public sealed class HlsAssetServiceTests : IDisposable {
 
         Assert.NotNull(asset);
         var metadata = await File.ReadAllTextAsync(Path.Combine(virtualRoot, "metadata.json"));
-        Assert.Contains("\"FormatVersion\": 7", metadata);
+        Assert.Contains("\"FormatVersion\": 8", metadata);
         Assert.False(File.Exists(Path.Combine(virtualRoot, "v", "720p", "seg_00000.ts")));
     }
 
@@ -678,6 +678,50 @@ public sealed class HlsAssetServiceTests : IDisposable {
             argument.Contains("tonemapx=tonemap=bt2390", StringComparison.Ordinal) &&
             argument.Contains("peak=400", StringComparison.Ordinal) &&
             argument.Contains("t=bt709:m=bt709:p=bt709:format=yuv420p", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task VirtualSegmentsUseHdrToneMappingForDolbyVisionProfileEightSources() {
+        var videoId = Guid.Parse("c8c8c8c8-c8c8-c8c8-c8c8-c8c8c8c8c8c8");
+        var sourcePath = Path.Combine(_cacheRoot, "dovi-profile-eight-source.mkv");
+        await File.WriteAllTextAsync(sourcePath, "source");
+        var process = new ManifestWritingProcessExecutor();
+        var service = new HlsAssetService(
+            new HlsAssetServiceOptions(_cacheRoot, HlsTranscoderProfile.Software),
+            new FakeVideoSourceService(new VideoSourceFile(
+                videoId,
+                sourcePath,
+                "video/x-matroska",
+                false,
+                DurationSeconds: 180,
+                Width: 3840,
+                Height: 1920,
+                Streams:
+                [
+                    new(0, "Video", "hevc", null, "Video", 3840, 1920, 24, null, null, null, true, false) {
+                        PixelFormat = "yuv420p10le",
+                        ColorTransfer = "smpte2084",
+                        ColorPrimaries = "bt2020",
+                        ColorSpace = "bt2020nc",
+                        DvProfile = 8,
+                        DvLevel = 6,
+                        RpuPresentFlag = true,
+                        BlPresentFlag = true,
+                        DvBlSignalCompatibilityId = 1
+                    }
+                ])),
+            process,
+            NullLogger<HlsAssetService>.Instance);
+
+        var segment = await service.GetAssetAsync(videoId, "v/8mbps/seg_00000.ts", null, CancellationToken.None);
+
+        Assert.NotNull(segment);
+        var arguments = Assert.Single(process.ArgumentHistory);
+        Assert.DoesNotContain(arguments, argument => argument.Contains("tonemapx", StringComparison.Ordinal));
+        Assert.Contains(arguments, argument =>
+            argument.Contains("zscale=t=linear", StringComparison.Ordinal) &&
+            argument.Contains("tonemap=tonemap=hable", StringComparison.Ordinal) &&
+            argument.Contains("format=yuv420p", StringComparison.Ordinal));
     }
 
     [Fact]

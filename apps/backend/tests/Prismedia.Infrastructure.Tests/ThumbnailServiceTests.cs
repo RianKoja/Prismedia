@@ -73,6 +73,41 @@ public sealed class ThumbnailServiceTests : IDisposable {
     }
 
     [Fact]
+    public async Task ThumbnailAndPreviewUseHdrToneMappingForDolbyVisionProfileEightSources() {
+        var inputPath = Path.Combine(_root, "dovi-profile-eight.mkv");
+        var thumbPath = Path.Combine(_root, "profile-eight-thumb.jpg");
+        var previewPath = Path.Combine(_root, "profile-eight-preview.mp4");
+        await File.WriteAllTextAsync(inputPath, "source");
+        var process = new ProbedVideoProcessExecutor(DolbyVisionProfileEightProbeJson);
+        var service = new ThumbnailService(process, new MediaProbeService(process));
+
+        var result = await service.GenerateThumbnailAndPreviewAsync(
+            inputPath,
+            thumbPath,
+            thumbSeekSeconds: 12,
+            thumbWidth: 640,
+            thumbHeight: 320,
+            thumbQuality: 3,
+            previewPath: previewPath,
+            previewStartSeconds: 20,
+            previewDurationSeconds: 8,
+            CancellationToken.None);
+
+        Assert.True(result.Thumbnail);
+        Assert.True(result.Preview);
+        Assert.Equal(2, process.FfmpegArguments.Count);
+        Assert.All(process.FfmpegArguments, arguments => {
+            var filterIndex = arguments.ToList().IndexOf("-vf");
+            Assert.True(filterIndex >= 0);
+            var filter = arguments[filterIndex + 1];
+            Assert.DoesNotContain("tonemapx", filter);
+            Assert.Contains("zscale=t=linear", filter);
+            Assert.Contains("tonemap=tonemap=hable", filter);
+            Assert.Contains("zscale=t=bt709:m=bt709:p=bt709", filter);
+        });
+    }
+
+    [Fact]
     public async Task ThumbnailAndPreviewUseConfiguredFfmpegAndCompanionFfprobePaths() {
         var inputPath = Path.Combine(_root, "dovi-configured.mkv");
         var thumbPath = Path.Combine(_root, "configured-thumb.jpg");
@@ -262,6 +297,39 @@ public sealed class ThumbnailServiceTests : IDisposable {
                   "el_present_flag": 0,
                   "bl_present_flag": 1,
                   "dv_bl_signal_compatibility_id": 0
+                }
+              ],
+              "disposition": { "default": 1, "forced": 0 }
+            }
+          ]
+        }
+        """;
+
+    private const string DolbyVisionProfileEightProbeJson = """
+        {
+          "format": { "duration": "42", "format_name": "matroska" },
+          "streams": [
+            {
+              "index": 0,
+              "codec_type": "video",
+              "codec_name": "hevc",
+              "pix_fmt": "yuv420p10le",
+              "width": 3840,
+              "height": 1920,
+              "avg_frame_rate": "24000/1001",
+              "color_range": "tv",
+              "color_transfer": "smpte2084",
+              "color_primaries": "bt2020",
+              "color_space": "bt2020nc",
+              "side_data_list": [
+                {
+                  "side_data_type": "DOVI configuration record",
+                  "dv_profile": 8,
+                  "dv_level": 6,
+                  "rpu_present_flag": 1,
+                  "el_present_flag": 0,
+                  "bl_present_flag": 1,
+                  "dv_bl_signal_compatibility_id": 1
                 }
               ],
               "disposition": { "default": 1, "forced": 0 }

@@ -403,8 +403,7 @@ public sealed class ThumbnailService {
             string.Equals(stream.ColorPrimaries, "bt2020", StringComparison.OrdinalIgnoreCase));
 
     private static bool RequiresDolbyVisionToneMapping(MediaStreamProbeResult? stream) =>
-        stream?.DvProfile is not null ||
-        stream?.RpuPresentFlag == true ||
+        stream?.DvProfile is 5 ||
         stream?.DvBlSignalCompatibilityId is 0;
 
     private static string InputHdrColorParameters(MediaStreamProbeResult? stream) {
