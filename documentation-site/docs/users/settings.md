@@ -46,7 +46,7 @@ Playback settings cover direct/HLS behavior, generated preview defaults, player 
 
 ## Subtitles
 
-![Subtitle settings](/img/screenshots/settings-subtitles.png)
+![Subtitle view options](/img/screenshots/settings-subtitles.png)
 
 Subtitle settings control:
 
@@ -55,6 +55,7 @@ Subtitle settings control:
 - Caption style.
 - Text size.
 - Vertical position.
+- Transparency.
 
 Video pages can still apply local per-browser overrides from the player.
 

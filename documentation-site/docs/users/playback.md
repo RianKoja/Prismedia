@@ -27,9 +27,9 @@ Video detail pages include:
 
 Subtitle tracks can come from sidecar files, embedded streams, or manual upload. Supported text tracks are converted to WebVTT for browser playback.
 
-![Subtitle settings](/img/screenshots/settings-subtitles.png)
+![Subtitle view options](/img/screenshots/settings-subtitles.png)
 
-Settings control auto-enable behavior, preferred languages, caption style, text size, and vertical position. Video pages also offer per-browser overrides from the player.
+Subtitle view options control auto-enable behavior, preferred languages, caption style, text size, vertical position, and transparency. Video pages also offer per-browser overrides from the player.
 
 ## Transcripts
 
