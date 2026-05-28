@@ -155,6 +155,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 ### Removed
 
 ### Docs
+- Replaced stale README and documentation screenshots with fresh captures from the current Prismedia app shell.
 - Added a books and comics browsing screenshot to show book detail progress, resume, and volume context.
 - Updated the subtitle view options screenshot and related playback/settings copy.
 - Removed development-server language from user setup docs and clarified that release images serve the built web app from the .NET API.
