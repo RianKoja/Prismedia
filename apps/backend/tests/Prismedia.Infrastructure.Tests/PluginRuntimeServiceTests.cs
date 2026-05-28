@@ -323,7 +323,7 @@ public sealed class PluginRuntimeServiceTests : IDisposable {
     }
 
     [Fact]
-    public async Task IdentifyIgnoresProviderStructuralChildrenThatDoNotMapToLocalChildren() {
+    public async Task IdentifyPreservesProviderStructuralChildrenThatDoNotMapToLocalChildren() {
         var pluginDir = Path.Combine(_tempRoot, "tmdb");
         Directory.CreateDirectory(pluginDir);
         await File.WriteAllTextAsync(
@@ -389,7 +389,10 @@ public sealed class PluginRuntimeServiceTests : IDisposable {
         var response = await service.IdentifyAsync(seriesId, "tmdb", null, hideNsfw: false, CancellationToken.None);
 
         Assert.True(response.Ok);
-        Assert.Empty(response.Result!.Children);
+        var child = Assert.Single(response.Result!.Children);
+        Assert.Null(child.TargetEntityId);
+        Assert.Equal("video-season", child.TargetKind);
+        Assert.Equal("Season 1", child.Patch.Title);
         Assert.Equal("Generated Studio", Assert.Single(response.Result.Relationships).Patch.Title);
     }
 
@@ -621,6 +624,7 @@ public sealed class PluginRuntimeServiceTests : IDisposable {
         var request = Assert.Single(executor.Requests);
         Assert.Equal("search", request.Action);
         Assert.Empty(request.Hints.ExternalIds);
+        Assert.True(request.IncludeNsfw);
     }
 
     [Fact]

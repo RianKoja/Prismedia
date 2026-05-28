@@ -84,7 +84,7 @@ public sealed partial class EntityMetadataApplyService : IEntityMetadataPatchSer
         }
 
         if (request.Children is { Count: > 0 }) {
-            await ApplyStructuralChildrenAsync(request.Children, now, [entity.Id], cancellationToken);
+            await ApplyStructuralChildrenAsync(request.Children, entity.Id, now, [entity.Id], cancellationToken);
         }
 
         if (request.Relationships is { Count: > 0 } &&
@@ -245,7 +245,7 @@ public sealed partial class EntityMetadataApplyService : IEntityMetadataPatchSer
             await ApplyRelationshipProposalsAsync(entityId, relationshipProposals, now, cancellationToken);
         }
 
-        await ApplyStructuralChildrenAsync(EntityMetadataProposalTraversal.StructuralChildren(proposal), now, [entity.Id], cancellationToken);
+        await ApplyStructuralChildrenAsync(EntityMetadataProposalTraversal.StructuralChildren(proposal), entity.Id, now, [entity.Id], cancellationToken);
 
         entity.UpdatedAt = now;
         await _db.SaveChangesAsync(cancellationToken);

@@ -53,6 +53,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - Updated web app manifest and mobile browser metadata for home-screen installation and browser UI theme colors.
 
 ### Fixed
+- Fixed plugin cascade reviews so provider-created structural children such as MangaDex volumes and chapters can be created and updated while respecting NSFW visibility.
 - Fixed plugin no-match errors so the selected provider name is shown instead of a TMDB-specific message.
 - Fixed first-scan trickplay generation so preview jobs wait for probe metadata instead of completing before trickplay tiles can be created.
 - Fixed the changelog popup so local installs can load bundled release notes and check GitHub releases for new Prismedia versions.

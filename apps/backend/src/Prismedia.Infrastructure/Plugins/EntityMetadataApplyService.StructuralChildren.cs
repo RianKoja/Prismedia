@@ -12,22 +12,24 @@ public sealed partial class EntityMetadataApplyService {
     /// </summary>
     private async Task ApplyStructuralChildrenAsync(
         IReadOnlyList<EntityMetadataProposal> children,
+        Guid parentEntityId,
         DateTimeOffset now,
         HashSet<Guid> visited,
         CancellationToken cancellationToken) {
         foreach (var child in children) {
-            if (child.TargetEntityId is null) {
+            if (EntityMetadataProposalTraversal.IsRelationshipKind(child.TargetKind)) {
                 continue;
             }
 
-            if (!visited.Add(child.TargetEntityId.Value)) {
-                continue;
-            }
+            var childEntity = child.TargetEntityId is { } existingId
+                ? await _db.Entities.FirstOrDefaultAsync(row => row.Id == existingId && row.DeletedAt == null, cancellationToken)
+                : await FindOrCreateStructuralChildAsync(parentEntityId, child, now, cancellationToken);
 
-            var childEntity = await _db.Entities
-                .FirstOrDefaultAsync(row => row.Id == child.TargetEntityId.Value && row.DeletedAt == null, cancellationToken);
             if (childEntity is null) {
-                visited.Remove(child.TargetEntityId.Value);
+                continue;
+            }
+
+            if (!visited.Add(childEntity.Id)) {
                 continue;
             }
 
@@ -38,9 +40,87 @@ public sealed partial class EntityMetadataApplyService {
                 await ApplyRelationshipProposalsAsync(childEntity.Id, relationshipProposals, now, cancellationToken);
             }
 
-            await ApplyStructuralChildrenAsync(EntityMetadataProposalTraversal.StructuralChildren(child), now, visited, cancellationToken);
-            visited.Remove(child.TargetEntityId.Value);
+            await ApplyStructuralChildrenAsync(EntityMetadataProposalTraversal.StructuralChildren(child), childEntity.Id, now, visited, cancellationToken);
+            visited.Remove(childEntity.Id);
         }
+    }
+
+    private async Task<EntityRow?> FindOrCreateStructuralChildAsync(
+        Guid parentEntityId,
+        EntityMetadataProposal child,
+        DateTimeOffset now,
+        CancellationToken cancellationToken) {
+        if (string.IsNullOrWhiteSpace(child.TargetKind) ||
+            !EntityKindRegistry.TryGet(child.TargetKind, out _) ||
+            string.IsNullOrWhiteSpace(child.Patch.Title)) {
+            return null;
+        }
+
+        var existing = await FindStructuralChildByExternalIdsAsync(parentEntityId, child, cancellationToken)
+            ?? await FindStructuralChildByTitleAsync(parentEntityId, child.TargetKind, child.Patch.Title, cancellationToken);
+        if (existing is not null) {
+            return existing;
+        }
+
+        var entity = new EntityRow {
+            Id = Guid.NewGuid(),
+            KindCode = child.TargetKind,
+            Title = child.Patch.Title.Trim(),
+            ParentEntityId = parentEntityId,
+            SortOrder = EntityMetadataPositionRules.SortOrderFor(child.TargetKind, EntityMetadataPositionRules.Normalize(child.Patch.Positions)),
+            CreatedAt = now,
+            UpdatedAt = now
+        };
+        _db.Entities.Add(entity);
+        return entity;
+    }
+
+    private async Task<EntityRow?> FindStructuralChildByExternalIdsAsync(
+        Guid parentEntityId,
+        EntityMetadataProposal child,
+        CancellationToken cancellationToken) {
+        foreach (var (provider, value) in child.Patch.ExternalIds) {
+            if (string.IsNullOrWhiteSpace(provider) || string.IsNullOrWhiteSpace(value)) {
+                continue;
+            }
+
+            var entity = await _db.EntityExternalIds
+                .Where(row => row.Provider == provider.Trim() && row.Value == value.Trim())
+                .Join(
+                    _db.Entities,
+                    externalId => externalId.EntityId,
+                    entity => entity.Id,
+                    (_, entity) => entity)
+                .FirstOrDefaultAsync(
+                    entity => entity.ParentEntityId == parentEntityId &&
+                        entity.KindCode == child.TargetKind &&
+                        entity.DeletedAt == null,
+                    cancellationToken);
+            if (entity is not null) {
+                return entity;
+            }
+        }
+
+        return null;
+    }
+
+    private async Task<EntityRow?> FindStructuralChildByTitleAsync(
+        Guid parentEntityId,
+        string kind,
+        string title,
+        CancellationToken cancellationToken) {
+        var normalizedTitle = title.Trim();
+        return _db.Entities.Local.FirstOrDefault(row =>
+                row.ParentEntityId == parentEntityId &&
+                row.KindCode == kind &&
+                row.Title.Equals(normalizedTitle, StringComparison.OrdinalIgnoreCase) &&
+                row.DeletedAt == null)
+            ?? await _db.Entities.FirstOrDefaultAsync(
+                row => row.ParentEntityId == parentEntityId &&
+                    row.KindCode == kind &&
+                    row.Title.ToLower() == normalizedTitle.ToLower() &&
+                    row.DeletedAt == null,
+                cancellationToken);
     }
 
     private async Task ApplyPatchToEntityAsync(
@@ -99,10 +179,16 @@ public sealed partial class EntityMetadataApplyService {
         }
 
         if (images.Count > 0) {
-            var image = images.FirstOrDefault(i => i.Kind is "still") ?? images.FirstOrDefault(i => i.Kind is "poster") ?? images[0];
+            var image = images.FirstOrDefault(i => i.Kind is "still") ??
+                images.FirstOrDefault(i => i.Kind is "poster") ??
+                images.FirstOrDefault(i => i.Kind is "cover") ??
+                images.FirstOrDefault(i => i.Kind is "backdrop") ??
+                images[0];
             var role = image.Kind switch {
                 "still" => EntityFileRole.Thumbnail,
                 "poster" => EntityFileRole.Poster,
+                "cover" => EntityFileRole.Cover,
+                "backdrop" => EntityFileRole.Backdrop,
                 _ => EntityFileRole.Thumbnail
             };
             await _artwork.DownloadPluginImageAsync(entity, image, role, now, cancellationToken);

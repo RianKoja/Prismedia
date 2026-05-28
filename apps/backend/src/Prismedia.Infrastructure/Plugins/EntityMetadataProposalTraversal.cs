@@ -14,6 +14,6 @@ internal static class EntityMetadataProposalTraversal {
             .Select(group => group.First())
             .ToArray();
 
-    private static bool IsRelationshipKind(string kind) =>
+    public static bool IsRelationshipKind(string kind) =>
         kind is "person" or "studio" or "tag";
 }

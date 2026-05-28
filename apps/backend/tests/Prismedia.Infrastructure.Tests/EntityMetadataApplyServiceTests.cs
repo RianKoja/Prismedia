@@ -512,6 +512,68 @@ public sealed class EntityMetadataApplyServiceTests {
     }
 
     [Fact]
+    public async Task ApplyProposalChildrenWithoutTargetEntityIdsCreatesStructuralBookChildren() {
+        await using var db = CreateContext();
+        var bookId = Guid.Parse("11111111-2222-3333-4444-555555555555");
+        SeedEntity(db, bookId, "book", "Manga");
+        await db.SaveChangesAsync();
+
+        var proposal = new EntityMetadataProposal(
+            ProposalId: "mangadex:manga-1",
+            Provider: "mangadex",
+            TargetKind: "book",
+            Confidence: 1,
+            MatchReason: "external-id",
+            Patch: EmptyPatch(),
+            Images: [],
+            Children:
+            [
+                new EntityMetadataProposal(
+                    ProposalId: "mangadex:manga-1:volume:1",
+                    Provider: "mangadex",
+                    TargetKind: "book-volume",
+                    Confidence: 0.8m,
+                    MatchReason: "volume-map",
+                    Patch: EmptyPatch() with {
+                        Title = "Volume 1",
+                        ExternalIds = new Dictionary<string, string> { ["mangadex"] = "manga-1", ["volume"] = "1" },
+                        Positions = new Dictionary<string, int> { ["volumeNumber"] = 1 }
+                    },
+                    Images: [],
+                    Children:
+                    [
+                        new EntityMetadataProposal(
+                            ProposalId: "mangadex:manga-1:chapter:chapter-1",
+                            Provider: "mangadex",
+                            TargetKind: "book-chapter",
+                            Confidence: 0.7m,
+                            MatchReason: "chapter-feed",
+                            Patch: EmptyPatch() with {
+                                Title = "Chapter 1",
+                                ExternalIds = new Dictionary<string, string> { ["mangadexChapter"] = "chapter-1" },
+                                Positions = new Dictionary<string, int> { ["chapterNumber"] = 1 }
+                            },
+                            Images: [],
+                            Children: [],
+                            Candidates: [])
+                    ],
+                    Candidates: [])
+            ],
+            Candidates: []);
+
+        var service = new EntityMetadataApplyService(db, new PluginArtworkServiceOptions(Path.GetTempPath()));
+        await service.ApplyAsync(bookId, proposal, selectedFields: ["externalIds"], selectedImages: null, CancellationToken.None);
+
+        var volume = await db.Entities.SingleAsync(row => row.KindCode == "book-volume");
+        var chapter = await db.Entities.SingleAsync(row => row.KindCode == "book-chapter");
+        Assert.Equal(bookId, volume.ParentEntityId);
+        Assert.Equal(volume.Id, chapter.ParentEntityId);
+        Assert.Equal(1, volume.SortOrder);
+        Assert.Equal(1, chapter.SortOrder);
+        Assert.Equal("chapter-1", (await db.EntityExternalIds.SingleAsync(row => row.EntityId == chapter.Id)).Value);
+    }
+
+    [Fact]
     public async Task ApplyCascadePositionsUpdatesCanonicalPositionsAndStructuralSortOrder() {
         await using var db = CreateContext();
         var seriesId = Guid.Parse("88888888-8888-8888-8888-888888888888");

@@ -60,6 +60,7 @@ public sealed record IdentifyQuery(
 /// <param name="Query">Optional user-provided query override.</param>
 /// <param name="Hints">ID-first lookup hints derived from existing entity metadata.</param>
 /// <param name="StructuralContext">Structural parent and position context for child-aware identify.</param>
+/// <param name="IncludeNsfw">Whether plugin lookups may include adult upstream results for this request.</param>
 public sealed record IdentifyPluginRequest(
     int ProtocolVersion,
     string Action,
@@ -67,7 +68,8 @@ public sealed record IdentifyPluginRequest(
     IdentifyEntitySnapshot Entity,
     IdentifyQuery Query,
     IdentifyMatchHints Hints,
-    IdentifyStructuralContext? StructuralContext = null);
+    IdentifyStructuralContext? StructuralContext = null,
+    bool IncludeNsfw = false);
 
 /// <summary>
 /// Request body for identifying one entity with a provider.

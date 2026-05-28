@@ -85,6 +85,7 @@ public sealed class IdentifyPluginService : IIdentifyProviderService {
             query,
             ancestors,
             parentSortOrder: entity.SortOrder,
+            includeNsfw: !hideNsfw,
             visited: [],
             cancellationToken);
 
@@ -93,7 +94,7 @@ public sealed class IdentifyPluginService : IIdentifyProviderService {
         }
 
         if (entity.ParentEntityId is not null) {
-            var cascadeResult = await CascadeFromParentAsync(entity, descriptor, auth, cancellationToken);
+            var cascadeResult = await CascadeFromParentAsync(entity, descriptor, auth, includeNsfw: !hideNsfw, cancellationToken);
             if (cascadeResult is not null) {
                 return MarkNsfwIfNeeded(cascadeResult, providerIsNsfw);
             }
@@ -141,6 +142,7 @@ public sealed class IdentifyPluginService : IIdentifyProviderService {
         EntityRow entity,
         PluginDescriptor descriptor,
         IReadOnlyDictionary<string, string> auth,
+        bool includeNsfw,
         CancellationToken cancellationToken) {
         var current = entity;
         while (current.ParentEntityId is { } parentId) {
@@ -157,7 +159,7 @@ public sealed class IdentifyPluginService : IIdentifyProviderService {
             var parentAncestors = await LoadAncestorSnapshotsAsync(parent, descriptor.Manifest.Id, cancellationToken);
             var parentResult = await IdentifyEntityWithStructuralContextAsync(
                 parent, descriptor, auth, query: null, parentAncestors,
-                parentSortOrder: parent.SortOrder, visited: [], cancellationToken);
+                parentSortOrder: parent.SortOrder, includeNsfw, visited: [], cancellationToken);
 
             if (!parentResult.Ok || parentResult.Result?.Patch is null) {
                 current = parent;
@@ -234,6 +236,7 @@ public sealed class IdentifyPluginService : IIdentifyProviderService {
         IdentifyQuery? query,
         IReadOnlyList<IdentifyEntitySnapshot> ancestors,
         int? parentSortOrder,
+        bool includeNsfw,
         HashSet<Guid> visited,
         CancellationToken cancellationToken) {
         if (!visited.Add(entity.Id)) {
@@ -258,7 +261,8 @@ public sealed class IdentifyPluginService : IIdentifyProviderService {
             Entity: await SnapshotAsync(entity, descriptor.Manifest.Id, cancellationToken),
             Query: query ?? new IdentifyQuery(null, null, null),
             Hints: hints,
-            StructuralContext: structuralContext);
+            StructuralContext: structuralContext,
+            IncludeNsfw: includeNsfw);
 
         var response = await _runner.IdentifyAsync(descriptor, request, cancellationToken);
         if (!response.Ok || response.Result is null) {
@@ -277,6 +281,7 @@ public sealed class IdentifyPluginService : IIdentifyProviderService {
             descriptor,
             auth,
             [await SnapshotFromProposalAsync(entity, descriptor.Manifest.Id, response.Result, cancellationToken), .. ancestors],
+            includeNsfw,
             visited,
             cancellationToken);
         visited.Remove(entity.Id);
@@ -289,6 +294,7 @@ public sealed class IdentifyPluginService : IIdentifyProviderService {
         PluginDescriptor descriptor,
         IReadOnlyDictionary<string, string> auth,
         IReadOnlyList<IdentifyEntitySnapshot> ancestorPath,
+        bool includeNsfw,
         HashSet<Guid> visited,
         CancellationToken cancellationToken) {
         var existingChildren = await LoadStructuralChildrenAsync(entity.Id, cancellationToken);
@@ -305,18 +311,79 @@ public sealed class IdentifyPluginService : IIdentifyProviderService {
                 query: null,
                 ancestors: ancestorPath,
                 parentSortOrder: child.SortOrder,
+                includeNsfw,
                 visited,
                 cancellationToken);
             if (childResponse.Ok && childResponse.Result?.Patch is not null) {
-                structuralChildren.Add(childResponse.Result);
+                structuralChildren.Add(EnsureStructuralPositions(childResponse.Result, child));
             }
         }
 
         return providerProposal with {
             TargetKind = entity.KindCode,
             TargetEntityId = entity.Id,
-            Children = structuralChildren,
+            Children = MergeStructuralChildren(providerProposal.Children, structuralChildren),
             Relationships = EntityMetadataProposalTraversal.Relationships(providerProposal)
+        };
+    }
+
+    private static IReadOnlyList<EntityMetadataProposal> MergeStructuralChildren(
+        IReadOnlyList<EntityMetadataProposal> providerChildren,
+        IReadOnlyList<EntityMetadataProposal> localChildren) {
+        if (providerChildren.Count == 0) {
+            return localChildren;
+        }
+
+        if (localChildren.Count == 0) {
+            return providerChildren;
+        }
+
+        var merged = new List<EntityMetadataProposal>(providerChildren);
+        foreach (var localChild in localChildren) {
+            var existingIndex = merged.FindIndex(providerChild => IsSameStructuralChild(providerChild, localChild));
+            if (existingIndex >= 0) {
+                merged[existingIndex] = localChild;
+                continue;
+            }
+
+            merged.Add(localChild);
+        }
+
+        return merged;
+    }
+
+    private static bool IsSameStructuralChild(EntityMetadataProposal left, EntityMetadataProposal right) {
+        if (!left.TargetKind.Equals(right.TargetKind, StringComparison.OrdinalIgnoreCase)) {
+            return false;
+        }
+
+        var leftPositions = EntityMetadataPositionRules.Normalize(left.Patch.Positions);
+        var rightPositions = EntityMetadataPositionRules.Normalize(right.Patch.Positions);
+        foreach (var code in new[] { "season", "volume", "episode", "chapter", "sort" }) {
+            if (leftPositions.TryGetValue(code, out var leftValue) &&
+                rightPositions.TryGetValue(code, out var rightValue) &&
+                leftValue == rightValue) {
+                return true;
+            }
+        }
+
+        return !string.IsNullOrWhiteSpace(left.Patch.Title) &&
+            !string.IsNullOrWhiteSpace(right.Patch.Title) &&
+            left.Patch.Title.Equals(right.Patch.Title, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static EntityMetadataProposal EnsureStructuralPositions(EntityMetadataProposal proposal, StructuralChild child) {
+        if (child.SortOrder is not { } sortOrder || proposal.Patch.Positions.Count > 0) {
+            return proposal;
+        }
+
+        var code = child.Entity.KindCode.Equals(EntityKindRegistry.VideoSeason.Code, StringComparison.OrdinalIgnoreCase)
+            ? "seasonNumber"
+            : "sortOrder";
+        return proposal with {
+            Patch = proposal.Patch with {
+                Positions = new Dictionary<string, int> { [code] = sortOrder }
+            }
         };
     }
 
