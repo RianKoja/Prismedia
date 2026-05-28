@@ -114,8 +114,8 @@ function Hero() {
               src={useBaseUrl('/img/logo.png')}
               alt=""
               className={styles.heroLogo}
-              width={72}
-              height={72}
+              width={96}
+              height={96}
             />
             <span className={styles.heroWordmark}>Prismedia</span>
           </div>

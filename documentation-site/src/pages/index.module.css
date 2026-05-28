@@ -150,20 +150,20 @@
 .heroBrand {
   display: flex;
   align-items: center;
-  gap: 0.9rem;
-  margin-bottom: 1.4rem;
+  gap: 1.1rem;
+  margin-bottom: 1.6rem;
 }
 
 .heroLogo {
-  width: 72px;
-  height: 72px;
-  filter: drop-shadow(0 0 20px rgba(196, 154, 90, 0.3));
+  width: 96px;
+  height: 96px;
+  filter: drop-shadow(0 0 24px rgba(196, 154, 90, 0.35));
 }
 
 .heroWordmark {
   font-family: var(--ifm-heading-font-family);
   font-weight: 800;
-  font-size: 2rem;
+  font-size: 2.6rem;
   letter-spacing: -0.03em;
   color: var(--prismedia-text-primary);
 }
@@ -179,12 +179,7 @@
 }
 
 .heroAccent {
-  background: linear-gradient(135deg, #c49a5a 0%, #f1d7a4 60%, #c49a5a 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  filter: drop-shadow(0 0 18px rgba(196, 154, 90, 0.32));
-  font-style: italic;
+  color: var(--prismedia-brass);
   font-weight: 800;
 }
 
