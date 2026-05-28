@@ -53,6 +53,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - Updated web app manifest and mobile browser metadata for home-screen installation and browser UI theme colors.
 
 ### Fixed
+- Fixed provider-applied Studio artwork so identified channel/studio relationship metadata can save both logo thumbnails and header backdrops.
 - Fixed plugin cascade reviews so provider-created structural children such as MangaDex volumes and chapters can be created and updated while respecting NSFW visibility.
 - Fixed MangaDex identify reviews so cover artwork keeps a book-cover aspect ratio and existing volume or chapter folders can receive scoped metadata.
 - Fixed provider artwork downloads so MangaDex cover selections can be applied without CDN User-Agent errors.

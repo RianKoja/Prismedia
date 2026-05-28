@@ -883,7 +883,10 @@ public sealed class EntityMetadataApplyServiceTests {
             Confidence: 1,
             MatchReason: "studio",
             Patch: EmptyPatch() with { Title = "Chair Pictures" },
-            Images: [new ImageCandidate("logo", "https://example.test/studio.png", "tmdb", null, null, null, null)],
+            Images: [
+                new ImageCandidate("logo", "https://example.test/studio.png", "tmdb", null, null, null, null),
+                new ImageCandidate("backdrop", "https://example.test/studio-banner.jpg", "tmdb", null, null, null, null)
+            ],
             Children: [],
             Candidates: []);
         var proposal = new EntityMetadataProposal(
@@ -910,7 +913,13 @@ public sealed class EntityMetadataApplyServiceTests {
         var actorId = await db.Entities.Where(row => row.KindCode == "person" && row.Title == "Lead Actor").Select(row => row.Id).SingleAsync();
         var studioId = await db.Entities.Where(row => row.KindCode == "studio" && row.Title == "Chair Pictures").Select(row => row.Id).SingleAsync();
         Assert.Equal(EntityFileRole.Poster, (await db.EntityFiles.SingleAsync(row => row.EntityId == actorId)).Role);
-        Assert.Equal(EntityFileRole.Logo, (await db.EntityFiles.SingleAsync(row => row.EntityId == studioId)).Role);
+        Assert.Equal(
+            [EntityFileRole.Backdrop, EntityFileRole.Logo],
+            await db.EntityFiles
+                .Where(row => row.EntityId == studioId)
+                .OrderBy(row => row.Role)
+                .Select(row => row.Role)
+                .ToArrayAsync());
     }
 
     [Fact]

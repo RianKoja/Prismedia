@@ -120,15 +120,35 @@ public sealed partial class EntityMetadataApplyService {
 
             await ApplyPatchToEntityAsync(linkedEntity, child.Patch, [], now, cancellationToken);
 
-            if (child.Images.Count == 0) {
-                continue;
+            await ApplyRelationshipArtworkAsync(linkedEntity, child, now, cancellationToken);
+        }
+    }
+
+    private async Task ApplyRelationshipArtworkAsync(
+        EntityRow linkedEntity,
+        EntityMetadataProposal proposal,
+        DateTimeOffset now,
+        CancellationToken cancellationToken) {
+        if (proposal.Images.Count == 0) {
+            return;
+        }
+
+        if (proposal.TargetKind == "studio") {
+            var logo = proposal.Images.FirstOrDefault(image => image.Kind is "logo" or "poster") ?? proposal.Images[0];
+            await _artwork.DownloadPluginImageAsync(linkedEntity, logo, EntityFileRole.Logo, now, cancellationToken);
+
+            var backdrop = proposal.Images.FirstOrDefault(image => image.Kind is "backdrop" or "banner" or "hero");
+            if (backdrop is not null) {
+                await _artwork.DownloadPluginImageAsync(linkedEntity, backdrop, EntityFileRole.Backdrop, now, cancellationToken);
             }
 
-            var image = child.Images.FirstOrDefault(img => img.Kind is "poster") ?? child.Images.FirstOrDefault(img => img.Kind is "logo") ?? child.Images[0];
-            var role = child.TargetKind == "studio" ? EntityFileRole.Logo : EntityFileRole.Poster;
-
-            await _artwork.DownloadPluginImageAsync(linkedEntity, image, role, now, cancellationToken);
+            return;
         }
+
+        var image = proposal.Images.FirstOrDefault(img => img.Kind is "poster") ??
+            proposal.Images.FirstOrDefault(img => img.Kind is "logo") ??
+            proposal.Images[0];
+        await _artwork.DownloadPluginImageAsync(linkedEntity, image, EntityFileRole.Poster, now, cancellationToken);
     }
 
     private sealed class CreditRelationshipAccumulator {
