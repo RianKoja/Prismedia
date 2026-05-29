@@ -434,7 +434,12 @@ public sealed class PluginCatalogService : IPluginCatalogService {
 
         try {
             var indexUrl = ResolveIndexUrl(_options.CommunityIndexUrl);
-            var body = await _http.GetStringAsync(indexUrl, cancellationToken);
+            using var request = new HttpRequestMessage(HttpMethod.Get, AddCacheBuster(indexUrl));
+            request.Headers.TryAddWithoutValidation("Cache-Control", "no-cache");
+            request.Headers.TryAddWithoutValidation("Pragma", "no-cache");
+            using var response = await _http.SendAsync(request, cancellationToken);
+            response.EnsureSuccessStatusCode();
+            var body = await response.Content.ReadAsStringAsync(cancellationToken);
             return PluginIndexParser.Parse(body, indexUrl);
         } catch (HttpRequestException) {
             return [];
@@ -457,6 +462,11 @@ public sealed class PluginCatalogService : IPluginCatalogService {
         }
 
         return configured.TrimEnd('/') + "/index.yml";
+    }
+
+    private static string AddCacheBuster(string url) {
+        var separator = url.Contains('?', StringComparison.Ordinal) ? "&" : "?";
+        return $"{url}{separator}_={DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}";
     }
 
     private string ResolveEntryUrl(string path) {

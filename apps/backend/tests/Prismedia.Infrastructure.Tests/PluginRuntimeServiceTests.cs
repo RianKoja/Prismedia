@@ -314,7 +314,7 @@ public sealed class PluginRuntimeServiceTests : IDisposable {
 
     [Fact]
     public async Task CatalogResolvesPrismediaPluginsYamlIndexFromRepositoryBaseUrl() {
-        var index = """
+            var index = """
         # Prismedia Community Plugins Index
         - id: tvdb
           name: The TVDB
@@ -396,7 +396,8 @@ public sealed class PluginRuntimeServiceTests : IDisposable {
 
         Assert.Equal(2, providers.Count);
         Assert.Contains(handler.Requests,
-            uri => uri.ToString() == "https://raw.githubusercontent.com/pauljoda/Prismedia-Plugins/main/index.yml");
+            uri => uri.GetLeftPart(UriPartial.Path) == "https://raw.githubusercontent.com/pauljoda/Prismedia-Plugins/main/index.yml" &&
+                !string.IsNullOrWhiteSpace(uri.Query));
         var tmdb = providers.Single(provider => provider.Id == "tmdb");
         Assert.Equal("The Movie Database", tmdb.Name);
         Assert.Equal("1.1.0", tmdb.Version);
@@ -1641,7 +1642,8 @@ public sealed class PluginRuntimeServiceTests : IDisposable {
             HttpRequestMessage request,
             CancellationToken cancellationToken) {
             Requests.Add(request.RequestUri!);
-            if (!_responses.TryGetValue(request.RequestUri!.ToString(), out var body)) {
+            if (!_responses.TryGetValue(request.RequestUri!.ToString(), out var body) &&
+                !_responses.TryGetValue(request.RequestUri!.GetLeftPart(UriPartial.Path), out body)) {
                 return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound));
             }
 
