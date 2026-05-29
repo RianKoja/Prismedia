@@ -308,7 +308,15 @@ public sealed class IdentifyPluginService : IIdentifyProviderService {
 
             var providerChild = providerStructuralChildren.FirstOrDefault(proposal => IsSameStructuralChild(child, proposal));
             if (providerChild is not null) {
-                structuralChildren.Add(providerChild);
+                structuralChildren.Add(await HydrateMatchedProviderChildAsync(
+                    child,
+                    providerChild,
+                    descriptor,
+                    auth,
+                    ancestorPath,
+                    includeNsfw,
+                    visited,
+                    cancellationToken));
                 continue;
             }
 
@@ -333,6 +341,47 @@ public sealed class IdentifyPluginService : IIdentifyProviderService {
             Children = MergeStructuralChildren(boundProviderProposal.Children, structuralChildren),
             Relationships = EntityMetadataProposalTraversal.Relationships(boundProviderProposal)
         };
+    }
+
+    private async Task<EntityMetadataProposal> HydrateMatchedProviderChildAsync(
+        StructuralChild child,
+        EntityMetadataProposal providerChild,
+        PluginDescriptor descriptor,
+        IReadOnlyDictionary<string, string> auth,
+        IReadOnlyList<IdentifyEntitySnapshot> ancestorPath,
+        bool includeNsfw,
+        HashSet<Guid> visited,
+        CancellationToken cancellationToken) {
+        if (EntityMetadataProposalTraversal.StructuralChildren(providerChild).Count > 0 ||
+            !await HasSupportedStructuralChildrenAsync(child.Entity.Id, descriptor.Manifest, cancellationToken)) {
+            return providerChild;
+        }
+
+        var childResponse = await IdentifyEntityWithStructuralContextAsync(
+            child.Entity,
+            descriptor,
+            auth,
+            query: null,
+            ancestors: ancestorPath,
+            parentSortOrder: child.SortOrder,
+            includeNsfw,
+            visited,
+            cancellationToken);
+        return childResponse.Ok && childResponse.Result?.Patch is not null
+            ? EnsureStructuralPositions(childResponse.Result, child)
+            : providerChild;
+    }
+
+    private async Task<bool> HasSupportedStructuralChildrenAsync(
+        Guid parentEntityId,
+        PluginManifest manifest,
+        CancellationToken cancellationToken) {
+        var childKinds = await _db.Entities
+            .AsNoTracking()
+            .Where(row => row.ParentEntityId == parentEntityId && row.DeletedAt == null)
+            .Select(row => row.KindCode)
+            .ToArrayAsync(cancellationToken);
+        return childKinds.Any(kind => manifest.Supports.Any(support => IsCompatibleStructuralKind(kind, support.EntityKind)));
     }
 
     private async Task<EntityMetadataProposal> BindLocalStructuralTargetsAsync(

@@ -56,6 +56,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - Updated web app manifest and mobile browser metadata for home-screen installation and browser UI theme colors.
 
 ### Fixed
+- Fixed TMDB Identify cascades so matched season shells are hydrated when local episodes exist, allowing episode titles and artwork to appear in the review tree after selecting a series search result.
 - Fixed Identify candidate selection for provider-created series trees so Prismedia reuses matching season and episode proposals instead of re-querying the provider for every existing child before the review can open.
 - Fixed Identify child review drill-down when a provider returns a duplicate child proposal id, preventing season and episode review pages from snapping back to the parent view.
 - Improved Identify review context headers on mobile so kind chips no longer crowd or clip the title.
