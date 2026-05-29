@@ -23,6 +23,9 @@ internal sealed class PlaybackCapabilityMapper(PrismediaDbContext db) : IEntityC
             row.CompletedAt)));
     }
 
+    // No-op by design: PersistAsync upserts the single playback row in place (find-by-EntityId then
+    // update), so playback state must survive a clear/persist cycle rather than be deleted and re-added.
+    // Clearing here would drop accumulated play counts and resume positions during an entity re-save.
     public Task ClearAsync(Entity entity, CancellationToken cancellationToken) => Task.CompletedTask;
 
     public async Task PersistAsync(Entity entity, CancellationToken cancellationToken) {

@@ -168,6 +168,28 @@ public sealed class EfEntityRepositoryTests {
     }
 
     [Fact]
+    public async Task SavingTheSameEntityTwiceDoesNotDuplicateCapabilityRows() {
+        // A retried job re-runs its handler from scratch and re-saves the entity. The save must be
+        // idempotent so retries cannot accumulate duplicate capability rows.
+        await using var db = CreateContext();
+        var id = Guid.Parse("cccccccc-cccc-cccc-cccc-cccccccccccc");
+        var repository = new EfEntityRepository(db, EntityMappers.Kinds(db), EntityMappers.Capabilities(db));
+
+        for (var i = 0; i < 3; i++) {
+            var video = new Video(id, "Retried", subtitlesExtractedAt: null);
+            Set(video, new CapabilityStats([new CapabilityStats.Item("scenes", 12), new CapabilityStats.Item("tags", 3)]));
+            Set(video, new CapabilitySource([new CapabilitySource.Item("stash", "abc")]));
+            video.AttachFile(EntityFileRole.Source, "/media/v.mp4", "video/mp4");
+            await repository.SaveAsync(video, CancellationToken.None);
+        }
+
+        Assert.Equal(2, await db.EntityStats.CountAsync(r => r.EntityId == id));
+        Assert.Equal(1, await db.EntitySources.CountAsync(r => r.EntityId == id));
+        Assert.Equal(1, await db.EntityFiles.CountAsync(r => r.EntityId == id));
+        Assert.Equal(1, await db.Entities.CountAsync(r => r.Id == id));
+    }
+
+    [Fact]
     public async Task FindAsyncDoesNotHydrateMissingSubtitleFiles() {
         await using var db = CreateContext();
         var id = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");

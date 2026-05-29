@@ -146,6 +146,25 @@ public sealed class EfEntityRepository : IEntityWriteRepository {
     /// </summary>
     public async Task SaveAsync(Entity entity, CancellationToken cancellationToken) {
         ArgumentNullException.ThrowIfNull(entity);
+
+        // The capability save flushes stale rows before re-adding them (see the intermediate
+        // SaveChanges in SaveEntityAsync), so the write spans two SaveChanges calls. Wrap both in a
+        // single transaction so a failure between them cannot leave an entity with its capabilities
+        // cleared but not re-persisted, which would matter when a failed job is retried. The save is
+        // pure database work with no file IO between the flushes, so the transaction stays short.
+        // The in-memory test provider has no transaction support, and if a caller already opened a
+        // transaction we participate in it rather than nesting.
+        if (!_db.Database.IsRelational() || _db.Database.CurrentTransaction is not null) {
+            await SaveCoreAsync(entity, cancellationToken);
+            return;
+        }
+
+        await using var transaction = await _db.Database.BeginTransactionAsync(cancellationToken);
+        await SaveCoreAsync(entity, cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+    }
+
+    private async Task SaveCoreAsync(Entity entity, CancellationToken cancellationToken) {
         var visited = new HashSet<Guid>();
         await SaveEntityAsync(entity, visited, cancellationToken);
         await _db.SaveChangesAsync(cancellationToken);

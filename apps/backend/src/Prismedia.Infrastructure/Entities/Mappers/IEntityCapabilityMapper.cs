@@ -23,6 +23,12 @@ public interface IEntityCapabilityMapper {
     /// queue the new rows. Splitting clear from persist keeps both phases idempotent on
     /// EntityId-keyed rows without per-mapper saves and works on the EF Core InMemory
     /// provider used by tests.
+    ///
+    /// A mapper may legitimately implement this as a no-op when its <see cref="PersistAsync"/>
+    /// upserts in place (matching existing rows by a stable key and updating them) rather than
+    /// deleting and re-adding. In that case the clear-then-add contract does not apply and a
+    /// no-op clear is correct; such mappers must document why on their override. See the
+    /// playback and marker mappers for the two current cases.
     /// </summary>
     Task ClearAsync(Entity entity, CancellationToken cancellationToken);
 

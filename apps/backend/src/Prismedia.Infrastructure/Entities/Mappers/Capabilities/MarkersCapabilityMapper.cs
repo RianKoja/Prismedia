@@ -21,6 +21,9 @@ internal sealed class MarkersCapabilityMapper(PrismediaDbContext db) : IEntityCa
             new CapabilityMarkers.Item(r.Id, r.Title, r.Seconds, r.EndSeconds)).ToArray()));
     }
 
+    // No-op by design: PersistAsync reconciles markers by their stable ids (update matched, remove
+    // stale, add new), so a blanket clear is unnecessary and would needlessly delete then recreate
+    // every marker row on each entity re-save.
     public Task ClearAsync(Entity entity, CancellationToken cancellationToken) => Task.CompletedTask;
 
     public async Task PersistAsync(Entity entity, CancellationToken cancellationToken) {
