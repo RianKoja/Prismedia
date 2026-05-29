@@ -472,8 +472,51 @@ public sealed class IdentifyPluginService : IIdentifyProviderService {
             merged.Add(localChild);
         }
 
-        return merged;
+        return NormalizeStructuralChildren(merged);
     }
+
+    private static IReadOnlyList<EntityMetadataProposal> NormalizeStructuralChildren(
+        IReadOnlyList<EntityMetadataProposal> children) =>
+        children
+            .Select((child, index) => new { Child = child, Index = index })
+            .GroupBy(row => StructuralChildKey(row.Child), StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.First())
+            .OrderBy(row => StructuralSortOrder(row.Child) is null)
+            .ThenBy(row => StructuralSortOrder(row.Child))
+            .ThenBy(row => row.Index)
+            .Select(row => row.Child)
+            .ToArray();
+
+    private static string StructuralChildKey(EntityMetadataProposal child) {
+        if (child.TargetEntityId is { } targetEntityId) {
+            return $"id:{targetEntityId}";
+        }
+
+        var sortOrder = StructuralSortOrder(child);
+        if (sortOrder is not null) {
+            return $"position:{StructuralKindKey(child.TargetKind)}:{sortOrder}";
+        }
+
+        if (!string.IsNullOrWhiteSpace(child.ProposalId)) {
+            return $"proposal:{child.ProposalId}";
+        }
+
+        return $"title:{StructuralKindKey(child.TargetKind)}:{child.Patch.Title?.Trim()}";
+    }
+
+    private static int? StructuralSortOrder(EntityMetadataProposal child) {
+        var kind = child.TargetKind.Equals("video-episode", StringComparison.OrdinalIgnoreCase)
+            ? EntityKindRegistry.Video.Code
+            : child.TargetKind;
+        return EntityMetadataPositionRules.SortOrderFor(
+            kind,
+            EntityMetadataPositionRules.Normalize(child.Patch.Positions));
+    }
+
+    private static string StructuralKindKey(string kind) =>
+        kind.Equals("video-episode", StringComparison.OrdinalIgnoreCase)
+            ? EntityKindRegistry.Video.Code
+            : kind.Trim().ToLowerInvariant();
 
     private static bool IsSameStructuralChild(EntityMetadataProposal left, EntityMetadataProposal right) {
         if (!left.TargetKind.Equals(right.TargetKind, StringComparison.OrdinalIgnoreCase)) {
