@@ -1,19 +1,19 @@
 using Prismedia.Application.Entities;
-using Prismedia.Domain.Capabilities;
 
 namespace Prismedia.Application.Videos;
 
 /// <summary>
 /// Persists Jellyfin-compatible playback events into Prismedia's shared playback capability.
 /// Combines transcode session lifecycle (via <see cref="ITranscodeSessionService"/>) with
-/// entity-level playback state writes (via <see cref="IEntityWriteRepository"/>).
+/// entity-level playback state writes, which are routed through <see cref="EntityCapabilityService"/>
+/// so that Jellyfin clients and the native player produce identical playback state for the same inputs.
 /// </summary>
 public sealed class PlaybackSessionService : IPlaybackSessionService {
-    private readonly IEntityWriteRepository _entities;
+    private readonly EntityCapabilityService _capabilities;
     private readonly ITranscodeSessionService _transcodes;
 
-    public PlaybackSessionService(IEntityWriteRepository entities, ITranscodeSessionService transcodes) {
-        _entities = entities;
+    public PlaybackSessionService(EntityCapabilityService capabilities, ITranscodeSessionService transcodes) {
+        _capabilities = capabilities;
         _transcodes = transcodes;
     }
 
@@ -27,7 +27,7 @@ public sealed class PlaybackSessionService : IPlaybackSessionService {
         if (request.ItemId != Guid.Empty && request.PositionTicks is >= 0) {
             await UpdatePlaybackAsync(
                 request.ItemId,
-                TimeSpan.FromSeconds(ToSeconds(request.PositionTicks.Value)),
+                ToSeconds(request.PositionTicks.Value),
                 completed: false,
                 cancellationToken);
         }
@@ -42,7 +42,7 @@ public sealed class PlaybackSessionService : IPlaybackSessionService {
         if (request.ItemId != Guid.Empty) {
             await UpdatePlaybackAsync(
                 request.ItemId,
-                request.PositionTicks is >= 0 ? TimeSpan.FromSeconds(ToSeconds(request.PositionTicks.Value)) : TimeSpan.Zero,
+                request.PositionTicks is >= 0 ? ToSeconds(request.PositionTicks.Value) : 0,
                 completed: false,
                 cancellationToken);
         }
@@ -53,37 +53,28 @@ public sealed class PlaybackSessionService : IPlaybackSessionService {
     }
 
     public async Task<UserItemDataResult?> MarkPlayedAsync(Guid itemId, CancellationToken cancellationToken) {
-        return await UpdatePlaybackAsync(itemId, TimeSpan.Zero, completed: true, cancellationToken) is null
-            ? null
-            : new UserItemDataResult(Played: true, PlaybackPositionTicks: 0);
+        return await UpdatePlaybackAsync(itemId, resumeSeconds: 0, completed: true, cancellationToken)
+            ? new UserItemDataResult(Played: true, PlaybackPositionTicks: 0)
+            : null;
     }
 
     public async Task<UserItemDataResult?> MarkUnplayedAsync(Guid itemId, CancellationToken cancellationToken) {
-        return await UpdatePlaybackAsync(itemId, TimeSpan.Zero, completed: false, cancellationToken) is null
-            ? null
-            : new UserItemDataResult(Played: false, PlaybackPositionTicks: 0);
+        return await UpdatePlaybackAsync(itemId, resumeSeconds: 0, completed: false, cancellationToken)
+            ? new UserItemDataResult(Played: false, PlaybackPositionTicks: 0)
+            : null;
     }
 
-    private async Task<Prismedia.Domain.Entities.Entity?> UpdatePlaybackAsync(
+    private async Task<bool> UpdatePlaybackAsync(
         Guid itemId,
-        TimeSpan resumeTime,
+        double resumeSeconds,
         bool completed,
-        CancellationToken cancellationToken) {
-        var entity = await _entities.FindAsync(itemId, cancellationToken);
-        if (entity is null) {
-            return null;
-        }
-
-        var playback = entity.GetCapability<CapabilityPlayback>();
-        if (playback is null) {
-            playback = new CapabilityPlayback();
-            entity.AddCapability(playback);
-        }
-
-        playback.MarkPlayed(resumeTime, DateTimeOffset.UtcNow);
-        await _entities.SaveAsync(entity, cancellationToken);
-        return entity;
-    }
+        CancellationToken cancellationToken) =>
+        await _capabilities.UpdatePlaybackAsync(
+            itemId,
+            resumeSeconds,
+            durationSeconds: null,
+            completed,
+            cancellationToken) is not null;
 
     private void RegisterOrPing(PlaybackSessionCommand request) {
         if (string.IsNullOrWhiteSpace(request.PlaySessionId)) {
