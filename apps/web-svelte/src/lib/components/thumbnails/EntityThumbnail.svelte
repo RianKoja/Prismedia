@@ -42,6 +42,7 @@
     linkable?: boolean;
     mediaOnly?: boolean;
     hoverPreviewsEnabled?: boolean;
+    hoverPreviewSuppressed?: () => boolean;
     interactive?: boolean;
     onActivate?: (card: EntityThumbnailCard) => void;
     onSelectedChange?: (selected: boolean) => void;
@@ -59,6 +60,7 @@
     linkable = true,
     mediaOnly = false,
     hoverPreviewsEnabled = true,
+    hoverPreviewSuppressed,
     interactive = true,
     onActivate,
     onSelectedChange,
@@ -168,7 +170,7 @@
   }
 
   function activateHoverPreview() {
-    if (!hoverPreviewsEnabled || !hoverable) return;
+    if (!canUseHoverPreviews() || !hoverable) return;
     pointerRatio = latestPointerRatio;
     void ensureSpriteLoaded();
   }
@@ -201,6 +203,10 @@
   );
   const selectionTabIndex = $derived(interactive && !effectiveHref ? 0 : undefined);
 
+  function canUseHoverPreviews(): boolean {
+    return hoverPreviewsEnabled && !(hoverPreviewSuppressed?.() ?? false);
+  }
+
   function updatePointerRatio(event: PointerEvent) {
     if (!hoverable) return;
     const bounds = (event.currentTarget as HTMLElement).getBoundingClientRect();
@@ -209,7 +215,7 @@
   }
 
   function handlePointerEnter(event: PointerEvent) {
-    if (!hoverPreviewsEnabled) return;
+    if (!canUseHoverPreviews()) return;
     updatePointerRatio(event);
     clearHoverIntentTimer();
     hoverIntentTimer = window.setTimeout(() => {
@@ -219,7 +225,10 @@
   }
 
   function handlePointerMove(event: PointerEvent) {
-    if (!hoverPreviewsEnabled) return;
+    if (!canUseHoverPreviews()) {
+      clearHover();
+      return;
+    }
     if (!pointerScrubbing && scrubPointerType === "touch") {
       const deltaX = event.clientX - scrubStartClientX;
       const deltaY = event.clientY - scrubStartClientY;
@@ -251,7 +260,7 @@
   }
 
   function handlePointerDown(event: PointerEvent) {
-    if (!hoverPreviewsEnabled || !hoverable) return;
+    if (!canUseHoverPreviews() || !hoverable) return;
     scrubStartClientX = event.clientX;
     scrubStartClientY = event.clientY;
     scrubPointerType = event.pointerType;
@@ -295,7 +304,7 @@
       suppressNextFocusPreview = false;
       return;
     }
-    if (!hoverPreviewsEnabled) return;
+    if (!canUseHoverPreviews()) return;
     pointerRatio = hoverable ? 0.5 : null;
     void ensureSpriteLoaded();
   }

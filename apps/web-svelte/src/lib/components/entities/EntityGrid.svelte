@@ -195,8 +195,7 @@
   let sectionEl: HTMLElement | undefined = $state();
   let measuredScrollMaxHeight = $state<string | null>(null);
   let measuredFillHeight = $state<string | null>(null);
-  let scrolling = $state(false);
-  let scrollEndTimer: number | null = null;
+  let hoverPreviewsResumeAt = 0;
   // svelte-ignore state_referenced_locally
   let sortBy = $state<EntityGridSort>(initialSortBy);
   // svelte-ignore state_referenced_locally
@@ -269,7 +268,6 @@
   const pageStart = $derived(effectiveTotal === 0 ? 0 : currentPageIndex * pageSize);
   const pageEnd = $derived(Math.min(effectiveTotal, pageStart + pageSize));
   const pagedCards = $derived(visibleCards.slice(pageStart, Math.min(visibleCards.length, pageStart + pageSize)));
-  const hoverPreviewsEnabled = $derived(!scrolling);
   const canPageBack = $derived(currentPageIndex > 0);
   const canPageForward = $derived(currentPageIndex < pageCount - 1 || Boolean(hasMore && onLoadMore));
   const canSeekToEnd = $derived(currentPageIndex < pageCount - 1);
@@ -424,19 +422,12 @@
     };
   });
 
-  function clearScrollEndTimer() {
-    if (scrollEndTimer === null) return;
-    window.clearTimeout(scrollEndTimer);
-    scrollEndTimer = null;
+  function areHoverPreviewsSuppressed() {
+    return browser && performance.now() < hoverPreviewsResumeAt;
   }
 
   function markScrolling() {
-    scrolling = true;
-    clearScrollEndTimer();
-    scrollEndTimer = window.setTimeout(() => {
-      scrollEndTimer = null;
-      scrolling = false;
-    }, 180);
+    hoverPreviewsResumeAt = performance.now() + 220;
   }
 
   onMount(() => {
@@ -444,7 +435,6 @@
 
     return () => {
       window.removeEventListener("scroll", markScrolling, { capture: true });
-      clearScrollEndTimer();
     };
   });
 
@@ -871,7 +861,7 @@
             linkable={!onCardActivate}
             mediaOnly={mediaWall}
             onActivate={onCardActivate ? (activatedCard) => onCardActivate(activatedCard, pagedCards) : undefined}
-            {hoverPreviewsEnabled}
+            hoverPreviewSuppressed={areHoverPreviewsSuppressed}
             {selectable}
             selectMode={selectedCount > 0}
             selected={selectedIds.includes(card.entity.id)}

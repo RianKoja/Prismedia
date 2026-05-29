@@ -346,6 +346,27 @@ describe("EntityThumbnail", () => {
     expect(container.querySelector(".sprite-overlay")).toBeNull();
   });
 
+  it("does not load hover previews while the caller temporarily suppresses them", async () => {
+    vi.useFakeTimers();
+    const { container } = render(EntityThumbnail, {
+      props: {
+        card: spriteCard(),
+        hoverPreviewSuppressed: () => true,
+      },
+    });
+    const media = container.querySelector(".media") as HTMLElement;
+    Object.defineProperty(media, "getBoundingClientRect", {
+      configurable: true,
+      value: () => ({ left: 0, width: 100 }),
+    });
+
+    await fireEvent(media, pointerEvent("pointerenter", 50));
+    await vi.advanceTimersByTimeAsync(500);
+
+    expect(loadTrickplayFrames).not.toHaveBeenCalled();
+    expect(container.querySelector(".sprite-overlay")).toBeNull();
+  });
+
   it("renders card titles as wrapping static text", () => {
     const { container } = render(EntityThumbnail, {
       props: {

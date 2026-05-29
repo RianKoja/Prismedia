@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { fireEvent, render, screen, waitFor } from "@testing-library/svelte";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { EntityThumbnailCard } from "$lib/entities/entity-thumbnail";
@@ -255,6 +256,14 @@ describe("EntityGrid pagination", () => {
     expect(container.querySelector(".entity-grid")?.classList.contains("is-static")).toBe(true);
     expect(container.querySelector(".pagination-shell")).toBeNull();
     expect(screen.queryByText("Page 1 / 1")).not.toBeInTheDocument();
+  });
+
+  it("does not fan reactive scroll state into every thumbnail while scrolling", () => {
+    const source = readFileSync("src/lib/components/entities/EntityGrid.svelte", "utf8");
+
+    expect(source).not.toContain("let scrolling = $state");
+    expect(source).not.toContain("const hoverPreviewsEnabled = $derived(!scrolling)");
+    expect(source).toContain("hoverPreviewSuppressed={areHoverPreviewsSuppressed}");
   });
 });
 
