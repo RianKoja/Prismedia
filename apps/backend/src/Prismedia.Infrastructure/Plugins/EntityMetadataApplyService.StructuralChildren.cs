@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Prismedia.Application.Plugins;
 using Prismedia.Contracts.Entities;
 using Prismedia.Contracts.Plugins;
 using Prismedia.Domain.Entities;
@@ -15,6 +16,8 @@ public sealed partial class EntityMetadataApplyService {
         Guid parentEntityId,
         DateTimeOffset now,
         HashSet<Guid> visited,
+        IReadOnlyList<string> parentPath,
+        IdentifyApplyProgressReporter? progress,
         CancellationToken cancellationToken) {
         foreach (var child in children) {
             if (EntityMetadataProposalTraversal.IsRelationshipKind(child.TargetKind)) {
@@ -33,14 +36,25 @@ public sealed partial class EntityMetadataApplyService {
                 continue;
             }
 
+            var childTitle = !string.IsNullOrWhiteSpace(child.Patch.Title) ? child.Patch.Title.Trim() : childEntity.Title;
+            var childPath = parentPath.Count == 0 ? [childTitle] : parentPath.Concat([childTitle]).ToArray();
+            progress?.ReportEntity(childEntity.KindCode, childTitle, childPath);
+
             await ApplyPatchToEntityAsync(childEntity, child.Patch, child.Images, now, cancellationToken);
             var relationshipProposals = EntityMetadataProposalTraversal.Relationships(child);
             if (relationshipProposals.Count > 0 &&
                 (child.Patch.Credits.Count > 0 || !string.IsNullOrWhiteSpace(child.Patch.Studio) || child.Patch.Tags.Count > 0)) {
-                await ApplyRelationshipProposalsAsync(childEntity.Id, relationshipProposals, now, cancellationToken);
+                await ApplyRelationshipProposalsAsync(childEntity.Id, relationshipProposals, now, childPath, progress, cancellationToken);
             }
 
-            await ApplyStructuralChildrenAsync(EntityMetadataProposalTraversal.StructuralChildren(child), childEntity.Id, now, visited, cancellationToken);
+            await ApplyStructuralChildrenAsync(
+                EntityMetadataProposalTraversal.StructuralChildren(child),
+                childEntity.Id,
+                now,
+                visited,
+                childPath,
+                progress,
+                cancellationToken);
             visited.Remove(childEntity.Id);
         }
     }

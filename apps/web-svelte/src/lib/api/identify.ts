@@ -4,6 +4,7 @@ export type {
   EntityMetadataFlagsPatch,
   EntityMetadataPatch,
   EntityMetadataProposal,
+  IdentifyApplyProgress,
   EntitySearchCandidate,
   IdentifyBulkResult,
   IdentifyBulkSession,

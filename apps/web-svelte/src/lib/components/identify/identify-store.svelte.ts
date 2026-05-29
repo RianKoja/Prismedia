@@ -6,6 +6,7 @@ import {
   closeBulkIdentifySession,
   deleteIdentifyQueueItem,
   fetchIdentifyEntity,
+  fetchIdentifyApplyProgress,
   fetchIdentifyQueue,
   fetchIdentifyQueueItem,
   searchIdentifyQueueItem,
@@ -14,6 +15,7 @@ import { fetchPluginProviders } from "$lib/api/plugins";
 import type {
   EntityMetadataProposal,
   EntitySearchCandidate,
+  IdentifyApplyProgress,
   IdentifyBulkSession,
   IdentifyQueueItem as ApiIdentifyQueueItem,
   IdentifyQueueState,
@@ -84,6 +86,7 @@ export class IdentifyStore {
   identifyingProviderTotal = $state<number | null>(null);
   identifyingPhase = $state<"searching" | "matched">("searching");
   applying = $state(false);
+  applyProgress = $state<IdentifyApplyProgress | null>(null);
   bulkSession = $state<IdentifyBulkSession | null>(null);
   bulkStarting = $state(false);
   returnEntityId = $state<string | null>(null);
@@ -94,6 +97,7 @@ export class IdentifyStore {
   reviewTagSelections = $state<Record<string, Record<string, boolean>>>({});
   reviewDetailsByEntityId = $state<Record<string, EntityDetailCard | null>>({});
   reviewDetailLoadingByEntityId = $state<Record<string, boolean>>({});
+  #stopApplyProgressPolling: (() => void) | null = null;
 
   constructor(getHideNsfw: () => boolean = () => false) {
     this.#getHideNsfw = getHideNsfw;
@@ -312,10 +316,14 @@ export class IdentifyStore {
     selectedImages?: Record<string, string | null>,
     options: { navigateNext?: boolean } = {},
   ) {
+    const progressId = createOperationId();
     this.applying = true;
+    this.applyProgress = initialApplyProgress(progressId, entity, proposal, selectedFields);
     this.error = null;
+    this.#stopApplyProgressPolling?.();
+    this.#stopApplyProgressPolling = this.#pollApplyProgress(entity.id, progressId);
     try {
-      const item = await applyIdentifyQueueItem(entity.id, proposal, selectedFields, selectedImages);
+      const item = await applyIdentifyQueueItem(entity.id, proposal, selectedFields, selectedImages, { progressId });
       this.#removeActiveQueueItem(item.entityId);
       if (options.navigateNext) {
         const next = this.nextQueueItem(item.entityId);
@@ -338,7 +346,10 @@ export class IdentifyStore {
     } catch (err) {
       this.error = readError(err);
     } finally {
+      this.#stopApplyProgressPolling?.();
+      this.#stopApplyProgressPolling = null;
       this.applying = false;
+      this.applyProgress = null;
     }
   }
 
@@ -586,7 +597,39 @@ export class IdentifyStore {
     });
   }
 
+  #pollApplyProgress(entityId: string, progressId: string): () => void {
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const controller = new AbortController();
+
+    const tick = async () => {
+      if (stopped) return;
+      try {
+        const progress = await fetchIdentifyApplyProgress(entityId, progressId, { signal: controller.signal });
+        if (!stopped) this.applyProgress = progress;
+      } catch (err) {
+        if (!stopped && !(err instanceof Error && err.name === "AbortError")) {
+          timer = setTimeout(tick, 600);
+        }
+        return;
+      }
+
+      if (!stopped) {
+        timer = setTimeout(tick, this.applyProgress?.state === "running" ? 400 : 800);
+      }
+    };
+
+    timer = setTimeout(tick, 120);
+    return () => {
+      stopped = true;
+      controller.abort();
+      if (timer) clearTimeout(timer);
+    };
+  }
+
   destroy() {
+    this.#stopApplyProgressPolling?.();
+    this.#stopApplyProgressPolling = null;
   }
 
   #upsertQueueItem(item: IdentifyQueueItem) {
@@ -812,6 +855,81 @@ function identifyQueryHasMatch(
 function isResolvedIdentifyResult(item: IdentifyQueueItem): boolean {
   return (item.state === "proposal" && Boolean(item.proposal)) ||
     (item.state === "search" && item.candidates.length > 0);
+}
+
+function createOperationId(): string {
+  return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function initialApplyProgress(
+  id: string,
+  entity: EntityCard,
+  proposal: EntityMetadataProposal,
+  selectedFields: string[],
+): IdentifyApplyProgress {
+  const title = proposalTitleForProgress(proposal) || entity.title;
+  return {
+    id,
+    entityId: entity.id,
+    state: "running",
+    currentIndex: 0,
+    total: countApplyProgressSteps(proposal, selectedFields),
+    currentKind: proposal.targetKind || entity.kind,
+    currentTitle: title,
+    currentPath: [title],
+    error: null,
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+function countApplyProgressSteps(
+  proposal: EntityMetadataProposal,
+  selectedFields: string[],
+): number {
+  const selected = new Set(selectedFields.map((field) => field.toLowerCase()));
+  let count = 1;
+  if (selected.has("credits") || selected.has("studio") || selected.has("tags")) {
+    count += relationshipProgressSteps(proposal);
+  }
+
+  count += structuralProgressChildren(proposal).reduce(
+    (total, child) => total + countStructuralApplyProgressSteps(child),
+    0,
+  );
+  return Math.max(count, 1);
+}
+
+function countStructuralApplyProgressSteps(proposal: EntityMetadataProposal): number {
+  let count = 1;
+  if (proposal.patch.credits.length > 0 || Boolean(proposal.patch.studio?.trim()) || proposal.patch.tags.length > 0) {
+    count += relationshipProgressSteps(proposal);
+  }
+
+  count += structuralProgressChildren(proposal).reduce(
+    (total, child) => total + countStructuralApplyProgressSteps(child),
+    0,
+  );
+  return count;
+}
+
+function relationshipProgressSteps(proposal: EntityMetadataProposal): number {
+  return new Set(
+    (proposal.relationships ?? [])
+      .filter((child) => isRelationshipProgressKind(child.targetKind))
+      .map((child) => child.proposalId),
+  ).size;
+}
+
+function structuralProgressChildren(proposal: EntityMetadataProposal): EntityMetadataProposal[] {
+  return (proposal.children ?? []).filter((child) => !isRelationshipProgressKind(child.targetKind));
+}
+
+function isRelationshipProgressKind(kind: string): boolean {
+  return kind === "person" || kind === "studio" || kind === "tag";
+}
+
+function proposalTitleForProgress(proposal: EntityMetadataProposal): string {
+  return proposal.patch.title?.trim() ?? "";
 }
 
 function relationshipEntityIdForProposal(

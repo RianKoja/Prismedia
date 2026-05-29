@@ -91,6 +91,12 @@
     ?? entity.coverUrl
     ?? proposalImageUrl(proposal, ["poster", "thumbnail", "cover"]),
   );
+  const applyProgressPercent = $derived.by(() => {
+    const progress = store.applyProgress;
+    if (!progress) return 0;
+    return Math.max(0, Math.min(100, Math.round((progress.currentIndex / Math.max(progress.total, 1)) * 100)));
+  });
+  const applyProgressPath = $derived((store.applyProgress?.currentPath ?? []).filter((part) => part.trim().length > 0));
 
   $effect(() => {
     if (reviewStateProposalId === proposal.proposalId) return;
@@ -444,6 +450,39 @@
     </IdentifyReviewSection>
   {/if}
 
+  {#if store.applying && store.applyProgress}
+    <div class="apply-progress-row" aria-live="polite">
+      <div class="flex min-w-0 items-center gap-2">
+        <span class="grid h-8 w-8 shrink-0 place-items-center rounded-xs border border-border-accent bg-accent-950/40 text-text-accent shadow-[0_0_18px_rgba(242,194,106,0.18)]">
+          <Loader2 class="h-4 w-4 animate-spin" />
+        </span>
+        <div class="min-w-0">
+          <div class="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1">
+            <span class="font-heading text-[0.82rem] font-semibold text-text-primary">Applying metadata</span>
+            <span class="font-mono text-[0.68rem] text-text-muted">
+              {store.applyProgress.currentIndex}/{store.applyProgress.total}
+            </span>
+          </div>
+          <div class="mt-1 flex min-w-0 flex-wrap items-center gap-1.5 text-[0.75rem] text-text-secondary">
+            {#if applyProgressPath.length > 0}
+              {#each applyProgressPath as part, index (index)}
+                {#if index > 0}
+                  <span class="font-mono text-text-disabled">-&gt;</span>
+                {/if}
+                <span class="max-w-[14rem] truncate">{part}</span>
+              {/each}
+            {:else}
+              <span>Preparing accepted proposal</span>
+            {/if}
+          </div>
+        </div>
+      </div>
+      <div class="mt-3 h-1.5 overflow-hidden rounded-xs border border-border-subtle bg-surface-3" role="progressbar" aria-valuenow={applyProgressPercent} aria-valuemin="0" aria-valuemax="100">
+        <div class="h-full rounded-xs bg-[linear-gradient(90deg,rgba(213,154,42,0.82),rgba(242,194,106,0.95))] shadow-[0_0_14px_rgba(242,194,106,0.28)] transition-[width] duration-300" style:width={`${applyProgressPercent}%`}></div>
+      </div>
+    </div>
+  {/if}
+
   <!-- Action footer -->
   <div class="flex flex-col gap-2 py-2 md:flex-row md:items-center md:gap-3">
     <!-- Top row on mobile: cancel + summary -->
@@ -528,6 +567,17 @@
 </div>
 
 <style>
+  .apply-progress-row {
+    width: 100%;
+    border: 1px solid rgba(242, 194, 106, 0.28);
+    border-radius: var(--radius-sm);
+    background:
+      linear-gradient(135deg, rgba(242, 194, 106, 0.12), rgba(213, 154, 42, 0.05)),
+      rgba(20, 20, 22, 0.86);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 0 26px rgba(242, 194, 106, 0.08);
+    padding: 0.875rem;
+  }
+
   .identify-thumbnail-grid {
     content-visibility: auto;
     contain-intrinsic-size: auto 28rem;

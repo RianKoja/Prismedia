@@ -19,10 +19,15 @@ public sealed class IdentifyQueueService : IIdentifyQueueService {
 
     private readonly PrismediaDbContext _db;
     private readonly IdentifyPluginService _identify;
+    private readonly IIdentifyApplyProgressStore _progress;
 
-    public IdentifyQueueService(PrismediaDbContext db, IdentifyPluginService identify) {
+    public IdentifyQueueService(
+        PrismediaDbContext db,
+        IdentifyPluginService identify,
+        IIdentifyApplyProgressStore progress) {
         _db = db;
         _identify = identify;
+        _progress = progress;
     }
 
     /// <summary>
@@ -181,31 +186,45 @@ public sealed class IdentifyQueueService : IIdentifyQueueService {
             throw new InvalidOperationException("Identify proposal kind does not match the queued entity.");
         }
         var acceptedProposal = MarkAcceptedProposalTreeOrganized(proposal);
-
-        var applied = await _identify.ApplyAsync(
-            entityId,
-            acceptedProposal,
-            request.SelectedFields,
-            request.SelectedImages,
-            cancellationToken);
-        if (!applied) {
-            throw new KeyNotFoundException($"Entity '{entityId}' was not found.");
+        IdentifyApplyProgressReporter? progressReporter = null;
+        if (request.ProgressId is { } progressId) {
+            _progress.Begin(progressId, entityId, CountApplySteps(acceptedProposal, request.SelectedFields));
+            progressReporter = new IdentifyApplyProgressReporter(_progress, progressId);
         }
 
-        var now = DateTimeOffset.UtcNow;
-        row.State = IdentifyQueueState.Done;
-        row.ProposalJson = JsonSerializer.Serialize(acceptedProposal, JsonOptions);
-        row.Error = null;
-        row.UpdatedAt = now;
-        row.CompletedAt = now;
+        try {
+            var applied = await _identify.ApplyAsync(
+                entityId,
+                acceptedProposal,
+                request.SelectedFields,
+                request.SelectedImages,
+                progressReporter,
+                cancellationToken);
+            if (!applied) {
+                throw new KeyNotFoundException($"Entity '{entityId}' was not found.");
+            }
 
-        var entityRow = await _db.Entities.FindAsync([entityId], cancellationToken);
-        if (entityRow is not null) {
-            entityRow.IsOrganized = true;
-            entityRow.UpdatedAt = now;
+            var now = DateTimeOffset.UtcNow;
+            row.State = IdentifyQueueState.Done;
+            row.ProposalJson = JsonSerializer.Serialize(acceptedProposal, JsonOptions);
+            row.Error = null;
+            row.UpdatedAt = now;
+            row.CompletedAt = now;
+
+            var entityRow = await _db.Entities.FindAsync([entityId], cancellationToken);
+            if (entityRow is not null) {
+                entityRow.IsOrganized = true;
+                entityRow.UpdatedAt = now;
+            }
+
+            await _db.SaveChangesAsync(cancellationToken);
+            if (request.ProgressId is { } completedProgressId) {
+                _progress.Complete(completedProgressId);
+            }
+        } catch (Exception ex) when (request.ProgressId is { } failedProgressId) {
+            _progress.Fail(failedProgressId, ex.Message);
+            throw;
         }
-
-        await _db.SaveChangesAsync(cancellationToken);
 
         var refreshedEntity = await LoadEntityAsync(entityId, cancellationToken) ?? entity;
         return MapRow(row, refreshedEntity);
@@ -369,6 +388,39 @@ public sealed class IdentifyQueueService : IIdentifyQueueService {
         flags is null
             ? new EntityMetadataFlagsPatch(null, null, true)
             : flags with { IsOrganized = true };
+
+    private static int CountApplySteps(EntityMetadataProposal proposal, IReadOnlyCollection<string> selectedFields) {
+        var selected = selectedFields.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var count = 1;
+        if (selected.Contains("credits") || selected.Contains("studio") || selected.Contains("tags")) {
+            count += CountRelationships(proposal);
+        }
+
+        count += proposal.Children
+            .Where(child => !EntityMetadataProposalTraversal.IsRelationshipKind(child.TargetKind))
+            .Sum(CountStructuralApplySteps);
+        return Math.Max(count, 1);
+    }
+
+    private static int CountStructuralApplySteps(EntityMetadataProposal proposal) {
+        var count = 1;
+        if (proposal.Patch.Credits.Count > 0 ||
+            !string.IsNullOrWhiteSpace(proposal.Patch.Studio) ||
+            proposal.Patch.Tags.Count > 0) {
+            count += CountRelationships(proposal);
+        }
+
+        count += proposal.Children
+            .Where(child => !EntityMetadataProposalTraversal.IsRelationshipKind(child.TargetKind))
+            .Sum(CountStructuralApplySteps);
+        return count;
+    }
+
+    private static int CountRelationships(EntityMetadataProposal proposal) =>
+        (proposal.Relationships ?? [])
+            .Where(child => EntityMetadataProposalTraversal.IsRelationshipKind(child.TargetKind))
+            .GroupBy(child => child.ProposalId, StringComparer.Ordinal)
+            .Count();
 
     private static T? Deserialize<T>(string? json) {
         if (string.IsNullOrWhiteSpace(json)) {

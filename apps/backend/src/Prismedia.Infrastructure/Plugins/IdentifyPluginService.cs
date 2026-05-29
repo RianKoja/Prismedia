@@ -198,6 +198,18 @@ public sealed class IdentifyPluginService : IIdentifyProviderService {
         CancellationToken cancellationToken) =>
         _apply.ApplyAsync(entityId, proposal, selectedFields, selectedImages, cancellationToken);
 
+    /// <summary>
+    /// Applies selected metadata proposal fields to an entity while publishing live progress.
+    /// </summary>
+    public Task<bool> ApplyAsync(
+        Guid entityId,
+        EntityMetadataProposal proposal,
+        IReadOnlyCollection<string> selectedFields,
+        IReadOnlyDictionary<string, string?>? selectedImages,
+        IdentifyApplyProgressReporter? progress,
+        CancellationToken cancellationToken) =>
+        _apply.ApplyAsync(entityId, proposal, selectedFields, selectedImages, progress, cancellationToken);
+
     private static string ResolveAction(
         PluginManifest manifest,
         string entityKind,

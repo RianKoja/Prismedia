@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Prismedia.Application.Entities;
+using Prismedia.Application.Plugins;
 using Prismedia.Contracts.Entities;
 using Prismedia.Contracts.Plugins;
 using Prismedia.Infrastructure.Persistence;
@@ -84,12 +85,12 @@ public sealed partial class EntityMetadataApplyService : IEntityMetadataPatchSer
         }
 
         if (request.Children is { Count: > 0 }) {
-            await ApplyStructuralChildrenAsync(request.Children, entity.Id, now, [entity.Id], cancellationToken);
+            await ApplyStructuralChildrenAsync(request.Children, entity.Id, now, [entity.Id], [], null, cancellationToken);
         }
 
         if (request.Relationships is { Count: > 0 } &&
             (fields.Contains("credits") || fields.Contains("studio") || fields.Contains("tags"))) {
-            await ApplyRelationshipProposalsAsync(entityId, request.Relationships, now, cancellationToken);
+            await ApplyRelationshipProposalsAsync(entityId, request.Relationships, now, [], null, cancellationToken);
         }
 
         entity.UpdatedAt = now;
@@ -160,6 +161,25 @@ public sealed partial class EntityMetadataApplyService : IEntityMetadataPatchSer
         EntityMetadataProposal proposal,
         IReadOnlyCollection<string> selectedFields,
         IReadOnlyDictionary<string, string?>? selectedImages,
+        CancellationToken cancellationToken) =>
+        await ApplyAsync(entityId, proposal, selectedFields, selectedImages, null, cancellationToken);
+
+    /// <summary>
+    /// Applies selected fields from a proposal to an existing entity and reports entity-level progress.
+    /// </summary>
+    /// <param name="entityId">Entity receiving metadata.</param>
+    /// <param name="proposal">Plugin proposal chosen by the user.</param>
+    /// <param name="selectedFields">Field keys selected in the review UI.</param>
+    /// <param name="selectedImages">Optional role-to-remote-URL artwork selections.</param>
+    /// <param name="progress">Optional progress reporter for synchronous queue accepts.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>True when the entity exists and was updated.</returns>
+    public async Task<bool> ApplyAsync(
+        Guid entityId,
+        EntityMetadataProposal proposal,
+        IReadOnlyCollection<string> selectedFields,
+        IReadOnlyDictionary<string, string?>? selectedImages,
+        IdentifyApplyProgressReporter? progress,
         CancellationToken cancellationToken) {
         ArgumentNullException.ThrowIfNull(proposal);
         ArgumentNullException.ThrowIfNull(selectedFields);
@@ -173,6 +193,9 @@ public sealed partial class EntityMetadataApplyService : IEntityMetadataPatchSer
         var selected = selectedFields.ToHashSet(StringComparer.OrdinalIgnoreCase);
         var patch = proposal.Patch;
         var now = DateTimeOffset.UtcNow;
+        var rootTitle = !string.IsNullOrWhiteSpace(patch.Title) ? patch.Title.Trim() : entity.Title;
+        var rootPath = new[] { rootTitle };
+        progress?.ReportEntity(entity.KindCode, rootTitle, rootPath);
 
         if (selected.Contains("title") && !string.IsNullOrWhiteSpace(patch.Title)) {
             entity.Title = patch.Title.Trim();
@@ -219,10 +242,17 @@ public sealed partial class EntityMetadataApplyService : IEntityMetadataPatchSer
 
         var relationshipProposals = EntityMetadataProposalTraversal.Relationships(proposal);
         if (relationshipProposals.Count > 0 && (selected.Contains("credits") || selected.Contains("studio") || selected.Contains("tags"))) {
-            await ApplyRelationshipProposalsAsync(entityId, relationshipProposals, now, cancellationToken);
+            await ApplyRelationshipProposalsAsync(entityId, relationshipProposals, now, rootPath, progress, cancellationToken);
         }
 
-        await ApplyStructuralChildrenAsync(EntityMetadataProposalTraversal.StructuralChildren(proposal), entity.Id, now, [entity.Id], cancellationToken);
+        await ApplyStructuralChildrenAsync(
+            EntityMetadataProposalTraversal.StructuralChildren(proposal),
+            entity.Id,
+            now,
+            [entity.Id],
+            rootPath,
+            progress,
+            cancellationToken);
 
         entity.UpdatedAt = now;
         await _db.SaveChangesAsync(cancellationToken);

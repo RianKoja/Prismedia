@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Prismedia.Application.Plugins;
 using Prismedia.Contracts.Plugins;
 using Prismedia.Domain.Entities;
 using Prismedia.Infrastructure.Persistence;
@@ -291,7 +292,7 @@ public sealed class IdentifyQueueServiceTests : IDisposable {
             new DotnetPluginProcessRunner(executor, new PluginCatalogOptions([], tempRoot, "1.0.0")),
             new EntityMetadataApplyService(db, new PluginArtworkServiceOptions(tempRoot)));
 
-        return new IdentifyQueueService(db, identify);
+        return new IdentifyQueueService(db, identify, new InMemoryIdentifyApplyProgressStore());
     }
 
     private static void WriteManifest(string root) {

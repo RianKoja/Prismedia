@@ -92,6 +92,22 @@ internal static class IdentifyQueueEndpoints {
             .Produces<ApiProblem>(StatusCodes.Status400BadRequest)
             .Produces<ApiProblem>(StatusCodes.Status404NotFound);
 
+        group.MapGet("/queue/entities/{entityId:guid}/apply-progress/{progressId:guid}", (
+            Guid entityId,
+            Guid progressId,
+            IIdentifyApplyProgressStore progress) => {
+                var snapshot = progress.Get(progressId);
+                if (snapshot is null || snapshot.EntityId != entityId) {
+                    return Results.NotFound(new ApiProblem("identify_apply_progress_not_found", $"Apply progress '{progressId}' was not found."));
+                }
+
+                return Results.Ok(snapshot);
+            })
+            .WithName("GetIdentifyApplyProgress")
+            .WithSummary("Gets live progress for an Identify proposal apply operation.")
+            .Produces<IdentifyApplyProgress>()
+            .Produces<ApiProblem>(StatusCodes.Status404NotFound);
+
         group.MapDelete("/queue/entities/{entityId:guid}", async (
             Guid entityId,
             IIdentifyQueueService queue,

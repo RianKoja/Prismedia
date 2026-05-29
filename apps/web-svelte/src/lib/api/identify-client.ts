@@ -16,14 +16,19 @@ import type {
   ListIdentifyQueueParams,
 } from "$lib/api/generated/model";
 import { requestInit, unwrapGenerated, type RequestOptions } from "$lib/api/generated-response";
-import { apiPath } from "$lib/api/orval-fetch";
+import { apiPath, fetchApi } from "$lib/api/orval-fetch";
 import { fetchEntities, fetchEntity, type EntityCard, type EntityDetailCard, type EntityListResponse } from "$lib/api/entities";
 import type {
+  IdentifyApplyProgress,
   EntityMetadataProposal,
   IdentifyQuery,
   IdentifyQueueItem,
   PluginProvider,
 } from "$lib/api/identify-types";
+
+interface ApplyIdentifyQueueItemOptions extends RequestOptions {
+  progressId?: string | null;
+}
 
 export function fetchIdentifyProviders(kind?: string, options?: RequestOptions): Promise<PluginProvider[]> {
   return listIdentifyProviders({ kind }, requestInit(options)).then((response) =>
@@ -111,14 +116,28 @@ export function applyIdentifyQueueItem(
   proposal: EntityMetadataProposal | null,
   selectedFields: string[],
   selectedImages?: Record<string, string | null>,
-  options?: RequestOptions,
+  options?: ApplyIdentifyQueueItemOptions,
 ): Promise<IdentifyQueueItem> {
-  return applyIdentifyQueueItemRequest(entityId, {
+  const request = {
     proposal,
     selectedFields,
     selectedImages: selectedImages ?? {},
-  } as ApplyIdentifyQueueItemRequest, requestInit(options)).then((response) =>
+    ...(options?.progressId ? { progressId: options.progressId } : {}),
+  } as ApplyIdentifyQueueItemRequest;
+
+  return applyIdentifyQueueItemRequest(entityId, request, requestInit(options)).then((response) =>
     unwrapGenerated(response, "Failed to apply identify queue item") as IdentifyQueueItem,
+  );
+}
+
+export async function fetchIdentifyApplyProgress(
+  entityId: string,
+  progressId: string,
+  options?: RequestOptions,
+): Promise<IdentifyApplyProgress> {
+  return fetchApi<IdentifyApplyProgress>(
+    `/identify/queue/entities/${entityId}/apply-progress/${progressId}`,
+    requestInit(options),
   );
 }
 

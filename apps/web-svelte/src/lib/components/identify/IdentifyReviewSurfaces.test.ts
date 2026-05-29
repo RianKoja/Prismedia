@@ -7,6 +7,18 @@ import IdentifyReviewParent from "./IdentifyReviewParent.svelte";
 
 const store = vi.hoisted(() => ({
   applying: false,
+  applyProgress: null as null | {
+    id: string;
+    entityId: string;
+    state: string;
+    currentIndex: number;
+    total: number;
+    currentKind?: string | null;
+    currentTitle?: string | null;
+    currentPath: string[];
+    error?: string | null;
+    updatedAt: string;
+  },
   reviewCascadeSelections: {},
   reviewFieldSelections: {},
   reviewImageSelections: {},
@@ -39,6 +51,7 @@ vi.mock("./identify-store.svelte", () => ({
 describe("Identify review surfaces", () => {
   beforeEach(() => {
     store.applying = false;
+    store.applyProgress = null;
     store.queue = [];
     store.beginProposalReview.mockReset();
     store.getReviewDetailForProposal.mockReset();
@@ -189,6 +202,36 @@ describe("Identify review surfaces", () => {
     expect(screen.getAllByText("Merge").length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText("New").length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText("Matched").length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("renders a full-width apply progress row with the active proposal path", () => {
+    store.applying = true;
+    store.applyProgress = {
+      id: "apply-1",
+      entityId: "entity-1",
+      state: "running",
+      currentIndex: 3,
+      total: 12,
+      currentKind: "video",
+      currentTitle: "Episode 3",
+      currentPath: ["The Chair Company", "Season 1", "Episode 3"],
+      error: null,
+      updatedAt: new Date().toISOString(),
+    };
+
+    render(IdentifyReviewParent, {
+      props: {
+        entity: entity(),
+        proposal: proposal("root"),
+      },
+    });
+
+    expect(screen.getByText("Applying metadata")).toBeInTheDocument();
+    expect(screen.getByText("3/12")).toBeInTheDocument();
+    expect(screen.getAllByText("The Chair Company").length).toBeGreaterThan(0);
+    expect(screen.getByText("Season 1")).toBeInTheDocument();
+    expect(screen.getByText("Episode 3")).toBeInTheDocument();
+    expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "25");
   });
 });
 

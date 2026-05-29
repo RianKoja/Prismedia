@@ -24,6 +24,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - Added reversible file explorer exclusions so files and folders can be skipped by library scans without deleting them.
 - Added a centralized app settings registry and descriptor-driven settings UI for app-wide visibility, playback, subtitle, scan, generation, worker, and HLS defaults.
 - Added a durable Identify queue so search results and metadata proposals survive navigation and backend restarts.
+- Added live progress feedback while accepting Identify proposals so large cascades show the entity path currently being applied.
 - Added a media wall toggle to entity grids for browsing thumbnail-only library layouts.
 - Added a worker status badge to Job Control so stalled queues show when the background worker is offline.
 

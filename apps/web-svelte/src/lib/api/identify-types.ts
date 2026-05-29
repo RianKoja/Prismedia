@@ -110,6 +110,19 @@ export interface IdentifyBulkSession {
 
 export type IdentifyQueueState = "search" | "proposal" | "done" | "deleted" | "error";
 
+export interface IdentifyApplyProgress {
+  id: string;
+  entityId: string;
+  state: "running" | "succeeded" | "failed" | string;
+  currentIndex: number;
+  total: number;
+  currentKind?: string | null;
+  currentTitle?: string | null;
+  currentPath: string[];
+  error?: string | null;
+  updatedAt: string;
+}
+
 export interface IdentifyQueueItem {
   id: string;
   entityId: string;

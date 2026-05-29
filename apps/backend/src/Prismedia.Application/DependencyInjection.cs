@@ -17,6 +17,7 @@ using Prismedia.Application.Jobs.Handlers.Probe;
 using Prismedia.Application.Jobs.Handlers.Scan;
 using Prismedia.Application.Jobs.Ports;
 using Prismedia.Domain.Entities;
+using Prismedia.Application.Plugins;
 
 namespace Prismedia.Application;
 
@@ -34,6 +35,7 @@ public static class DependencyInjection {
         services.AddScoped<OrganizeService>();
         services.AddScoped<FilesService>();
         services.AddScoped<IAudioStreamService, AudioStreamService>();
+        services.AddSingleton<IIdentifyApplyProgressStore, InMemoryIdentifyApplyProgressStore>();
 
         return services;
     }

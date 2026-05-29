@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Prismedia.Application.Plugins;
 using Prismedia.Contracts.Entities;
 using Prismedia.Contracts.Plugins;
 using Prismedia.Domain.Entities;
@@ -228,6 +229,8 @@ public sealed partial class EntityMetadataApplyService {
         Guid sourceEntityId,
         IReadOnlyList<EntityMetadataProposal> relationships,
         DateTimeOffset now,
+        IReadOnlyList<string> sourcePath,
+        IdentifyApplyProgressReporter? progress,
         CancellationToken cancellationToken) {
         foreach (var child in relationships) {
             if (string.IsNullOrWhiteSpace(child.Patch.Title)) {
@@ -246,6 +249,10 @@ public sealed partial class EntityMetadataApplyService {
             if (linkedEntity.Id == sourceEntityId) {
                 continue;
             }
+
+            var title = child.Patch.Title.Trim();
+            var path = sourcePath.Count == 0 ? [title] : sourcePath.Concat([title]).ToArray();
+            progress?.ReportEntity(linkedEntity.KindCode, title, path);
 
             await ApplyPatchToEntityAsync(linkedEntity, child.Patch, [], now, cancellationToken);
 

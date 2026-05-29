@@ -36,6 +36,31 @@ public sealed record IdentifyQueueItem(
     DateTimeOffset? CompletedAt);
 
 /// <summary>
+/// Live progress for applying a reviewed Identify proposal.
+/// </summary>
+/// <param name="Id">Client-supplied operation identifier.</param>
+/// <param name="EntityId">Root entity whose proposal is being applied.</param>
+/// <param name="State">Progress state code: running, succeeded, or failed.</param>
+/// <param name="CurrentIndex">One-based index for the entity currently being applied.</param>
+/// <param name="Total">Estimated number of entity-level apply steps.</param>
+/// <param name="CurrentKind">Entity kind currently being applied, when work has started.</param>
+/// <param name="CurrentTitle">Entity title currently being applied, when work has started.</param>
+/// <param name="CurrentPath">Structural title path from the root proposal to the current entity.</param>
+/// <param name="Error">Failure message when the apply operation fails.</param>
+/// <param name="UpdatedAt">When the progress snapshot last changed.</param>
+public sealed record IdentifyApplyProgress(
+    Guid Id,
+    Guid EntityId,
+    string State,
+    int CurrentIndex,
+    int Total,
+    string? CurrentKind,
+    string? CurrentTitle,
+    IReadOnlyList<string> CurrentPath,
+    string? Error,
+    DateTimeOffset UpdatedAt);
+
+/// <summary>
 /// Request body for starting or retrying an identify provider search.
 /// </summary>
 /// <param name="Provider">Provider code selected by the user.</param>
@@ -48,7 +73,9 @@ public sealed record IdentifyQueueSearchRequest(string Provider, IdentifyQuery? 
 /// <param name="Proposal">Optional reviewed proposal payload. When null, the stored proposal is applied.</param>
 /// <param name="SelectedFields">Root proposal field keys selected by the user.</param>
 /// <param name="SelectedImages">Optional role-to-remote-URL artwork selections.</param>
+/// <param name="ProgressId">Optional client-supplied operation id for polling live apply progress.</param>
 public sealed record ApplyIdentifyQueueItemRequest(
     EntityMetadataProposal? Proposal,
     IReadOnlyList<string> SelectedFields,
-    IReadOnlyDictionary<string, string?>? SelectedImages);
+    IReadOnlyDictionary<string, string?>? SelectedImages,
+    Guid? ProgressId = null);
