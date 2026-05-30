@@ -33,6 +33,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - Added a worker status badge to Job Control so stalled queues show when the background worker is offline.
 
 ### Changed
+- Deepened shared material card surfaces so plugin rows, settings cards, and other repeated panels keep a solid machined feel without relying on blur.
 - Restricted blur-backed glass treatments to shell-level overlays, high-level chrome, and static asset effects so repeated cards, chips, badges, and progress surfaces use cheaper material styling.
 - Split the single "Fingerprints" generation setting into separate "OpenSubtitles hash (oshash)" and "MD5 checksum" toggles. oshash stays on by default because it only reads a small slice of each file, while MD5 — which must read every byte and is the slow part of fingerprinting on large libraries — is now off by default and only computed when you turn it on. Disabling MD5 now actually skips the full-file read instead of computing it and throwing it away.
 - Queuing a batch for Identify now adds every selected item to the review queue up front and returns you to the dashboard immediately, then searches them there with live progress, instead of holding you on the originating tab while each item resolves one by one.

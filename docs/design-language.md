@@ -173,11 +173,13 @@ The machined bevel (inset top/left highlights) reads as a lit panel edge — a m
 ### Material Card (cards, chips, rows)
 
 ```css
-background: linear-gradient(180deg, rgba(255,255,255,0.035), rgba(255,255,255,0)),
-            var(--color-surface-2);
+background: linear-gradient(180deg, rgba(255,255,255,0.032), rgba(255,255,255,0.012) 42%, rgba(0,0,0,0.18) 100%),
+            linear-gradient(160deg, color-mix(in srgb, var(--color-surface-2) 58%, var(--color-surface-1) 42%) 0%, var(--color-surface-1) 100%);
 border: 1px solid var(--border-default);
 border-radius: var(--radius-sm);
-box-shadow: var(--shadow-panel);
+box-shadow: inset 0 1px 0 rgba(255,255,255,0.045),
+            inset 0 -1px 0 rgba(0,0,0,0.35),
+            0 8px 24px rgba(0,0,0,0.42);
 transition: border-color 180ms var(--ease-mechanical),
             box-shadow   180ms var(--ease-mechanical);
 
