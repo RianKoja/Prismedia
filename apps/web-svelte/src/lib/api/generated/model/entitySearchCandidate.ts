@@ -23,4 +23,15 @@ export interface EntitySearchCandidate {
      * @pattern ^-?(?:0|[1-9]\d*)(?:\.\d+)?$
      */
   popularity: number | string | null;
+  /** @nullable */
+  candidateId: string | null;
+  /** @nullable */
+  source: string | null;
+  /**
+     * @nullable
+     * @pattern ^-?(?:0|[1-9]\d*)(?:\.\d+)?$
+     */
+  confidence: number | string | null;
+  /** @nullable */
+  matchReason: string | null;
 }

@@ -15,13 +15,19 @@ public sealed record ImageCandidate(
 /// <summary>
 /// Search candidate returned when a plugin needs user disambiguation.
 /// </summary>
+/// <param name="Confidence">Optional 0-1 provider score for title-search matches.</param>
+/// <param name="MatchReason">Provider reason for the candidate score, such as title-search.</param>
 public sealed record EntitySearchCandidate(
     IReadOnlyDictionary<string, string> ExternalIds,
     string Title,
     int? Year,
     string? Overview,
     string? PosterUrl,
-    decimal? Popularity);
+    decimal? Popularity,
+    string? CandidateId = null,
+    string? Source = null,
+    decimal? Confidence = null,
+    string? MatchReason = null);
 
 /// <summary>
 /// Capability-aligned metadata patch proposed by a plugin.

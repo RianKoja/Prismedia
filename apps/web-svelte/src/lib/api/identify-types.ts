@@ -50,6 +50,10 @@ export interface EntitySearchCandidate {
   overview?: string | null;
   posterUrl?: string | null;
   popularity?: number | null;
+  candidateId?: string | null;
+  source?: string | null;
+  confidence?: number | null;
+  matchReason?: string | null;
 }
 
 export interface CreditPatch {

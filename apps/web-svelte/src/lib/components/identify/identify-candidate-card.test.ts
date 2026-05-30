@@ -19,6 +19,10 @@ describe("identify candidate cards", () => {
 			posterUrl: "https://image.tmdb.org/t/p/w500/poster.jpg",
 			title: "The Chair Company",
 			year: 2025,
+			candidateId: null,
+			source: null,
+			confidence: null,
+			matchReason: null,
 		};
 
 		const card = identifyCandidateToThumbnailCard(candidate, "video-series", 0);
@@ -44,6 +48,10 @@ describe("identify candidate cards", () => {
 			posterUrl: null,
 			title: "Friendship",
 			year: 2025,
+			candidateId: null,
+			source: null,
+			confidence: null,
+			matchReason: null,
 		};
 
 		expect(identifyCandidateKey(candidate, 3)).toBe("candidate:friendship:2025:3");

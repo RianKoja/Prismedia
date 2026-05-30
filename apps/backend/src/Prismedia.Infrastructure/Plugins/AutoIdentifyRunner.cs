@@ -20,19 +20,6 @@ public sealed class AutoIdentifyRunner(
     IIdentifyProviderService identify,
     PrismediaDbContext db,
     ILogger<AutoIdentifyRunner> logger) : IAutoIdentifyRunner {
-    /// <summary>
-    /// Maps stored entity kind codes to the high-level selector kinds exposed in settings.
-    /// Kinds absent from this map (structural seasons, taxonomy entities, etc.) are never auto-identified.
-    /// </summary>
-    private static readonly IReadOnlyDictionary<string, string> SelectorKindByEntityKind =
-        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) {
-            ["video"] = "video",
-            ["gallery"] = "gallery",
-            ["image"] = "image",
-            ["audio-track"] = "audio",
-            ["book"] = "book",
-        };
-
     public async Task<AutoIdentifyResult> RunAsync(Guid entityId, CancellationToken cancellationToken) {
         var config = await settings.GetAutoIdentifySettingsAsync(cancellationToken);
         if (!config.Enabled) {
@@ -56,7 +43,7 @@ public sealed class AutoIdentifyRunner(
             return new AutoIdentifyResult(false, SkipReason: "child entity; its parent is identified instead");
         }
 
-        if (!SelectorKindByEntityKind.TryGetValue(entity.KindCode, out var selectorKind)) {
+        if (!AutoIdentifySelectorKinds.TryMap(entity.KindCode, out var selectorKind)) {
             return new AutoIdentifyResult(false, SkipReason: $"kind '{entity.KindCode}' is not auto-identifiable");
         }
 
@@ -95,6 +82,31 @@ public sealed class AutoIdentifyRunner(
             }
 
             var proposal = response.Result;
+            if (proposal.Patch is null && proposal.Candidates is { Count: > 0 } candidates) {
+                var candidate = SelectConfidentCandidate(candidates, config.ConfidenceThreshold);
+                if (candidate is null) {
+                    continue;
+                }
+
+                try {
+                    response = await identify.IdentifyAsync(
+                        entityId,
+                        providerId,
+                        new IdentifyQuery(Title: null, Url: null, ExternalIds: candidate.ExternalIds),
+                        hideNsfw: false,
+                        cancellationToken);
+                } catch (Exception ex) {
+                    logger.LogWarning(ex, "AutoIdentify: provider {Provider} failed to hydrate candidate for entity {EntityId}", providerId, entityId);
+                    continue;
+                }
+
+                if (!response.Ok || response.Result?.Patch is null) {
+                    continue;
+                }
+
+                proposal = response.Result;
+            }
+
             if (!MeetsConfidenceBar(proposal, config.ConfidenceThreshold)) {
                 continue;
             }
@@ -114,13 +126,46 @@ public sealed class AutoIdentifyRunner(
     }
 
     /// <summary>
+    /// Picks a single provider-ranked search candidate only when the provider supplied an explicit
+    /// confidence score that meets the user's auto-apply threshold.
+    /// </summary>
+    private static EntitySearchCandidate? SelectConfidentCandidate(
+        IReadOnlyList<EntitySearchCandidate> candidates,
+        double threshold) {
+        var ranked = candidates
+            .Where(candidate => candidate.ExternalIds.Count > 0 && candidate.Confidence is not null)
+            .Select(candidate => new {
+                Candidate = candidate,
+                Confidence = NormalizeConfidence(candidate.Confidence!.Value)
+            })
+            .OrderByDescending(row => row.Confidence)
+            .ToArray();
+
+        if (ranked.Length == 0 || ranked[0].Confidence < threshold) {
+            return null;
+        }
+
+        if (ranked.Length > 1 && ranked[1].Confidence >= threshold) {
+            return null;
+        }
+
+        return ranked[0].Candidate;
+    }
+
+    /// <summary>
     /// A proposal qualifies for auto-apply when it carries concrete metadata and either reports a
     /// confidence at or above the threshold or reports no confidence at all (treated as an exact /
     /// definitive match, as with id/url lookups and deterministic scrapers).
     /// </summary>
     private static bool MeetsConfidenceBar(EntityMetadataProposal proposal, double threshold) {
         var patch = proposal.Patch;
-        var hasConcreteMetadata = !string.IsNullOrWhiteSpace(patch.Title) || patch.ExternalIds.Count > 0;
+        // A series root often carries little of its own metadata; its matched children are the value,
+        // so treat structural children as concrete content too. Collections may be null on synthetic
+        // structural roots, so guard every access.
+        var hasConcreteMetadata =
+            !string.IsNullOrWhiteSpace(patch?.Title) ||
+            patch?.ExternalIds is { Count: > 0 } ||
+            proposal.Children is { Count: > 0 };
         if (!hasConcreteMetadata) {
             return false;
         }
@@ -129,13 +174,13 @@ public sealed class AutoIdentifyRunner(
             return true;
         }
 
-        // Confidence is a 0–1 fraction by contract; tolerate providers that report a 0–100 percentage.
-        var normalized = (double)confidence;
-        if (normalized > 1d) {
-            normalized /= 100d;
-        }
+        return NormalizeConfidence(confidence) >= threshold;
+    }
 
-        return normalized >= threshold;
+    private static double NormalizeConfidence(decimal confidence) {
+        // Confidence is a 0-1 fraction by contract; tolerate providers that report a 0-100 percentage.
+        var normalized = (double)confidence;
+        return normalized > 1d ? normalized / 100d : normalized;
     }
 
     /// <summary>
@@ -147,20 +192,23 @@ public sealed class AutoIdentifyRunner(
         var patch = proposal.Patch;
         var fields = new List<string>();
 
-        if (!string.IsNullOrWhiteSpace(patch.Title)) fields.Add("title");
-        if (!string.IsNullOrWhiteSpace(patch.Description)) fields.Add("description");
-        if (patch.ExternalIds.Count > 0) fields.Add("externalIds");
-        if (patch.Urls.Count > 0) fields.Add("urls");
-        if (patch.Dates.Count > 0) fields.Add("dates");
-        if (patch.Stats.Count > 0) fields.Add("stats");
-        if (patch.Positions.Count > 0) fields.Add("positions");
-        if (!string.IsNullOrWhiteSpace(patch.Classification)) fields.Add("classification");
-        if (patch.Rating.HasValue) fields.Add("rating");
-        if (patch.Flags is not null) fields.Add("flags");
-        if (patch.Tags.Count > 0) fields.Add("tags");
-        if (!string.IsNullOrWhiteSpace(patch.Studio)) fields.Add("studio");
-        if (patch.Credits.Count > 0) fields.Add("credits");
-        if (proposal.Images.Count > 0) fields.Add("images");
+        if (patch is not null) {
+            if (!string.IsNullOrWhiteSpace(patch.Title)) fields.Add("title");
+            if (!string.IsNullOrWhiteSpace(patch.Description)) fields.Add("description");
+            if (patch.ExternalIds is { Count: > 0 }) fields.Add("externalIds");
+            if (patch.Urls is { Count: > 0 }) fields.Add("urls");
+            if (patch.Dates is { Count: > 0 }) fields.Add("dates");
+            if (patch.Stats is { Count: > 0 }) fields.Add("stats");
+            if (patch.Positions is { Count: > 0 }) fields.Add("positions");
+            if (!string.IsNullOrWhiteSpace(patch.Classification)) fields.Add("classification");
+            if (patch.Rating.HasValue) fields.Add("rating");
+            if (patch.Flags is not null) fields.Add("flags");
+            if (patch.Tags is { Count: > 0 }) fields.Add("tags");
+            if (!string.IsNullOrWhiteSpace(patch.Studio)) fields.Add("studio");
+            if (patch.Credits is { Count: > 0 }) fields.Add("credits");
+        }
+
+        if (proposal.Images is { Count: > 0 }) fields.Add("images");
 
         return fields;
     }
@@ -171,7 +219,7 @@ public sealed class AutoIdentifyRunner(
     /// as relationship proposals with their own artwork handling.
     /// </summary>
     private static IReadOnlyDictionary<string, string?>? SelectDefaultImages(EntityMetadataProposal proposal) {
-        if (proposal.Images.Count == 0) {
+        if (proposal.Images is not { Count: > 0 }) {
             return null;
         }
 

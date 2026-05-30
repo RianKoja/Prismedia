@@ -81,6 +81,7 @@ public sealed class DotnetPluginProcessRunner : IIdentifyRunner {
     private sealed record PluginWireResponse(bool Ok, PluginWireResult? Result, string? Error);
 
     private sealed record PluginWireSearchCandidate(
+        string? CandidateId,
         IReadOnlyDictionary<string, string>? ExternalIds,
         string? Title,
         int? Year,
@@ -88,7 +89,10 @@ public sealed class DotnetPluginProcessRunner : IIdentifyRunner {
         string? PosterUrl,
         decimal? Popularity,
         string? Description,
-        string? ThumbnailUrl);
+        string? ThumbnailUrl,
+        string? Source,
+        decimal? Confidence,
+        string? MatchReason);
 
     private static IdentifyPluginResponse ConvertWireResponse(PluginWireResponse wire, string providerName) {
         if (!wire.Ok || wire.Result is null) {
@@ -134,7 +138,11 @@ public sealed class DotnetPluginProcessRunner : IIdentifyRunner {
             candidate.Year,
             candidate.Overview ?? candidate.Description,
             candidate.PosterUrl ?? candidate.ThumbnailUrl,
-            candidate.Popularity);
+            candidate.Popularity,
+            candidate.CandidateId,
+            candidate.Source,
+            candidate.Confidence,
+            candidate.MatchReason);
 
     private static void TryDelete(string path) {
         try {

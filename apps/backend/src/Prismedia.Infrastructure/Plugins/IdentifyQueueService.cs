@@ -349,7 +349,11 @@ public sealed class IdentifyQueueService : IIdentifyQueueService {
                 YearFromDates(proposal.Patch.Dates),
                 proposal.Patch.Description,
                 poster,
-                proposal.Confidence)
+                Popularity: null,
+                CandidateId: proposal.ProposalId,
+                Source: proposal.Provider,
+                Confidence: proposal.Confidence,
+                MatchReason: proposal.MatchReason)
         ];
     }
 

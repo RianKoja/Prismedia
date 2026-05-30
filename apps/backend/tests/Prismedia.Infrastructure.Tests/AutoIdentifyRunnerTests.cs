@@ -73,6 +73,52 @@ public sealed class AutoIdentifyRunnerTests {
     }
 
     [Fact]
+    public async Task HydratesAndAppliesSingleConfidentSearchCandidate() {
+        await using var db = CreateContext();
+        var entityId = await SeedVideoAsync(db, organized: false, kind: "video-series", title: "The Chair Company");
+        var settings = await ConfigureAsync(db, enabled: true, providers: ["tmdb"], confidencePercent: 90m);
+        var identify = new FakeIdentifyProvider {
+            ProposalsByProvider = {
+                ["tmdb"] = CandidateShell("tmdb", "271267", "The Chair Company", confidence: 1m),
+            },
+            ProposalsByExternalId = {
+                ["tmdb:271267"] = Proposal("tmdb", confidence: 1m, title: "The Chair Company", targetKind: "video-series"),
+            },
+        };
+        var runner = new AutoIdentifyRunner(settings, identify, db, NullLogger<AutoIdentifyRunner>.Instance);
+
+        var result = await runner.RunAsync(entityId, CancellationToken.None);
+
+        Assert.True(result.Applied);
+        Assert.Equal("tmdb", result.Provider);
+        Assert.Equal(2, identify.IdentifyCalls.Count);
+        Assert.Equal("271267", identify.IdentifyCalls[1].Query?.ExternalIds?["tmdb"]);
+        Assert.Single(identify.ApplyCalls);
+    }
+
+    [Fact]
+    public async Task LeavesSearchCandidatesForReviewWhenCandidateConfidenceIsBelowThreshold() {
+        await using var db = CreateContext();
+        var entityId = await SeedVideoAsync(db, organized: false, kind: "video-series", title: "The Chair Company");
+        var settings = await ConfigureAsync(db, enabled: true, providers: ["tmdb"], confidencePercent: 90m);
+        var identify = new FakeIdentifyProvider {
+            ProposalsByProvider = {
+                ["tmdb"] = CandidateShell("tmdb", "271267", "The Chair Company", confidence: 0.5m),
+            },
+            ProposalsByExternalId = {
+                ["tmdb:271267"] = Proposal("tmdb", confidence: 1m, title: "The Chair Company", targetKind: "video-series"),
+            },
+        };
+        var runner = new AutoIdentifyRunner(settings, identify, db, NullLogger<AutoIdentifyRunner>.Instance);
+
+        var result = await runner.RunAsync(entityId, CancellationToken.None);
+
+        Assert.False(result.Applied);
+        Assert.Single(identify.IdentifyCalls);
+        Assert.Empty(identify.ApplyCalls);
+    }
+
+    [Fact]
     public async Task SkipsOrganizedEntityWhenUnorganizedOnly() {
         await using var db = CreateContext();
         var entityId = await SeedVideoAsync(db, organized: true);
@@ -87,6 +133,44 @@ public sealed class AutoIdentifyRunnerTests {
         Assert.False(result.Applied);
         Assert.Equal("already organized", result.SkipReason);
         Assert.Empty(identify.IdentifyCalls);
+    }
+
+    [Fact]
+    public async Task AppliesSeriesRootWhoseRootPatchHasNullCollections() {
+        await using var db = CreateContext();
+        var seriesId = await SeedVideoAsync(db, organized: false, kind: "video-series");
+        var settings = await ConfigureAsync(db, enabled: true, providers: ["p1"], confidencePercent: 90m);
+        // A series root often arrives with a sparse patch (null collections) and its value in Children.
+        var sparsePatch = new EntityMetadataPatch(
+            Title: "The Chair Company",
+            Description: null,
+            ExternalIds: null!,
+            Urls: null!,
+            Tags: null!,
+            Studio: null,
+            Credits: null!,
+            Dates: null!,
+            Stats: null!,
+            Positions: null!,
+            Classification: null);
+        var proposal = new EntityMetadataProposal(
+            ProposalId: Guid.NewGuid().ToString(),
+            Provider: "p1",
+            TargetKind: "video-series",
+            Confidence: null,
+            MatchReason: null,
+            Patch: sparsePatch,
+            Images: null!,
+            Children: [],
+            Candidates: [],
+            Relationships: null!);
+        var identify = new FakeIdentifyProvider { ProposalsByProvider = { ["p1"] = proposal } };
+        var runner = new AutoIdentifyRunner(settings, identify, db, NullLogger<AutoIdentifyRunner>.Instance);
+
+        var result = await runner.RunAsync(seriesId, CancellationToken.None);
+
+        Assert.True(result.Applied);
+        Assert.Contains("title", Assert.Single(identify.ApplyCalls).Fields);
     }
 
     [Fact]
@@ -121,11 +205,11 @@ public sealed class AutoIdentifyRunnerTests {
         Assert.Empty(identify.IdentifyCalls);
     }
 
-    private static EntityMetadataProposal Proposal(string provider, decimal? confidence, string title) =>
+    private static EntityMetadataProposal Proposal(string provider, decimal? confidence, string title, string targetKind = "video") =>
         new(
             ProposalId: Guid.NewGuid().ToString(),
             Provider: provider,
-            TargetKind: "video",
+            TargetKind: targetKind,
             Confidence: confidence,
             MatchReason: null,
             Patch: new EntityMetadataPatch(
@@ -145,12 +229,46 @@ public sealed class AutoIdentifyRunnerTests {
             Candidates: [],
             Relationships: []);
 
-    private static async Task<Guid> SeedVideoAsync(PrismediaDbContext db, bool organized, Guid? parentId = null) {
+    private static EntityMetadataProposal CandidateShell(
+        string provider,
+        string externalId,
+        string title,
+        decimal? confidence) =>
+        new(
+            ProposalId: null!,
+            Provider: provider,
+            TargetKind: "video-series",
+            Confidence: null,
+            MatchReason: null,
+            Patch: null!,
+            Images: [],
+            Children: [],
+            Candidates: [
+                new EntitySearchCandidate(
+                    new Dictionary<string, string> { [provider] = externalId },
+                    title,
+                    Year: 2025,
+                    Overview: null,
+                    PosterUrl: null,
+                    Popularity: null,
+                    CandidateId: $"{provider}:tv:{externalId}",
+                    Source: provider,
+                    Confidence: confidence,
+                    MatchReason: "title-search")
+            ],
+            Relationships: []);
+
+    private static async Task<Guid> SeedVideoAsync(
+        PrismediaDbContext db,
+        bool organized,
+        Guid? parentId = null,
+        string kind = "video",
+        string title = "video.mkv") {
         var id = Guid.NewGuid();
         db.Entities.Add(new EntityRow {
             Id = id,
-            KindCode = "video",
-            Title = "video.mkv",
+            KindCode = kind,
+            Title = title,
             IsOrganized = organized,
             ParentEntityId = parentId,
             CreatedAt = DateTimeOffset.UtcNow,
@@ -185,7 +303,8 @@ public sealed class AutoIdentifyRunnerTests {
 
     private sealed class FakeIdentifyProvider : IIdentifyProviderService {
         public Dictionary<string, EntityMetadataProposal> ProposalsByProvider { get; } = new(StringComparer.Ordinal);
-        public List<(Guid EntityId, string Provider)> IdentifyCalls { get; } = [];
+        public Dictionary<string, EntityMetadataProposal> ProposalsByExternalId { get; } = new(StringComparer.Ordinal);
+        public List<(Guid EntityId, string Provider, IdentifyQuery? Query)> IdentifyCalls { get; } = [];
         public List<(IReadOnlyCollection<string> Fields, IReadOnlyDictionary<string, string?>? SelectedImages)> ApplyCalls { get; } = [];
 
         public Task<IReadOnlyList<PluginProvider>> ListProvidersAsync(string? entityKind, CancellationToken cancellationToken) {
@@ -206,7 +325,13 @@ public sealed class AutoIdentifyRunnerTests {
 
         public Task<IdentifyPluginResponse> IdentifyAsync(
             Guid entityId, string providerId, IdentifyQuery? query, bool hideNsfw, CancellationToken cancellationToken) {
-            IdentifyCalls.Add((entityId, providerId));
+            IdentifyCalls.Add((entityId, providerId, query));
+            if (query?.ExternalIds is not null &&
+                query.ExternalIds.TryGetValue(providerId, out var externalId) &&
+                ProposalsByExternalId.TryGetValue($"{providerId}:{externalId}", out var lookupProposal)) {
+                return Task.FromResult(new IdentifyPluginResponse(true, lookupProposal, null));
+            }
+
             return Task.FromResult(ProposalsByProvider.TryGetValue(providerId, out var proposal)
                 ? new IdentifyPluginResponse(true, proposal, null)
                 : new IdentifyPluginResponse(false, null, "no result"));

@@ -123,6 +123,7 @@ docs/                  Architecture and design language docs.
 - Development: `docker compose -f infra/docker/docker-compose.yml up` runs Vite, the .NET API, the .NET worker, and PostgreSQL with hot reload.
 - Production: single unified image (`ghcr.io/pauljoda/prismedia`) bundles PostgreSQL, ffmpeg, the built Svelte frontend, the .NET API, and the .NET worker.
 - The .NET API listens on port 8008, serves same-origin `/api/*` routes, and serves the built Svelte assets.
+- Always open and test Prismedia through the .NET app at `http://localhost:8008`; do not browse Vite directly because Vite is only the frontend dev server and does not provide the running app surface by itself.
 - Volumes: `/data` for database/cache/thumbnails and `/media` for the user's media library.
 
 ## Tooling Expectations

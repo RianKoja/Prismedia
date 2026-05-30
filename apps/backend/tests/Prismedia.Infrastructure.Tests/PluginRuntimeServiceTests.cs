@@ -578,6 +578,10 @@ public sealed class PluginRuntimeServiceTests : IDisposable {
         Assert.Equal("Abbott Elementary", candidate.Title);
         Assert.Equal("A workplace comedy.", candidate.Overview);
         Assert.Equal("https://image.tmdb.org/t/p/w342/poster.jpg", candidate.PosterUrl);
+        Assert.Equal("tmdb:tv:125935", candidate.CandidateId);
+        Assert.Equal("TMDB", candidate.Source);
+        Assert.Equal(1m, candidate.Confidence);
+        Assert.Equal("title-search", candidate.MatchReason);
     }
 
     [Fact]
