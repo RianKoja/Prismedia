@@ -109,6 +109,28 @@ public sealed partial class SecurityEndpointTests : IDisposable {
     }
 
     [Fact]
+    public async Task JellyfinConnectionCompatibilityRoutesAcceptCommonClientProbes() {
+        using var factory = CreateFactory();
+        using var client = factory.CreateClient();
+
+        using var ping = await client.PostAsync("/System/Ping", null);
+        var publicInfo = await client.GetFromJsonAsync<JellyfinPublicSystemInfo>("/System/Info/Public");
+        var users = await client.GetFromJsonAsync<IReadOnlyList<JellyfinUserDto>>("/Users/Public");
+        var user = Assert.Single(users!);
+        using var passwordFieldResponse = await client.PostAsJsonAsync(
+            "/Users/AuthenticateByName",
+            new { Username = "Prismedia", Password = TestAuth.ApiKey });
+        using var legacyResponse = await client.PostAsync(
+            $"/Users/{user.Id:D}/Authenticate?pw={Uri.EscapeDataString(TestAuth.ApiKey)}",
+            null);
+
+        Assert.Equal(HttpStatusCode.OK, ping.StatusCode);
+        Assert.NotNull(publicInfo);
+        Assert.True(passwordFieldResponse.IsSuccessStatusCode);
+        Assert.True(legacyResponse.IsSuccessStatusCode);
+    }
+
+    [Fact]
     public async Task JellyfinProfileControlsNsfwCatalogVisibility() {
         using var factory = CreateFactory(new CatalogEntityReadService());
         using var client = factory.CreateClient();

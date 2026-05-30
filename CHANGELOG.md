@@ -82,6 +82,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - Updated web app manifest and mobile browser metadata for home-screen installation and browser UI theme colors.
 
 ### Fixed
+- Fixed Jellyfin-compatible server setup for clients that probe with POST ping, send the login password as `Password`, or use the legacy user-id authentication route.
 - Fixed Auto Identify so confident plugin search candidates, such as exact TMDB title matches, are resolved and applied instead of being left in manual review.
 - Fixed book progress metadata so zero-based page cursors display the same completed percentage as the main reading progress card.
 - Fixed completed book progress cards so they offer Start over without showing a misleading Resume action.

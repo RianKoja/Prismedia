@@ -35,7 +35,14 @@ public sealed record JellyfinAuthenticateByNameRequest {
     public string? Username { get; init; }
 
     [JsonPropertyName("Pw")]
+    public string? Pw { get; init; }
+
+    [JsonPropertyName("Password")]
     public string? Password { get; init; }
+
+    /// <summary>Password value supplied by either Jellyfin's <c>Pw</c> field or older client <c>Password</c> field.</summary>
+    [JsonIgnore]
+    public string? EffectivePassword => Pw ?? Password;
 }
 
 /// <summary>Jellyfin-compatible authentication result.</summary>

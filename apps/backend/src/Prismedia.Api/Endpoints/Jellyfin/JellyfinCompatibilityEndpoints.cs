@@ -23,6 +23,11 @@ public static class JellyfinCompatibilityEndpoints {
             .WithName("GetJellyfinPing")
             .WithSummary("Gets a Jellyfin-compatible ping response.");
 
+        routes.MapPost("/System/Ping", () => Results.Text("Prismedia"))
+            .WithTags("Jellyfin System")
+            .WithName("PostJellyfinPing")
+            .ExcludeFromDescription();
+
         routes.MapGet("/System/Info/Public", async (
             HttpContext httpContext,
             PrismediaSecurityService security,
@@ -118,38 +123,34 @@ public static class JellyfinCompatibilityEndpoints {
             HttpContext httpContext,
             PrismediaSecurityService security,
             CancellationToken cancellationToken) => {
-            var result = await security.AuthenticateJellyfinProfileAsync(
+            return await AuthenticateAsync(
                 request.Username,
-                request.Password,
-                httpContext.Request.GetJellyfinClientIdentity(),
-                PrismediaAuthentication.BucketFor(httpContext, request.Username),
+                request.EffectivePassword,
+                httpContext,
+                security,
                 cancellationToken);
-
-            if (result.IsThrottled) {
-                return Results.Json(
-                    new ApiProblem("auth_rate_limited", "Too many failed authentication attempts."),
-                    statusCode: StatusCodes.Status429TooManyRequests);
-            }
-
-            if (!result.Succeeded || result.Profile is null || result.Session is null || result.AccessToken is null) {
-                return Results.Json(
-                    new ApiProblem("jellyfin_auth_failed", "Invalid username or API key."),
-                    statusCode: StatusCodes.Status401Unauthorized);
-            }
-
-            var state = await security.EnsureSecurityAsync(cancellationToken);
-            var user = ToUserDto(result.Profile, state);
-            return Results.Ok(new JellyfinAuthenticationResult(
-                user,
-                ToSessionDto(result.Profile, result.Session),
-                result.AccessToken,
-                state.ServerId.ToString("N")));
         })
             .WithTags("Jellyfin Users")
             .WithName("AuthenticateJellyfinUserByName")
             .Produces<JellyfinAuthenticationResult>()
             .Produces<ApiProblem>(StatusCodes.Status401Unauthorized)
             .Produces<ApiProblem>(StatusCodes.Status429TooManyRequests);
+
+        routes.MapPost("/Users/{userId:guid}/Authenticate", async (
+            Guid userId,
+            string? pw,
+            HttpContext httpContext,
+            PrismediaSecurityService security,
+            CancellationToken cancellationToken) => {
+            var profile = (await security.ListProfilesAsync(cancellationToken)).Items
+                .FirstOrDefault(item => item.Id == userId && item.Enabled);
+            return profile is null
+                ? Results.NotFound(new ApiProblem("jellyfin_user_not_found", $"User '{userId}' was not found."))
+                : await AuthenticateAsync(profile.Username, pw, httpContext, security, cancellationToken);
+        })
+            .WithTags("Jellyfin Users")
+            .WithName("AuthenticateJellyfinUserLegacy")
+            .ExcludeFromDescription();
     }
 
     private static void MapJellyfinCatalogEndpoints(this IEndpointRouteBuilder routes) {
@@ -358,6 +359,40 @@ public static class JellyfinCompatibilityEndpoints {
             NsfwVisibility.ShouldHide(null, httpContext),
             cancellationToken);
         return Results.Ok(result);
+    }
+
+    private static async Task<IResult> AuthenticateAsync(
+        string? username,
+        string? password,
+        HttpContext httpContext,
+        PrismediaSecurityService security,
+        CancellationToken cancellationToken) {
+        var result = await security.AuthenticateJellyfinProfileAsync(
+            username,
+            password,
+            httpContext.Request.GetJellyfinClientIdentity(),
+            PrismediaAuthentication.BucketFor(httpContext, username),
+            cancellationToken);
+
+        if (result.IsThrottled) {
+            return Results.Json(
+                new ApiProblem("auth_rate_limited", "Too many failed authentication attempts."),
+                statusCode: StatusCodes.Status429TooManyRequests);
+        }
+
+        if (!result.Succeeded || result.Profile is null || result.Session is null || result.AccessToken is null) {
+            return Results.Json(
+                new ApiProblem("jellyfin_auth_failed", "Invalid username or API key."),
+                statusCode: StatusCodes.Status401Unauthorized);
+        }
+
+        var state = await security.EnsureSecurityAsync(cancellationToken);
+        var user = ToUserDto(result.Profile, state);
+        return Results.Ok(new JellyfinAuthenticationResult(
+            user,
+            ToSessionDto(result.Profile, result.Session),
+            result.AccessToken,
+            state.ServerId.ToString("N")));
     }
 
     private static async Task<IResult> StreamImageAsync(

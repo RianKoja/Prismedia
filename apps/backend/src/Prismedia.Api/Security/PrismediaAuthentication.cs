@@ -169,18 +169,22 @@ internal static class PrismediaAuthentication {
 
     private static bool IsJellyfinRequest(PathString requestPath) {
         var path = requestPath.Value ?? string.Empty;
-        return JellyfinPrefixes.Any(prefix => path.StartsWith(prefix, StringComparison.Ordinal));
+        return JellyfinPrefixes.Any(prefix => path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
     }
 
     private static bool IsPublicJellyfinRoute(HttpRequest request) {
         var path = request.Path.Value ?? string.Empty;
-        return (HttpMethods.IsGet(request.Method) && path.Equals("/System/Info/Public", StringComparison.Ordinal)) ||
-            (HttpMethods.IsGet(request.Method) && path.Equals("/System/Ping", StringComparison.Ordinal)) ||
-            (HttpMethods.IsGet(request.Method) && path.Equals("/Branding/Configuration", StringComparison.Ordinal)) ||
-            (HttpMethods.IsGet(request.Method) && (path.Equals("/Branding/Css", StringComparison.Ordinal) ||
-                path.Equals("/Branding/Css.css", StringComparison.Ordinal))) ||
-            (HttpMethods.IsGet(request.Method) && path.Equals("/Users/Public", StringComparison.Ordinal)) ||
-            (HttpMethods.IsPost(request.Method) && path.Equals("/Users/AuthenticateByName", StringComparison.Ordinal));
+        return (HttpMethods.IsGet(request.Method) && path.Equals("/System/Info/Public", StringComparison.OrdinalIgnoreCase)) ||
+            ((HttpMethods.IsGet(request.Method) || HttpMethods.IsPost(request.Method)) &&
+                path.Equals("/System/Ping", StringComparison.OrdinalIgnoreCase)) ||
+            (HttpMethods.IsGet(request.Method) && path.Equals("/Branding/Configuration", StringComparison.OrdinalIgnoreCase)) ||
+            (HttpMethods.IsGet(request.Method) && (path.Equals("/Branding/Css", StringComparison.OrdinalIgnoreCase) ||
+                path.Equals("/Branding/Css.css", StringComparison.OrdinalIgnoreCase))) ||
+            (HttpMethods.IsGet(request.Method) && path.Equals("/Users/Public", StringComparison.OrdinalIgnoreCase)) ||
+            (HttpMethods.IsPost(request.Method) && path.Equals("/Users/AuthenticateByName", StringComparison.OrdinalIgnoreCase)) ||
+            (HttpMethods.IsPost(request.Method) &&
+                path.StartsWith("/Users/", StringComparison.OrdinalIgnoreCase) &&
+                path.EndsWith("/Authenticate", StringComparison.OrdinalIgnoreCase));
     }
 
     private static string? ExtractToken(HttpRequest request) =>
