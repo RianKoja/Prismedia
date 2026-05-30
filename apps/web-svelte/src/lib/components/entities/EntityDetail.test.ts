@@ -83,8 +83,11 @@ describe("EntityDetail", () => {
     });
 
     const action = screen.getByRole("button", { name: "Play All" });
+    const appStyles = readFileSync("src/app.css", "utf8");
     expect(action.className).toContain("entity-action-button");
     expect(action.className).toContain("entity-action-button-primary");
+    expect(appStyles).toContain(".entity-action-button-primary {");
+    expect(appStyles).toContain("color-mix(in srgb, var(--entity-action-accent) 92%, #fff 8%)");
 
     await fireEvent.click(action);
 

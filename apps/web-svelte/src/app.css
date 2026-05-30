@@ -410,12 +410,39 @@
     background: color-mix(in srgb, var(--entity-action-accent) 6%, transparent);
   }
 
-  .entity-action-button-active,
-  .entity-action-button-primary {
+  .entity-action-button-active {
     color: var(--entity-action-accent);
     border-color: color-mix(in srgb, var(--entity-action-accent) 58%, var(--entity-action-border));
     box-shadow: 0 0 14px var(--entity-action-accent-glow);
     background: color-mix(in srgb, var(--entity-action-accent) 10%, transparent);
+  }
+
+  .entity-action-button-primary {
+    color: color-mix(in srgb, var(--color-surface-0, #07090d) 88%, #000 12%);
+    border-color: color-mix(in srgb, var(--entity-action-accent) 82%, rgba(255, 255, 255, 0.2));
+    background: linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--entity-action-accent) 92%, #fff 8%),
+      color-mix(in srgb, var(--entity-action-accent) 78%, #000 22%)
+    );
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.34),
+      inset 0 -1px 0 rgba(0, 0, 0, 0.22),
+      0 0 18px var(--entity-action-accent-glow);
+  }
+
+  .entity-action-button-primary:hover:not(:disabled) {
+    color: color-mix(in srgb, var(--color-surface-0, #07090d) 92%, #000 8%);
+    border-color: color-mix(in srgb, var(--entity-action-accent) 92%, #fff 8%);
+    background: linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--entity-action-accent) 96%, #fff 4%),
+      color-mix(in srgb, var(--entity-action-accent) 84%, #000 16%)
+    );
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.42),
+      inset 0 -1px 0 rgba(0, 0, 0, 0.2),
+      0 0 22px color-mix(in srgb, var(--entity-action-accent) 36%, transparent);
   }
 
   .entity-action-button-danger {
