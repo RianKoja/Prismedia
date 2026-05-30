@@ -3,7 +3,6 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/svelte";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { EntityThumbnailCard } from "$lib/entities/entity-thumbnail";
 import { createEntityGridPrefs, type EntityGridPrefs } from "$lib/entities/entity-grid-prefs";
-import { readCookie } from "$lib/utils/cookie";
 import EntityGrid from "./EntityGrid.test-harness.svelte";
 
 const GRID_PREFS_DEFAULTS = {
@@ -14,28 +13,19 @@ const GRID_PREFS_DEFAULTS = {
   pageSize: 250,
 } as const;
 
-/** Seeds this grid's persistence cookie with a partial view state for the test. */
+/** Seeds this grid's persisted view state with a partial override for the test. */
 function seedGridPrefs(prefsKey: string, prefs: Partial<EntityGridPrefs>): void {
-  const api = createEntityGridPrefs(prefsKey, GRID_PREFS_DEFAULTS);
-  api.writeCookie({ ...api.defaults(), ...prefs });
+  const store = createEntityGridPrefs(prefsKey, GRID_PREFS_DEFAULTS);
+  store.save({ ...store.defaults(), ...prefs });
 }
 
-/** Reads back this grid's persisted view state from its cookie. */
+/** Reads back this grid's persisted view state. */
 function readGridPrefs(prefsKey: string): EntityGridPrefs | null {
-  const api = createEntityGridPrefs(prefsKey, GRID_PREFS_DEFAULTS);
-  return api.parse(readCookie(api.cookieName));
-}
-
-function clearAllCookies(): void {
-  for (const entry of document.cookie.split(";")) {
-    const name = entry.split("=")[0]?.trim();
-    if (name) document.cookie = `${name}=;path=/;max-age=0;samesite=lax`;
-  }
+  return createEntityGridPrefs(prefsKey, GRID_PREFS_DEFAULTS).load();
 }
 
 describe("EntityGrid pagination", () => {
   beforeEach(() => {
-    clearAllCookies();
     Object.defineProperty(window, "localStorage", {
       configurable: true,
       value: createLocalStorageStub(),
@@ -60,7 +50,6 @@ describe("EntityGrid pagination", () => {
   });
 
   afterEach(() => {
-    clearAllCookies();
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });

@@ -3,17 +3,20 @@
  *
  * Every EntityGrid instance is identified by a stable `prefsKey` (typically the
  * route plus the entity kind it browses, e.g. `series` or `series-<id>-videos`).
- * This module turns that key into a dedicated cookie so the grid's filters,
- * sort, card size, media-wall toggle, page size, and active preset survive
- * reloads and naturally stay scoped to the device — no cross-device sync layer.
+ * This module turns that key into a dedicated `localStorage` entry so the grid's
+ * filters, sort, card size, media-wall toggle, page size, and active preset
+ * survive reloads and stay scoped to the device — no cross-device sync layer and
+ * no per-request cookie overhead.
  *
- * The state is stored in a cookie (matching the `list-prefs` convention used
- * elsewhere) so dropping an EntityGrid on any page automatically restores the
- * last view the user left it in. Only non-default state is written; resetting a
- * grid back to its defaults clears the cookie so we never accumulate noise.
+ * The state is kept client-side in `localStorage` (the app runs as an SPA, so
+ * there is nothing for the server to read), and only non-default state is
+ * written: resetting a grid back to its defaults clears the entry so we never
+ * accumulate noise. The store is deliberately small and validation is lenient,
+ * so the persisted shape can grow new fields over time without invalidating
+ * entries written by older builds.
  */
 
-import { createListPrefs, isRecord, type ListPrefsApi } from "$lib/list-prefs";
+import { isRecord } from "$lib/list-prefs";
 import type {
   EntityGridSort,
   EntityGridSortDir,
@@ -37,8 +40,8 @@ export interface EntityGridPrefs {
 }
 
 /**
- * Grid-specific fallbacks used when no cookie exists yet or a stored field is
- * missing/invalid. These mirror the EntityGrid props so each surface keeps its
+ * Grid-specific fallbacks used when no stored state exists yet or a stored field
+ * is missing/invalid. These mirror the EntityGrid props so each surface keeps its
  * own sensible starting view (e.g. index pages default to "added"/"desc").
  */
 export interface EntityGridPrefsDefaults {
@@ -49,15 +52,31 @@ export interface EntityGridPrefsDefaults {
   pageSize: number;
 }
 
-const COOKIE_PREFIX = "pm_eg_";
+/**
+ * A localStorage-backed view-state store scoped to a single grid. Kept as a
+ * small explicit surface (rather than free functions) so additional persistence
+ * concerns — migrations, schema versioning, alternate backends — can be layered
+ * in later without touching the EntityGrid component.
+ */
+export interface EntityGridPrefsStore {
+  /** The localStorage key this grid's view state is stored under. */
+  storageKey: string;
+  /** The default view state for this grid, used for comparison and resets. */
+  defaults: () => EntityGridPrefs;
+  /** True when `prefs` equals the defaults, i.e. there is nothing worth persisting. */
+  isDefault: (prefs: EntityGridPrefs) => boolean;
+  /** Reads and validates the stored state, or `null` when absent or unreadable. */
+  load: () => EntityGridPrefs | null;
+  /** Persists the full state. Best-effort: storage errors are swallowed. */
+  save: (prefs: EntityGridPrefs) => void;
+  /** Removes any stored state for this grid. */
+  clear: () => void;
+}
+
+const STORAGE_PREFIX = "prismedia:entity-grid-state:";
 const VALID_SORTS: readonly EntityGridSort[] = ["title", "kind", "rating", "position", "added", "random"];
 const VALID_SORT_DIRS: readonly EntityGridSortDir[] = ["asc", "desc"];
 const VALID_VIEW_MODES: readonly EntityGridViewMode[] = ["grid", "list"];
-
-/** Cookie tokens cannot contain separators/whitespace, so fold the key to a safe charset. */
-function cookieNameFor(prefsKey: string): string {
-  return `${COOKIE_PREFIX}${prefsKey.replace(/[^A-Za-z0-9_-]/g, "_")}`;
-}
 
 function oneOf<T extends string>(value: unknown, allowed: readonly T[], fallback: T): T {
   return typeof value === "string" && (allowed as readonly string[]).includes(value) ? (value as T) : fallback;
@@ -78,17 +97,19 @@ function finiteNumber(value: unknown, fallback: number): number {
 }
 
 /**
- * Builds the cookie-backed prefs store for a single grid.
+ * Builds the localStorage-backed prefs store for a single grid.
  *
  * `validate` is lenient on purpose: any field that is missing or malformed
- * (including cookies written by an older grid version) falls back to the
+ * (including entries written by an older grid version) falls back to the
  * supplied default, so persisted state always hydrates into a complete object
  * instead of being discarded wholesale.
  */
 export function createEntityGridPrefs(
   prefsKey: string,
   defaults: EntityGridPrefsDefaults,
-): ListPrefsApi<EntityGridPrefs> {
+): EntityGridPrefsStore {
+  const storageKey = `${STORAGE_PREFIX}${prefsKey}`;
+
   const base = (): EntityGridPrefs => ({
     query: "",
     activeKind: ENTITY_GRID_ALL_KINDS,
@@ -103,24 +124,54 @@ export function createEntityGridPrefs(
     activePresetId: null,
   });
 
-  return createListPrefs<EntityGridPrefs>({
-    cookieName: cookieNameFor(prefsKey),
-    defaults: base,
-    validate: (parsed: Record<string, unknown>): EntityGridPrefs => ({
-      query: typeof parsed.query === "string" ? parsed.query : "",
-      activeKind: typeof parsed.activeKind === "string" ? parsed.activeKind : ENTITY_GRID_ALL_KINDS,
-      filterIds: stringArray(parsed.filterIds),
-      includeNsfw: typeof parsed.includeNsfw === "boolean" ? parsed.includeNsfw : true,
-      sortBy: oneOf(parsed.sortBy, VALID_SORTS, defaults.sortBy),
-      sortDir: oneOf(parsed.sortDir, VALID_SORT_DIRS, defaults.sortDir),
-      viewMode: oneOf(parsed.viewMode, VALID_VIEW_MODES, "grid"),
-      mediaWall: typeof parsed.mediaWall === "boolean" ? parsed.mediaWall : defaults.mediaWall,
-      scale: finiteNumber(parsed.scale, defaults.scale),
-      pageSize: positiveInt(parsed.pageSize, defaults.pageSize),
-      activePresetId: typeof parsed.activePresetId === "string" ? parsed.activePresetId : null,
-    }),
+  const validate = (parsed: Record<string, unknown>): EntityGridPrefs => ({
+    query: typeof parsed.query === "string" ? parsed.query : "",
+    activeKind: typeof parsed.activeKind === "string" ? parsed.activeKind : ENTITY_GRID_ALL_KINDS,
+    filterIds: stringArray(parsed.filterIds),
+    includeNsfw: typeof parsed.includeNsfw === "boolean" ? parsed.includeNsfw : true,
+    sortBy: oneOf(parsed.sortBy, VALID_SORTS, defaults.sortBy),
+    sortDir: oneOf(parsed.sortDir, VALID_SORT_DIRS, defaults.sortDir),
+    viewMode: oneOf(parsed.viewMode, VALID_VIEW_MODES, "grid"),
+    mediaWall: typeof parsed.mediaWall === "boolean" ? parsed.mediaWall : defaults.mediaWall,
+    scale: finiteNumber(parsed.scale, defaults.scale),
+    pageSize: positiveInt(parsed.pageSize, defaults.pageSize),
+    activePresetId: typeof parsed.activePresetId === "string" ? parsed.activePresetId : null,
   });
-}
 
-/** Re-exported for tests and callers that need the record guard without a second import. */
-export { isRecord };
+  function load(): EntityGridPrefs | null {
+    if (typeof window === "undefined") return null;
+    try {
+      const raw = window.localStorage.getItem(storageKey);
+      if (!raw) return null;
+      const parsed: unknown = JSON.parse(raw);
+      if (!isRecord(parsed)) return null;
+      return validate(parsed);
+    } catch {
+      return null;
+    }
+  }
+
+  function save(prefs: EntityGridPrefs): void {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(storageKey, JSON.stringify(prefs));
+    } catch {
+      // localStorage full or unavailable — view-state persistence is best-effort.
+    }
+  }
+
+  function clear(): void {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.removeItem(storageKey);
+    } catch {
+      // Ignore storage access errors.
+    }
+  }
+
+  function isDefault(prefs: EntityGridPrefs): boolean {
+    return JSON.stringify(prefs) === JSON.stringify(base());
+  }
+
+  return { storageKey, defaults: base, isDefault, load, save, clear };
+}

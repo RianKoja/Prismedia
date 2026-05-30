@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { createEntityGridPrefs, type EntityGridPrefsDefaults } from "./entity-grid-prefs";
-import { readCookie } from "$lib/utils/cookie";
 
 const DEFAULTS: EntityGridPrefsDefaults = {
   sortBy: "added",
@@ -10,24 +9,17 @@ const DEFAULTS: EntityGridPrefsDefaults = {
   pageSize: 250,
 };
 
-function clearAllCookies(): void {
-  for (const entry of document.cookie.split(";")) {
-    const name = entry.split("=")[0]?.trim();
-    if (name) document.cookie = `${name}=;path=/;max-age=0;samesite=lax`;
-  }
-}
-
 describe("entity-grid prefs", () => {
-  afterEach(() => clearAllCookies());
+  afterEach(() => window.localStorage.clear());
 
-  it("derives a sanitized, namespaced cookie name from the grid key", () => {
-    const api = createEntityGridPrefs("series-abc/123", DEFAULTS);
-    expect(api.cookieName).toBe("pm_eg_series-abc_123");
+  it("derives a namespaced storage key from the grid key", () => {
+    const store = createEntityGridPrefs("series-abc-123", DEFAULTS);
+    expect(store.storageKey).toBe("prismedia:entity-grid-state:series-abc-123");
   });
 
-  it("round-trips the full view state through the cookie", () => {
-    const api = createEntityGridPrefs("videos", DEFAULTS);
-    api.writeCookie({
+  it("round-trips the full view state through localStorage", () => {
+    const store = createEntityGridPrefs("videos", DEFAULTS);
+    store.save({
       query: "matrix",
       activeKind: "video",
       filterIds: ["flags:favorite", "rating:min:4"],
@@ -41,7 +33,7 @@ describe("entity-grid prefs", () => {
       activePresetId: "preset-1",
     });
 
-    expect(api.parse(readCookie(api.cookieName))).toEqual({
+    expect(store.load()).toEqual({
       query: "matrix",
       activeKind: "video",
       filterIds: ["flags:favorite", "rating:min:4"],
@@ -57,12 +49,13 @@ describe("entity-grid prefs", () => {
   });
 
   it("fills missing or malformed fields from the grid defaults", () => {
-    const api = createEntityGridPrefs("books", DEFAULTS);
-    const parsed = api.parse(
-      encodeURIComponent(JSON.stringify({ scale: 9, sortBy: "bogus", filterIds: ["ok", 7] })),
+    const store = createEntityGridPrefs("books", DEFAULTS);
+    window.localStorage.setItem(
+      store.storageKey,
+      JSON.stringify({ scale: 9, sortBy: "bogus", filterIds: ["ok", 7] }),
     );
 
-    expect(parsed).toEqual({
+    expect(store.load()).toEqual({
       query: "",
       activeKind: "all",
       filterIds: ["ok"],
@@ -77,14 +70,27 @@ describe("entity-grid prefs", () => {
     });
   });
 
-  it("treats the seeded default state as default so the cookie can be cleared", () => {
-    const api = createEntityGridPrefs("galleries", DEFAULTS);
-    expect(api.isDefault(api.defaults())).toBe(true);
-    expect(api.isDefault({ ...api.defaults(), filterIds: ["flags:favorite"] })).toBe(false);
+  it("treats the seeded default state as default so the entry can be cleared", () => {
+    const store = createEntityGridPrefs("galleries", DEFAULTS);
+    expect(store.isDefault(store.defaults())).toBe(true);
+    expect(store.isDefault({ ...store.defaults(), filterIds: ["flags:favorite"] })).toBe(false);
   });
 
-  it("returns null for an absent cookie", () => {
-    const api = createEntityGridPrefs("audio", DEFAULTS);
-    expect(api.parse(readCookie(api.cookieName))).toBeNull();
+  it("clears stored state", () => {
+    const store = createEntityGridPrefs("studios", DEFAULTS);
+    store.save({ ...store.defaults(), scale: 9 });
+    store.clear();
+    expect(store.load()).toBeNull();
+  });
+
+  it("returns null when nothing is stored", () => {
+    const store = createEntityGridPrefs("audio", DEFAULTS);
+    expect(store.load()).toBeNull();
+  });
+
+  it("returns null for unparseable stored state", () => {
+    const store = createEntityGridPrefs("people", DEFAULTS);
+    window.localStorage.setItem(store.storageKey, "not json");
+    expect(store.load()).toBeNull();
   });
 });

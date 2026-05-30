@@ -14,7 +14,6 @@
   import { updateEntityFlags } from "$lib/api/entity-mutations";
   import { createFilterPresets, type FilterPreset } from "$lib/filter-presets";
   import { createEntityGridPrefs, type EntityGridPrefs } from "$lib/entities/entity-grid-prefs";
-  import { readCookie } from "$lib/utils/cookie";
   import { usePageSnapshots } from "$lib/stores/page-snapshots.svelte";
   import EntityThumbnail from "$lib/components/thumbnails/EntityThumbnail.svelte";
   import {
@@ -145,12 +144,12 @@
     return Number.isFinite(numeric) && numeric > 0 ? numeric : DEFAULT_PAGE_SIZE;
   }
 
-  // Cookie-backed view-state store for this grid, built once from the stable
-  // prefsKey. Dropping an EntityGrid on any page with a prefsKey makes its
+  // localStorage-backed view-state store for this grid, built once from the
+  // stable prefsKey. Dropping an EntityGrid on any page with a prefsKey makes its
   // filters, sort, card size, media wall, page size, and active preset persist
   // across reloads — scoped to the device, with no cross-device sync layer.
   // svelte-ignore state_referenced_locally
-  const prefsApi = browser && prefsKey
+  const prefsStore = browser && prefsKey
     ? createEntityGridPrefs(prefsKey, {
         sortBy: initialSortBy,
         sortDir: initialSortDir,
@@ -159,7 +158,7 @@
         pageSize: normalizePageSize(initialPageSize),
       })
     : null;
-  const persistedPrefs: EntityGridPrefs | null = prefsApi ? prefsApi.parse(readCookie(prefsApi.cookieName)) : null;
+  const persistedPrefs: EntityGridPrefs | null = prefsStore ? prefsStore.load() : null;
 
   let actionsMenuOpen = $state(false);
   let capabilityOverrides = $state(new Map<string, EntityCapability[]>());
@@ -439,10 +438,10 @@
     onRequestChange?.(request);
   });
 
-  // Persist the full view state to this grid's cookie whenever a tracked
-  // control changes. Reading every field here registers them as dependencies so
-  // any change re-runs the effect. Only non-default state is stored; returning a
-  // grid to its defaults clears the cookie so stale view state never lingers.
+  // Persist the full view state for this grid whenever a tracked control
+  // changes. Reading every field here registers them as dependencies so any
+  // change re-runs the effect. Only non-default state is stored; returning a
+  // grid to its defaults clears the entry so stale view state never lingers.
   $effect(() => {
     const snapshot: EntityGridPrefs = {
       query,
@@ -457,9 +456,9 @@
       pageSize,
       activePresetId,
     };
-    if (!prefsApi) return;
-    if (prefsApi.isDefault(snapshot)) prefsApi.clearCookie();
-    else prefsApi.writeCookie(snapshot);
+    if (!prefsStore) return;
+    if (prefsStore.isDefault(snapshot)) prefsStore.clear();
+    else prefsStore.save(snapshot);
   });
 
   $effect(() => {
