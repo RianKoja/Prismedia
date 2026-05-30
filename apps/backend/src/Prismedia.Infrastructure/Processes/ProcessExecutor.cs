@@ -13,12 +13,17 @@ public class ProcessExecutor {
     /// <param name="arguments">Arguments passed without shell interpolation.</param>
     /// <param name="environment">Optional environment variables to set for the process.</param>
     /// <param name="cancellationToken">Token used to cancel process execution.</param>
+    /// <param name="lowPriority">
+    /// When true, runs the process at below-normal scheduling priority so background
+    /// media generation (thumbnails, trickplay) never starves playback, the API, or scans.
+    /// </param>
     /// <returns>Exit code plus captured standard output and standard error.</returns>
     public virtual async Task<ProcessExecutionResult> RunAsync(
         string fileName,
         IReadOnlyList<string> arguments,
         IReadOnlyDictionary<string, string>? environment,
-        CancellationToken cancellationToken) {
+        CancellationToken cancellationToken,
+        bool lowPriority = false) {
         var startInfo = new ProcessStartInfo(fileName) {
             RedirectStandardError = true,
             RedirectStandardOutput = true,
@@ -35,6 +40,7 @@ public class ProcessExecutor {
 
         using var process = Process.Start(startInfo) ??
             throw new InvalidOperationException($"Failed to start '{fileName}'.");
+        TryApplyLowPriority(process, lowPriority);
 
         try {
             var stdoutTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
@@ -119,13 +125,18 @@ public class ProcessExecutor {
     /// <param name="environment">Optional environment variables to set for the process.</param>
     /// <param name="outputPath">File that receives standard output.</param>
     /// <param name="cancellationToken">Token used to cancel process execution.</param>
+    /// <param name="lowPriority">
+    /// When true, runs the process at below-normal scheduling priority so background
+    /// media generation never starves playback, the API, or scans.
+    /// </param>
     /// <returns>Exit code plus captured standard error.</returns>
     public virtual async Task<ProcessExecutionResult> RunToFileAsync(
         string fileName,
         IReadOnlyList<string> arguments,
         IReadOnlyDictionary<string, string>? environment,
         string outputPath,
-        CancellationToken cancellationToken) {
+        CancellationToken cancellationToken,
+        bool lowPriority = false) {
         Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
 
         var startInfo = new ProcessStartInfo(fileName) {
@@ -144,6 +155,7 @@ public class ProcessExecutor {
 
         using var process = Process.Start(startInfo) ??
             throw new InvalidOperationException($"Failed to start '{fileName}'.");
+        TryApplyLowPriority(process, lowPriority);
         await using var output = File.Create(outputPath);
 
         try {
@@ -160,6 +172,24 @@ public class ProcessExecutor {
             process.Kill(entireProcessTree: true);
             await process.WaitForExitAsync(CancellationToken.None);
             throw;
+        }
+    }
+
+    /// <summary>
+    /// Best-effort downgrade of a freshly started process to below-normal scheduling
+    /// priority. On Linux this maps to a positive nice value. Failures are ignored:
+    /// the process may have already exited or the platform may forbid the change, in
+    /// which case generation simply proceeds at normal priority.
+    /// </summary>
+    private static void TryApplyLowPriority(Process process, bool lowPriority) {
+        if (!lowPriority) {
+            return;
+        }
+
+        try {
+            process.PriorityClass = ProcessPriorityClass.BelowNormal;
+        } catch {
+            // Intentionally ignored — priority is an optimization, not a correctness requirement.
         }
     }
 }

@@ -898,7 +898,7 @@ public sealed class HlsAssetServiceTests : IDisposable {
             string fileName,
             IReadOnlyList<string> arguments,
             IReadOnlyDictionary<string, string>? environment,
-            CancellationToken cancellationToken) {
+            CancellationToken cancellationToken, bool lowPriority = false) {
             WasCalled = true;
             LastArguments = arguments;
             FileNameHistory.Add(fileName);
@@ -933,7 +933,7 @@ public sealed class HlsAssetServiceTests : IDisposable {
             string fileName,
             IReadOnlyList<string> arguments,
             IReadOnlyDictionary<string, string>? environment,
-            CancellationToken cancellationToken) {
+            CancellationToken cancellationToken, bool lowPriority = false) {
             var outputPath = arguments[^1];
             Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
             await File.WriteAllTextAsync(outputPath, "playlist", cancellationToken);
@@ -946,7 +946,7 @@ public sealed class HlsAssetServiceTests : IDisposable {
             string fileName,
             IReadOnlyList<string> arguments,
             IReadOnlyDictionary<string, string>? environment,
-            CancellationToken cancellationToken) =>
+            CancellationToken cancellationToken, bool lowPriority = false) =>
             Task.FromResult(new ProcessExecutionResult(1, string.Empty, "No such filter: 'tonemapx'"));
     }
 
@@ -957,7 +957,7 @@ public sealed class HlsAssetServiceTests : IDisposable {
             string fileName,
             IReadOnlyList<string> arguments,
             IReadOnlyDictionary<string, string>? environment,
-            CancellationToken cancellationToken) {
+            CancellationToken cancellationToken, bool lowPriority = false) {
             ArgumentHistory.Add(arguments);
             if (arguments.Any(argument => argument.Contains("tonemap", StringComparison.Ordinal))) {
                 return new ProcessExecutionResult(1, string.Empty, "No such filter: 'zscale'");
@@ -983,7 +983,7 @@ public sealed class HlsAssetServiceTests : IDisposable {
             string fileName,
             IReadOnlyList<string> arguments,
             IReadOnlyDictionary<string, string>? environment,
-            CancellationToken cancellationToken) {
+            CancellationToken cancellationToken, bool lowPriority = false) {
             ArgumentHistory.Add(arguments);
             var outputPath = arguments[^1];
             Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
@@ -1020,7 +1020,7 @@ public sealed class HlsAssetServiceTests : IDisposable {
             string fileName,
             IReadOnlyList<string> arguments,
             IReadOnlyDictionary<string, string>? environment,
-            CancellationToken cancellationToken) {
+            CancellationToken cancellationToken, bool lowPriority = false) {
             ArgumentHistory.Add(arguments);
             var outputPath = arguments[^1];
             Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);

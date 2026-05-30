@@ -133,4 +133,43 @@ public sealed partial class LibraryScanPersistenceService {
         return detail?.SubtitlesExtractedAt is not null;
     }
 
+    public async Task<IReadOnlyList<AutoIdentifyRootTarget>> ResolveAutoIdentifyRootsAsync(
+        IReadOnlyList<Guid> entityIds, CancellationToken cancellationToken) {
+        if (entityIds.Count == 0) return [];
+
+        // Load the scanned entities plus their ancestor chain in waves (libraries are only a few
+        // levels deep), then walk each scanned entity up to its top-level ancestor.
+        var info = new Dictionary<Guid, (string KindCode, string Title, Guid? ParentId)>();
+        var toLoad = new HashSet<Guid>(entityIds);
+        while (toLoad.Count > 0) {
+            var batch = toLoad.ToList();
+            toLoad.Clear();
+            var rows = await _db.Entities.AsNoTracking()
+                .Where(entity => batch.Contains(entity.Id) && entity.DeletedAt == null)
+                .Select(entity => new { entity.Id, entity.KindCode, entity.Title, entity.ParentEntityId })
+                .ToListAsync(cancellationToken);
+            foreach (var row in rows) {
+                info[row.Id] = (row.KindCode, row.Title, row.ParentEntityId);
+                if (row.ParentEntityId is { } parentId && !info.ContainsKey(parentId)) {
+                    toLoad.Add(parentId);
+                }
+            }
+        }
+
+        var roots = new Dictionary<Guid, AutoIdentifyRootTarget>();
+        foreach (var id in entityIds) {
+            var current = id;
+            var guard = 0;
+            while (info.TryGetValue(current, out var node) && node.ParentId is { } parent && guard++ < 64) {
+                current = parent;
+            }
+
+            if (!roots.ContainsKey(current) && info.TryGetValue(current, out var rootInfo)) {
+                roots[current] = new AutoIdentifyRootTarget(current, rootInfo.KindCode, rootInfo.Title);
+            }
+        }
+
+        return roots.Values.ToList();
+    }
+
 }

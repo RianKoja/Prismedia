@@ -8,9 +8,16 @@ namespace Prismedia.Infrastructure.Media.Processing;
 /// </summary>
 /// <param name="FfmpegPath">Executable name or absolute path for ffmpeg.</param>
 /// <param name="ConfiguredFfprobePath">Optional executable name or absolute path for ffprobe.</param>
+/// <param name="AssetGenerationThreads">
+/// Per-process ffmpeg thread cap for background asset generation (thumbnails, preview
+/// clips, trickplay, waveforms). Defaults to 1 so a queue of concurrent generation jobs
+/// stays bounded instead of each ffmpeg spinning up one decode thread per core. Does not
+/// affect on-demand playback transcodes.
+/// </param>
 public sealed record MediaToolOptions(
     string FfmpegPath = "ffmpeg",
-    string? ConfiguredFfprobePath = null) {
+    string? ConfiguredFfprobePath = null,
+    int AssetGenerationThreads = 1) {
     private const string DefaultFfmpegName = "ffmpeg";
     private const string JellyfinFfmpegName = "jellyfin-ffmpeg";
 

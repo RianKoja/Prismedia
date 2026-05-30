@@ -33,6 +33,9 @@ public sealed class ScanAudioJobHandler(
         var validLibraryPaths = ContainerPathsFor(root.Path, dirGroups.Keys);
         var libraryIdsByPath = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
         var siblingSortOrders = SiblingSortOrders(validLibraryPaths);
+        // Libraries (albums) and loose tracks are auto-identify candidates; resolution collapses
+        // tracks and nested libraries to their top-level album so only the album is queued.
+        var autoIdentifyIds = new List<Guid>();
 
         foreach (var dirPath in validLibraryPaths) {
             var libraryTitle = Path.GetFileName(dirPath);
@@ -50,6 +53,7 @@ public sealed class ScanAudioJobHandler(
                 root.IsNsfw,
                 cancellationToken);
             libraryIdsByPath[dirPath] = libraryId;
+            autoIdentifyIds.Add(libraryId);
         }
 
         var validLooseTrackPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -90,10 +94,11 @@ public sealed class ScanAudioJobHandler(
                         TargetEntityId: trackId.ToString(), TargetLabel: title), cancellationToken);
                 }
 
-                var autoIdentify = AutoIdentifyScanEnqueue.RequestFor(
-                    settings, "audio", "audio-track", trackId.ToString(), title);
-                if (autoIdentify is not null)
-                    await context.EnqueueIfNeededAsync(autoIdentify, cancellationToken);
+                // Loose tracks (no owning library) are their own auto-identify roots; tracks inside a
+                // library are covered by that library's identification.
+                if (libraryId is null) {
+                    autoIdentifyIds.Add(trackId);
+                }
             }
 
             processedDirs++;
@@ -115,6 +120,8 @@ public sealed class ScanAudioJobHandler(
         }
 
         await audio.RemoveStaleAudioLibrariesInRootAsync(root.Id, validLibraryPaths.ToHashSet(StringComparer.OrdinalIgnoreCase), cancellationToken);
+
+        await AutoIdentifyScanEnqueue.EnqueueRootsAsync(context, settings, downstreamNeeds, autoIdentifyIds, cancellationToken);
     }
 
     private static bool SamePath(string left, string right) =>

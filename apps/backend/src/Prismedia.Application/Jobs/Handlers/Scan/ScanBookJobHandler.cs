@@ -71,8 +71,9 @@ public sealed class ScanBookJobHandler(
             }
             validBookPaths.Add(first.BookPath);
 
+            // A book is the top-level root of its volumes/chapters/pages, so identify it directly.
             var bookAutoIdentify = AutoIdentifyScanEnqueue.RequestFor(
-                settings, "book", "book", bookId.ToString(), first.BookTitle);
+                settings, "book", bookId.ToString(), first.BookTitle);
             if (bookAutoIdentify is not null)
                 await context.EnqueueIfNeededAsync(bookAutoIdentify, cancellationToken);
 

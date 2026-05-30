@@ -37,6 +37,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - Added a worker status badge to Job Control so stalled queues show when the background worker is offline.
 
 ### Changed
+- Scrubbing-preview (trickplay) generation is dramatically lighter on the CPU: each video is now sampled in a single ffmpeg pass instead of launching a separate process for every preview frame, and all background media generation (thumbnails, preview clips, trickplay, waveforms) runs at below-normal priority with a capped thread count. Libraries with many videos no longer peg every core or make playback and browsing stutter while previews are being built.
+- Library scans now take priority over the thumbnail and preview work they queue, so newly added media shows up in the library promptly instead of waiting behind a long backlog of preview generation.
 - Entity grids now lazy-load cover images and request the small thumbnail variant, dramatically cutting the network and image-decoding work needed to render large libraries.
 - Image and comic-page thumbnails are now generated in-process during scans (with an automatic ffmpeg fallback for unusual formats like HEIC/AVIF), instead of launching a separate ffmpeg process for every file — noticeably faster scans on large image and comic libraries.
 - Uploading poster or header artwork now shows a spinner over the image while it is processed, so it is clear the upload is in progress.

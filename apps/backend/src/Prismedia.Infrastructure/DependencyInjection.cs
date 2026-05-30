@@ -57,6 +57,11 @@ public static class DependencyInjection {
         var mediaToolOptions = MediaToolOptions.FromConfiguration(
             configuration["PRISMEDIA_FFMPEG_PATH"] ?? configuration["Prismedia:Hls:FfmpegPath"],
             configuration["PRISMEDIA_FFPROBE_PATH"] ?? configuration["Prismedia:Hls:FfprobePath"]);
+        if (int.TryParse(
+                configuration["PRISMEDIA_ASSETGEN_THREADS"] ?? configuration["Prismedia:AssetGenerationThreads"],
+                out var assetGenThreads) && assetGenThreads >= 1) {
+            mediaToolOptions = mediaToolOptions with { AssetGenerationThreads = assetGenThreads };
+        }
 
         RegisterPersistence(services, connectionString);
         RegisterMediaProcessing(services, mediaToolOptions, dataDir);

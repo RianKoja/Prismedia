@@ -33,6 +33,9 @@ public sealed class ScanGalleryJobHandler(
         var validGalleryPaths = ContainerPathsFor(root.Path, dirGroups.Keys);
         var galleryIdsByPath = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
         var siblingSortOrders = SiblingSortOrders(validGalleryPaths);
+        // Galleries and loose images are auto-identify candidates; resolution collapses nested
+        // galleries to their top gallery so only the top-level container is queued.
+        var autoIdentifyIds = new List<Guid>();
 
         foreach (var dirPath in validGalleryPaths) {
             var galleryTitle = Path.GetFileName(dirPath);
@@ -50,11 +53,7 @@ public sealed class ScanGalleryJobHandler(
                 root.IsNsfw,
                 cancellationToken);
             galleryIdsByPath[dirPath] = galleryId;
-
-            var galleryAutoIdentify = AutoIdentifyScanEnqueue.RequestFor(
-                settings, "gallery", "gallery", galleryId.ToString(), galleryTitle);
-            if (galleryAutoIdentify is not null)
-                await context.EnqueueIfNeededAsync(galleryAutoIdentify, cancellationToken);
+            autoIdentifyIds.Add(galleryId);
         }
 
         var validLooseImagePaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -98,13 +97,10 @@ public sealed class ScanGalleryJobHandler(
                         TargetEntityId: imageId.ToString(), TargetLabel: title), cancellationToken);
                 }
 
-                // Only loose images (no owning gallery) are auto-identified individually; images
-                // inside a gallery are identified as part of that gallery.
+                // Loose images (no owning gallery) are their own auto-identify roots; images inside a
+                // gallery are covered by that gallery's identification.
                 if (galleryId is null) {
-                    var imageAutoIdentify = AutoIdentifyScanEnqueue.RequestFor(
-                        settings, "image", "image", imageId.ToString(), title);
-                    if (imageAutoIdentify is not null)
-                        await context.EnqueueIfNeededAsync(imageAutoIdentify, cancellationToken);
+                    autoIdentifyIds.Add(imageId);
                 }
             }
 
@@ -127,6 +123,8 @@ public sealed class ScanGalleryJobHandler(
         }
 
         await images.RemoveStaleGalleriesInRootAsync(root.Id, validGalleryPaths.ToHashSet(StringComparer.OrdinalIgnoreCase), cancellationToken);
+
+        await AutoIdentifyScanEnqueue.EnqueueRootsAsync(context, settings, downstreamNeeds, autoIdentifyIds, cancellationToken);
     }
 
     private static bool SamePath(string left, string right) =>

@@ -125,7 +125,7 @@ public sealed class MediaProbeServiceTests {
             string fileName,
             IReadOnlyList<string> arguments,
             IReadOnlyDictionary<string, string>? environment,
-            CancellationToken cancellationToken) {
+            CancellationToken cancellationToken, bool lowPriority = false) {
             LastFileName = fileName;
             LastArguments = arguments;
             return Task.FromResult(new ProcessExecutionResult(0, _json, string.Empty));

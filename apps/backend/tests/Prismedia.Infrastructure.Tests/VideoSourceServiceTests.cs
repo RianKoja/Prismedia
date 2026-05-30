@@ -290,7 +290,7 @@ public sealed class VideoSourceServiceTests : IDisposable {
             string fileName,
             IReadOnlyList<string> arguments,
             IReadOnlyDictionary<string, string>? environment,
-            CancellationToken cancellationToken) {
+            CancellationToken cancellationToken, bool lowPriority = false) {
             return Task.FromResult(new ProcessExecutionResult(0, _json, string.Empty));
         }
     }

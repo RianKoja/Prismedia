@@ -115,6 +115,18 @@ const _JOB_DEFINITIONS = [
     description: "Coordinates provider imports and applies metadata to entities.",
   },
   {
+    type: "auto-identify",
+    queueName: "metadata-import",
+    label: "Auto Identify",
+    description: "Identifies newly scanned media through enabled plugins and applies confident matches.",
+  },
+  {
+    type: "bulk-identify",
+    queueName: "metadata-import",
+    label: "Bulk Identify",
+    description: "Searches a provider for multiple entities and queues results for review.",
+  },
+  {
     type: "refresh-collection",
     queueName: "collection-refresh",
     label: "Collection Refresh",

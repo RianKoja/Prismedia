@@ -119,10 +119,6 @@ public sealed class ScanLibraryJobHandler(
                         // Backfill the small grid variant for an existing cover (GeneratePreview, which
                         // also generates it, isn't running because a thumbnail already exists).
                         jobRequests.Add(new EnqueueJobRequest(JobType.GenerateGridThumbnail, TargetEntityKind: "video", TargetEntityId: entityIdStr, TargetLabel: label, Priority: 5));
-
-                    var autoIdentify = AutoIdentifyScanEnqueue.RequestFor(settings, "video", "video", entityIdStr, label);
-                    if (autoIdentify is not null)
-                        jobRequests.Add(autoIdentify);
                 }
 
                 if (jobRequests.Count > 0) {
@@ -135,6 +131,10 @@ public sealed class ScanLibraryJobHandler(
                     $"Enqueued downstream for {batchEnd}/{allEntityIds.Count}", cancellationToken);
             }
         }
+
+        // Auto identify the top-level ancestors only (a series rather than each episode), so one job
+        // identifies the whole tree and episodes are filled by cascading from it.
+        await AutoIdentifyScanEnqueue.EnqueueRootsAsync(context, settings, downstreamNeeds, allEntityIds, cancellationToken);
 
         int removed;
         int orphans;

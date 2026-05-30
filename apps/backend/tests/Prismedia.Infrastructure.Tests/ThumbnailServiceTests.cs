@@ -155,16 +155,23 @@ public sealed class ThumbnailServiceTests : IDisposable {
             jpegQuality: 3,
             CancellationToken.None);
 
-        Assert.Equal(2, count);
-        Assert.All(process.FfmpegArguments, arguments => {
-            var filterIndex = arguments.ToList().IndexOf("-vf");
-            Assert.True(filterIndex >= 0);
-            var filter = arguments[filterIndex + 1];
-            Assert.Contains("zscale=t=linear", filter);
-            Assert.Contains("tonemap=tonemap=hable", filter);
-            Assert.Contains("zscale=t=bt709:m=bt709:p=bt709", filter);
-            Assert.Contains("format=yuvj420p", filter);
-        });
+        Assert.True(count >= 1);
+
+        // Trickplay extraction is a single decode pass: one ffmpeg invocation samples
+        // every keyframe via the fps filter rather than spawning one process per frame.
+        Assert.Single(process.FfmpegArguments);
+        var arguments = process.FfmpegArguments[0];
+        Assert.Contains("-skip_frame", arguments);
+        Assert.Contains("image2", arguments);
+
+        var filterIndex = arguments.ToList().IndexOf("-vf");
+        Assert.True(filterIndex >= 0);
+        var filter = arguments[filterIndex + 1];
+        Assert.StartsWith("fps=1/6,", filter);
+        Assert.Contains("zscale=t=linear", filter);
+        Assert.Contains("tonemap=tonemap=hable", filter);
+        Assert.Contains("zscale=t=bt709:m=bt709:p=bt709", filter);
+        Assert.Contains("format=yuvj420p", filter);
     }
 
     [Fact]
@@ -212,7 +219,7 @@ public sealed class ThumbnailServiceTests : IDisposable {
             string fileName,
             IReadOnlyList<string> arguments,
             IReadOnlyDictionary<string, string>? environment,
-            CancellationToken cancellationToken) {
+            CancellationToken cancellationToken, bool lowPriority = false) {
             var inputIndex = arguments.ToList().IndexOf("-i");
             Assert.True(inputIndex >= 0);
             ConcatLines = await File.ReadAllLinesAsync(arguments[inputIndex + 1], cancellationToken);
@@ -230,7 +237,7 @@ public sealed class ThumbnailServiceTests : IDisposable {
             string fileName,
             IReadOnlyList<string> arguments,
             IReadOnlyDictionary<string, string>? environment,
-            CancellationToken cancellationToken) =>
+            CancellationToken cancellationToken, bool lowPriority = false) =>
             Task.FromResult(new ProcessExecutionResult(1, string.Empty, "stdout text path used"));
 
         public override async Task<ProcessExecutionResult> RunToFileAsync(
@@ -238,7 +245,7 @@ public sealed class ThumbnailServiceTests : IDisposable {
             IReadOnlyList<string> arguments,
             IReadOnlyDictionary<string, string>? environment,
             string outputPath,
-            CancellationToken cancellationToken) {
+            CancellationToken cancellationToken, bool lowPriority = false) {
             OutputPaths.Add(outputPath);
             var bytes = new byte[samples.Length * 2];
             for (var i = 0; i < samples.Length; i++) {
@@ -260,7 +267,7 @@ public sealed class ThumbnailServiceTests : IDisposable {
             string fileName,
             IReadOnlyList<string> arguments,
             IReadOnlyDictionary<string, string>? environment,
-            CancellationToken cancellationToken) {
+            CancellationToken cancellationToken, bool lowPriority = false) {
             if (Path.GetFileName(fileName).Equals("ffprobe", StringComparison.OrdinalIgnoreCase)) {
                 FfprobeFileNames.Add(fileName);
                 return new ProcessExecutionResult(0, probeJson, string.Empty);

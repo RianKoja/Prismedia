@@ -68,7 +68,26 @@ public interface IDownstreamNeedsPersistence {
     Task<bool> HasEntityFingerprintAsync(Guid entityId, FingerprintAlgorithm algorithm, CancellationToken cancellationToken);
     Task<bool> HasEntityFileAsync(Guid entityId, EntityFileRole role, CancellationToken cancellationToken);
     Task<bool> HasSubtitlesExtractedAsync(Guid entityId, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Resolves the distinct top-level ancestors of the given scanned entities. Children (episodes,
+    /// images in a gallery, tracks in an album) collapse to their root so auto identify targets only
+    /// the parent, which cascades down to its descendants. Each root is returned once.
+    /// </summary>
+    /// <param name="entityIds">Scanned entity IDs to resolve.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    Task<IReadOnlyList<AutoIdentifyRootTarget>> ResolveAutoIdentifyRootsAsync(
+        IReadOnlyList<Guid> entityIds, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<AutoIdentifyRootTarget>>([]);
 }
+
+/// <summary>
+/// A distinct top-level entity that auto identify should target.
+/// </summary>
+/// <param name="Id">Root entity identifier.</param>
+/// <param name="KindCode">Root entity kind code.</param>
+/// <param name="Title">Root entity title for job dashboards.</param>
+public sealed record AutoIdentifyRootTarget(Guid Id, string KindCode, string Title);
 
 /// <summary>Writes media processing outputs and source-file metadata for entities.</summary>
 public interface IMediaProcessingStatePersistence {

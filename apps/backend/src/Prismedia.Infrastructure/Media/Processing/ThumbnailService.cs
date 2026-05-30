@@ -5,6 +5,8 @@ namespace Prismedia.Infrastructure.Media.Processing;
 
 /// <summary>
 /// Generates thumbnails, preview clips, and trickplay sprites via ffmpeg.
+/// All generation runs at below-normal process priority with a bounded ffmpeg thread
+/// count so background work never saturates the host or starves playback.
 /// </summary>
 public sealed class ThumbnailService {
     private readonly ProcessExecutor _processExecutor;
@@ -29,17 +31,19 @@ public sealed class ThumbnailService {
         MediaToolOptions? toolOptions = null) {
         Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
         var tools = toolOptions ?? _toolOptions;
+        var threads = Threads(tools);
         var videoFilter = await BuildVideoFilterAsync(inputPath, $"scale={width}:{height}", cancellationToken, tools);
 
         var result = await _processExecutor.RunAsync(tools.FfmpegPath,
             ["-hide_banner", "-loglevel", "error", "-y",
+             "-threads", threads,
              "-ss", seekSeconds.ToString("F2"),
              "-i", inputPath,
              "-frames:v", "1",
              "-vf", videoFilter,
              "-q:v", quality.ToString(),
              outputPath],
-            null, cancellationToken);
+            null, cancellationToken, lowPriority: true);
 
         return result.ExitCode == 0 && File.Exists(outputPath);
     }
@@ -54,10 +58,12 @@ public sealed class ThumbnailService {
         MediaToolOptions? toolOptions = null) {
         Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
         var tools = toolOptions ?? _toolOptions;
+        var threads = Threads(tools);
         var videoFilter = await BuildVideoFilterAsync(inputPath, "scale=960:-2", cancellationToken, tools);
 
         var result = await _processExecutor.RunAsync(tools.FfmpegPath,
             ["-hide_banner", "-loglevel", "error", "-y",
+             "-threads", threads,
              "-ss", startSeconds.ToString("F2"),
              "-t", durationSeconds.ToString(),
              "-i", inputPath,
@@ -68,7 +74,7 @@ public sealed class ThumbnailService {
              "-crf", "24",
              "-movflags", "+faststart",
              outputPath],
-            null, cancellationToken);
+            null, cancellationToken, lowPriority: true);
 
         return result.ExitCode == 0 && File.Exists(outputPath);
     }
@@ -83,6 +89,7 @@ public sealed class ThumbnailService {
         MediaToolOptions? toolOptions = null) {
         Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
         var tools = toolOptions ?? _toolOptions;
+        var threads = Threads(tools);
         var videoFilter = await BuildVideoFilterAsync(
             inputPath,
             $"scale={width}:{height}:force_original_aspect_ratio=decrease:force_divisible_by=2,setsar=1,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2,format=yuvj420p",
@@ -92,13 +99,14 @@ public sealed class ThumbnailService {
         var result = await _processExecutor.RunAsync(tools.FfmpegPath,
             ["-hide_banner", "-loglevel", "error", "-y",
              "-skip_frame", "nokey",
+             "-threads", threads,
              "-ss", seekSeconds.ToString("F2"),
              "-i", inputPath,
              "-frames:v", "1",
              "-vf", videoFilter,
              "-q:v", jpegQuality.ToString(),
              outputPath],
-            null, cancellationToken);
+            null, cancellationToken, lowPriority: true);
 
         return result.ExitCode == 0 && File.Exists(outputPath);
     }
@@ -113,16 +121,18 @@ public sealed class ThumbnailService {
         MediaToolOptions? toolOptions = null) {
         Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
         var tools = toolOptions ?? _toolOptions;
+        var threads = Threads(tools);
 
         var result = await _processExecutor.RunAsync(tools.FfmpegPath,
             ["-hide_banner", "-loglevel", "error", "-y",
+             "-threads", threads,
              "-i", inputPath,
              "-frames:v", "1",
              "-vf", $"scale={targetWidth}:-1",
              "-q:v", quality.ToString(),
              "-update", "1",
              outputPath],
-            null, cancellationToken);
+            null, cancellationToken, lowPriority: true);
 
         return result.ExitCode == 0 && File.Exists(outputPath);
     }
@@ -153,7 +163,7 @@ public sealed class ThumbnailService {
             args.AddRange(["-map", $"0:{streams[i].StreamIndex}", "-c:s", "webvtt", outputPaths[i]]);
         }
 
-        var result = await _processExecutor.RunAsync(tools.FfmpegPath, args, null, cancellationToken);
+        var result = await _processExecutor.RunAsync(tools.FfmpegPath, args, null, cancellationToken, lowPriority: true);
         if (result.ExitCode == 0) {
             return outputPaths.Where(File.Exists).ToList();
         }
@@ -164,7 +174,7 @@ public sealed class ThumbnailService {
             var perStreamResult = await _processExecutor.RunAsync(tools.FfmpegPath,
                 ["-y", "-v", "error", "-i", inputPath,
                  "-map", $"0:{stream.StreamIndex}", "-c:s", "webvtt", outputPath],
-                null, cancellationToken);
+                null, cancellationToken, lowPriority: true);
 
             if (perStreamResult.ExitCode == 0 && File.Exists(outputPath)) {
                 succeeded.Add(outputPath);
@@ -175,10 +185,13 @@ public sealed class ThumbnailService {
     }
 
     /// <summary>
-    /// Extracts trickplay frames using parallel per-frame keyframe extraction.
-    /// Uses -skip_frame nokey with input-seek (-ss before -i) so each invocation
-    /// only decodes a single keyframe — orders of magnitude faster than segment-based
-    /// fps-filter extraction which must decode the entire video.
+    /// Extracts trickplay frames in a single ffmpeg decode pass. The file is opened and
+    /// demuxed exactly once; the <c>fps=1/interval</c> filter samples one keyframe per
+    /// interval (mirroring Jellyfin's trickplay extraction). This replaces the previous
+    /// per-frame approach that spawned one input-seeking ffmpeg process per frame — that
+    /// paid full process-startup and decode-thread-pool overhead hundreds of times per
+    /// video and saturated every core. Frames are written as <c>frame-00001.jpg</c>…
+    /// in lexical order so <see cref="ComposeTiledJpegSheetsAsync"/> can tile them directly.
     /// </summary>
     public async Task<int> ExtractTrickplayFramesBatchAsync(
         string inputPath, string outputDir, double duration,
@@ -187,30 +200,42 @@ public sealed class ThumbnailService {
         MediaToolOptions? toolOptions = null) {
         Directory.CreateDirectory(outputDir);
         var tools = toolOptions ?? _toolOptions;
-        var frameFilter = await BuildVideoFilterAsync(
+        if (intervalSeconds < 1) intervalSeconds = 1;
+
+        var totalFrames = (int)(duration / intervalSeconds);
+        if (totalFrames < 1) return 0;
+
+        var scaleFilter = await BuildVideoFilterAsync(
             inputPath,
             $"scale={width}:{height}:force_original_aspect_ratio=decrease:force_divisible_by=2,setsar=1,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2,format=yuvj420p",
             cancellationToken,
             tools);
 
-        var totalFrames = (int)(duration / intervalSeconds);
-        if (totalFrames < 1) return 0;
+        // fps filter runs first so frames are dropped before the (more expensive)
+        // scale/tonemap stage. -skip_frame nokey keeps the decoder to keyframes only.
+        var frameFilter = $"fps=1/{intervalSeconds},{scaleFilter}";
+        var threads = Threads(tools);
+        var outputPattern = Path.Combine(outputDir, "frame-%05d.jpg");
 
-        using var semaphore = new SemaphoreSlim(8);
-        var tasks = new List<Task<bool>>(totalFrames);
+        var result = await _processExecutor.RunAsync(tools.FfmpegPath,
+            ["-hide_banner", "-loglevel", "error", "-y",
+             "-skip_frame", "nokey",
+             "-threads", threads,
+             "-i", inputPath,
+             "-an", "-sn",
+             "-vf", frameFilter,
+             "-threads", threads,
+             "-c:v", "mjpeg",
+             "-q:v", jpegQuality.ToString(),
+             "-fps_mode", "passthrough",
+             "-f", "image2",
+             outputPattern],
+            null, cancellationToken, lowPriority: true);
 
-        for (var i = 0; i < totalFrames; i++) {
-            var seekSeconds = i * intervalSeconds + intervalSeconds / 2.0;
-            seekSeconds = Math.Min(seekSeconds, Math.Max(0, duration - 0.5));
+        if (result.ExitCode != 0)
+            return 0;
 
-            var outputPath = Path.Combine(outputDir, $"frame-{i + 1:D5}.jpg");
-            tasks.Add(ExtractSingleKeyframeAsync(
-                semaphore, inputPath, outputPath, seekSeconds,
-                frameFilter, jpegQuality, tools, cancellationToken));
-        }
-
-        var results = await Task.WhenAll(tasks);
-        return results.Count(r => r);
+        return Directory.EnumerateFiles(outputDir, "frame-*.jpg").Count();
     }
 
     /// <summary>
@@ -239,11 +264,12 @@ public sealed class ThumbnailService {
         var tools = toolOptions ?? _toolOptions;
         var result = await _processExecutor.RunAsync(tools.FfmpegPath,
             ["-hide_banner", "-loglevel", "error", "-y",
+             "-threads", Threads(tools),
              "-f", "concat", "-safe", "0", "-i", concatList,
              "-vf", $"scale={frameWidth}:{frameHeight},tile={columns}x{rows}",
              "-q:v", jpegQuality.ToString(),
              outputPath],
-            null, cancellationToken);
+            null, cancellationToken, lowPriority: true);
 
         File.Delete(concatList);
         return result.ExitCode == 0 && File.Exists(outputPath);
@@ -271,6 +297,8 @@ public sealed class ThumbnailService {
         Directory.CreateDirectory(outputDir);
         var framesPerSheet = columns * rows;
         var sheetCount = 0;
+        var tools = toolOptions ?? _toolOptions;
+        var threads = Threads(tools);
 
         foreach (var chunk in frames.Chunk(framesPerSheet)) {
             var outputPath = Path.Combine(outputDir, $"{sheetCount}.jpg");
@@ -280,14 +308,14 @@ public sealed class ThumbnailService {
                 chunk.Select(frame => $"file '{Path.GetFullPath(frame).Replace("'", "'\\''")}'"),
                 cancellationToken);
 
-            var tools = toolOptions ?? _toolOptions;
             var result = await _processExecutor.RunAsync(tools.FfmpegPath,
                 ["-hide_banner", "-loglevel", "error", "-y",
+                 "-threads", threads,
                  "-f", "concat", "-safe", "0", "-i", concatList,
                  "-vf", $"scale={frameWidth}:{frameHeight},tile={columns}x{rows}",
                  "-q:v", jpegQuality.ToString(),
                  outputPath],
-                null, cancellationToken);
+                null, cancellationToken, lowPriority: true);
 
             File.Delete(concatList);
             if (result.ExitCode != 0 || !File.Exists(outputPath)) {
@@ -300,33 +328,9 @@ public sealed class ThumbnailService {
         return sheetCount;
     }
 
-    private async Task<bool> ExtractSingleKeyframeAsync(
-        SemaphoreSlim semaphore, string inputPath, string outputPath,
-        double seekSeconds, string videoFilter, int jpegQuality,
-        MediaToolOptions toolOptions,
-        CancellationToken cancellationToken) {
-        await semaphore.WaitAsync(cancellationToken);
-        try {
-            var result = await _processExecutor.RunAsync(toolOptions.FfmpegPath,
-                ["-hide_banner", "-loglevel", "error", "-y",
-                 "-skip_frame", "nokey",
-                 "-ss", seekSeconds.ToString("F2"),
-                 "-i", inputPath,
-                 "-frames:v", "1",
-                 "-vf", videoFilter,
-                 "-q:v", jpegQuality.ToString(),
-                 outputPath],
-                null, cancellationToken);
-
-            return result.ExitCode == 0 && File.Exists(outputPath);
-        } finally {
-            semaphore.Release();
-        }
-    }
-
     /// <summary>
-    /// Generates a thumbnail and preview clip in a single ffmpeg invocation using
-    /// the tee muxer to produce both outputs from one decode pass.
+    /// Generates a thumbnail and preview clip from a video. The two outputs are produced
+    /// by separate ffmpeg invocations because they seek to different points in the file.
     /// </summary>
     public async Task<(bool Thumbnail, bool Preview)> GenerateThumbnailAndPreviewAsync(
         string inputPath,
@@ -337,21 +341,24 @@ public sealed class ThumbnailService {
         Directory.CreateDirectory(Path.GetDirectoryName(thumbnailPath)!);
         Directory.CreateDirectory(Path.GetDirectoryName(previewPath)!);
         var tools = toolOptions ?? _toolOptions;
+        var threads = Threads(tools);
         var thumbFilter = await BuildVideoFilterAsync(inputPath, $"scale={thumbWidth}:{thumbHeight}", cancellationToken, tools);
         var previewFilter = await BuildVideoFilterAsync(inputPath, "scale=960:-2", cancellationToken, tools);
 
         var thumbResult = await _processExecutor.RunAsync(tools.FfmpegPath,
             ["-hide_banner", "-loglevel", "error", "-y",
+             "-threads", threads,
              "-ss", thumbSeekSeconds.ToString("F2"),
              "-i", inputPath,
              "-frames:v", "1",
              "-vf", thumbFilter,
              "-q:v", thumbQuality.ToString(),
              thumbnailPath],
-            null, cancellationToken);
+            null, cancellationToken, lowPriority: true);
 
         var previewResult = await _processExecutor.RunAsync(tools.FfmpegPath,
             ["-hide_banner", "-loglevel", "error", "-y",
+             "-threads", threads,
              "-ss", previewStartSeconds.ToString("F2"),
              "-t", previewDurationSeconds.ToString(),
              "-i", inputPath,
@@ -362,7 +369,7 @@ public sealed class ThumbnailService {
              "-crf", "24",
              "-movflags", "+faststart",
              previewPath],
-            null, cancellationToken);
+            null, cancellationToken, lowPriority: true);
 
         return (
             thumbResult.ExitCode == 0 && File.Exists(thumbnailPath),
@@ -410,6 +417,12 @@ public sealed class ThumbnailService {
     }
 
     /// <summary>
+    /// Per-process ffmpeg thread cap for background generation, as a CLI argument value.
+    /// </summary>
+    private static string Threads(MediaToolOptions toolOptions) =>
+        Math.Max(1, toolOptions.AssetGenerationThreads).ToString();
+
+    /// <summary>
     /// Generates audio waveform peak data via ffmpeg PCM decode.
     /// Returns min/max pairs for the given pixels-per-second resolution.
     /// </summary>
@@ -422,10 +435,11 @@ public sealed class ThumbnailService {
         var pcmPath = Path.Combine(Path.GetTempPath(), $"prismedia-waveform-{Guid.NewGuid():N}.pcm");
         var result = await _processExecutor.RunToFileAsync(tools.FfmpegPath,
             ["-hide_banner", "-loglevel", "error",
+             "-threads", Threads(tools),
              "-i", inputPath,
              "-f", "s16le", "-ac", "1", "-ar", sampleRate.ToString(),
              "pipe:1"],
-            null, pcmPath, cancellationToken);
+            null, pcmPath, cancellationToken, lowPriority: true);
 
         try {
             if (result.ExitCode != 0)

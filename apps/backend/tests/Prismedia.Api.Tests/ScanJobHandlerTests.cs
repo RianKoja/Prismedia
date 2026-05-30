@@ -1118,6 +1118,11 @@ public sealed class ScanJobHandlerTests {
         public Task<IReadOnlyDictionary<Guid, DownstreamNeeds>> CheckDownstreamNeedsBatchAsync(IReadOnlyList<Guid> entityIds, CancellationToken cancellationToken) =>
             Task.FromResult(DownstreamNeedsById);
 
+        // The fake models a flat video library: each scanned entity is its own top-level root.
+        public Task<IReadOnlyList<AutoIdentifyRootTarget>> ResolveAutoIdentifyRootsAsync(IReadOnlyList<Guid> entityIds, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<AutoIdentifyRootTarget>>(
+                entityIds.Distinct().Select(id => new AutoIdentifyRootTarget(id, "video", "video.mkv")).ToList());
+
         public Task<bool> HasEntityTechnicalAsync(Guid entityId, CancellationToken cancellationToken) =>
             Task.FromResult(false);
 
@@ -1290,7 +1295,13 @@ public sealed class ScanJobHandlerTests {
 
         public Task<IReadOnlyList<JobRunSnapshot>> ListAsync(bool hideNsfw, CancellationToken cancellationToken) => Task.FromResult<IReadOnlyList<JobRunSnapshot>>([]);
         public Task<JobRunSnapshot> EnqueueAsync(JobType type, CancellationToken cancellationToken) => throw new NotSupportedException();
-        public Task<JobRunSnapshot> EnqueueAsync(EnqueueJobRequest request, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<JobRunSnapshot> EnqueueAsync(EnqueueJobRequest request, CancellationToken cancellationToken) {
+            Enqueued.Add(request);
+            return Task.FromResult(new JobRunSnapshot(
+                Guid.NewGuid(), request.Type, JobRunStatus.Queued, 0, null,
+                request.PayloadJson ?? "{}", request.TargetEntityKind, request.TargetEntityId, request.TargetLabel,
+                DateTimeOffset.UtcNow, null, null));
+        }
         public Task<bool> HasPendingAsync(JobType type, string? targetEntityId, CancellationToken cancellationToken) => Task.FromResult(false);
         public Task<int> EnqueueBatchAsync(IReadOnlyList<EnqueueJobRequest> requests, CancellationToken cancellationToken) {
             Enqueued.AddRange(requests);

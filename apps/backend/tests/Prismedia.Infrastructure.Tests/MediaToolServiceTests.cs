@@ -85,7 +85,7 @@ public sealed class MediaToolServiceTests {
             string fileName,
             IReadOnlyList<string> arguments,
             IReadOnlyDictionary<string, string>? environment,
-            CancellationToken cancellationToken) {
+            CancellationToken cancellationToken, bool lowPriority = false) {
             FileNames.Add(fileName);
             return Task.FromResult(_results[fileName]);
         }
@@ -96,7 +96,7 @@ public sealed class MediaToolServiceTests {
             string fileName,
             IReadOnlyList<string> arguments,
             IReadOnlyDictionary<string, string>? environment,
-            CancellationToken cancellationToken) {
+            CancellationToken cancellationToken, bool lowPriority = false) {
             throw new FileNotFoundException(fileName);
         }
     }

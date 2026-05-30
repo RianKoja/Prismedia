@@ -68,7 +68,12 @@ public static class LibraryScanJobs {
                     PayloadJson: new ScanRootPayload(rootId).ToJson(),
                     TargetEntityKind: TargetKind,
                     TargetEntityId: targetId,
-                    TargetLabel: label),
+                    TargetLabel: label,
+                    // Scan creates the lightweight entities the UI shows, so it must out-rank
+                    // the downstream asset jobs it spawns (probe 30, fingerprint 20, preview 10).
+                    // Otherwise a new scan stalls behind a large trickplay/preview backlog and
+                    // newly added media takes a long time to appear in the library.
+                    Priority: 50),
                 cancellationToken);
             queued++;
         }

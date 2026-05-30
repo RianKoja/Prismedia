@@ -507,7 +507,7 @@ public sealed class IdentifyQueueServiceTests : IDisposable {
             string fileName,
             IReadOnlyList<string> arguments,
             IReadOnlyDictionary<string, string>? environment,
-            CancellationToken cancellationToken) {
+            CancellationToken cancellationToken, bool lowPriority = false) {
             var wire = new {
                 ok = true,
                 result = new {
@@ -535,7 +535,7 @@ public sealed class IdentifyQueueServiceTests : IDisposable {
             string fileName,
             IReadOnlyList<string> arguments,
             IReadOnlyDictionary<string, string>? environment,
-            CancellationToken cancellationToken) {
+            CancellationToken cancellationToken, bool lowPriority = false) {
             var requestJson = await File.ReadAllTextAsync(arguments[1], cancellationToken);
             var request = JsonSerializer.Deserialize<IdentifyPluginRequest>(requestJson, JsonOptions)!;
             return new ProcessExecutionResult(
@@ -550,7 +550,7 @@ public sealed class IdentifyQueueServiceTests : IDisposable {
             string fileName,
             IReadOnlyList<string> arguments,
             IReadOnlyDictionary<string, string>? environment,
-            CancellationToken cancellationToken) {
+            CancellationToken cancellationToken, bool lowPriority = false) {
             var requestJson = await File.ReadAllTextAsync(arguments[1], cancellationToken);
             var request = JsonSerializer.Deserialize<IdentifyPluginRequest>(requestJson, JsonOptions)!;
             var proposal = new EntityMetadataProposal(
@@ -603,7 +603,7 @@ public sealed class IdentifyQueueServiceTests : IDisposable {
             string fileName,
             IReadOnlyList<string> arguments,
             IReadOnlyDictionary<string, string>? environment,
-            CancellationToken cancellationToken) {
+            CancellationToken cancellationToken, bool lowPriority = false) {
             var wire = new {
                 ok = true,
                 result = new {
@@ -632,7 +632,7 @@ public sealed class IdentifyQueueServiceTests : IDisposable {
             string fileName,
             IReadOnlyList<string> arguments,
             IReadOnlyDictionary<string, string>? environment,
-            CancellationToken cancellationToken) {
+            CancellationToken cancellationToken, bool lowPriority = false) {
             var requestJson = await File.ReadAllTextAsync(arguments[1], cancellationToken);
             var request = JsonSerializer.Deserialize<IdentifyPluginRequest>(requestJson, JsonOptions)!;
             if (request.Action == "lookup-id") {

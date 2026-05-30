@@ -1710,7 +1710,7 @@ public sealed class PluginRuntimeServiceTests : IDisposable {
             string fileName,
             IReadOnlyList<string> arguments,
             IReadOnlyDictionary<string, string>? environment,
-            CancellationToken cancellationToken) {
+            CancellationToken cancellationToken, bool lowPriority = false) {
             FileName = fileName;
             Arguments = arguments.ToArray();
             var requestJson = await File.ReadAllTextAsync(arguments[1], cancellationToken);
@@ -1757,7 +1757,7 @@ public sealed class PluginRuntimeServiceTests : IDisposable {
             string fileName,
             IReadOnlyList<string> arguments,
             IReadOnlyDictionary<string, string>? environment,
-            CancellationToken cancellationToken) =>
+            CancellationToken cancellationToken, bool lowPriority = false) =>
             Task.FromResult(new ProcessExecutionResult(
                 0,
                 """
@@ -1779,7 +1779,7 @@ public sealed class PluginRuntimeServiceTests : IDisposable {
             string fileName,
             IReadOnlyList<string> arguments,
             IReadOnlyDictionary<string, string>? environment,
-            CancellationToken cancellationToken) =>
+            CancellationToken cancellationToken, bool lowPriority = false) =>
             Task.FromResult(new ProcessExecutionResult(
                 0,
                 """
@@ -1815,7 +1815,7 @@ public sealed class PluginRuntimeServiceTests : IDisposable {
             string fileName,
             IReadOnlyList<string> arguments,
             IReadOnlyDictionary<string, string>? environment,
-            CancellationToken cancellationToken) {
+            CancellationToken cancellationToken, bool lowPriority = false) {
             var requestJson = await File.ReadAllTextAsync(arguments[1], cancellationToken);
             var request = JsonSerializer.Deserialize<IdentifyPluginRequest>(
                 requestJson,
@@ -1855,7 +1855,7 @@ public sealed class PluginRuntimeServiceTests : IDisposable {
             string fileName,
             IReadOnlyList<string> arguments,
             IReadOnlyDictionary<string, string>? environment,
-            CancellationToken cancellationToken) {
+            CancellationToken cancellationToken, bool lowPriority = false) {
             var requestJson = await File.ReadAllTextAsync(arguments[1], cancellationToken);
             var request = JsonSerializer.Deserialize<IdentifyPluginRequest>(
                 requestJson,
@@ -1931,7 +1931,7 @@ public sealed class PluginRuntimeServiceTests : IDisposable {
             string fileName,
             IReadOnlyList<string> arguments,
             IReadOnlyDictionary<string, string>? environment,
-            CancellationToken cancellationToken) {
+            CancellationToken cancellationToken, bool lowPriority = false) {
             var requestJson = await File.ReadAllTextAsync(arguments[1], cancellationToken);
             var request = JsonSerializer.Deserialize<IdentifyPluginRequest>(
                 requestJson,
@@ -2016,7 +2016,7 @@ public sealed class PluginRuntimeServiceTests : IDisposable {
             string fileName,
             IReadOnlyList<string> arguments,
             IReadOnlyDictionary<string, string>? environment,
-            CancellationToken cancellationToken) {
+            CancellationToken cancellationToken, bool lowPriority = false) {
             var requestJson = await File.ReadAllTextAsync(arguments[1], cancellationToken);
             var request = JsonSerializer.Deserialize<IdentifyPluginRequest>(
                 requestJson,
@@ -2118,7 +2118,7 @@ public sealed class PluginRuntimeServiceTests : IDisposable {
             string fileName,
             IReadOnlyList<string> arguments,
             IReadOnlyDictionary<string, string>? environment,
-            CancellationToken cancellationToken) {
+            CancellationToken cancellationToken, bool lowPriority = false) {
             var requestJson = await File.ReadAllTextAsync(arguments[1], cancellationToken);
             var request = JsonSerializer.Deserialize<IdentifyPluginRequest>(
                 requestJson,
@@ -2176,7 +2176,7 @@ public sealed class PluginRuntimeServiceTests : IDisposable {
             string fileName,
             IReadOnlyList<string> arguments,
             IReadOnlyDictionary<string, string>? environment,
-            CancellationToken cancellationToken) {
+            CancellationToken cancellationToken, bool lowPriority = false) {
             var requestJson = await File.ReadAllTextAsync(arguments[1], cancellationToken);
             var request = JsonSerializer.Deserialize<IdentifyPluginRequest>(
                 requestJson,
