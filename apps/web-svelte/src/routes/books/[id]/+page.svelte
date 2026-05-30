@@ -586,8 +586,7 @@
     white-space: nowrap;
   }
 
-  .progress-section strong,
-  .chapter-card strong {
+  .progress-section strong {
     display: block;
     color: var(--color-text-primary, #f2eed8);
     font-size: 0.92rem;
@@ -664,37 +663,6 @@
     background: var(--color-surface-3, #151a28);
   }
 
-  .chapter-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
-    gap: 0.75rem;
-  }
-
-  .chapter-card {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    align-items: start;
-    gap: 0.75rem;
-    min-height: 6.5rem;
-    padding: 0.9rem;
-    border: 1px solid var(--color-border-subtle, #1c2235);
-    border-radius: var(--radius-sm, 6px);
-    background: var(--color-surface-1, #0c0f15);
-    color: var(--color-text-muted, #8a93a6);
-    text-decoration: none;
-    transition: border-color 0.15s, box-shadow 0.15s;
-  }
-
-  .chapter-card:hover {
-    border-color: rgba(196, 154, 90, 0.42);
-    box-shadow: 0 0 18px rgb(196 154 90 / 0.12);
-  }
-
-  .chapter-card-body {
-    display: grid;
-    gap: 0.35rem;
-    min-width: 0;
-  }
 
 
 </style>
