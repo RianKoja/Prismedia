@@ -90,7 +90,7 @@ RUN set -eux; \
     *) echo "Unsupported Jellyfin FFmpeg architecture: $TARGETARCH" >&2; exit 1 ;; \
   esac; \
   curl -fsSL \
-    "https://repo.jellyfin.org/files/ffmpeg/ubuntu/latest-7.x/${jellyfin_arch}/jellyfin-ffmpeg7_${JELLYFIN_FFMPEG_VERSION}-noble_${jellyfin_arch}.deb" \
+    "https://repo.jellyfin.org/files/ffmpeg/ubuntu/7.x/${JELLYFIN_FFMPEG_VERSION}/${jellyfin_arch}/jellyfin-ffmpeg7_${JELLYFIN_FFMPEG_VERSION}-noble_${jellyfin_arch}.deb" \
     -o /tmp/jellyfin-ffmpeg.deb; \
   apt-get install -y --no-install-recommends \
     /tmp/jellyfin-ffmpeg.deb \
