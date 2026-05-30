@@ -191,6 +191,11 @@ public sealed record JellyfinImageInfo(
     [property: JsonPropertyName("ImageIndex")] int? ImageIndex,
     [property: JsonPropertyName("ImageTag")] string ImageTag);
 
+/// <summary>Jellyfin-compatible user view grouping option.</summary>
+public sealed record JellyfinSpecialViewOptionDto(
+    [property: JsonPropertyName("Name")] string? Name,
+    [property: JsonPropertyName("Id")] string? Id);
+
 /// <summary>Minimal display preferences DTO accepted by Jellyfin clients.</summary>
 public sealed record JellyfinDisplayPreferencesDto {
     [JsonPropertyName("Id")]

@@ -164,6 +164,30 @@ public static class JellyfinCompatibilityEndpoints {
             .WithName("GetJellyfinUserViewsLegacy")
             .Produces<JellyfinQueryResult<JellyfinBaseItemDto>>();
 
+        routes.MapGet("/UserViews/GroupingOptions", async (
+            Guid? userId,
+            HttpContext httpContext,
+            PrismediaSecurityService security,
+            JellyfinCatalogService catalog,
+            CancellationToken cancellationToken) =>
+            await GetGroupingOptionsAsync(userId, httpContext, security, catalog, cancellationToken))
+            .WithTags("Jellyfin Catalog")
+            .WithName("GetJellyfinUserViewGroupingOptions")
+            .Produces<IReadOnlyList<JellyfinSpecialViewOptionDto>>()
+            .Produces<ApiProblem>(StatusCodes.Status404NotFound);
+
+        routes.MapGet("/Users/{userId:guid}/GroupingOptions", async (
+            Guid userId,
+            HttpContext httpContext,
+            PrismediaSecurityService security,
+            JellyfinCatalogService catalog,
+            CancellationToken cancellationToken) =>
+            await GetGroupingOptionsAsync(userId, httpContext, security, catalog, cancellationToken))
+            .WithTags("Jellyfin Catalog")
+            .WithName("GetJellyfinUserViewGroupingOptionsLegacy")
+            .Produces<IReadOnlyList<JellyfinSpecialViewOptionDto>>()
+            .Produces<ApiProblem>(StatusCodes.Status404NotFound);
+
         routes.MapGet("/Items/Root", GetRootAsync)
             .WithTags("Jellyfin Catalog")
             .WithName("GetJellyfinItemsRoot")
@@ -296,6 +320,25 @@ public static class JellyfinCompatibilityEndpoints {
         CancellationToken cancellationToken) {
         var state = await security.EnsureSecurityAsync(cancellationToken);
         return Results.Ok(catalog.GetRoot(state.ServerId.ToString("N")));
+    }
+
+    private static async Task<IResult> GetGroupingOptionsAsync(
+        Guid? userId,
+        HttpContext httpContext,
+        PrismediaSecurityService security,
+        JellyfinCatalogService catalog,
+        CancellationToken cancellationToken) {
+        var user = await ResolveUserAsync(httpContext, security, userId, cancellationToken);
+        if (user is null) {
+            return Results.NotFound(new ApiProblem("jellyfin_user_not_found", "No Jellyfin user was found."));
+        }
+
+        var options = catalog.GetUserViews(user.ServerId)
+            .Items
+            .Select(item => new JellyfinSpecialViewOptionDto(item.Name, item.Id.ToString("N")))
+            .OrderBy(item => item.Name, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        return Results.Ok(options);
     }
 
     private static async Task<IResult> GetItemsAsync(

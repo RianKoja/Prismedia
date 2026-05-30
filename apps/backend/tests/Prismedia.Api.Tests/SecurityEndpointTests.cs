@@ -128,6 +128,16 @@ public sealed partial class SecurityEndpointTests : IDisposable {
         Assert.NotNull(publicInfo);
         Assert.True(passwordFieldResponse.IsSuccessStatusCode);
         Assert.True(legacyResponse.IsSuccessStatusCode);
+
+        var auth = await passwordFieldResponse.Content.ReadFromJsonAsync<JellyfinAuthenticationResult>();
+        Assert.NotNull(auth);
+        var groupingOptions = await JellyfinGetFromJsonAsync<IReadOnlyList<JellyfinSpecialViewOptionDto>>(
+            client,
+            $"/Users/{auth.User.Id:D}/GroupingOptions",
+            auth.AccessToken);
+
+        Assert.NotNull(groupingOptions);
+        Assert.Equal(["Collections", "Series", "Videos"], groupingOptions.Select(item => item.Name ?? "").ToArray());
     }
 
     [Fact]

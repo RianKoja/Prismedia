@@ -82,6 +82,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - Updated web app manifest and mobile browser metadata for home-screen installation and browser UI theme colors.
 
 ### Fixed
+- Fixed Infuse Jellyfin setup so its user-view grouping validation request succeeds after sign-in.
 - Fixed Jellyfin-compatible server setup for clients that probe with POST ping, send the login password as `Password`, or use the legacy user-id authentication route.
 - Fixed local debug startup so Jellyfin-compatible clients using IPv4, IPv6 localhost, or the LAN can reach Prismedia on port 8008.
 - Fixed Auto Identify so confident plugin search candidates, such as exact TMDB title matches, are resolved and applied instead of being left in manual review.
