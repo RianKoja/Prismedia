@@ -594,8 +594,6 @@
     border-top: 0;
     border-radius: 0 0 var(--radius-md, 10px) var(--radius-md, 10px);
     background: var(--toolbar-detail-glass);
-    backdrop-filter: blur(var(--glass-blur-sm));
-    -webkit-backdrop-filter: blur(var(--glass-blur-sm));
   }
 
   .search-row {
