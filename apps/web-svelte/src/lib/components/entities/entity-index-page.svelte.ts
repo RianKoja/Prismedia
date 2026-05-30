@@ -1,5 +1,5 @@
 import { fetchEntities, type EntityCard } from "$lib/api/entities";
-import { entityCardToThumbnailCard } from "$lib/entities/entity-grid";
+import { entityCardToThumbnailCard, type EntityGridServerQuery } from "$lib/entities/entity-grid";
 import { resolveEntityHref } from "$lib/entities/entity-routes";
 import type { EntityThumbnailCard } from "$lib/entities/entity-thumbnail";
 
@@ -8,6 +8,15 @@ const DEFAULT_ENTITY_PAGE_SIZE = 250;
 function requireTotalCount(value: number | string): number {
   if (typeof value === "number" && Number.isFinite(value)) return value;
   throw new Error("Entity list totalCount must be a number.");
+}
+
+/** Shallow structural equality for the server query, treating it as a flat bag. */
+function sameServerQuery(a: EntityGridServerQuery, b: EntityGridServerQuery): boolean {
+  const keys = new Set([...Object.keys(a), ...Object.keys(b)]) as Set<keyof EntityGridServerQuery>;
+  for (const key of keys) {
+    if (a[key] !== b[key]) return false;
+  }
+  return true;
 }
 
 export type EntityIndexLoadState = "loading" | "ready" | "error";
@@ -28,6 +37,12 @@ export class EntityIndexPageState {
   pageSize = $state(DEFAULT_ENTITY_PAGE_SIZE);
   query = $state("");
   totalCount = $state(0);
+  /**
+   * Server-resolvable sort and filter parameters mirrored from the grid
+   * controls. Changing them re-fetches from the first page so the sort and
+   * filters apply across the entire library rather than the loaded page.
+   */
+  serverQuery = $state.raw<EntityGridServerQuery>({});
 
   cards: EntityThumbnailCard[] = $derived.by(() =>
     this.items.map((item) => entityCardToThumbnailCard(item, this.hrefFor(item))),
@@ -59,6 +74,7 @@ export class EntityIndexPageState {
         query: this.query || undefined,
         hideNsfw: this.#options.getHideNsfw(),
         limit: this.pageSize,
+        ...this.serverQuery,
       }, { signal });
       if (signal.aborted) return;
       this.items = response.items;
@@ -84,6 +100,7 @@ export class EntityIndexPageState {
         cursor: this.nextCursor,
         hideNsfw: this.#options.getHideNsfw(),
         limit: this.pageSize,
+        ...this.serverQuery,
       });
       this.items = [...this.items, ...response.items];
       this.nextCursor = response.nextCursor;
@@ -104,6 +121,17 @@ export class EntityIndexPageState {
       this.#searchTimer = null;
       void this.loadInitial();
     }, 300);
+  }
+
+  /**
+   * Applies a new server-resolvable sort/filter query. Re-fetches from the first
+   * page only when the effective parameters actually change so unrelated grid
+   * interactions (scale, view mode) do not trigger redundant network loads.
+   */
+  setServerQuery(next: EntityGridServerQuery) {
+    if (sameServerQuery(this.serverQuery, next)) return;
+    this.serverQuery = next;
+    void this.loadInitial();
   }
 
   #defaultHref(item: EntityCard): string | undefined {

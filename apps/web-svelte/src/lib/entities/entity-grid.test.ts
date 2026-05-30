@@ -5,8 +5,11 @@ import {
   applyEntityGridState,
   buildCapabilityFilterOptions,
   buildEntityKindTabs,
+  buildServerQueryFromFilters,
   entityCardToThumbnailCard,
   entityGridRequestFromState,
+  isServerResolvedFilterId,
+  type EntityGridState,
 } from "./entity-grid";
 
 function flags(isNsfw = false): EntityCapability {
@@ -126,6 +129,7 @@ describe("entity grid helpers", () => {
       query: "safe",
       sortBy: "title",
       sortDir: "asc",
+      randomSeed: 0,
     }, options);
 
     expect(visible.map((item) => item.entity.id)).toEqual(["1"]);
@@ -143,6 +147,7 @@ describe("entity grid helpers", () => {
       query: "",
       sortBy: "position",
       sortDir: "asc",
+      randomSeed: 0,
     });
 
     expect(visible.map((item) => item.entity.id)).toEqual(["episode-2", "episode-10", "special"]);
@@ -159,6 +164,7 @@ describe("entity grid helpers", () => {
       query: "",
       sortBy: "position",
       sortDir: "asc",
+      randomSeed: 0,
     });
 
     expect(visible.map((item) => item.entity.id)).toEqual(["first-added", "second-added"]);
@@ -173,6 +179,7 @@ describe("entity grid helpers", () => {
       query: "bunny",
       sortBy: "rating",
       sortDir: "desc",
+      randomSeed: 0,
     }, options);
 
     expect(request).toMatchObject({
@@ -285,3 +292,94 @@ function thumbnailEntity(
     isOrganized: false,
   };
 }
+
+function gridState(overrides: Partial<EntityGridState> = {}): EntityGridState {
+  return {
+    activeKind: ENTITY_GRID_ALL_KINDS,
+    filterIds: [],
+    includeNsfw: true,
+    query: "",
+    sortBy: "title",
+    sortDir: "asc",
+    randomSeed: 0,
+    ...overrides,
+  };
+}
+
+function flaggedThumb(overrides: Partial<EntityThumbnail> & { id: string; title: string }): EntityThumbnail {
+  return { ...thumbnailEntity(overrides.id, overrides.kind ?? "video", overrides.title), ...overrides };
+}
+
+describe("server-resolved filters and sorting", () => {
+  it("identifies which filter ids the server resolves across the whole library", () => {
+    expect(isServerResolvedFilterId("flags:favorite")).toBe(true);
+    expect(isServerResolvedFilterId("flags:organized:true")).toBe(true);
+    expect(isServerResolvedFilterId("rating:min:3")).toBe(true);
+    expect(isServerResolvedFilterId("rating:max:4")).toBe(true);
+    expect(isServerResolvedFilterId("rating:unrated")).toBe(true);
+    expect(isServerResolvedFilterId("status:watched")).toBe(true);
+    // Client-only filters stay client-resolved.
+    expect(isServerResolvedFilterId("technical:codec:h264")).toBe(false);
+    expect(isServerResolvedFilterId("dates:from:2026-01-01")).toBe(false);
+  });
+
+  it("folds active filter ids into a server query", () => {
+    expect(
+      buildServerQueryFromFilters([
+        "flags:favorite",
+        "flags:organized:true",
+        "rating:min:3",
+        "rating:max:5",
+        "status:watched",
+      ]),
+    ).toEqual({ favorite: true, organized: true, ratingMin: 3, ratingMax: 5, status: "watched" });
+  });
+
+  it("collapses multiple rating bounds to the tightest window", () => {
+    const server = buildServerQueryFromFilters(["rating:min:2", "rating:min:4", "rating:max:5", "rating:max:3"]);
+    expect(server.ratingMin).toBe(4);
+    expect(server.ratingMax).toBe(3);
+  });
+
+  it("maps the unrated and not-organized filters to server flags", () => {
+    expect(buildServerQueryFromFilters(["rating:unrated"])).toEqual({ unrated: true });
+    expect(buildServerQueryFromFilters(["flags:organized:false"])).toEqual({ organized: false });
+  });
+
+  it("emits a stable seed for the random sort", () => {
+    const request = entityGridRequestFromState(gridState({ sortBy: "random", randomSeed: 4242 }), []);
+    expect(request.server.sort).toBe("random");
+    expect(request.server.seed).toBe(4242);
+  });
+
+  it("forwards date-added and rating sorts with direction, and leaves kind/position to the client", () => {
+    expect(entityGridRequestFromState(gridState({ sortBy: "added", sortDir: "desc" }), []).server)
+      .toMatchObject({ sort: "added", sortDir: "desc" });
+    expect(entityGridRequestFromState(gridState({ sortBy: "rating", sortDir: "asc" }), []).server)
+      .toMatchObject({ sort: "rating", sortDir: "asc" });
+    expect(entityGridRequestFromState(gridState({ sortBy: "kind" }), []).server.sort).toBeUndefined();
+    expect(entityGridRequestFromState(gridState({ sortBy: "position" }), []).server.sort).toBeUndefined();
+  });
+
+  it("does not re-filter the loaded page on server-resolved filters", () => {
+    const cards = [
+      entityCardToThumbnailCard(flaggedThumb({ id: "fav", title: "Favorite", isFavorite: true })),
+      entityCardToThumbnailCard(flaggedThumb({ id: "plain", title: "Plain" })),
+    ];
+    // The server already narrowed the result set, so the client keeps every card.
+    const visible = applyEntityGridState(cards, gridState({ filterIds: ["flags:favorite"] }));
+    expect(visible.map((card) => card.entity.id).sort()).toEqual(["fav", "plain"]);
+  });
+
+  it("preserves server order for random and date-added sorts", () => {
+    const cards = [
+      entityCardToThumbnailCard(thumbnailEntity("a", "video", "Zeta")),
+      entityCardToThumbnailCard(thumbnailEntity("b", "video", "Alpha")),
+    ];
+    // Title sort would reorder to Alpha, Zeta; random/added keep arrival order.
+    expect(applyEntityGridState(cards, gridState({ sortBy: "random", randomSeed: 1 })).map((c) => c.entity.id))
+      .toEqual(["a", "b"]);
+    expect(applyEntityGridState(cards, gridState({ sortBy: "added" })).map((c) => c.entity.id))
+      .toEqual(["a", "b"]);
+  });
+});

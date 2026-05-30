@@ -75,14 +75,29 @@ public sealed class StashScraperInstaller {
         }
 
         Directory.CreateDirectory(_scrapersRoot);
-        await InstallEntryAsync(entry, Path.Combine(_scrapersRoot, SafeSegment(entry.Id)), cancellationToken);
+        var destination = Path.Combine(_scrapersRoot, SafeSegment(entry.Id));
+        await InstallEntryAsync(entry, destination, cancellationToken);
 
         // Dependencies (py_common, shared API helpers) extract directly under the scrapers root so
         // they resolve on PYTHONPATH (which is set to the parent of each scraper directory).
         var installedDeps = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         await InstallDependenciesAsync(entry, entries, installedDeps, cancellationToken);
+
+        // Many python scrapers import the shared py_common module without declaring it in the index
+        // requires (Stash bundles it globally). Defensively install it whenever the scraper ships
+        // python scripts so performer/scene scripts resolve their imports.
+        if (ScraperShipsPython(destination) &&
+            !installedDeps.Contains("py_common") &&
+            entries.TryGetValue("py_common", out var pyCommon)) {
+            await InstallEntryAsync(pyCommon, Path.Combine(_scrapersRoot, SafeSegment(pyCommon.Id)), cancellationToken);
+        }
+
         return true;
     }
+
+    private static bool ScraperShipsPython(string directory) =>
+        Directory.Exists(directory) &&
+        Directory.EnumerateFiles(directory, "*.py", SearchOption.AllDirectories).Any();
 
     private async Task InstallDependenciesAsync(
         StashScraperIndexEntry entry,

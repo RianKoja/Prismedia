@@ -97,6 +97,14 @@
     ?? entity.coverUrl
     ?? proposalImageUrl(proposal, ["poster", "thumbnail", "cover"]),
   );
+  // Direct videos carry a wide thumbnail/still rather than a portrait poster — show the context
+  // chip in the matching orientation.
+  const contextImageWide = $derived.by(() => {
+    const images = proposal.images ?? [];
+    const hasPoster = images.some((image) => image.kind === "poster" || image.kind === "cover");
+    const hasWide = images.some((image) => image.kind === "thumbnail" || image.kind === "still" || image.kind === "backdrop");
+    return !hasPoster && hasWide;
+  });
   const applyProgressPercent = $derived.by(() => {
     const progress = store.applyProgress;
     if (!progress) return 0;
@@ -182,9 +190,9 @@
   <!-- Context bar -->
   <div class="grid grid-cols-[auto_1fr_auto_auto_auto] items-center gap-4 rounded-sm border border-border-subtle bg-surface-1 p-3.5 shadow-well">
     {#if contextPosterUrl}
-      <img src={contextPosterUrl} alt="" class="h-16 w-11 rounded-xs object-cover" decoding="async" />
+      <img src={contextPosterUrl} alt="" class={cn("rounded-xs object-cover", contextImageWide ? "h-12 w-[5.5rem]" : "h-16 w-11")} decoding="async" />
     {:else}
-      <div class="grid h-16 w-11 place-items-center rounded-xs bg-surface-3">
+      <div class={cn("grid place-items-center rounded-xs bg-surface-3", contextImageWide ? "h-12 w-[5.5rem]" : "h-16 w-11")}>
         <Layers class="h-5 w-5 text-text-disabled" />
       </div>
     {/if}
@@ -354,7 +362,11 @@
                 ? "border-border-accent-strong shadow-[0_0_16px_rgba(242,194,106,0.2)]"
                 : "border-border-default hover:border-border-accent",
             )}
-            style="aspect-ratio: {group.kind === 'poster' || group.kind === 'cover' ? '2/3' : group.kind === 'backdrop' ? '16/9' : '2/1'};"
+            style="aspect-ratio: {group.kind === 'poster' || group.kind === 'cover'
+              ? '2/3'
+              : group.kind === 'backdrop' || group.kind === 'thumbnail' || group.kind === 'still'
+                ? '16/9'
+                : '2/1'};"
             onclick={() => setImageSelected(group.kind, selectedImages[group.kind] === image.url ? null : image.url)}
           >
             <img
@@ -599,7 +611,9 @@
     grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
   }
 
-  .identify-artwork-grid[data-artwork-kind="backdrop"] {
+  .identify-artwork-grid[data-artwork-kind="backdrop"],
+  .identify-artwork-grid[data-artwork-kind="thumbnail"],
+  .identify-artwork-grid[data-artwork-kind="still"] {
     grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
   }
 
@@ -612,7 +626,9 @@
       grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
     }
 
-    .identify-artwork-grid[data-artwork-kind="backdrop"] {
+    .identify-artwork-grid[data-artwork-kind="backdrop"],
+    .identify-artwork-grid[data-artwork-kind="thumbnail"],
+    .identify-artwork-grid[data-artwork-kind="still"] {
       grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
     }
   }

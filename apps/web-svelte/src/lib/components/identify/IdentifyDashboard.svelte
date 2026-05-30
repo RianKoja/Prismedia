@@ -117,54 +117,73 @@
   <!-- Queue -->
   {#if store.queue.length > 0}
     <section class="surface-panel overflow-hidden">
-      <header class="flex items-center gap-2.5 border-b border-border-subtle bg-surface-2 px-3.5 py-2.5">
-        <ScanSearch class="h-3.5 w-3.5 text-text-accent" />
-        <span class="text-kicker text-text-accent">Review queue</span>
-        <span class="font-mono text-[0.7rem] text-text-muted">{store.queue.length} items</span>
-        {#if store.bulkAccepting}
-          <span class="inline-flex items-center gap-1.5 font-mono text-[0.7rem] text-text-accent">
-            <Loader2 class="h-3 w-3 animate-spin" />
-            Accepting {store.bulkAcceptDone}/{store.bulkAcceptTotal}
-          </span>
-        {/if}
-        <div class="flex-1"></div>
-        {#if acceptableSelectedCount > 0}
-          <button
-            type="button"
-            class="inline-flex h-7 items-center gap-1.5 rounded-xs border border-border-accent-strong px-2.5 text-[0.72rem] font-medium text-text-primary transition-all disabled:cursor-not-allowed disabled:opacity-40"
-            style="background: linear-gradient(135deg, rgba(242,194,106,0.24), rgba(242,194,106,0.1)); box-shadow: 0 0 18px rgba(242,194,106,0.16);"
-            disabled={store.bulkAccepting}
-            onclick={acceptSelected}
-          >
-            {#if store.bulkAccepting}
+      <header class="flex flex-col gap-2.5 border-b border-border-subtle bg-surface-2 px-3.5 py-2.5 sm:flex-row sm:items-center">
+        <div class="flex items-center gap-2.5">
+          <ScanSearch class="h-3.5 w-3.5 text-text-accent" />
+          <span class="text-kicker text-text-accent">Review queue</span>
+          <span class="font-mono text-[0.7rem] text-text-muted">{store.queue.length} items</span>
+          {#if store.bulkAccepting}
+            <span class="inline-flex items-center gap-1.5 font-mono text-[0.7rem] text-text-accent">
               <Loader2 class="h-3 w-3 animate-spin" />
-            {:else}
-              <Check class="h-3 w-3" />
-            {/if}
-            Accept {acceptableSelectedCount}
-          </button>
-        {/if}
-        {#if selectedQueueIds.size > 0}
+              Accepting {store.bulkAcceptDone}/{store.bulkAcceptTotal}
+            </span>
+          {/if}
+        </div>
+        <div class="hidden flex-1 sm:block"></div>
+        <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
+          {#if acceptableSelectedCount > 0}
+            <button
+              type="button"
+              class="inline-flex h-8 w-full items-center justify-center gap-1.5 rounded-xs border border-border-accent-strong px-2.5 text-[0.72rem] font-medium text-text-primary transition-all disabled:cursor-not-allowed disabled:opacity-40 sm:h-7 sm:w-auto"
+              style="background: linear-gradient(135deg, rgba(242,194,106,0.24), rgba(242,194,106,0.1)); box-shadow: 0 0 18px rgba(242,194,106,0.16);"
+              disabled={store.bulkAccepting}
+              onclick={acceptSelected}
+            >
+              {#if store.bulkAccepting}
+                <Loader2 class="h-3 w-3 animate-spin" />
+              {:else}
+                <Check class="h-3 w-3" />
+              {/if}
+              Accept {acceptableSelectedCount}
+            </button>
+          {/if}
+          {#if selectedQueueIds.size > 0}
+            <button
+              type="button"
+              class="inline-flex h-8 w-full items-center justify-center gap-1.5 rounded-xs border border-border-default bg-surface-2 px-2.5 text-[0.72rem] font-medium text-text-muted transition-colors hover:border-error/50 hover:text-error-text disabled:cursor-not-allowed disabled:opacity-40 sm:h-7 sm:w-auto"
+              disabled={store.bulkAccepting}
+              onclick={cancelSelected}
+            >
+              <X class="h-3 w-3" />
+              Cancel {selectedQueueIds.size}
+            </button>
+          {/if}
           <button
             type="button"
-            class="inline-flex h-7 items-center gap-1.5 rounded-xs border border-border-default bg-surface-2 px-2.5 text-[0.72rem] font-medium text-text-muted transition-colors hover:border-error/50 hover:text-error-text disabled:cursor-not-allowed disabled:opacity-40"
-            disabled={store.bulkAccepting}
-            onclick={cancelSelected}
+            class="inline-flex h-8 w-full items-center justify-center gap-1.5 rounded-xs border border-border-accent-strong bg-accent-950/40 px-2.5 text-[0.72rem] font-medium text-text-accent transition-colors hover:bg-accent-950/60 disabled:cursor-not-allowed disabled:opacity-40 sm:h-7 sm:w-auto"
+            disabled={!hasReviewable}
+            onclick={() => store.reviewQueueItem(store.queue[0])}
           >
-            <X class="h-3 w-3" />
-            Cancel {selectedQueueIds.size}
+            <Sparkles class="h-3 w-3" />
+            Review all
           </button>
-        {/if}
-        <button
-          type="button"
-          class="inline-flex h-7 items-center gap-1.5 rounded-xs border border-border-accent-strong bg-accent-950/40 px-2.5 text-[0.72rem] font-medium text-text-accent transition-colors hover:bg-accent-950/60 disabled:cursor-not-allowed disabled:opacity-40"
-          disabled={!hasReviewable}
-          onclick={() => store.reviewQueueItem(store.queue[0])}
-        >
-          <Sparkles class="h-3 w-3" />
-          Review all
-        </button>
+        </div>
       </header>
+
+      <!-- Mobile select-all -->
+      <label class="flex items-center gap-2.5 border-b border-border-default bg-surface-2 px-3.5 py-2 md:hidden">
+        <input
+          type="checkbox"
+          class="h-3.5 w-3.5 accent-accent-500"
+          checked={allSelected}
+          onchange={toggleSelectAll}
+          aria-label="Select all queued items"
+        />
+        <span class="text-kicker">{allSelected ? "Deselect all" : "Select all"}</span>
+        {#if selectedQueueIds.size > 0}
+          <span class="font-mono text-[0.66rem] text-text-muted">{selectedQueueIds.size} selected</span>
+        {/if}
+      </label>
 
       <!-- Queue header -->
       <div class="hidden items-center gap-3 border-b border-border-default bg-surface-2 px-3.5 py-2 md:grid md:grid-cols-[32px_70px_minmax(0,2fr)_minmax(0,1fr)_90px_80px_100px]">

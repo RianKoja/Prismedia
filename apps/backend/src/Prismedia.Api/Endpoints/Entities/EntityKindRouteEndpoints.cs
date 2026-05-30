@@ -22,10 +22,36 @@ internal static class EntityKindRouteEndpoints {
             string? cursor,
             bool? hideNsfw,
             int? limit,
+            string? sort,
+            string? sortDir,
+            int? seed,
+            bool? favorite,
+            bool? organized,
+            int? ratingMin,
+            int? ratingMax,
+            bool? unrated,
+            string? status,
             HttpContext httpContext,
             IEntityReadService entities,
             CancellationToken cancellationToken) =>
-            Results.Ok(await entities.ListAsync(kind, query, cursor, NsfwVisibility.ShouldHide(hideNsfw, httpContext), limit, cancellationToken)))
+            Results.Ok(await entities.ListAsync(
+                kind,
+                query,
+                cursor,
+                NsfwVisibility.ShouldHide(hideNsfw, httpContext),
+                limit,
+                cancellationToken,
+                referencedBy: null,
+                relationshipCode: null,
+                sort: sort,
+                sortDir: sortDir,
+                seed: seed,
+                favorite: favorite,
+                organized: organized,
+                ratingMin: ratingMin,
+                ratingMax: ratingMax,
+                unrated: unrated,
+                status: status)))
             .WithName(listName)
             .WithSummary($"List {tag}.")
             .Produces(StatusCodes.Status200OK, listResponseType);

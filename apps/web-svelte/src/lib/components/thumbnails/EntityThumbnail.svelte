@@ -92,6 +92,16 @@
   let scrubPointerType = "mouse";
   let suppressNextFocusPreview = false;
   let suppressNextActivation = false;
+  // Touch scrubbing: a press-and-hold arms it, then a non-passive touchmove preventDefault stops
+  // the row from scrolling so the same element supports both swipe-to-scroll and hold-to-scrub.
+  let mediaEl: HTMLElement | undefined = $state();
+  let touchScrubArmed = false;
+  let touchScrubbing = false;
+  let touchScrubTimer: number | null = null;
+  let touchStartX = 0;
+  let touchStartY = 0;
+  const TOUCH_SCRUB_HOLD_MS = 350;
+  const TOUCH_SCRUB_SLOP = 10;
 
   let spriteFrames = $state<TrickplayFrame[] | null>(null);
   let spriteError = $state(false);
@@ -162,6 +172,77 @@
     if (!hoverIntentTimer) return;
     window.clearTimeout(hoverIntentTimer);
     hoverIntentTimer = null;
+  }
+
+  function clearTouchScrubTimer() {
+    if (!touchScrubTimer) return;
+    window.clearTimeout(touchScrubTimer);
+    touchScrubTimer = null;
+  }
+
+  function ratioFromClientX(clientX: number): number {
+    if (!mediaEl) return latestPointerRatio;
+    const bounds = mediaEl.getBoundingClientRect();
+    if (bounds.width <= 0) return latestPointerRatio;
+    return Math.min(1, Math.max(0, (clientX - bounds.left) / bounds.width));
+  }
+
+  function handleTouchStart(event: TouchEvent) {
+    if (!hoverable || !canUseHoverPreviews() || event.touches.length !== 1) {
+      return;
+    }
+
+    const touch = event.touches[0];
+    touchStartX = touch.clientX;
+    touchStartY = touch.clientY;
+    touchScrubArmed = false;
+    touchScrubbing = false;
+    clearTouchScrubTimer();
+    // Arm scrubbing only after a deliberate, still press-and-hold. Any earlier movement cancels it
+    // (handled in touchmove), leaving the browser free to scroll the row.
+    touchScrubTimer = window.setTimeout(() => {
+      touchScrubTimer = null;
+      touchScrubArmed = true;
+      latestPointerRatio = ratioFromClientX(touchStartX);
+      pointerRatio = latestPointerRatio;
+      void ensureSpriteLoaded();
+    }, TOUCH_SCRUB_HOLD_MS);
+  }
+
+  function handleTouchMove(event: TouchEvent) {
+    const touch = event.touches[0];
+    if (!touch) {
+      return;
+    }
+
+    if (touchScrubArmed) {
+      // Cancel the scroll so the hold-then-drag scrubs instead. A non-passive touchmove
+      // preventDefault stops scrolling even when touch-action permits panning.
+      event.preventDefault();
+      touchScrubbing = true;
+      suppressNextActivation = true;
+      pointerRatio = ratioFromClientX(touch.clientX);
+      void ensureSpriteLoaded();
+      return;
+    }
+
+    if (Math.abs(touch.clientX - touchStartX) > TOUCH_SCRUB_SLOP ||
+      Math.abs(touch.clientY - touchStartY) > TOUCH_SCRUB_SLOP) {
+      // The user is swiping to scroll — abandon the hold and any preview.
+      clearTouchScrubTimer();
+      clearHoverIntentTimer();
+      pointerRatio = null;
+    }
+  }
+
+  function handleTouchEnd() {
+    clearTouchScrubTimer();
+    if (touchScrubbing) {
+      pointerRatio = null;
+    }
+
+    touchScrubArmed = false;
+    touchScrubbing = false;
   }
 
   function capturePointer(element: HTMLElement, pointerId: number) {
@@ -235,18 +316,9 @@
       clearHover();
       return;
     }
-    if (!pointerScrubbing && scrubPointerType === "touch") {
-      const deltaX = event.clientX - scrubStartClientX;
-      const deltaY = event.clientY - scrubStartClientY;
-      if (Math.abs(deltaX) < 12 || Math.abs(deltaX) <= Math.abs(deltaY) * 1.25) return;
-      pointerScrubbing = true;
-      suppressNextActivation = true;
-      capturePointer(event.currentTarget as HTMLElement, event.pointerId);
-      updatePointerRatio(event);
-      pointerRatio = latestPointerRatio;
-      void ensureSpriteLoaded();
-      event.preventDefault();
-      event.stopPropagation();
+    // Touch drags scroll the row (governed by touch-action); scrubbing is a pointer-hover
+    // interaction, so a touch move never hijacks the gesture into the scrubber.
+    if (scrubPointerType === "touch") {
       return;
     }
 
@@ -274,6 +346,7 @@
     suppressNextActivation = false;
     clearHoverIntentTimer();
     if (event.pointerType === "touch") {
+      // Touch never scrubs: let the gesture scroll the row or resolve to a tap.
       return;
     }
     if (effectiveHref) {
@@ -379,8 +452,26 @@
     return String(Math.round(value));
   }
 
+  // touchmove must be non-passive so preventDefault can cancel scrolling while scrubbing; Svelte's
+  // inline handlers can register as passive, so attach the listeners explicitly.
+  $effect(() => {
+    const element = mediaEl;
+    if (!element) return;
+    element.addEventListener("touchstart", handleTouchStart, { passive: true });
+    element.addEventListener("touchmove", handleTouchMove, { passive: false });
+    element.addEventListener("touchend", handleTouchEnd, { passive: true });
+    element.addEventListener("touchcancel", handleTouchEnd, { passive: true });
+    return () => {
+      element.removeEventListener("touchstart", handleTouchStart);
+      element.removeEventListener("touchmove", handleTouchMove);
+      element.removeEventListener("touchend", handleTouchEnd);
+      element.removeEventListener("touchcancel", handleTouchEnd);
+    };
+  });
+
   onDestroy(() => {
     clearHoverIntentTimer();
+    clearTouchScrubTimer();
   });
 </script>
 
@@ -405,6 +496,7 @@
   onkeydown={handleSurfaceKeydown}
 >
   <div
+    bind:this={mediaEl}
     class="media"
     class:has-placeholder={showPlaceholder}
     class:has-logo-art={isLogoLikeArtwork && !showPlaceholder}
@@ -715,7 +807,9 @@
     width: 100%;
     min-height: 0;
     overflow: hidden;
-    touch-action: pan-y;
+    /* Allow the browser to pan in both axes so horizontal thumbnail rows scroll on touch.
+       Trickplay scrubbing is a pointer-hover (desktop) interaction and is unaffected by this. */
+    touch-action: pan-x pan-y;
     border-radius: 5px 5px 0 0;
     background:
       radial-gradient(circle at 50% 45%, rgb(255 255 255 / 0.08), transparent 34%),

@@ -73,6 +73,7 @@ import type {
   GetVideoSeriesParams,
   HeadFileContentParams,
   HealthResponse,
+  IdentifyApplyProgress,
   IdentifyBulkStartRequest,
   IdentifyEntityParams,
   IdentifyEntityRequest,
@@ -130,6 +131,7 @@ import type {
   SettingsCatalogResponse,
   SettingsValuesResponse,
   StartBulkIdentifyParams,
+  StashScraperListing,
   StudioDetail,
   TagDetail,
   UpdateCheckResponse,
@@ -5336,6 +5338,42 @@ export const listPlugins = async ( options?: RequestInit): Promise<listPluginsRe
 
 
 
+export type listStashScrapersResponse200 = {
+  data: StashScraperListing[]
+  status: 200
+}
+
+export type listStashScrapersResponseSuccess = (listStashScrapersResponse200) & {
+  headers: Headers;
+};
+;
+
+export type listStashScrapersResponse = (listStashScrapersResponseSuccess)
+
+export const getListStashScrapersUrl = () => {
+
+
+
+
+  return `/api/plugins/stash-scrapers`
+}
+
+/**
+ * @summary Lists Stash community scrapers available for install from the CommunityScrapers index.
+ */
+export const listStashScrapers = async ( options?: RequestInit): Promise<listStashScrapersResponse> => {
+
+  return orvalFetch<listStashScrapersResponse>(getListStashScrapersUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
 export type installPluginResponse200 = {
   data: PluginProvider
   status: 200
@@ -5415,6 +5453,49 @@ export const removePlugin = async (provider: string, options?: RequestInit): Pro
   {
     ...options,
     method: 'DELETE'
+
+
+  }
+);}
+
+
+
+export type updatePluginResponse200 = {
+  data: PluginProvider
+  status: 200
+}
+
+export type updatePluginResponse404 = {
+  data: ApiProblem
+  status: 404
+}
+
+export type updatePluginResponseSuccess = (updatePluginResponse200) & {
+  headers: Headers;
+};
+export type updatePluginResponseError = (updatePluginResponse404) & {
+  headers: Headers;
+};
+
+export type updatePluginResponse = (updatePluginResponseSuccess | updatePluginResponseError)
+
+export const getUpdatePluginUrl = (provider: string,) => {
+
+
+
+
+  return `/api/plugins/${provider}/update`
+}
+
+/**
+ * @summary Downloads and enables the newest compatible community plugin artifact.
+ */
+export const updatePlugin = async (provider: string, options?: RequestInit): Promise<updatePluginResponse> => {
+
+  return orvalFetch<updatePluginResponse>(getUpdatePluginUrl(provider),
+  {
+    ...options,
+    method: 'POST'
 
 
   }
@@ -5885,6 +5966,51 @@ export const applyIdentifyQueueItem = async (entityId: string,
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(
       applyIdentifyQueueItemRequest,)
+  }
+);}
+
+
+
+export type getIdentifyApplyProgressResponse200 = {
+  data: IdentifyApplyProgress
+  status: 200
+}
+
+export type getIdentifyApplyProgressResponse404 = {
+  data: ApiProblem
+  status: 404
+}
+
+export type getIdentifyApplyProgressResponseSuccess = (getIdentifyApplyProgressResponse200) & {
+  headers: Headers;
+};
+export type getIdentifyApplyProgressResponseError = (getIdentifyApplyProgressResponse404) & {
+  headers: Headers;
+};
+
+export type getIdentifyApplyProgressResponse = (getIdentifyApplyProgressResponseSuccess | getIdentifyApplyProgressResponseError)
+
+export const getGetIdentifyApplyProgressUrl = (entityId: string,
+    progressId: string,) => {
+
+
+
+
+  return `/api/identify/queue/entities/${entityId}/apply-progress/${progressId}`
+}
+
+/**
+ * @summary Gets live progress for an Identify proposal apply operation.
+ */
+export const getIdentifyApplyProgress = async (entityId: string,
+    progressId: string, options?: RequestInit): Promise<getIdentifyApplyProgressResponse> => {
+
+  return orvalFetch<getIdentifyApplyProgressResponse>(getGetIdentifyApplyProgressUrl(entityId,progressId),
+  {
+    ...options,
+    method: 'GET'
+
+
   }
 );}
 

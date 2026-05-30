@@ -45,7 +45,16 @@ public sealed class EfEntityReadService : IEntityReadService {
         int? limit,
         CancellationToken cancellationToken,
         Guid? referencedBy = null,
-        string? relationshipCode = null) {
+        string? relationshipCode = null,
+        string? sort = null,
+        string? sortDir = null,
+        int? seed = null,
+        bool? favorite = null,
+        bool? organized = null,
+        int? ratingMin = null,
+        int? ratingMax = null,
+        bool? unrated = null,
+        string? status = null) {
         var pageSize = Math.Clamp(limit ?? DefaultPageSize, 1, MaxPageSize);
         var normalizedRelationshipCode = string.IsNullOrWhiteSpace(relationshipCode)
             ? null
@@ -75,28 +84,181 @@ public sealed class EfEntityReadService : IEntityReadService {
         }
 
         entityQuery = ApplyNsfwVisibility(entityQuery, hideNsfw == true);
+        entityQuery = ApplyListFilters(entityQuery, favorite, organized, ratingMin, ratingMax, unrated, status);
 
         // Snapshot the unbounded filtered total before applying the cursor; this is what
         // drives the client's page-of-pages and seek-to-end behaviour and must stay
         // independent of where in the cursor sequence we currently are.
         var totalCount = await entityQuery.CountAsync(cancellationToken);
 
-        if (TryDecodeCursor(cursor, out var cursorTitle, out var cursorId)) {
-            entityQuery = entityQuery.Where(entity =>
-                string.Compare(entity.Title, cursorTitle) > 0 ||
-                (entity.Title == cursorTitle && entity.Id.CompareTo(cursorId) > 0));
-        }
+        var offset = DecodeOffsetCursor(cursor);
+        var sortKey = ParseSort(sort);
+        var descending = string.Equals(sortDir?.Trim(), "desc", StringComparison.OrdinalIgnoreCase);
 
-        var rows = await entityQuery
-            .OrderBy(entity => entity.Title)
-            .ThenBy(entity => entity.Id)
-            .Take(pageSize + 1)
-            .ToArrayAsync(cancellationToken);
+        EntityRow[] rows;
+        if (sortKey == ListSort.Random) {
+            // Random must shuffle the entire matching set, not just the loaded page,
+            // and stay stable across paged requests with the same seed. We pull the
+            // matching identifiers (cheap), order them by a deterministic seed-mixed
+            // hash in memory, then hydrate only the page slice. This is provider
+            // agnostic (PostgreSQL in production, SQLite under test) and avoids
+            // depending on database-specific random/hash functions.
+            var ids = await entityQuery
+                .OrderBy(entity => entity.Id)
+                .Select(entity => entity.Id)
+                .ToArrayAsync(cancellationToken);
+            var shuffled = DeterministicShuffle(ids, seed ?? 0);
+            var pageIds = shuffled.Skip(offset).Take(pageSize + 1).ToArray();
+            var rowsById = await _db.Entities.AsNoTracking()
+                .Where(entity => pageIds.Contains(entity.Id))
+                .ToDictionaryAsync(entity => entity.Id, cancellationToken);
+            rows = pageIds
+                .Where(rowsById.ContainsKey)
+                .Select(id => rowsById[id])
+                .ToArray();
+        } else {
+            rows = await ApplyOrdering(entityQuery, sortKey, descending)
+                .Skip(offset)
+                .Take(pageSize + 1)
+                .ToArrayAsync(cancellationToken);
+        }
 
         var page = rows.Take(pageSize).ToArray();
         var thumbnails = await ProjectThumbnailsAsync(page, hideNsfw == true, cancellationToken);
-        var nextCursor = rows.Length > pageSize ? EncodeCursor(page[^1].Title, page[^1].Id) : null;
+        var nextCursor = rows.Length > pageSize ? EncodeOffsetCursor(offset + pageSize) : null;
         return new EntityListResponse(thumbnails, nextCursor, totalCount);
+    }
+
+    /// <summary>Sort strategies supported by the list/browse projection.</summary>
+    private enum ListSort {
+        Title,
+        DateAdded,
+        Rating,
+        Random,
+    }
+
+    private static ListSort ParseSort(string? sort) =>
+        sort?.Trim().ToLowerInvariant() switch {
+            "added" or "date" or "date-added" or "dateadded" or "createdat" or "created" or "recent" => ListSort.DateAdded,
+            "rating" => ListSort.Rating,
+            "random" or "shuffle" => ListSort.Random,
+            _ => ListSort.Title,
+        };
+
+    /// <summary>
+    /// Applies a deterministic ORDER BY for the non-random sorts. Each strategy ends
+    /// with a stable identifier tiebreaker so offset paging never skips or repeats a
+    /// row, and rating always pushes unrated entities to the end regardless of
+    /// direction.
+    /// </summary>
+    private static IQueryable<EntityRow> ApplyOrdering(IQueryable<EntityRow> query, ListSort sort, bool descending) =>
+        sort switch {
+            ListSort.DateAdded => descending
+                ? query.OrderByDescending(entity => entity.CreatedAt).ThenByDescending(entity => entity.Id)
+                : query.OrderBy(entity => entity.CreatedAt).ThenBy(entity => entity.Id),
+            ListSort.Rating => descending
+                ? query.OrderBy(entity => entity.RatingValue == null)
+                    .ThenByDescending(entity => entity.RatingValue)
+                    .ThenBy(entity => entity.Title)
+                    .ThenBy(entity => entity.Id)
+                : query.OrderBy(entity => entity.RatingValue == null)
+                    .ThenBy(entity => entity.RatingValue)
+                    .ThenBy(entity => entity.Title)
+                    .ThenBy(entity => entity.Id),
+            _ => descending
+                ? query.OrderByDescending(entity => entity.Title).ThenByDescending(entity => entity.Id)
+                : query.OrderBy(entity => entity.Title).ThenBy(entity => entity.Id),
+        };
+
+    /// <summary>
+    /// Applies the server-side library filters that span the whole matching set:
+    /// favorite and organized flags, rating bounds (including the explicit unrated
+    /// case), and the adaptive engagement status. Status is resolved against both the
+    /// playback capability (videos/audio) and the progress capability (books/comics)
+    /// so a single control reads correctly for every kind that records engagement.
+    /// </summary>
+    private IQueryable<EntityRow> ApplyListFilters(
+        IQueryable<EntityRow> query,
+        bool? favorite,
+        bool? organized,
+        int? ratingMin,
+        int? ratingMax,
+        bool? unrated,
+        string? status) {
+        if (favorite == true) {
+            query = query.Where(entity => entity.IsFavorite);
+        }
+
+        if (organized is { } wantsOrganized) {
+            query = wantsOrganized
+                ? query.Where(entity => entity.IsOrganized)
+                : query.Where(entity => !entity.IsOrganized);
+        }
+
+        if (unrated == true) {
+            query = query.Where(entity => entity.RatingValue == null);
+        }
+
+        if (ratingMin is { } min) {
+            query = query.Where(entity => entity.RatingValue != null && entity.RatingValue >= min);
+        }
+
+        if (ratingMax is { } max) {
+            query = query.Where(entity => entity.RatingValue != null && entity.RatingValue <= max);
+        }
+
+        var normalizedStatus = status?.Trim().ToLowerInvariant();
+        if (string.IsNullOrEmpty(normalizedStatus)) {
+            return query;
+        }
+
+        var playback = _db.Set<EntityPlaybackRow>();
+        var progress = _db.Set<EntityProgressRow>();
+        return normalizedStatus switch {
+            "watched" or "read" or "completed" or "finished" =>
+                query.Where(entity =>
+                    playback.Any(row => row.EntityId == entity.Id && row.CompletedAt != null) ||
+                    progress.Any(row => row.EntityId == entity.Id && row.CompletedAt != null)),
+            "unwatched" or "unread" or "unstarted" or "new" =>
+                query.Where(entity =>
+                    !playback.Any(row => row.EntityId == entity.Id &&
+                        (row.CompletedAt != null || row.PlayCount > 0 || row.ResumeSeconds > 0)) &&
+                    !progress.Any(row => row.EntityId == entity.Id &&
+                        (row.CompletedAt != null || row.Index > 0))),
+            "in-progress" or "inprogress" or "in_progress" or "reading" or "watching" =>
+                query.Where(entity =>
+                    playback.Any(row => row.EntityId == entity.Id &&
+                        row.CompletedAt == null && row.ResumeSeconds > 0) ||
+                    progress.Any(row => row.EntityId == entity.Id &&
+                        row.CompletedAt == null && row.Index > 0 && row.Index < row.Total)),
+            _ => query,
+        };
+    }
+
+    /// <summary>
+    /// Orders the supplied identifiers by a deterministic, seed-mixed FNV-1a hash so
+    /// the same seed always produces the same shuffle. The shuffle is stable across
+    /// paged requests and across process restarts, and does not depend on any
+    /// database-specific random function.
+    /// </summary>
+    private static Guid[] DeterministicShuffle(Guid[] ids, int seed) {
+        var seedMix = unchecked((ulong)seed * 0x9E3779B97F4A7C15UL + 0x9E3779B97F4A7C15UL);
+        return ids
+            .OrderBy(id => ShuffleKey(id, seedMix))
+            .ThenBy(id => id)
+            .ToArray();
+    }
+
+    private static ulong ShuffleKey(Guid id, ulong seedMix) {
+        Span<byte> bytes = stackalloc byte[16];
+        id.TryWriteBytes(bytes);
+        var hash = seedMix ^ 0xCBF29CE484222325UL;
+        foreach (var value in bytes) {
+            hash ^= value;
+            hash *= 0x100000001B3UL;
+        }
+
+        return hash;
     }
 
     public async Task<EntityCard?> GetAsync(Guid id, bool hideNsfw, CancellationToken cancellationToken) {
@@ -612,21 +774,26 @@ public sealed class EfEntityReadService : IEntityReadService {
             _ => code.Replace('-', ' ')
         };
 
-    private static string EncodeCursor(string title, Guid id) =>
-        Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes($"{title}\n{id:N}"));
+    private static string EncodeOffsetCursor(int offset) =>
+        Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes($"offset:{offset}"));
 
-    private static bool TryDecodeCursor(string? cursor, out string title, out Guid id) {
-        title = string.Empty;
-        id = Guid.Empty;
+    private static int DecodeOffsetCursor(string? cursor) {
         if (string.IsNullOrWhiteSpace(cursor)) {
-            return false;
+            return 0;
         }
 
         try {
-            var parts = System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(cursor)).Split('\n');
-            return parts.Length == 2 && Guid.TryParseExact(parts[1], "N", out id) && !string.IsNullOrWhiteSpace(title = parts[0]);
+            var text = System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(cursor));
+            const string prefix = "offset:";
+            if (text.StartsWith(prefix, StringComparison.Ordinal) &&
+                int.TryParse(text.AsSpan(prefix.Length), out var offset) &&
+                offset >= 0) {
+                return offset;
+            }
         } catch (FormatException) {
-            return false;
+            // Fall through to the start of the result set on an unparseable cursor.
         }
+
+        return 0;
     }
 }

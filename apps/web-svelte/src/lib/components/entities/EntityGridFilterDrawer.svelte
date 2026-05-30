@@ -7,10 +7,28 @@
   interface Props {
     activeFilterIds: string[];
     filterOptions: EntityGridFilterOption[];
+    entityKind?: string;
     onActiveFilterIdsChange: (ids: string[]) => void;
   }
 
-  let { activeFilterIds, filterOptions, onActiveFilterIdsChange }: Props = $props();
+  let { activeFilterIds, filterOptions, entityKind, onActiveFilterIdsChange }: Props = $props();
+
+  // Adaptive engagement-status labels. Reading kinds phrase the status as
+  // Read/Unread/Reading; everything else uses Watched/Unwatched/In progress.
+  const READING_KINDS = new Set(["book", "book-volume", "book-chapter"]);
+  const statusChoices = $derived(
+    READING_KINDS.has(entityKind ?? "")
+      ? [
+          { id: "status:watched", label: "Read" },
+          { id: "status:unwatched", label: "Unread" },
+          { id: "status:in-progress", label: "Reading" },
+        ]
+      : [
+          { id: "status:watched", label: "Watched" },
+          { id: "status:unwatched", label: "Unwatched" },
+          { id: "status:in-progress", label: "In progress" },
+        ],
+  );
 
   const activeSet = $derived(new Set(activeFilterIds));
   const optionMap = $derived(new Map(filterOptions.map((option) => [option.id, option])));
@@ -24,12 +42,27 @@
   const hasDateFilters = $derived(
     filterOptions.some((option) => option.capabilityKind === CAPABILITY_KIND.dates),
   );
-  const hasPlaybackOrFileFilters = $derived(
-    filterOptions.some((option) => option.capabilityKind === CAPABILITY_KIND.files || option.capabilityKind === CAPABILITY_KIND.progress),
+  const hasFileFilters = $derived(
+    filterOptions.some((option) => option.capabilityKind === CAPABILITY_KIND.files),
   );
   const hasFlagFilters = $derived(
     filterOptions.some((option) => option.capabilityKind === CAPABILITY_KIND.flags),
   );
+
+  // Only kinds that record playback or reading progress get the status filter;
+  // for taxonomy and standalone media it would never match. When the kind is
+  // unknown (mixed surfaces) the control is shown so it stays discoverable.
+  const ENGAGEMENT_KINDS = new Set([
+    "video",
+    "video-series",
+    "video-season",
+    "audio-library",
+    "audio-track",
+    "book",
+    "book-volume",
+    "book-chapter",
+  ]);
+  const showStatus = $derived(entityKind == null || ENGAGEMENT_KINDS.has(entityKind));
 
   const resolutions = ["4K", "1080p", "720p", "480p"];
   const durationChoices = [
@@ -125,6 +158,11 @@
               </button>
             {/each}
           </div>
+          <div class="flex flex-wrap gap-1">
+            <button type="button" class={chipClass("rating:unrated")} onclick={() => toggleFilter("rating:unrated")}>
+              Unrated
+            </button>
+          </div>
         </div>
       </section>
     {/if}
@@ -169,13 +207,24 @@
       </section>
     {/if}
 
-    {#if hasPlaybackOrFileFilters}
+    {#if showStatus}
       <section>
-        <div class="mb-2 text-kicker">Playback & File</div>
+        <div class="mb-2 text-kicker">Status</div>
+        <div class="flex flex-wrap gap-1">
+          {#each statusChoices as item (item.id)}
+            <button type="button" class={chipClass(item.id)} onclick={() => toggleFilter(item.id)}>
+              {item.label}
+            </button>
+          {/each}
+        </div>
+      </section>
+    {/if}
+
+    {#if hasFileFilters}
+      <section>
+        <div class="mb-2 text-kicker">File</div>
         <div class="flex flex-wrap gap-1">
           {#each [
-            { id: "progress:played:true", label: "Played" },
-            { id: "progress:played:false", label: "Unplayed" },
             { id: "files:has:true", label: "Has file" },
             { id: "files:has:false", label: "No file" },
           ] as item (item.id)}
@@ -192,6 +241,7 @@
         <div class="mb-2 text-kicker">Library Flags</div>
         <div class="flex flex-wrap gap-1">
           {#each [
+            { id: "flags:favorite", label: "Favorites" },
             { id: "flags:organized:true", label: "Organized" },
             { id: "flags:organized:false", label: "Not organized" },
             { id: "flags:nsfw:true", label: "Is NSFW" },

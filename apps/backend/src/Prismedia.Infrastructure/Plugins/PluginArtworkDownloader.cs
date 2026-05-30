@@ -12,7 +12,9 @@ namespace Prismedia.Infrastructure.Plugins;
 /// Downloads plugin artwork into the Prismedia cache and updates entity file rows.
 /// </summary>
 public sealed class PluginArtworkDownloader {
-    private const string UserAgent = "Prismedia/1.0 (+https://github.com/pauljoda/prismedia)";
+    // A browser-like agent: many image CDNs reject generic/bot agents with 403.
+    private const string UserAgent =
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
     private readonly PrismediaDbContext _db;
     private readonly PluginArtworkServiceOptions _options;
     private readonly HttpClient _http;
@@ -42,7 +44,12 @@ public sealed class PluginArtworkDownloader {
                 continue;
             }
 
-            var bytes = await _http.GetByteArrayAsync(url, cancellationToken);
+            // A single unreachable or blocked image (e.g. a CDN 403) must not fail the whole apply.
+            var bytes = await TryDownloadAsync(url, cancellationToken);
+            if (bytes is null) {
+                continue;
+            }
+
             await UpsertArtworkAsync(entityId, role, roleCode, url, bytes, now, cancellationToken);
         }
     }
@@ -56,18 +63,37 @@ public sealed class PluginArtworkDownloader {
         EntityFileRole role,
         DateTimeOffset now,
         CancellationToken cancellationToken) {
+        var bytes = await TryDownloadAsync(image.Url, cancellationToken);
+        if (bytes is null) {
+            return;
+        }
+
+        await UpsertArtworkAsync(
+            entity.Id,
+            role,
+            role.ToString().ToLowerInvariant(),
+            image.Url,
+            bytes,
+            now,
+            cancellationToken);
+        entity.UpdatedAt = now;
+    }
+
+    /// <summary>
+    /// Fetches remote artwork bytes, returning null when the image is unreachable, blocked, or times
+    /// out so callers can skip it without aborting the surrounding metadata apply.
+    /// </summary>
+    private async Task<byte[]?> TryDownloadAsync(string url, CancellationToken cancellationToken) {
         try {
-            var bytes = await _http.GetByteArrayAsync(image.Url, cancellationToken);
-            await UpsertArtworkAsync(
-                entity.Id,
-                role,
-                role.ToString().ToLowerInvariant(),
-                image.Url,
-                bytes,
-                now,
-                cancellationToken);
-            entity.UpdatedAt = now;
+            return await _http.GetByteArrayAsync(url, cancellationToken);
         } catch (HttpRequestException) {
+            return null;
+        } catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested) {
+            return null;
+        } catch (InvalidOperationException) {
+            return null;
+        } catch (UriFormatException) {
+            return null;
         }
     }
 

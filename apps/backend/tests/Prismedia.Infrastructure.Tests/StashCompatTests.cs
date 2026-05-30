@@ -132,7 +132,7 @@ public sealed class StashCompatTests {
         Assert.Equal("https://site.example/scene/123", scene.Url);
         Assert.Equal("https://img.example/cover.jpg", scene.Image);
         Assert.Equal("Cool Studio", scene.Studio?.Name);
-        Assert.Equal(["Alice", "Bob"], scene.Performers);
+        Assert.Equal(["Alice", "Bob"], scene.Performers.Select(p => p.Name).ToArray());
         Assert.Equal(["Tag1", "Tag2"], scene.Tags);
     }
 
@@ -148,7 +148,7 @@ public sealed class StashCompatTests {
             Image = "https://img.example/cover.jpg",
             Code = "ABC-123",
             Studio = new StashScrapedStudio { Name = "Cool Studio" },
-            Performers = ["Alice", "Bob"],
+            Performers = [new StashScrapedPerformer { Name = "Alice" }, new StashScrapedPerformer { Name = "Bob" }],
             Tags = ["Tag1", "Tag2"]
         };
 
@@ -166,7 +166,45 @@ public sealed class StashCompatTests {
         Assert.Equal("ABC-123", proposal.Patch.ExternalIds["stash-test-site"]);
         Assert.Contains("https://site.example/scene/123", proposal.Patch.Urls);
         Assert.Single(proposal.Images);
-        Assert.Equal("poster", proposal.Images[0].Kind);
+        Assert.Equal("thumbnail", proposal.Images[0].Kind);
+
+        // Performers and the studio are also surfaced as relationship proposals (carded in review,
+        // enrichable on apply), not only as flat patch fields.
+        var relationshipKinds = proposal.Relationships.Select(r => r.TargetKind).ToArray();
+        Assert.Equal(["Alice", "Bob"], proposal.Relationships.Where(r => r.TargetKind == "person").Select(r => r.Patch.Title).ToArray());
+        Assert.Contains("studio", relationshipKinds);
+        Assert.Equal("Cool Studio", proposal.Relationships.Single(r => r.TargetKind == "studio").Patch.Title);
+    }
+
+    [Fact]
+    public void MapperCarriesPerformerAndStudioArtwork() {
+        var scene = new StashScrapedScene {
+            Title = "Scene",
+            Studio = new StashScrapedStudio { Name = "Studio X", Url = "https://studio.example", Image = "https://studio.example/logo.png" },
+            Performers = [
+                new StashScrapedPerformer {
+                    Name = "Jane Doe",
+                    Url = "https://site.example/p/jane",
+                    Image = "https://site.example/p/jane.jpg",
+                    Details = "Bio here",
+                    Birthdate = "1990-01-02"
+                }
+            ]
+        };
+
+        var proposal = StashResultMapper.ToProposal(scene, "stash-x", "Stash X", "video", null, "Matched by URL", 0.9m);
+
+        var person = proposal.Relationships.Single(r => r.TargetKind == "person");
+        Assert.Equal("Jane Doe", person.Patch.Title);
+        Assert.Equal("poster", person.Images.Single().Kind);
+        Assert.Equal("https://site.example/p/jane.jpg", person.Images.Single().Url);
+        Assert.Equal("Bio here", person.Patch.Description);
+        Assert.Equal("1990-01-02", person.Patch.Dates["birth"]);
+        Assert.Contains("https://site.example/p/jane", person.Patch.Urls);
+
+        var studio = proposal.Relationships.Single(r => r.TargetKind == "studio");
+        Assert.Equal("logo", studio.Images.Single().Kind);
+        Assert.Contains("https://studio.example", studio.Patch.Urls);
     }
 
     [Fact]
@@ -388,9 +426,11 @@ public sealed class StashCompatTests {
             """;
         // CommunityScrapers zips name the YAML after the package id (TestSite.zip -> TestSite.yml),
         // so the index-derived and discovery-derived provider ids agree.
+        // CommunityScrapers package zips hold files at the archive root (py_common.zip contains
+        // log.py, util.py, ... directly), extracting to scrapers/<id>/.
         var archives = new Dictionary<string, byte[]> {
             ["https://index.example/stable/TestSite.zip"] = ZipWith(("TestSite.yml", SampleYaml)),
-            ["https://index.example/stable/py_common.zip"] = ZipWith(("py_common/log.py", "def log(): pass\n"))
+            ["https://index.example/stable/py_common.zip"] = ZipWith(("log.py", "def log(): pass\n"))
         };
 
         var cacheRoot = Path.Combine(Path.GetTempPath(), $"stash-install-{Guid.NewGuid():N}");
@@ -409,7 +449,7 @@ public sealed class StashCompatTests {
             Assert.NotNull(installed);
             Assert.True(installed!.Installed);
             Assert.True(File.Exists(Path.Combine(cacheRoot, "scrapers", "TestSite", "TestSite.yml")));
-            Assert.True(File.Exists(Path.Combine(cacheRoot, "scrapers", "py_common", "py_common", "log.py")));
+            Assert.True(File.Exists(Path.Combine(cacheRoot, "scrapers", "py_common", "log.py")));
         } finally {
             Directory.Delete(cacheRoot, recursive: true);
         }
@@ -506,7 +546,7 @@ public sealed class StashCompatTests {
         Assert.NotNull(scene);
         Assert.Equal("Scripted Scene", scene!.Title);
         Assert.Equal("Py Studio", scene.Studio?.Name);
-        Assert.Equal(["Carol", "Dave"], scene.Performers);
+        Assert.Equal(["Carol", "Dave"], scene.Performers.Select(p => p.Name).ToArray());
     }
 
     [Fact]

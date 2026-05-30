@@ -57,7 +57,7 @@ public sealed class StashXPathEngine {
                     scene.Tags = EvaluateArray(document, selectorDef, common);
                     break;
                 case "performers":
-                    scene.Performers = EvaluateArray(document, selectorDef, common);
+                    scene.Performers = EvaluatePerformerArray(document, selectorDef, common);
                     break;
                 case "studio":
                     scene.Studio = EvaluateStudio(document, selectorDef, common);
@@ -162,18 +162,84 @@ public sealed class StashXPathEngine {
         return string.IsNullOrWhiteSpace(processed) ? null : processed;
     }
 
-    private IReadOnlyList<string> EvaluateArray(IDocument document, StashYamlNode subObject, StashYamlNode common) {
-        var nameField = subObject.HasKey("Name") ? subObject["Name"] : subObject["name"];
-        if (nameField.IsMissing) {
+    /// <summary>
+    /// Evaluates a performer page block (sceneScraper's <c>performer</c>), capturing the fields
+    /// used to enrich a Person entity: name, image, profile URL, gender, bio, birth date, country.
+    /// </summary>
+    /// <param name="html">Raw performer page HTML.</param>
+    /// <param name="scraperBlock">The resolved scraper block containing a <c>performer</c> definition.</param>
+    /// <returns>The scraped performer, or null when no usable field was extracted.</returns>
+    public StashScrapedPerformer? EvaluatePerformer(string html, StashYamlNode scraperBlock) {
+        var performerDef = scraperBlock["performer"];
+        if (performerDef.IsMissing) {
+            return null;
+        }
+
+        var document = Parser.ParseDocument(html);
+        var common = scraperBlock["common"];
+        var performer = new StashScrapedPerformer {
+            Name = EvaluateNamedField(document, performerDef, common, "Name"),
+            Image = EvaluateNamedField(document, performerDef, common, "Image"),
+            Url = EvaluateNamedField(document, performerDef, common, "URLs", "URL", "url"),
+            Gender = EvaluateNamedField(document, performerDef, common, "Gender"),
+            Details = EvaluateNamedField(document, performerDef, common, "Details"),
+            Birthdate = EvaluateNamedField(document, performerDef, common, "Birthdate"),
+            Country = EvaluateNamedField(document, performerDef, common, "Country")
+        };
+        return performer.HasData ? performer : null;
+    }
+
+    private IReadOnlyList<string> EvaluateArray(IDocument document, StashYamlNode subObject, StashYamlNode common) =>
+        ValuesForField(document, subObject, common, "Name", "name");
+
+    private IReadOnlyList<StashScrapedPerformer> EvaluatePerformerArray(IDocument document, StashYamlNode subObject, StashYamlNode common) {
+        // Stash zips each declared field by node index; capture name plus any URL/image the scene
+        // exposes so credited performers can be enriched and shown with artwork.
+        var names = ValuesForField(document, subObject, common, "Name", "name");
+        var urls = ValuesForField(document, subObject, common, "URL", "url");
+        var images = ValuesForField(document, subObject, common, "Image", "image");
+        var performers = new List<StashScrapedPerformer>(names.Count);
+        for (var index = 0; index < names.Count; index++) {
+            performers.Add(new StashScrapedPerformer {
+                Name = names[index],
+                Url = index < urls.Count ? urls[index] : null,
+                Image = index < images.Count ? images[index] : null
+            });
+        }
+
+        return performers;
+    }
+
+    private StashScrapedStudio? EvaluateStudio(IDocument document, StashYamlNode subObject, StashYamlNode common) {
+        var name = EvaluateNamedField(document, subObject, common, "Name", "name");
+        if (string.IsNullOrWhiteSpace(name)) {
+            return null;
+        }
+
+        return new StashScrapedStudio {
+            Name = name,
+            Url = EvaluateNamedField(document, subObject, common, "URL", "url"),
+            Image = EvaluateNamedField(document, subObject, common, "Image", "image")
+        };
+    }
+
+    private string? EvaluateNamedField(IDocument document, StashYamlNode subObject, StashYamlNode common, params string[] fieldNames) {
+        var field = FieldByName(subObject, fieldNames);
+        return field.IsMissing ? null : EvaluateString(document, field, common);
+    }
+
+    private List<string> ValuesForField(IDocument document, StashYamlNode subObject, StashYamlNode common, params string[] fieldNames) {
+        var field = FieldByName(subObject, fieldNames);
+        if (field.IsMissing) {
             return [];
         }
 
-        var (selector, postProcess) = ParseFieldDef(nameField, common);
+        var (selector, postProcess) = ParseFieldDef(field, common);
         if (string.IsNullOrWhiteSpace(selector)) {
             return [];
         }
 
-        var results = new List<string>();
+        var values = new List<string>();
         foreach (var node in SelectAll(document, selector)) {
             var raw = NodeValue(node).Trim();
             if (string.IsNullOrEmpty(raw)) {
@@ -182,23 +248,21 @@ public sealed class StashXPathEngine {
 
             var processed = StashSelector.ApplyPostProcess(raw, postProcess);
             if (!string.IsNullOrWhiteSpace(processed)) {
-                results.Add(processed);
+                values.Add(processed);
             }
         }
 
-        return results;
+        return values;
     }
 
-    private StashScrapedStudio? EvaluateStudio(IDocument document, StashYamlNode subObject, StashYamlNode common) {
-        var name = subObject.HasKey("Name") ? EvaluateString(document, subObject["Name"], common) : null;
-        if (string.IsNullOrWhiteSpace(name)) {
-            return null;
+    private static StashYamlNode FieldByName(StashYamlNode subObject, params string[] names) {
+        foreach (var name in names) {
+            if (subObject.HasKey(name)) {
+                return subObject[name];
+            }
         }
 
-        var url = subObject.HasKey("URL") ? EvaluateString(document, subObject["URL"], common)
-            : subObject.HasKey("url") ? EvaluateString(document, subObject["url"], common)
-            : null;
-        return new StashScrapedStudio { Name = name, Url = url };
+        return StashYamlNode.Parse(string.Empty);
     }
 
     private static (string Selector, StashYamlNode PostProcess) ParseFieldDef(StashYamlNode fieldDef, StashYamlNode common) {

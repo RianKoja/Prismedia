@@ -5,6 +5,7 @@
     Flame,
     SearchX,
     CheckCheck,
+    ListChecks,
     X,
   } from "@lucide/svelte";
   import { onMount } from "svelte";
@@ -46,6 +47,11 @@
     cards: EntityThumbnailCard[];
     emptyMessage?: string;
     emptyTitle?: string;
+    /**
+     * The single entity kind this grid is browsing, when known. Drives adaptive
+     * filter labels (e.g. Read/Unread for books vs Watched/Unwatched for video).
+     */
+    entityKind?: string;
     hasMore?: boolean;
     initialPageSize?: number;
     initialMediaWall?: boolean;
@@ -85,6 +91,7 @@
     cards,
     emptyMessage = "Try adjusting your search or filters.",
     emptyTitle = "Nothing present",
+    entityKind,
     hasMore = false,
     initialPageSize = DEFAULT_PAGE_SIZE,
     initialMediaWall = false,
@@ -191,6 +198,9 @@
   // svelte-ignore state_referenced_locally
   let mediaWall = $state(initialMediaWall);
   let selectedIds = $state<string[]>([]);
+  // Selection is explicit: until the user turns it on, cards behave as plain links/activators
+  // (a single tap navigates). Turning it on reveals the checkboxes and routes taps to selection.
+  let selectionActive = $state(false);
   let viewportEl: HTMLDivElement | undefined = $state();
   let sectionEl: HTMLElement | undefined = $state();
   let measuredScrollMaxHeight = $state<string | null>(null);
@@ -200,6 +210,9 @@
   let sortBy = $state<EntityGridSort>(initialSortBy);
   // svelte-ignore state_referenced_locally
   let sortDir = $state<EntityGridSortDir>(initialSortDir);
+  // Seed for the random sort. Regenerated each time Random is (re)selected so the
+  // shuffle changes, but held stable across pagination within one shuffle.
+  let randomSeed = $state(1);
   let viewMode = $state<EntityGridViewMode>("grid");
   const nsfw = useNsfw();
   const effectiveNsfwMode = $derived(nsfwMode ?? nsfw.mode);
@@ -211,6 +224,7 @@
     query,
     sortBy,
     sortDir,
+    randomSeed,
   });
   const effectiveCards = $derived.by(() => {
     if (capabilityOverrides.size === 0) return cards;
@@ -293,6 +307,7 @@
     includeNsfw: boolean;
     sortBy: EntityGridSort;
     sortDir: EntityGridSortDir;
+    randomSeed?: number;
     viewMode: EntityGridViewMode;
     mediaWall?: boolean;
     selectedIds: string[];
@@ -332,6 +347,7 @@
         includeNsfw,
         sortBy,
         sortDir,
+        randomSeed,
         viewMode,
         mediaWall,
         selectedIds: [...selectedIds],
@@ -346,6 +362,7 @@
         includeNsfw = snapshot.includeNsfw;
         sortBy = snapshot.sortBy;
         sortDir = snapshot.sortDir;
+        randomSeed = snapshot.randomSeed ?? randomSeed;
         viewMode = snapshot.viewMode;
         mediaWall = snapshot.mediaWall ?? loadMediaWall();
         if (mediaWall) viewMode = "grid";
@@ -496,9 +513,25 @@
     pageIndex = 0;
   }
 
+  /** Generates a fresh, non-zero seed for the random shuffle. */
+  function nextRandomSeed(): number {
+    return Math.floor(Math.random() * 2_000_000_000) + 1;
+  }
+
   function setSortBy(value: EntityGridSort) {
+    // Re-selecting Random reshuffles; selecting it for the first time seeds it.
+    if (value === "random") {
+      randomSeed = nextRandomSeed();
+      pageIndex = 0;
+    }
     sortBy = value;
     activePresetId = null;
+  }
+
+  /** Reshuffles the current random ordering with a new seed. */
+  function reshuffle() {
+    randomSeed = nextRandomSeed();
+    pageIndex = 0;
   }
 
   function setSortDir(value: EntityGridSortDir) {
@@ -549,7 +582,9 @@
     filterIds = preset.filters
       .map((filter) => filter.value)
       .filter((id) => Boolean(entityGridFilterFromId(id, filterOptions)));
-    sortBy = preset.sortBy === "kind" || preset.sortBy === "rating" || preset.sortBy === "position" ? preset.sortBy : initialSortBy;
+    const presetSorts: EntityGridSort[] = ["title", "kind", "rating", "position", "added", "random"];
+    sortBy = (presetSorts as string[]).includes(preset.sortBy) ? (preset.sortBy as EntityGridSort) : initialSortBy;
+    if (sortBy === "random") randomSeed = nextRandomSeed();
     sortDir = preset.sortDir;
     activePresetId = preset.id;
     pageIndex = 0;
@@ -596,6 +631,14 @@
       ? Array.from(new Set([...selectedIds, id]))
       : selectedIds.filter((selectedId) => selectedId !== id);
     onSelectionChange?.(selectedIds);
+  }
+
+  function setSelectionActive(active: boolean) {
+    selectionActive = active;
+    if (!active && selectedIds.length > 0) {
+      selectedIds = [];
+      onSelectionChange?.(selectedIds);
+    }
   }
 
   function toggleNsfwFlag(markNsfw: boolean) {
@@ -712,8 +755,8 @@
     mediaOnly={mediaWall}
     onActivate={onCardActivate ? (activatedCard) => onCardActivate(activatedCard, pagedCards) : undefined}
     hoverPreviewSuppressed={areHoverPreviewsSuppressed}
-    {selectable}
-    selectMode={selectedCount > 0}
+    selectable={selectable && selectionActive}
+    selectMode={selectionActive}
     selected={selectedIds.includes(card.entity.id)}
     onSelectedChange={(selected) => updateSelection(card.entity.id, selected)}
   />
@@ -756,6 +799,7 @@
     onScaleChange={persistScale}
     onSortByChange={setSortBy}
     onSortDirChange={setSortDir}
+    onReshuffle={reshuffle}
     onViewModeChange={setViewMode}
     {presets}
     {query}
@@ -770,6 +814,7 @@
     <EntityGridFilterDrawer
       activeFilterIds={filterIds}
       {filterOptions}
+      {entityKind}
       onActiveFilterIdsChange={setFilterIds}
     />
   {/if}
@@ -781,47 +826,71 @@
     totalCount={cards.length}
   />
 
-  {#if selectedIds.length > 0}
+  {#if selectable}
     <div class="bulk-bar" role="status" aria-live="polite">
-      <span class="bulk-count">{selectedIds.length} selected</span>
-      <div class="bulk-controls">
-        <button
-          type="button"
-          class="bulk-btn"
-          title="Select all visible"
-          onclick={() => {
-            selectedIds = visibleCards.map((c) => c.entity.id);
-            onSelectionChange?.(selectedIds);
-          }}
-        >
-          <CheckCheck class="h-3.5 w-3.5" />
-          <span class="bulk-btn-label">Select all</span>
-        </button>
-        <button
-          type="button"
-          class="bulk-btn"
-          title="Clear selection"
-          onclick={() => {
-            selectedIds = [];
-            onSelectionChange?.(selectedIds);
-          }}
-        >
+      <button
+        type="button"
+        class="bulk-btn select-toggle"
+        class:is-active={selectionActive}
+        aria-pressed={selectionActive}
+        title={selectionActive ? "Exit selection" : "Select items"}
+        onclick={() => setSelectionActive(!selectionActive)}
+      >
+        {#if selectionActive}
           <X class="h-3.5 w-3.5" />
-          <span class="bulk-btn-label">Clear</span>
-        </button>
+          <span class="bulk-btn-label">Done</span>
+        {:else}
+          <ListChecks class="h-3.5 w-3.5" />
+          <span class="bulk-btn-label">Select</span>
+        {/if}
+      </button>
 
-        <span class="bulk-divider" aria-hidden="true"></span>
-        <button
-          type="button"
-          class="bulk-btn"
-          title={allSelectedNsfw ? "Mark SFW" : "Mark NSFW"}
-          onclick={() => toggleNsfwFlag(!allSelectedNsfw)}
-        >
-          <Flame class="h-3.5 w-3.5" />
-          <span class="bulk-btn-label">{allSelectedNsfw ? "Mark SFW" : "Mark NSFW"}</span>
-        </button>
+      {#if selectionActive}
+        <span class="bulk-count">{selectedIds.length} selected</span>
+      {/if}
 
-        {#if bulkActions.length > 0}
+      {#if selectionActive}
+        <div class="bulk-controls">
+          <button
+            type="button"
+            class="bulk-btn"
+            title="Select all visible"
+            onclick={() => {
+              selectedIds = visibleCards.map((c) => c.entity.id);
+              onSelectionChange?.(selectedIds);
+            }}
+          >
+            <CheckCheck class="h-3.5 w-3.5" />
+            <span class="bulk-btn-label">Select all</span>
+          </button>
+          <button
+            type="button"
+            class="bulk-btn"
+            title="Clear selection"
+            disabled={selectedIds.length === 0}
+            onclick={() => {
+              selectedIds = [];
+              onSelectionChange?.(selectedIds);
+            }}
+          >
+            <X class="h-3.5 w-3.5" />
+            <span class="bulk-btn-label">Clear</span>
+          </button>
+
+          {#if selectedIds.length > 0}
+            <span class="bulk-divider" aria-hidden="true"></span>
+            <button
+              type="button"
+              class="bulk-btn"
+              title={allSelectedNsfw ? "Mark SFW" : "Mark NSFW"}
+              onclick={() => toggleNsfwFlag(!allSelectedNsfw)}
+            >
+              <Flame class="h-3.5 w-3.5" />
+              <span class="bulk-btn-label">{allSelectedNsfw ? "Mark SFW" : "Mark NSFW"}</span>
+            </button>
+          {/if}
+
+          {#if bulkActions.length > 0 && selectedIds.length > 0}
           <span class="bulk-divider" aria-hidden="true"></span>
           <div class="bulk-actions-menu">
             <button
@@ -861,7 +930,8 @@
             {/if}
           </div>
         {/if}
-      </div>
+        </div>
+      {/if}
     </div>
   {/if}
 
@@ -1085,12 +1155,19 @@
     gap: 0.35rem;
     min-height: 12rem;
     place-content: center;
+    justify-items: center;
+    padding: 2.5rem 1.25rem;
     background: var(--color-surface-1, #0c0f15);
     border: 1px solid var(--color-border-subtle, rgba(148, 158, 178, 0.07));
     border-radius: var(--radius-sm, 6px);
     box-shadow: inset 0 2px 8px rgba(0,0,0,0.30);
     color: var(--color-text-muted);
     text-align: center;
+  }
+
+  .empty > strong,
+  .empty > span:not(.empty-icon) {
+    max-width: 32rem;
   }
 
   .empty-icon {

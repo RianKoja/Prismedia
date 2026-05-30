@@ -129,6 +129,90 @@ public sealed class StashScraperEngine {
             : [];
     }
 
+    /// <summary>
+    /// Resolves a performer's full profile (image, bio, gender, birth date) to enrich a credit.
+    /// Tries a direct <c>performerByURL</c> when the credit carries a URL, then falls back to a
+    /// <c>performerByName</c> search accepting only an exact name match. Best-effort.
+    /// </summary>
+    /// <param name="definition">Parsed scraper definition.</param>
+    /// <param name="scraperPath">Absolute path to the scraper file.</param>
+    /// <param name="credit">The credited performer (name, and possibly a URL).</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The scraped performer profile, or null when none could be resolved.</returns>
+    public async Task<StashScrapedPerformer?> ResolvePerformerAsync(
+        StashScraperDefinition definition,
+        string scraperPath,
+        StashScrapedPerformer credit,
+        CancellationToken cancellationToken) {
+        if (!string.IsNullOrWhiteSpace(credit.Url) && definition.HasCapability("performerByURL")) {
+            var byUrl = await ScrapePerformerPageAsync(
+                definition, scraperPath, "performerByURL", new StashScrapeInput(Url: credit.Url), cancellationToken);
+            if (byUrl is { HasData: true }) {
+                return byUrl;
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(credit.Name) && definition.HasCapability("performerByName")) {
+            var matches = await SearchPerformersByNameAsync(definition, scraperPath, credit.Name!, cancellationToken);
+            var match = matches.FirstOrDefault(candidate =>
+                !string.IsNullOrWhiteSpace(candidate.Name) &&
+                candidate.Name.Trim().Equals(credit.Name!.Trim(), StringComparison.OrdinalIgnoreCase));
+            if (match is { HasData: true }) {
+                return match;
+            }
+        }
+
+        return null;
+    }
+
+    private async Task<StashScrapedPerformer?> ScrapePerformerPageAsync(
+        StashScraperDefinition definition,
+        string scraperPath,
+        string capability,
+        StashScrapeInput input,
+        CancellationToken cancellationToken) {
+        var action = definition.ResolveAction(capability, input.Url);
+        if (action is null || action.Kind == StashActionKind.Script || string.IsNullOrWhiteSpace(action.ScraperKey)) {
+            return null;
+        }
+
+        var fetchUrl = ResolveFetchUrl(capability, action, input);
+        if (string.IsNullOrWhiteSpace(fetchUrl)) {
+            return null;
+        }
+
+        var body = await FetchAsync(definition, fetchUrl, cancellationToken);
+        if (body is null) {
+            return null;
+        }
+
+        return action.Kind == StashActionKind.ScrapeXPath
+            ? _xpath.EvaluatePerformer(body, definition.XPathScraper(action.ScraperKey))
+            : null;
+    }
+
+    private async Task<IReadOnlyList<StashScrapedPerformer>> SearchPerformersByNameAsync(
+        StashScraperDefinition definition,
+        string scraperPath,
+        string name,
+        CancellationToken cancellationToken) {
+        var action = definition.ResolveAction("performerByName", inputUrl: null);
+        if (action is null) {
+            return [];
+        }
+
+        // Most performer-by-name scrapers are python scripts; support that path when available.
+        if (action.Kind == StashActionKind.Script && _scripts is not null) {
+            try {
+                return await _scripts.SearchPerformersByNameAsync(scraperPath, action, name, cancellationToken);
+            } catch (StashPythonUnavailableException) {
+                return [];
+            }
+        }
+
+        return [];
+    }
+
     private static string? ResolveFetchUrl(string capability, StashAction action, StashScrapeInput input) {
         if (capability.EndsWith("ByURL", StringComparison.OrdinalIgnoreCase)) {
             return input.Url;

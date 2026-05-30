@@ -7,6 +7,39 @@ public sealed class StashScrapedStudio {
 
     /// <summary>Studio homepage URL.</summary>
     public string? Url { get; set; }
+
+    /// <summary>Studio logo/image URL.</summary>
+    public string? Image { get; set; }
+}
+
+/// <summary>A performer scraped from a Stash scraper definition (scene credit or performer page).</summary>
+public sealed class StashScrapedPerformer {
+    /// <summary>Performer name.</summary>
+    public string? Name { get; set; }
+
+    /// <summary>Performer profile URL.</summary>
+    public string? Url { get; set; }
+
+    /// <summary>Performer image/avatar URL.</summary>
+    public string? Image { get; set; }
+
+    /// <summary>Performer gender.</summary>
+    public string? Gender { get; set; }
+
+    /// <summary>Long-form bio/details.</summary>
+    public string? Details { get; set; }
+
+    /// <summary>Birth date, normalized to YYYY-MM-DD where possible.</summary>
+    public string? Birthdate { get; set; }
+
+    /// <summary>Country.</summary>
+    public string? Country { get; set; }
+
+    /// <summary>True when any usable field was extracted.</summary>
+    public bool HasData =>
+        !string.IsNullOrWhiteSpace(Name) ||
+        !string.IsNullOrWhiteSpace(Image) ||
+        !string.IsNullOrWhiteSpace(Details);
 }
 
 /// <summary>A scene scraped from a Stash scraper definition (the common scene shape).</summary>
@@ -35,8 +68,8 @@ public sealed class StashScrapedScene {
     /// <summary>Studio reference.</summary>
     public StashScrapedStudio? Studio { get; set; }
 
-    /// <summary>Performer names credited on the scene.</summary>
-    public IReadOnlyList<string> Performers { get; set; } = [];
+    /// <summary>Performers credited on the scene (name plus any URL/image the scraper exposes).</summary>
+    public IReadOnlyList<StashScrapedPerformer> Performers { get; set; } = [];
 
     /// <summary>Tag names attached to the scene.</summary>
     public IReadOnlyList<string> Tags { get; set; } = [];

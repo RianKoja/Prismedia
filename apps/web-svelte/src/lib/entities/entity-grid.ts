@@ -31,9 +31,28 @@ import {
  */
 export const ENTITY_GRID_ALL_KINDS = "all";
 
-export type EntityGridSort = "title" | "kind" | "rating" | "position";
+export type EntityGridSort = "title" | "kind" | "rating" | "position" | "added" | "random";
 export type EntityGridSortDir = "asc" | "desc";
 export type EntityGridViewMode = "grid" | "list";
+
+/**
+ * Server-resolvable list parameters derived from the active grid controls.
+ * These map onto the entity list endpoint so sorting, the seeded shuffle, and
+ * the library filters apply across the entire matching set instead of only the
+ * page already loaded in the browser. Undefined fields are omitted from the
+ * request so the server keeps its defaults.
+ */
+export interface EntityGridServerQuery {
+  sort?: EntityGridSort;
+  sortDir?: EntityGridSortDir;
+  seed?: number;
+  favorite?: boolean;
+  organized?: boolean;
+  ratingMin?: number;
+  ratingMax?: number;
+  unrated?: boolean;
+  status?: string;
+}
 
 export interface EntityGridKindTab {
   kind: string;
@@ -68,6 +87,8 @@ export interface EntityGridState {
   query: string;
   sortBy: EntityGridSort;
   sortDir: EntityGridSortDir;
+  /** Seed for the random sort; reshuffled whenever the user picks Random again. */
+  randomSeed: number;
 }
 
 export interface EntityGridRequest {
@@ -76,6 +97,8 @@ export interface EntityGridRequest {
   query?: string;
   sortBy: EntityGridSort;
   sortDir: EntityGridSortDir;
+  /** Server-resolvable sort and filter parameters for the list endpoint. */
+  server: EntityGridServerQuery;
 }
 
 /**
@@ -382,6 +405,69 @@ export function buildEntityKindTabs(
     .sort((left, right) => left.label.localeCompare(right.label));
 }
 
+/**
+ * Adaptive engagement-status filters. A single control reads correctly across
+ * kinds: the backend resolves `watched`/`read` (completed), `unwatched`/`unread`
+ * (no engagement), and `in-progress` against both the playback and progress
+ * capabilities, so the same filter value works for videos, audio, books, and
+ * comics. The drawer swaps in kind-specific labels.
+ */
+export const STATUS_FILTER_DEFS = [
+  { id: "status:watched", value: "watched", defaultLabel: "Watched" },
+  { id: "status:unwatched", value: "unwatched", defaultLabel: "Unwatched" },
+  { id: "status:in-progress", value: "in-progress", defaultLabel: "In progress" },
+] as const;
+
+const STATUS_VALUE_BY_ID = new Map<string, string>(STATUS_FILTER_DEFS.map((def) => [def.id, def.value]));
+
+/**
+ * Filter IDs whose effect is resolved by the list endpoint across the whole
+ * matching set rather than by client-side card inspection. These are skipped by
+ * {@link applyEntityGridState} so the loaded page is not re-filtered (often with
+ * data the thumbnail does not carry, such as playback/progress) on top of the
+ * server result.
+ */
+export function isServerResolvedFilterId(id: string): boolean {
+  return (
+    id === "flags:favorite" ||
+    id === "flags:organized:true" ||
+    id === "flags:organized:false" ||
+    id === "rating:unrated" ||
+    id.startsWith("rating:min:") ||
+    id.startsWith("rating:max:") ||
+    id.startsWith("status:")
+  );
+}
+
+/**
+ * Folds the active filter IDs into the server-resolvable query. Rating bounds
+ * collapse to the tightest active min/max; favorite and organized resolve to
+ * booleans; the engagement status takes the first selected value.
+ */
+export function buildServerQueryFromFilters(filterIds: string[]): EntityGridServerQuery {
+  const server: EntityGridServerQuery = {};
+  for (const id of filterIds) {
+    if (id === "flags:favorite") {
+      server.favorite = true;
+    } else if (id === "flags:organized:true") {
+      server.organized = true;
+    } else if (id === "flags:organized:false") {
+      server.organized = false;
+    } else if (id === "rating:unrated") {
+      server.unrated = true;
+    } else if (id.startsWith("rating:min:")) {
+      const value = Number(id.slice("rating:min:".length));
+      if (Number.isFinite(value)) server.ratingMin = Math.max(server.ratingMin ?? value, value);
+    } else if (id.startsWith("rating:max:")) {
+      const value = Number(id.slice("rating:max:".length));
+      if (Number.isFinite(value)) server.ratingMax = Math.min(server.ratingMax ?? value, value);
+    } else if (STATUS_VALUE_BY_ID.has(id)) {
+      server.status = STATUS_VALUE_BY_ID.get(id);
+    }
+  }
+  return server;
+}
+
 function addOption(options: Map<string, EntityGridFilterOption>, option: Omit<EntityGridFilterOption, "count">) {
   const existing = options.get(option.id);
   if (existing) {
@@ -451,10 +537,27 @@ export function buildCapabilityFilterOptions(cards: EntityThumbnailCard[]): Enti
   }
 
   if (hasFlags) {
+    addUniqueOption(options, { id: "flags:favorite", label: "Favorites", capabilityKind: CAPABILITY_KIND.flags, value: "favorite" });
     addUniqueOption(options, { id: "flags:organized:true", label: "Organized", capabilityKind: CAPABILITY_KIND.flags, value: "organized:true" });
     addUniqueOption(options, { id: "flags:organized:false", label: "Not organized", capabilityKind: CAPABILITY_KIND.flags, value: "organized:false" });
     addUniqueOption(options, { id: "flags:nsfw:true", label: "Is NSFW", capabilityKind: CAPABILITY_KIND.flags, value: "nsfw:true" });
     addUniqueOption(options, { id: "flags:nsfw:false", label: "Not NSFW", capabilityKind: CAPABILITY_KIND.flags, value: "nsfw:false" });
+  }
+
+  // Rating bucket helpers that don't depend on a loaded card already carrying a
+  // rating — "Unrated" is resolved entirely server-side.
+  addUniqueOption(options, { id: "rating:unrated", label: "Unrated", capabilityKind: CAPABILITY_KIND.rating, value: "unrated" });
+
+  // Adaptive engagement status. The server resolves these against playback
+  // (videos/audio) and progress (books/comics), so they are offered on every
+  // page; the drawer relabels them per kind.
+  for (const status of STATUS_FILTER_DEFS) {
+    addUniqueOption(options, {
+      id: status.id,
+      label: status.defaultLabel,
+      capabilityKind: CAPABILITY_KIND.progress,
+      value: status.value,
+    });
   }
 
   for (const { entity } of cards) {
@@ -620,6 +723,25 @@ export function entityGridFilterFromId(
       value: `${key}:${value}`,
     };
   }
+
+  // Server-resolved filters must resolve even before any cards (and therefore
+  // any capability-derived options) have loaded, so chips and snapshots survive.
+  if (id === "flags:favorite") {
+    return { id, count: 0, label: "Favorites", capabilityKind: CAPABILITY_KIND.flags, value: "favorite" };
+  }
+  if (id === "rating:unrated") {
+    return { id, count: 0, label: "Unrated", capabilityKind: CAPABILITY_KIND.rating, value: "unrated" };
+  }
+  if (id.startsWith("rating:min:") && value) {
+    return { id, count: 0, label: `${value}★+`, capabilityKind: CAPABILITY_KIND.rating, value: `min:${value}` };
+  }
+  if (id.startsWith("rating:max:") && value) {
+    return { id, count: 0, label: `≤${value}★`, capabilityKind: CAPABILITY_KIND.rating, value: `max:${value}` };
+  }
+  const statusDef = STATUS_FILTER_DEFS.find((def) => def.id === id);
+  if (statusDef) {
+    return { id, count: 0, label: statusDef.defaultLabel, capabilityKind: CAPABILITY_KIND.progress, value: statusDef.value };
+  }
   return undefined;
 }
 
@@ -714,7 +836,13 @@ export function applyEntityGridState(
   filterOptions = buildCapabilityFilterOptions(cards),
 ): EntityThumbnailCard[] {
   const query = state.query.trim().toLowerCase();
+  // Server-resolved filters (favorite, organized, rating bounds, unrated, and
+  // engagement status) have already pruned the result set on the server, and the
+  // list thumbnail does not even carry the data some of them need. Applying them
+  // again here would wrongly empty the page, so they are excluded from the local
+  // pass and only the genuinely client-side filters are re-checked.
   const filters = state.filterIds
+    .filter((id) => !isServerResolvedFilterId(id))
     .map((id) => entityGridFilterFromId(id, filterOptions))
     .filter((option): option is EntityGridFilterOption => Boolean(option));
 
@@ -724,6 +852,13 @@ export function applyEntityGridState(
     if (query && !card.entity.title.toLowerCase().includes(query)) return false;
     return filters.every((filter) => entityMatchesFilter(card.entity.capabilities, filter));
   });
+
+  // Random and date-added ordering are produced by the server across the whole
+  // result set; preserve the order the cards arrived in rather than reshuffling
+  // the loaded page locally.
+  if (state.sortBy === "random" || state.sortBy === "added") {
+    return filtered;
+  }
 
   const sorted = filtered.toSorted((left, right) => {
     const direction = state.sortDir === "asc" ? 1 : -1;
@@ -771,6 +906,25 @@ export function entityGridRequestFromState(
   state: EntityGridState,
   filterOptions: EntityGridFilterOption[],
 ): EntityGridRequest {
+  const server = buildServerQueryFromFilters(state.filterIds);
+
+  // Only the sorts that the server can reproduce across the full result set are
+  // forwarded. "kind" and "position" remain client-only reorderings of the
+  // loaded page, so the server keeps its default ordering for them.
+  if (state.sortBy === "random") {
+    server.sort = "random";
+    server.seed = state.randomSeed;
+  } else if (state.sortBy === "added") {
+    server.sort = "added";
+    server.sortDir = state.sortDir;
+  } else if (state.sortBy === "rating") {
+    server.sort = "rating";
+    server.sortDir = state.sortDir;
+  } else if (state.sortBy === "title") {
+    server.sort = "title";
+    server.sortDir = state.sortDir;
+  }
+
   return {
     filters: state.filterIds
       .map((id) => entityGridFilterFromId(id, filterOptions))
@@ -779,5 +933,6 @@ export function entityGridRequestFromState(
     query: state.query.trim() || undefined,
     sortBy: state.sortBy,
     sortDir: state.sortDir,
+    server,
   };
 }

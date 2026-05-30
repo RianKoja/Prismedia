@@ -10,8 +10,28 @@ namespace Prismedia.Application.Entities;
 public interface IEntityReadService {
     /// <summary>
     /// Lists active entities as thumbnail read models, optionally scoped by kind,
-    /// search text, NSFW visibility, and cursor.
+    /// search text, NSFW visibility, and cursor. Sorting, the seeded full-library
+    /// shuffle, and the library filters are all applied server-side so that they
+    /// span the entire matching set rather than a single loaded page.
     /// </summary>
+    /// <param name="sort">
+    /// Sort key: <c>title</c> (default), <c>added</c>/<c>date</c> (creation time),
+    /// <c>rating</c>, or <c>random</c> for a seeded shuffle of the whole result set.
+    /// </param>
+    /// <param name="sortDir"><c>asc</c> (default) or <c>desc</c>. Ignored for <c>random</c>.</param>
+    /// <param name="seed">
+    /// Stable seed for the <c>random</c> sort. The same seed reproduces the same
+    /// shuffle across every page so cursor paging stays consistent.
+    /// </param>
+    /// <param name="favorite">When true, only entities flagged as favorites.</param>
+    /// <param name="organized">When set, filters to organized (true) or unorganized (false) entities.</param>
+    /// <param name="ratingMin">Inclusive minimum rating (excludes unrated).</param>
+    /// <param name="ratingMax">Inclusive maximum rating (excludes unrated).</param>
+    /// <param name="unrated">When true, only entities with no rating.</param>
+    /// <param name="status">
+    /// Engagement status filter that adapts to the entity: <c>watched</c>/<c>read</c>
+    /// (completed), <c>unwatched</c>/<c>unread</c> (no engagement), or <c>in-progress</c>.
+    /// </param>
     Task<EntityListResponse> ListAsync(
         string? kind,
         string? query,
@@ -20,7 +40,16 @@ public interface IEntityReadService {
         int? limit,
         CancellationToken cancellationToken,
         Guid? referencedBy = null,
-        string? relationshipCode = null);
+        string? relationshipCode = null,
+        string? sort = null,
+        string? sortDir = null,
+        int? seed = null,
+        bool? favorite = null,
+        bool? organized = null,
+        int? ratingMin = null,
+        int? ratingMax = null,
+        bool? unrated = null,
+        string? status = null);
 
     /// <summary>
     /// Gets one active entity as the shared entity card read model.

@@ -836,6 +836,178 @@ public sealed class EfEntityReadServiceTests {
         Assert.Equal(5, secondPage.TotalCount);
     }
 
+    [Fact]
+    public async Task ListAsyncSortsByDateAddedDescendingThenAscending() {
+        await using var db = CreateContext();
+        var baseTime = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        var oldest = Guid.Parse("11111111-1111-1111-1111-111111111111");
+        var middle = Guid.Parse("22222222-2222-2222-2222-222222222222");
+        var newest = Guid.Parse("33333333-3333-3333-3333-333333333333");
+        db.Entities.AddRange(
+            new EntityRow { Id = oldest, KindCode = EntityKindRegistry.Video.Code, Title = "Zeta", CreatedAt = baseTime, UpdatedAt = baseTime },
+            new EntityRow { Id = middle, KindCode = EntityKindRegistry.Video.Code, Title = "Alpha", CreatedAt = baseTime.AddHours(1), UpdatedAt = baseTime },
+            new EntityRow { Id = newest, KindCode = EntityKindRegistry.Video.Code, Title = "Mu", CreatedAt = baseTime.AddHours(2), UpdatedAt = baseTime });
+        await db.SaveChangesAsync();
+
+        var service = CreateService(db);
+
+        var descending = await service.ListAsync(
+            EntityKindRegistry.Video.Code, null, null, null, null, CancellationToken.None, sort: "added", sortDir: "desc");
+        Assert.Equal(new[] { newest, middle, oldest }, descending.Items.Select(item => item.Id).ToArray());
+
+        var ascending = await service.ListAsync(
+            EntityKindRegistry.Video.Code, null, null, null, null, CancellationToken.None, sort: "added", sortDir: "asc");
+        Assert.Equal(new[] { oldest, middle, newest }, ascending.Items.Select(item => item.Id).ToArray());
+    }
+
+    [Fact]
+    public async Task ListAsyncSortsByRatingPushingUnratedLast() {
+        await using var db = CreateContext();
+        var now = DateTimeOffset.UtcNow;
+        var unrated = Guid.Parse("11111111-1111-1111-1111-111111111111");
+        var lowRating = Guid.Parse("22222222-2222-2222-2222-222222222222");
+        var highRating = Guid.Parse("33333333-3333-3333-3333-333333333333");
+        db.Entities.AddRange(
+            new EntityRow { Id = unrated, KindCode = EntityKindRegistry.Video.Code, Title = "Unrated", RatingValue = null, CreatedAt = now, UpdatedAt = now },
+            new EntityRow { Id = lowRating, KindCode = EntityKindRegistry.Video.Code, Title = "Low", RatingValue = 2, CreatedAt = now, UpdatedAt = now },
+            new EntityRow { Id = highRating, KindCode = EntityKindRegistry.Video.Code, Title = "High", RatingValue = 5, CreatedAt = now, UpdatedAt = now });
+        await db.SaveChangesAsync();
+
+        var service = CreateService(db);
+
+        var descending = await service.ListAsync(
+            EntityKindRegistry.Video.Code, null, null, null, null, CancellationToken.None, sort: "rating", sortDir: "desc");
+        Assert.Equal(new[] { highRating, lowRating, unrated }, descending.Items.Select(item => item.Id).ToArray());
+    }
+
+    [Fact]
+    public async Task ListAsyncRandomSortIsStableAcrossPagesForTheSameSeed() {
+        await using var db = CreateContext();
+        var now = DateTimeOffset.UtcNow;
+        for (var index = 0; index < 12; index++) {
+            db.Entities.Add(new EntityRow {
+                Id = Guid.Parse($"00000000-0000-0000-0000-0000000000{index:D2}"),
+                KindCode = EntityKindRegistry.Video.Code,
+                Title = $"Video {index:00}",
+                CreatedAt = now,
+                UpdatedAt = now
+            });
+        }
+        await db.SaveChangesAsync();
+
+        var service = CreateService(db);
+
+        var firstPage = await service.ListAsync(
+            EntityKindRegistry.Video.Code, null, null, null, limit: 5, CancellationToken.None, sort: "random", seed: 1234);
+        var secondPage = await service.ListAsync(
+            EntityKindRegistry.Video.Code, null, firstPage.NextCursor, null, limit: 5, CancellationToken.None, sort: "random", seed: 1234);
+        var firstPageAgain = await service.ListAsync(
+            EntityKindRegistry.Video.Code, null, null, null, limit: 5, CancellationToken.None, sort: "random", seed: 1234);
+
+        // The same seed reproduces the same overall order, and paging never repeats a row.
+        Assert.Equal(
+            firstPage.Items.Select(item => item.Id),
+            firstPageAgain.Items.Select(item => item.Id));
+        Assert.Empty(firstPage.Items.Select(item => item.Id)
+            .Intersect(secondPage.Items.Select(item => item.Id)));
+        Assert.Equal(12, firstPage.TotalCount);
+
+        // A different seed should generally produce a different ordering.
+        var differentSeed = await service.ListAsync(
+            EntityKindRegistry.Video.Code, null, null, null, limit: 5, CancellationToken.None, sort: "random", seed: 9999);
+        Assert.NotEqual(
+            firstPage.Items.Select(item => item.Id).ToArray(),
+            differentSeed.Items.Select(item => item.Id).ToArray());
+    }
+
+    [Fact]
+    public async Task ListAsyncFiltersByFavoriteOrganizedAndRatingBounds() {
+        await using var db = CreateContext();
+        var now = DateTimeOffset.UtcNow;
+        var favorite = Guid.Parse("11111111-1111-1111-1111-111111111111");
+        var organized = Guid.Parse("22222222-2222-2222-2222-222222222222");
+        var ratedThree = Guid.Parse("33333333-3333-3333-3333-333333333333");
+        var unrated = Guid.Parse("44444444-4444-4444-4444-444444444444");
+        db.Entities.AddRange(
+            new EntityRow { Id = favorite, KindCode = EntityKindRegistry.Video.Code, Title = "Fav", IsFavorite = true, RatingValue = 5, CreatedAt = now, UpdatedAt = now },
+            new EntityRow { Id = organized, KindCode = EntityKindRegistry.Video.Code, Title = "Org", IsOrganized = true, RatingValue = 1, CreatedAt = now, UpdatedAt = now },
+            new EntityRow { Id = ratedThree, KindCode = EntityKindRegistry.Video.Code, Title = "Three", RatingValue = 3, CreatedAt = now, UpdatedAt = now },
+            new EntityRow { Id = unrated, KindCode = EntityKindRegistry.Video.Code, Title = "None", RatingValue = null, CreatedAt = now, UpdatedAt = now });
+        await db.SaveChangesAsync();
+
+        var service = CreateService(db);
+
+        var favorites = await service.ListAsync(
+            EntityKindRegistry.Video.Code, null, null, null, null, CancellationToken.None, favorite: true);
+        Assert.Equal(favorite, Assert.Single(favorites.Items).Id);
+
+        var organizedOnly = await service.ListAsync(
+            EntityKindRegistry.Video.Code, null, null, null, null, CancellationToken.None, organized: true);
+        Assert.Equal(organized, Assert.Single(organizedOnly.Items).Id);
+
+        var atLeastThree = await service.ListAsync(
+            EntityKindRegistry.Video.Code, null, null, null, null, CancellationToken.None, ratingMin: 3);
+        Assert.Equal(
+            new[] { favorite, ratedThree }.OrderBy(id => id),
+            atLeastThree.Items.Select(item => item.Id).OrderBy(id => id));
+        Assert.Equal(2, atLeastThree.TotalCount);
+
+        var unratedOnly = await service.ListAsync(
+            EntityKindRegistry.Video.Code, null, null, null, null, CancellationToken.None, unrated: true);
+        Assert.Equal(unrated, Assert.Single(unratedOnly.Items).Id);
+    }
+
+    [Fact]
+    public async Task ListAsyncFiltersByAdaptiveStatusForPlaybackAndProgress() {
+        await using var db = CreateContext();
+        var now = DateTimeOffset.UtcNow;
+        var watchedVideo = Guid.Parse("11111111-1111-1111-1111-111111111111");
+        var inProgressVideo = Guid.Parse("22222222-2222-2222-2222-222222222222");
+        var unwatchedVideo = Guid.Parse("33333333-3333-3333-3333-333333333333");
+        var readBook = Guid.Parse("44444444-4444-4444-4444-444444444444");
+        var inProgressBook = Guid.Parse("55555555-5555-5555-5555-555555555555");
+        db.Entities.AddRange(
+            new EntityRow { Id = watchedVideo, KindCode = EntityKindRegistry.Video.Code, Title = "Watched", CreatedAt = now, UpdatedAt = now },
+            new EntityRow { Id = inProgressVideo, KindCode = EntityKindRegistry.Video.Code, Title = "Watching", CreatedAt = now, UpdatedAt = now },
+            new EntityRow { Id = unwatchedVideo, KindCode = EntityKindRegistry.Video.Code, Title = "Fresh", CreatedAt = now, UpdatedAt = now },
+            new EntityRow { Id = readBook, KindCode = EntityKindRegistry.Book.Code, Title = "Read", CreatedAt = now, UpdatedAt = now },
+            new EntityRow { Id = inProgressBook, KindCode = EntityKindRegistry.Book.Code, Title = "Reading", CreatedAt = now, UpdatedAt = now });
+        db.EntityPlayback.AddRange(
+            new EntityPlaybackRow { EntityId = watchedVideo, PlayCount = 1, CompletedAt = now, UpdatedAt = now },
+            new EntityPlaybackRow { EntityId = inProgressVideo, PlayCount = 0, ResumeSeconds = 42, UpdatedAt = now });
+        db.EntityProgress.AddRange(
+            new EntityProgressRow { EntityId = readBook, Unit = "page", Index = 30, Total = 30, CompletedAt = now, UpdatedAt = now },
+            new EntityProgressRow { EntityId = inProgressBook, Unit = "page", Index = 5, Total = 30, UpdatedAt = now });
+        await db.SaveChangesAsync();
+
+        var service = CreateService(db);
+
+        var watched = await service.ListAsync(
+            EntityKindRegistry.Video.Code, null, null, null, null, CancellationToken.None, status: "watched");
+        Assert.Equal(watchedVideo, Assert.Single(watched.Items).Id);
+
+        var unwatched = await service.ListAsync(
+            EntityKindRegistry.Video.Code, null, null, null, null, CancellationToken.None, status: "unwatched");
+        Assert.Equal(unwatchedVideo, Assert.Single(unwatched.Items).Id);
+
+        var watchingVideo = await service.ListAsync(
+            EntityKindRegistry.Video.Code, null, null, null, null, CancellationToken.None, status: "in-progress");
+        Assert.Equal(inProgressVideo, Assert.Single(watchingVideo.Items).Id);
+
+        var read = await service.ListAsync(
+            EntityKindRegistry.Book.Code, null, null, null, null, CancellationToken.None, status: "read");
+        Assert.Equal(readBook, Assert.Single(read.Items).Id);
+
+        var reading = await service.ListAsync(
+            EntityKindRegistry.Book.Code, null, null, null, null, CancellationToken.None, status: "in-progress");
+        Assert.Equal(inProgressBook, Assert.Single(reading.Items).Id);
+    }
+
+    private static EfEntityReadService CreateService(PrismediaDbContext db) {
+        var repository = new EfEntityRepository(db, EntityMappers.Kinds(db), EntityMappers.Capabilities(db));
+        return new EfEntityReadService(db, repository, EntityMappers.Kinds(db));
+    }
+
     private static PrismediaDbContext CreateContext() =>
         new(new DbContextOptionsBuilder<PrismediaDbContext>()
             .UseInMemoryDatabase(Guid.NewGuid().ToString())

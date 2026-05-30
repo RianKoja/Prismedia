@@ -81,10 +81,48 @@ public sealed class StashScriptExecutor {
         }
     }
 
+    /// <summary>
+    /// Runs a <c>performerByName</c> script action, returning candidate performers parsed from
+    /// the script's JSON array output. The performer name is sent as the stdin fragment.
+    /// </summary>
+    public async Task<IReadOnlyList<StashScrapedPerformer>> SearchPerformersByNameAsync(
+        string scraperPath,
+        StashAction action,
+        string name,
+        CancellationToken cancellationToken) {
+        var output = await RunRawAsync(scraperPath, action, SerializeNameFragment(name), cancellationToken);
+        if (string.IsNullOrEmpty(output)) {
+            return [];
+        }
+
+        try {
+            using var document = JsonDocument.Parse(output);
+            if (document.RootElement.ValueKind == JsonValueKind.Array) {
+                return document.RootElement.EnumerateArray()
+                    .Select(ParsePerformer)
+                    .Where(performer => performer is { HasData: true })
+                    .Select(performer => performer!)
+                    .ToArray();
+            }
+
+            var single = ParsePerformer(document.RootElement);
+            return single is { HasData: true } ? [single] : [];
+        } catch (JsonException) {
+            return [];
+        }
+    }
+
     private async Task<string?> RunAsync(
         string scraperPath,
         StashAction action,
         StashScrapeInput input,
+        CancellationToken cancellationToken) =>
+        await RunRawAsync(scraperPath, action, SerializeFragment(input), cancellationToken);
+
+    private async Task<string?> RunRawAsync(
+        string scraperPath,
+        StashAction action,
+        string stdin,
         CancellationToken cancellationToken) {
         if (action.Script.Count == 0) {
             return null;
@@ -102,7 +140,7 @@ public sealed class StashScriptExecutor {
             result = await _processes.RunWithStdinAsync(
                 command,
                 arguments,
-                SerializeFragment(input),
+                stdin,
                 environment,
                 scraperDir,
                 cancellationToken);
@@ -138,6 +176,25 @@ public sealed class StashScriptExecutor {
         return JsonSerializer.Serialize(fragment, JsonOptions);
     }
 
+    private static string SerializeNameFragment(string name) =>
+        JsonSerializer.Serialize(new Dictionary<string, string> { ["name"] = name }, JsonOptions);
+
+    private static StashScrapedPerformer? ParsePerformer(JsonElement element) {
+        if (element.ValueKind != JsonValueKind.Object) {
+            return null;
+        }
+
+        return new StashScrapedPerformer {
+            Name = StringField(element, "name"),
+            Url = StringField(element, "url") ?? FirstString(element, "urls"),
+            Image = StringField(element, "image") ?? FirstString(element, "images"),
+            Gender = StringField(element, "gender"),
+            Details = StringField(element, "details"),
+            Birthdate = StringField(element, "birthdate"),
+            Country = StringField(element, "country")
+        };
+    }
+
     private static StashScrapedScene? ParseScene(JsonElement element) {
         if (element.ValueKind != JsonValueKind.Object) {
             return null;
@@ -151,18 +208,53 @@ public sealed class StashScriptExecutor {
             Date = StringField(element, "date"),
             Image = StringField(element, "image"),
             Url = StringField(element, "url") ?? FirstString(element, "urls"),
-            Performers = NameArray(element, "performers"),
+            Performers = PerformerArray(element, "performers"),
             Tags = NameArray(element, "tags")
         };
 
         if (element.TryGetProperty("studio", out var studio) && studio.ValueKind == JsonValueKind.Object) {
             var name = StringField(studio, "name");
             if (!string.IsNullOrWhiteSpace(name)) {
-                scene.Studio = new StashScrapedStudio { Name = name, Url = StringField(studio, "url") };
+                scene.Studio = new StashScrapedStudio {
+                    Name = name,
+                    Url = StringField(studio, "url"),
+                    Image = StringField(studio, "image")
+                };
             }
         }
 
         return scene;
+    }
+
+    private static IReadOnlyList<StashScrapedPerformer> PerformerArray(JsonElement element, string name) {
+        if (!element.TryGetProperty(name, out var array) || array.ValueKind != JsonValueKind.Array) {
+            return [];
+        }
+
+        var results = new List<StashScrapedPerformer>();
+        foreach (var item in array.EnumerateArray()) {
+            if (item.ValueKind == JsonValueKind.String) {
+                var value = item.GetString();
+                if (!string.IsNullOrWhiteSpace(value)) {
+                    results.Add(new StashScrapedPerformer { Name = value.Trim() });
+                }
+            } else if (item.ValueKind == JsonValueKind.Object) {
+                var performerName = StringField(item, "name");
+                if (!string.IsNullOrWhiteSpace(performerName)) {
+                    results.Add(new StashScrapedPerformer {
+                        Name = performerName.Trim(),
+                        Url = StringField(item, "url") ?? FirstString(item, "urls"),
+                        Image = StringField(item, "image") ?? FirstString(item, "images"),
+                        Gender = StringField(item, "gender"),
+                        Details = StringField(item, "details"),
+                        Birthdate = StringField(item, "birthdate"),
+                        Country = StringField(item, "country")
+                    });
+                }
+            }
+        }
+
+        return results;
     }
 
     private static string? StringField(JsonElement element, string name) =>

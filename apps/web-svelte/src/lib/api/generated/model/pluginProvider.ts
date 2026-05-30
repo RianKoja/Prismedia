@@ -17,4 +17,7 @@ export interface PluginProvider {
   supports: PluginEntitySupport[];
   auth: PluginAuthField[];
   missingAuthKeys: string[];
+  updateAvailable?: boolean;
+  /** @nullable */
+  availableVersion?: string | null;
 }

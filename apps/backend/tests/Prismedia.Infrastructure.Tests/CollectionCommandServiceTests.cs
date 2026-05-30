@@ -291,7 +291,16 @@ public sealed class CollectionCommandServiceTests {
             int? limit,
             CancellationToken cancellationToken,
             Guid? referencedBy = null,
-            string? relationshipCode = null) =>
+            string? relationshipCode = null,
+            string? sort = null,
+            string? sortDir = null,
+            int? seed = null,
+            bool? favorite = null,
+            bool? organized = null,
+            int? ratingMin = null,
+            int? ratingMax = null,
+            bool? unrated = null,
+            string? status = null) =>
             throw new NotSupportedException();
 
         public Task<EntityCard?> GetAsync(Guid id, bool hideNsfw, CancellationToken cancellationToken) =>

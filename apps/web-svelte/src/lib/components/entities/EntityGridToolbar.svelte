@@ -10,6 +10,7 @@
     List,
     RotateCcw,
     Search,
+    Shuffle,
     SlidersHorizontal,
     X,
   } from "@lucide/svelte";
@@ -44,6 +45,7 @@
     onScaleChange: (scale: number) => void;
     onSortByChange: (sortBy: EntityGridSort) => void;
     onSortDirChange: (sortDir: EntityGridSortDir) => void;
+    onReshuffle: () => void;
     onViewModeChange: (viewMode: EntityGridViewMode) => void;
     presets: FilterPreset[];
     mediaWall: boolean;
@@ -75,6 +77,7 @@
     onScaleChange,
     onSortByChange,
     onSortDirChange,
+    onReshuffle,
     onViewModeChange,
     presets,
     mediaWall,
@@ -88,16 +91,20 @@
 
   const SORT_LABELS: Record<EntityGridSort, string> = {
     title: "Title",
+    added: "Date added",
+    rating: "Rating",
+    random: "Random",
     kind: "Kind",
     position: "Position",
-    rating: "Rating",
   };
 
   const SORT_OPTIONS: { value: EntityGridSort; label: string }[] = [
     { value: "title", label: "Title" },
+    { value: "added", label: "Date added" },
+    { value: "rating", label: "Rating" },
+    { value: "random", label: "Random" },
     { value: "kind", label: "Kind" },
     { value: "position", label: "Position" },
-    { value: "rating", label: "Rating" },
   ];
 
   let sortOpen = $state(false);
@@ -181,15 +188,27 @@
           {/if}
         </div>
 
-        <button
-          type="button"
-          class="ctrl-btn ctrl-icon"
-          title={sortDir === "asc" ? "Ascending — click to reverse" : "Descending — click to reverse"}
-          aria-label={`Sort direction: ${sortDir}`}
-          onclick={() => onSortDirChange(sortDir === "asc" ? "desc" : "asc")}
-        >
-          <ChevronDown class={cn("h-3.5 w-3.5 dir-arrow", sortDir === "asc" && "is-up")} />
-        </button>
+        {#if sortBy === "random"}
+          <button
+            type="button"
+            class="ctrl-btn ctrl-icon"
+            title="Reshuffle"
+            aria-label="Reshuffle the random order"
+            onclick={() => onReshuffle()}
+          >
+            <Shuffle class="h-3.5 w-3.5" />
+          </button>
+        {:else}
+          <button
+            type="button"
+            class="ctrl-btn ctrl-icon"
+            title={sortDir === "asc" ? "Ascending — click to reverse" : "Descending — click to reverse"}
+            aria-label={`Sort direction: ${sortDir}`}
+            onclick={() => onSortDirChange(sortDir === "asc" ? "desc" : "asc")}
+          >
+            <ChevronDown class={cn("h-3.5 w-3.5 dir-arrow", sortDir === "asc" && "is-up")} />
+          </button>
+        {/if}
 
         <span class="cluster-divider" aria-hidden="true"></span>
 

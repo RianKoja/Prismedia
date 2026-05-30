@@ -6,11 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 ### What's New
+- Library grids can now sort and filter across the entire collection instead of just the page on screen, including a Random shuffle that reorders the whole library (with a reshuffle button) and a new "Date added (newest)" default ordering.
 - Fresh instances now serve generated thumbnails as soon as the API starts, so newly scanned media no longer shows broken cover links when the cache directory did not exist yet.
 - Prismedia branding now uses the cleaned primary and NSFW logos throughout the app, with a larger sidebar brand lockup and a scalable vector line mark.
 - Mobile install metadata now presents Prismedia with the correct app name, theme colors, and safer icon spacing for browser and home-screen surfaces.
 
 ### Added
+- Added library-wide grid filters that apply across the whole collection: an adaptive status filter (Read/Unread/Reading for books and comics, Watched/Unwatched/In progress for video and audio), Favorites, Organized, rating thresholds, and Unrated.
+- Added Random, Date added, Rating, and Title sort options to library grids, with Random shuffling the entire library consistently across pages.
+- Added Stash community scraper compatibility for identification: browse and install scrapers from the Stash Community tab on the Plugins page (Python scrapers included), then identify videos by URL or name and map scraped scenes — title, date, studio, performers, director, tags, and cover art — into Prismedia. Credited performers and the studio are proposed as reviewable cards and their posters and bios are pulled from the scraper's performer/studio lookups. Stash scrapers are always NSFW, and every entity they create or touch is marked NSFW.
 - Added a typed EntityDetail action button API so route-level hero actions share consistent styling, sizing, disabled states, and mobile label behavior.
 - Added Prismedia Community plugin update detection and install actions so deployed providers can move to newer compatible repository versions.
 - Added global entity search results that show direct matches first, then related media for matched people, studios, and tags, with quick-open highlighted results in search and the command palette.

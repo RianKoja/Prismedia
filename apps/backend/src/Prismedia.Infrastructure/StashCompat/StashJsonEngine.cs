@@ -57,7 +57,9 @@ public sealed class StashJsonEngine {
                         scene.Tags = EvaluateArray(document.RootElement, selectorDef, common);
                         break;
                     case "performers":
-                        scene.Performers = EvaluateArray(document.RootElement, selectorDef, common);
+                        scene.Performers = EvaluateArray(document.RootElement, selectorDef, common)
+                            .Select(name => new StashScrapedPerformer { Name = name })
+                            .ToArray();
                         break;
                     case "studio":
                         var name = EvaluateString(document.RootElement, selectorDef["Name"], common);

@@ -48,15 +48,24 @@ public static class StashResultMapper {
             dates["release"] = scene.Date.Trim();
         }
 
-        var credits = scene.Performers
-            .Where(name => !string.IsNullOrWhiteSpace(name))
-            .Select((name, index) => new CreditPatch(name.Trim(), "performer", null, index))
+        // Performers become "performer" credits; a director, when present, becomes a "director"
+        // credit so the crew is captured too.
+        var performers = scene.Performers
+            .Where(performer => !string.IsNullOrWhiteSpace(performer.Name))
             .ToArray();
+        var credits = new List<CreditPatch>();
+        credits.AddRange(performers
+            .Select((performer, index) => new CreditPatch(performer.Name!.Trim(), "performer", null, index)));
+        if (!string.IsNullOrWhiteSpace(scene.Director)) {
+            credits.Add(new CreditPatch(scene.Director.Trim(), "director", null, credits.Count));
+        }
 
         var tags = scene.Tags
             .Where(name => !string.IsNullOrWhiteSpace(name))
             .Select(name => name.Trim())
             .ToArray();
+
+        var studioName = string.IsNullOrWhiteSpace(scene.Studio?.Name) ? null : scene.Studio!.Name!.Trim();
 
         var patch = new EntityMetadataPatch(
             string.IsNullOrWhiteSpace(scene.Title) ? null : scene.Title.Trim(),
@@ -64,17 +73,24 @@ public static class StashResultMapper {
             externalIds,
             urls.Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
             tags,
-            string.IsNullOrWhiteSpace(scene.Studio?.Name) ? null : scene.Studio!.Name!.Trim(),
+            studioName,
             credits,
             dates,
             new Dictionary<string, int>(),
             new Dictionary<string, int>(),
             null);
 
+        // A scraped scene is a direct video, so its cover is a wide thumbnail (the video's primary
+        // display image) rather than a portrait poster, which is reserved for movies and series.
         var images = new List<ImageCandidate>();
         if (!string.IsNullOrWhiteSpace(scene.Image)) {
-            images.Add(new ImageCandidate("poster", scene.Image.Trim(), providerName, null, null, null, null));
+            images.Add(new ImageCandidate("thumbnail", scene.Image.Trim(), providerName, null, null, null, null));
         }
+
+        // Emit credited people and the studio as relationship proposals too — not just flat patch
+        // strings — so the review UI surfaces them as cards and the apply pipeline can enrich the
+        // resulting Person/Studio entities (matching how first-party providers shape their output).
+        var relationships = BuildRelationships(performers, scene.Director, scene.Studio, providerId, providerName);
 
         return new EntityMetadataProposal(
             $"{providerId}:{inputUrl ?? scene.Url ?? scene.Title}",
@@ -86,8 +102,92 @@ public static class StashResultMapper {
             images,
             [],
             [],
-            Relationships: []);
+            Relationships: relationships);
     }
+
+    private static IReadOnlyList<EntityMetadataProposal> BuildRelationships(
+        IReadOnlyList<StashScrapedPerformer> performers,
+        string? director,
+        StashScrapedStudio? studio,
+        string providerId,
+        string providerName) {
+        var relationships = new List<EntityMetadataProposal>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var performer in performers) {
+            var name = performer.Name!.Trim();
+            if (!seen.Add(name)) {
+                continue;
+            }
+
+            relationships.Add(PersonProposal(providerId, providerName, name, performer));
+        }
+
+        if (!string.IsNullOrWhiteSpace(director) && seen.Add(director.Trim())) {
+            relationships.Add(PersonProposal(providerId, providerName, director.Trim(), performer: null));
+        }
+
+        if (!string.IsNullOrWhiteSpace(studio?.Name)) {
+            var studioName = studio!.Name!.Trim();
+            var studioUrls = Uri.TryCreate(studio.Url, UriKind.Absolute, out _) ? new[] { studio.Url!.Trim() } : [];
+            var studioImages = string.IsNullOrWhiteSpace(studio.Image)
+                ? Array.Empty<ImageCandidate>()
+                : [new ImageCandidate("logo", studio.Image.Trim(), providerName, null, null, null, null)];
+            relationships.Add(RelationshipProposal($"{providerId}:studio:{studioName}", providerName, "studio", studioName, null, studioUrls, studioImages));
+        }
+
+        return relationships;
+    }
+
+    private static EntityMetadataProposal PersonProposal(
+        string providerId,
+        string providerName,
+        string name,
+        StashScrapedPerformer? performer) {
+        var urls = Uri.TryCreate(performer?.Url, UriKind.Absolute, out _) ? new[] { performer!.Url!.Trim() } : [];
+        var images = string.IsNullOrWhiteSpace(performer?.Image)
+            ? Array.Empty<ImageCandidate>()
+            : [new ImageCandidate("poster", performer!.Image!.Trim(), providerName, null, null, null, null)];
+        var details = string.IsNullOrWhiteSpace(performer?.Details) ? null : performer!.Details!.Trim();
+        var dates = new Dictionary<string, string>();
+        if (!string.IsNullOrWhiteSpace(performer?.Birthdate)) {
+            dates["birth"] = performer!.Birthdate!.Trim();
+        }
+
+        return RelationshipProposal($"{providerId}:person:{name}", providerName, "person", name, details, urls, images, dates);
+    }
+
+    private static EntityMetadataProposal RelationshipProposal(
+        string proposalId,
+        string providerName,
+        string targetKind,
+        string title,
+        string? description,
+        IReadOnlyList<string> urls,
+        IReadOnlyList<ImageCandidate> images,
+        IReadOnlyDictionary<string, string>? dates = null) =>
+        new(
+            proposalId,
+            providerName,
+            targetKind,
+            null,
+            "cascade",
+            new EntityMetadataPatch(
+                title,
+                description,
+                new Dictionary<string, string>(),
+                urls,
+                [],
+                null,
+                [],
+                dates ?? new Dictionary<string, string>(),
+                new Dictionary<string, int>(),
+                new Dictionary<string, int>(),
+                null),
+            images,
+            [],
+            [],
+            Relationships: []);
 
     /// <summary>
     /// Builds a candidate from a scraped scene for name-search disambiguation.

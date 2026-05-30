@@ -1,7 +1,15 @@
 import { fireEvent, render, waitFor } from "@testing-library/svelte";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { tick } from "svelte";
 import EntityThumbnail from "./EntityThumbnail.svelte";
 import type { EntityThumbnailCard } from "$lib/entities/entity-thumbnail";
+
+// jsdom lacks TouchEvent, so synthesize a cancelable event carrying a touches list.
+function touchEvent(type: string, touches: Array<{ clientX: number; clientY: number }>): Event {
+  const event = new Event(type, { bubbles: true, cancelable: true });
+  Object.defineProperty(event, "touches", { value: touches, configurable: true });
+  return event;
+}
 
 const loadTrickplayFrames = vi.fn();
 
@@ -57,7 +65,7 @@ describe("EntityThumbnail", () => {
     });
   });
 
-  it("scrubs sprite trickplay from touch pointer drag", async () => {
+  it("does not scrub or capture the pointer on touch so rows stay scrollable", async () => {
     const { container } = render(EntityThumbnail, {
       props: {
         card: spriteCard(),
@@ -70,14 +78,63 @@ describe("EntityThumbnail", () => {
       value: () => ({ left: 0, width: 100 }),
     });
 
+    // A touch drag must not capture the pointer — the browser keeps owning the gesture so the
+    // surrounding horizontal row can scroll. (Scrubbing is a desktop pointer-hover interaction.)
     await fireEvent(media, pointerEvent("pointerdown", 10, { pointerType: "touch", pointerId: 7 }));
     await fireEvent(media, pointerEvent("pointermove", 90, { pointerType: "touch", pointerId: 7 }));
 
-    await waitFor(() => {
-      const overlay = container.querySelector<HTMLElement>(".sprite-overlay");
-      expect(loadTrickplayFrames).toHaveBeenCalledWith("/Videos/1/Trickplay/280/tiles.m3u8");
-      expect(overlay?.style.backgroundPosition).toContain("100%");
+    expect(media.setPointerCapture).not.toHaveBeenCalled();
+  });
+
+  it("scrubs sprite trickplay from a touch press-and-hold", async () => {
+    vi.useFakeTimers();
+    const { container } = render(EntityThumbnail, {
+      props: {
+        card: spriteCard(),
+      },
     });
+    await tick();
+    const media = container.querySelector(".media") as HTMLElement;
+    Object.defineProperty(media, "getBoundingClientRect", {
+      configurable: true,
+      value: () => ({ left: 0, width: 100 }),
+    });
+
+    media.dispatchEvent(touchEvent("touchstart", [{ clientX: 10, clientY: 10 }]));
+    // Press-and-hold arms scrubbing; the drag then preventDefaults to stop the row scrolling.
+    await vi.advanceTimersByTimeAsync(400);
+    const move = touchEvent("touchmove", [{ clientX: 90, clientY: 10 }]);
+    media.dispatchEvent(move);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(move.defaultPrevented).toBe(true);
+    const overlay = container.querySelector<HTMLElement>(".sprite-overlay");
+    expect(loadTrickplayFrames).toHaveBeenCalledWith("/Videos/1/Trickplay/280/tiles.m3u8");
+    expect(overlay?.style.backgroundPosition).toContain("100%");
+  });
+
+  it("lets a quick touch swipe scroll without scrubbing", async () => {
+    vi.useFakeTimers();
+    const { container } = render(EntityThumbnail, {
+      props: {
+        card: spriteCard(),
+      },
+    });
+    await tick();
+    const media = container.querySelector(".media") as HTMLElement;
+    Object.defineProperty(media, "getBoundingClientRect", {
+      configurable: true,
+      value: () => ({ left: 0, width: 100 }),
+    });
+
+    media.dispatchEvent(touchEvent("touchstart", [{ clientX: 10, clientY: 10 }]));
+    // Movement before the hold fires cancels arming, so the row keeps scrolling.
+    media.dispatchEvent(touchEvent("touchmove", [{ clientX: 60, clientY: 12 }]));
+    await vi.advanceTimersByTimeAsync(400);
+    const move = touchEvent("touchmove", [{ clientX: 90, clientY: 12 }]);
+    media.dispatchEvent(move);
+
+    expect(move.defaultPrevented).toBe(false);
   });
 
   it("keeps touch taps navigable when a thumbnail can scrub", async () => {
@@ -302,21 +359,23 @@ describe("EntityThumbnail", () => {
     expect(container.querySelector(".sequence-rail span.is-active")).not.toBeNull();
   });
 
-  it("scrubs image-sequence thumbnails from touch pointer drag", async () => {
+  it("scrubs image-sequence thumbnails from a mouse hover drag", async () => {
+    vi.useFakeTimers();
     const { container } = render(EntityThumbnail, {
       props: {
         card: imageSequenceCard(),
       },
     });
     const media = container.querySelector(".media") as HTMLElement;
-    media.setPointerCapture = vi.fn();
     Object.defineProperty(media, "getBoundingClientRect", {
       configurable: true,
       value: () => ({ left: 0, width: 100 }),
     });
 
-    await fireEvent(media, pointerEvent("pointerdown", 10, { pointerType: "touch", pointerId: 8 }));
-    await fireEvent(media, pointerEvent("pointermove", 90, { pointerType: "touch", pointerId: 8 }));
+    await fireEvent(media, pointerEvent("pointerenter", 0));
+    await vi.advanceTimersByTimeAsync(200);
+    await fireEvent(media, pointerEvent("pointermove", 90));
+    await vi.advanceTimersByTimeAsync(0);
 
     expect(container.querySelector<HTMLImageElement>(".media > img")?.getAttribute("src")).toBe("/assets/pages/3.jpg");
     expect(container.querySelector(".sequence-rail span.is-active")).not.toBeNull();

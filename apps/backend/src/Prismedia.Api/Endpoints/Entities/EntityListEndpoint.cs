@@ -15,6 +15,15 @@ internal static class EntityListEndpoint {
             int? limit,
             Guid? referencedBy,
             string? relationshipCode,
+            string? sort,
+            string? sortDir,
+            int? seed,
+            bool? favorite,
+            bool? organized,
+            int? ratingMin,
+            int? ratingMax,
+            bool? unrated,
+            string? status,
             HttpContext httpContext,
             IEntityReadService entities,
             CancellationToken cancellationToken) => {
@@ -30,7 +39,16 @@ internal static class EntityListEndpoint {
                     limit,
                     cancellationToken,
                     referencedBy,
-                    relationshipCode));
+                    relationshipCode,
+                    sort,
+                    sortDir,
+                    seed,
+                    favorite,
+                    organized,
+                    ratingMin,
+                    ratingMax,
+                    unrated,
+                    status));
             })
             .WithName("ListEntities")
             .WithSummary("List Entities.")

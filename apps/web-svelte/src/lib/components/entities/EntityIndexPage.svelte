@@ -98,6 +98,7 @@
 
   function handleRequestChange(request: EntityGridRequest) {
     page.setQuery(request.query ?? "");
+    page.setServerQuery(request.server);
   }
 
   function handleCardActivate(card: EntityThumbnailCard, visibleCards: EntityThumbnailCard[]) {
@@ -231,10 +232,13 @@
     <EntityGrid
       cards={page.cards}
       loading={page.loadState === "loading"}
+      entityKind={kind}
       {prefsKey}
       {emptyTitle}
       {emptyMessage}
       {initialMediaWall}
+      initialSortBy="added"
+      initialSortDir="desc"
       initialPageSize={page.pageSize}
       hasMore={page.nextCursor !== null}
       loadingMore={page.loadingMore}

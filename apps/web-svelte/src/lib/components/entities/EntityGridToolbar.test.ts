@@ -34,6 +34,7 @@ describe("EntityGridToolbar", () => {
         onScaleChange: vi.fn(),
         onSortByChange: vi.fn(),
         onSortDirChange: vi.fn(),
+        onReshuffle: vi.fn(),
         onViewModeChange: vi.fn(),
         presets: [],
         mediaWall: false,

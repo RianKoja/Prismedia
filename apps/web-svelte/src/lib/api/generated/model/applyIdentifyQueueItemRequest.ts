@@ -12,4 +12,6 @@ export interface ApplyIdentifyQueueItemRequest {
   selectedFields: string[];
   /** @nullable */
   selectedImages: ApplyIdentifyQueueItemRequestSelectedImages;
+  /** @nullable */
+  progressId?: string | null;
 }

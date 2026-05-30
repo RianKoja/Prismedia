@@ -109,6 +109,8 @@ public sealed class StashCompatRunner : IIdentifyRunner {
             return null;
         }
 
+        await EnrichPerformersAsync(engine, definition, descriptor.EntryPath, scene, cancellationToken);
+
         var byUrl = capability.EndsWith("ByURL", StringComparison.OrdinalIgnoreCase);
         return StashResultMapper.ToProposal(
             scene,
@@ -118,6 +120,53 @@ public sealed class StashCompatRunner : IIdentifyRunner {
             input.Url,
             byUrl ? "Matched by URL" : "Matched by query",
             byUrl ? 0.9m : 0.7m);
+    }
+
+    /// <summary>
+    /// Maximum performers enriched per scene, bounding the extra network/script calls.
+    /// </summary>
+    private const int MaxEnrichedPerformers = 12;
+
+    /// <summary>
+    /// Fills in performer artwork and bio by resolving each credited performer's profile through
+    /// the scraper's performer capabilities. Best-effort: a scene without performer URLs/lookups,
+    /// or a failed lookup, simply leaves the credit with just its name.
+    /// </summary>
+    private static async Task EnrichPerformersAsync(
+        StashScraperEngine engine,
+        StashScraperDefinition definition,
+        string scraperPath,
+        StashScrapedScene scene,
+        CancellationToken cancellationToken) {
+        if (!definition.HasCapability("performerByURL") && !definition.HasCapability("performerByName")) {
+            return;
+        }
+
+        foreach (var performer in scene.Performers.Take(MaxEnrichedPerformers)) {
+            if (!string.IsNullOrWhiteSpace(performer.Image)) {
+                continue;
+            }
+
+            StashScrapedPerformer? resolved;
+            try {
+                resolved = await engine.ResolvePerformerAsync(definition, scraperPath, performer, cancellationToken);
+            } catch (StashScriptActionRequiredException) {
+                return;
+            } catch (Exception) when (!cancellationToken.IsCancellationRequested) {
+                continue;
+            }
+
+            if (resolved is null) {
+                continue;
+            }
+
+            performer.Image ??= resolved.Image;
+            performer.Url ??= resolved.Url;
+            performer.Details ??= resolved.Details;
+            performer.Gender ??= resolved.Gender;
+            performer.Birthdate ??= resolved.Birthdate;
+            performer.Country ??= resolved.Country;
+        }
     }
 
     /// <summary>

@@ -13,4 +13,22 @@ hideNsfw?: boolean;
  * @pattern ^-?(?:0|[1-9]\d*)$
  */
 limit?: number | string;
+sort?: string;
+sortDir?: string;
+/**
+ * @pattern ^-?(?:0|[1-9]\d*)$
+ */
+seed?: number | string;
+favorite?: boolean;
+organized?: boolean;
+/**
+ * @pattern ^-?(?:0|[1-9]\d*)$
+ */
+ratingMin?: number | string;
+/**
+ * @pattern ^-?(?:0|[1-9]\d*)$
+ */
+ratingMax?: number | string;
+unrated?: boolean;
+status?: string;
 };
