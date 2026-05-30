@@ -335,8 +335,12 @@ function resolveSubtitles(capabilities: EntityCapability[]): EntityDetailSubtitl
 function resolveProgress(capabilities: EntityCapability[]): EntityDetailProgress | null {
   const progressCap = getCapability(capabilities, CAPABILITY_KIND.progress);
   if (!progressCap) return null;
-  const index = numberValue(progressCap.index) ?? 0;
-  const total = numberValue(progressCap.total) ?? 0;
+  const rawIndex = Math.max(0, numberValue(progressCap.index) ?? 0);
+  const total = Math.max(0, numberValue(progressCap.total) ?? 0);
+  const completed = Boolean(progressCap.completedAt);
+  const index = total > 0
+    ? (completed ? total : Math.min(rawIndex + 1, total))
+    : 0;
   const percent = total > 0 ? Math.round((index / total) * 100) : 0;
   return {
     index,
@@ -344,7 +348,7 @@ function resolveProgress(capabilities: EntityCapability[]): EntityDetailProgress
     percent,
     unit: progressCap.unit,
     mode: progressCap.mode,
-    completed: Boolean(progressCap.completedAt),
+    completed,
   };
 }
 

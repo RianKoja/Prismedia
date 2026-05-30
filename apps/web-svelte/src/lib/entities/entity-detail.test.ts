@@ -252,6 +252,37 @@ describe("entity detail view model", () => {
     expect(detail.stats.map((row) => row.code)).toEqual(["credits"]);
   });
 
+  it("displays progress indexes as one-based positions", () => {
+    const detail = entityCardToDetailCard({
+      id: "book-1",
+      kind: "book",
+      title: "Book",
+      parentEntityId: null,
+      sortOrder: null,
+      capabilities: [
+        {
+          kind: "progress",
+          currentEntityId: "chapter-1",
+          unit: "page",
+          index: 24,
+          total: 25,
+          mode: "paged",
+          completedAt: null,
+          updatedAt: "2026-05-30T12:00:00Z",
+        },
+      ],
+      childrenByKind: [],
+      relationships: [],
+    } satisfies EntityCard);
+
+    expect(detail.progress).toMatchObject({
+      index: 25,
+      total: 25,
+      percent: 100,
+      completed: false,
+    });
+  });
+
   it("labels plugin person classification by meaning instead of source", () => {
     const detail = entityCardToDetailCard({
       id: "person-1",

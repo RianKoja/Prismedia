@@ -89,7 +89,7 @@ export function bookEntityProgressDisplay(
     ? Math.round(((Math.min(workIndex, workTotal - 1) + 1) / workTotal) * 100)
     : Math.round((currentPage / pageCount) * 100);
   const percent = Math.min(100, Math.max(workPage > 0 ? 1 : 0, rawPercent));
-  const isComplete = Boolean(progress.completedAt);
+  const isComplete = Boolean(progress.completedAt) || percent >= 100;
   const chapterNumber = chapter.sortOrder + 1;
   const chapterLabel = `Ch. ${chapterNumber}: ${chapter.title}`;
   const pageLabel = isComplete ? null : `Page ${currentPage} of ${pageCount}`;
@@ -114,4 +114,3 @@ export function bookEntityProgressDisplay(
     readerMode: progress.mode === "webtoon" ? "webtoon" : "paged",
   };
 }
-

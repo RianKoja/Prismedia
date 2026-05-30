@@ -143,4 +143,38 @@ describe("book entity reader helpers", () => {
       percent: 44,
     });
   });
+
+  it("treats the last zero-based page index as complete for display", () => {
+    const display = bookEntityProgressDisplay(
+      entity({
+        capabilities: [
+          {
+            kind: "progress",
+            currentEntityId: "chapter-1",
+            unit: "page",
+            index: 24,
+            total: 25,
+            mode: "paged",
+            completedAt: null,
+            updatedAt: "2026-05-30T12:00:00.000Z",
+            workIndex: 24,
+            workTotal: 25,
+          },
+        ],
+      }),
+      [{ id: "chapter-1", title: "Finale", sortOrder: 0, pageCount: 25 }],
+    );
+
+    expect(display).toMatchObject({
+      currentPage: 25,
+      pageCount: 25,
+      workPage: 25,
+      workTotal: 25,
+      percent: 100,
+      isComplete: true,
+      showMeter: false,
+      pageLabel: null,
+      detailLabel: "Read",
+    });
+  });
 });
