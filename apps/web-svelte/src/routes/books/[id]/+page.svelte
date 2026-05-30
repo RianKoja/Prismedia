@@ -386,7 +386,11 @@
 
     {#if progressDisplay}
       <section class="progress-section">
-        <button type="button" class="progress-summary" onclick={resumeProgress}>
+        <button
+          type="button"
+          class="progress-summary"
+          onclick={progressDisplay.isComplete ? startProgressOver : resumeProgress}
+        >
           <span class="section-kicker">Current chapter</span>
           <strong>{progressDisplay.chapterLabel}</strong>
           <span class="progress-detail-lines">
@@ -405,11 +409,17 @@
           </span>
         {/if}
         <div class="progress-actions">
-          <button type="button" class="reader-action primary" onclick={resumeProgress}>
-            <Play class="h-3.5 w-3.5" />
-            Resume
-          </button>
-          <button type="button" class="reader-action" onclick={startProgressOver}>
+          {#if !progressDisplay.isComplete}
+            <button type="button" class="reader-action primary" onclick={resumeProgress}>
+              <Play class="h-3.5 w-3.5" />
+              Resume
+            </button>
+          {/if}
+          <button
+            type="button"
+            class={["reader-action", progressDisplay.isComplete && "primary"]}
+            onclick={startProgressOver}
+          >
             <RotateCcw class="h-3.5 w-3.5" />
             Start over
           </button>

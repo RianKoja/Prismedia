@@ -77,6 +77,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - Updated web app manifest and mobile browser metadata for home-screen installation and browser UI theme colors.
 
 ### Fixed
+- Fixed completed book progress cards so they offer Start over without showing a misleading Resume action.
 - Fixed primary detail-page actions such as book Read buttons so they render as solid accented controls instead of translucent outline buttons.
 - Fixed library scans so video `.nfo` / `.info.json` sidecars and comic `ComicInfo.xml` files inside ZIP/CBZ archives are imported again for titles, descriptions, dates, studios, URLs, tags, and credits.
 - Fixed library grid thumbnails appearing blank or "snapping in" while scrolling, which happened because every card eagerly loaded a full-resolution cover image at once and flooded the browser's image decoder.

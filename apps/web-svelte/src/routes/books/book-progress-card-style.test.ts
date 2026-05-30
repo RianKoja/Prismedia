@@ -20,7 +20,15 @@ describe("book progress card styling", () => {
 
     expect(source).not.toContain("No chapters linked to this book yet.");
     expect(source).not.toContain(".empty-children");
-    expect(source).toContain(".chapter-card");
-    expect(source).toContain("border-radius: var(--radius-sm");
+    expect(source).toContain("<EntityGrid");
+    expect(source).toContain("prefsKey={`book-${book.id}-chapters`}");
+  });
+
+  it("shows only start over when book progress is complete", async () => {
+    const source = await readFile("src/routes/books/[id]/+page.svelte", "utf8");
+
+    expect(source).toContain("onclick={progressDisplay.isComplete ? startProgressOver : resumeProgress}");
+    expect(source).toContain("{#if !progressDisplay.isComplete}");
+    expect(source).toContain('class={["reader-action", progressDisplay.isComplete && "primary"]}');
   });
 });
