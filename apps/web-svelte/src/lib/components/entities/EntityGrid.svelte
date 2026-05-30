@@ -1,12 +1,7 @@
 <script lang="ts">
   import { browser } from "$app/environment";
   import {
-    EllipsisVertical,
-    Flame,
     SearchX,
-    CheckCheck,
-    ListChecks,
-    X,
   } from "@lucide/svelte";
   import { onMount } from "svelte";
   import { isNsfw, withFlagCapability } from "$lib/api/capabilities";
@@ -160,7 +155,6 @@
     : null;
   const persistedPrefs: EntityGridPrefs | null = prefsStore ? prefsStore.load() : null;
 
-  let actionsMenuOpen = $state(false);
   let capabilityOverrides = $state(new Map<string, EntityCapability[]>());
   let activeKind = $state(persistedPrefs?.activeKind ?? ENTITY_GRID_ALL_KINDS);
   let activePresetId = $state<string | null>(persistedPrefs?.activePresetId ?? null);
@@ -603,7 +597,6 @@
   function clearFiltersAndSort() {
     activeKind = ENTITY_GRID_ALL_KINDS;
     activePresetId = null;
-    actionsMenuOpen = false;
     filterIds = [];
     includeNsfw = true;
     query = "";
@@ -629,6 +622,16 @@
       selectedIds = [];
       onSelectionChange?.(selectedIds);
     }
+  }
+
+  function selectAllVisible() {
+    selectedIds = visibleCards.map((c) => c.entity.id);
+    onSelectionChange?.(selectedIds);
+  }
+
+  function clearSelection() {
+    selectedIds = [];
+    onSelectionChange?.(selectedIds);
   }
 
   function toggleNsfwFlag(markNsfw: boolean) {
@@ -760,6 +763,8 @@
   <EntityGridToolbar
     activeFilterIds={filterIds}
     {activePresetId}
+    {allSelectedNsfw}
+    {bulkActions}
     canClearFiltersAndSort={Boolean(
       activeKind !== ENTITY_GRID_ALL_KINDS ||
         filterIds.length > 0 ||
@@ -778,21 +783,28 @@
     onActiveFilterIdsChange={setFilterIds}
     onApplyPreset={applyPreset}
     onClearFiltersAndSort={clearFiltersAndSort}
+    onClearSelection={clearSelection}
     onDeletePreset={deletePreset}
     onDrawerOpenChange={(open) => (drawerOpen = open)}
     onMediaWallChange={setMediaWall}
     onOverwritePreset={overwritePreset}
     onQueryChange={setQuery}
+    onSelectAllVisible={selectAllVisible}
+    onSelectionActiveChange={setSelectionActive}
     onSavePreset={savePreset}
     onScaleChange={persistScale}
     onSortByChange={setSortBy}
     onSortDirChange={setSortDir}
+    onToggleNsfwFlag={toggleNsfwFlag}
     onReshuffle={reshuffle}
     onViewModeChange={setViewMode}
     {presets}
     {query}
     {scale}
+    {selectable}
     {selectedCount}
+    {selectedIds}
+    {selectionActive}
     {sortBy}
     {sortDir}
     {viewMode}
@@ -805,115 +817,6 @@
       {entityKind}
       onActiveFilterIdsChange={setFilterIds}
     />
-  {/if}
-
-  {#if selectable}
-    <div class="bulk-bar" role="status" aria-live="polite">
-      <button
-        type="button"
-        class="bulk-btn select-toggle"
-        class:is-active={selectionActive}
-        aria-pressed={selectionActive}
-        title={selectionActive ? "Exit selection" : "Select items"}
-        onclick={() => setSelectionActive(!selectionActive)}
-      >
-        {#if selectionActive}
-          <X class="h-3.5 w-3.5" />
-          <span class="bulk-btn-label">Done</span>
-        {:else}
-          <ListChecks class="h-3.5 w-3.5" />
-          <span class="bulk-btn-label">Select</span>
-        {/if}
-      </button>
-
-      {#if selectionActive}
-        <span class="bulk-count">{selectedIds.length} selected</span>
-      {/if}
-
-      {#if selectionActive}
-        <div class="bulk-controls">
-          <button
-            type="button"
-            class="bulk-btn"
-            title="Select all visible"
-            onclick={() => {
-              selectedIds = visibleCards.map((c) => c.entity.id);
-              onSelectionChange?.(selectedIds);
-            }}
-          >
-            <CheckCheck class="h-3.5 w-3.5" />
-            <span class="bulk-btn-label">Select all</span>
-          </button>
-          <button
-            type="button"
-            class="bulk-btn"
-            title="Clear selection"
-            disabled={selectedIds.length === 0}
-            onclick={() => {
-              selectedIds = [];
-              onSelectionChange?.(selectedIds);
-            }}
-          >
-            <X class="h-3.5 w-3.5" />
-            <span class="bulk-btn-label">Clear</span>
-          </button>
-
-          {#if selectedIds.length > 0}
-            <span class="bulk-divider" aria-hidden="true"></span>
-            <button
-              type="button"
-              class="bulk-btn"
-              title={allSelectedNsfw ? "Mark SFW" : "Mark NSFW"}
-              onclick={() => toggleNsfwFlag(!allSelectedNsfw)}
-            >
-              <Flame class="h-3.5 w-3.5" />
-              <span class="bulk-btn-label">{allSelectedNsfw ? "Mark SFW" : "Mark NSFW"}</span>
-            </button>
-          {/if}
-
-          {#if bulkActions.length > 0 && selectedIds.length > 0}
-          <span class="bulk-divider" aria-hidden="true"></span>
-          <div class="bulk-actions-menu">
-            <button
-              type="button"
-              class="bulk-btn"
-              class:is-active={actionsMenuOpen}
-              title="Actions"
-              aria-label="Bulk actions"
-              aria-expanded={actionsMenuOpen}
-              onclick={() => (actionsMenuOpen = !actionsMenuOpen)}
-            >
-              <EllipsisVertical class="h-3.5 w-3.5" />
-              <span class="bulk-btn-label">Actions</span>
-            </button>
-            {#if actionsMenuOpen}
-              <button
-                type="button"
-                class="fixed inset-0 z-40 cursor-default"
-                aria-label="Close actions menu"
-                onclick={() => (actionsMenuOpen = false)}
-              ></button>
-              <div class="bulk-flyout">
-                {#each bulkActions as action (action.id)}
-                  <button
-                    type="button"
-                    class="bulk-flyout-item"
-                    class:danger={action.tone === "danger"}
-                    onclick={() => {
-                      action.onRun(selectedIds);
-                      actionsMenuOpen = false;
-                    }}
-                  >
-                    {action.label}
-                  </button>
-                {/each}
-              </div>
-            {/if}
-          </div>
-        {/if}
-        </div>
-      {/if}
-    </div>
   {/if}
 
   <EntityGridTabs
@@ -1015,11 +918,11 @@
    * own block padding, so cards get visible breathing room above and below
    * without creating a transparent strip inside the sticky toolbar shell.
    */
-  .entity-grid > * + * {
+  :global(.entity-grid > * + *) {
     margin-top: 0.85rem;
   }
 
-  .entity-grid > :first-child + * {
+  :global(.entity-grid > :first-child + *) {
     margin-top: 0;
   }
 
@@ -1170,165 +1073,6 @@
   .empty-icon :global(svg) {
     width: 100%;
     height: 100%;
-  }
-
-  /*
-   * Selection ("Select") bar — the second lower bar in the toolbar stack. It
-   * tucks up behind the sticky toolbar shell (negative top margin, no top
-   * border, only bottom corners rounded) so it reads as sliding out from
-   * underneath the controls, matching the EntityDetail content card. The extra
-   * top padding offsets the slice hidden behind the shell so the buttons stay
-   * clear of the seam.
-   */
-  .bulk-bar {
-    position: relative;
-    z-index: 3;
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    border: 1px solid var(--color-border, #1c2235);
-    border-top: 0;
-    background:
-      linear-gradient(180deg, rgba(19, 23, 31, 0.88), rgba(12, 15, 21, 0.96)),
-      var(--color-surface-2, #101420);
-    border-radius: 0 0 var(--radius-md, 10px) var(--radius-md, 10px);
-    box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.035),
-      0 10px 30px rgba(0, 0, 0, 0.24);
-    color: var(--color-text-muted);
-    font-family: var(--font-mono, "JetBrains Mono", monospace);
-    font-size: 0.7rem;
-    padding: 1.05rem 0.85rem 0.6rem;
-    pointer-events: auto;
-  }
-
-  /*
-   * Pull the Select bar up under the toolbar shell. A dedicated child selector
-   * is needed to beat `.entity-grid > :first-child + *` (which zeroes the
-   * margin of the element directly after the toolbar).
-   */
-  .entity-grid > .bulk-bar {
-    margin-top: -0.5rem;
-  }
-
-  .bulk-count {
-    color: var(--color-text-accent);
-    text-transform: uppercase;
-    flex-shrink: 0;
-  }
-
-  .bulk-controls {
-    display: flex;
-    align-items: center;
-    gap: 0.35rem;
-    margin-left: auto;
-  }
-
-  .bulk-divider {
-    display: inline-block;
-    width: 1px;
-    height: 1.1rem;
-    background: linear-gradient(
-      to bottom,
-      transparent,
-      rgb(255 255 255 / 0.08),
-      transparent
-    );
-    margin: 0 0.1rem;
-  }
-
-  .bulk-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.35rem;
-    height: 1.85rem;
-    border: 1px solid var(--color-border-subtle, rgba(148, 158, 178, 0.07));
-    background: var(--color-surface-2, #101420);
-    color: var(--color-text-muted);
-    font-family: var(--font-mono, "JetBrains Mono", monospace);
-    font-size: 0.66rem;
-    letter-spacing: 0.04em;
-    padding: 0 0.55rem;
-    border-radius: var(--radius-xs, 4px);
-    box-shadow: inset 0 2px 8px rgba(0,0,0,0.30);
-    transition:
-      border-color var(--duration-fast, 80ms) var(--ease-default, cubic-bezier(0.4, 0, 0.2, 1)),
-      background var(--duration-fast, 80ms) var(--ease-default, cubic-bezier(0.4, 0, 0.2, 1)),
-      color var(--duration-fast, 80ms) var(--ease-default, cubic-bezier(0.4, 0, 0.2, 1)),
-      box-shadow var(--duration-fast, 80ms) var(--ease-default, cubic-bezier(0.4, 0, 0.2, 1));
-  }
-
-  .bulk-btn:hover {
-    border-color: var(--color-border-accent, rgba(196, 154, 90, 0.25));
-    background: var(--color-surface-3, #151a28);
-    color: var(--color-text-primary);
-    box-shadow: 0 0 0 1px rgba(242,194,106,0.35), 0 0 8px rgba(242,194,106,0.15);
-  }
-
-  .bulk-btn.is-active {
-    border-color: var(--color-border-accent, rgba(196, 154, 90, 0.25));
-    background: var(--color-surface-4, #1c2235);
-    color: var(--color-text-accent, #f2c26a);
-    box-shadow: 0 0 0 1px rgba(242,194,106,0.35), 0 0 8px rgba(242,194,106,0.15);
-  }
-
-  .bulk-btn-label {
-    display: none;
-  }
-
-  @media (min-width: 520px) {
-    .bulk-btn-label {
-      display: inline;
-    }
-  }
-
-  .bulk-actions-menu {
-    position: relative;
-  }
-
-  .bulk-flyout {
-    position: absolute;
-    right: 0;
-    top: calc(100% + 0.3rem);
-    z-index: 50;
-    min-width: 10rem;
-    border: 1px solid var(--color-border-subtle, rgba(148, 158, 178, 0.07));
-    background: rgb(12, 15, 21);
-    border-radius: var(--radius-sm, 6px);
-    box-shadow: 0 8px 40px rgba(0,0,0,0.60);
-    padding: 0.3rem 0;
-    overflow: hidden;
-  }
-
-  .bulk-flyout-item {
-    display: flex;
-    align-items: center;
-    gap: 0.55rem;
-    width: 100%;
-    padding: 0.45rem 0.85rem;
-    background: transparent;
-    color: var(--color-text-muted);
-    font-family: var(--font-mono, "JetBrains Mono", monospace);
-    font-size: 0.74rem;
-    letter-spacing: 0.04em;
-    text-align: left;
-    transition:
-      background-color var(--duration-fast, 80ms) var(--ease-default, cubic-bezier(0.4, 0, 0.2, 1)),
-      color var(--duration-fast, 80ms) var(--ease-default, cubic-bezier(0.4, 0, 0.2, 1));
-  }
-
-  .bulk-flyout-item:hover {
-    background: rgb(255 255 255 / 0.04);
-    color: var(--color-text-primary);
-  }
-
-  .bulk-flyout-item.danger {
-    color: var(--color-text-muted);
-  }
-
-  .bulk-flyout-item.danger:hover {
-    background: rgb(168 72 80 / 0.12);
-    color: var(--color-error-text, #cc7880);
   }
 
   .empty strong {
