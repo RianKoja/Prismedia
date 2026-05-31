@@ -607,6 +607,10 @@
     flex: 1;
     overflow: hidden;
     user-select: none;
+    /* Deliver all touch gestures to our pointer handlers; without this the
+       browser claims horizontal swipes for back-navigation and fires
+       pointercancel mid-swipe, so swipe-to-navigate/dismiss never registers. */
+    touch-action: none;
   }
 
   .media-frame {

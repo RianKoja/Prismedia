@@ -86,7 +86,7 @@ describe("EntityThumbnail", () => {
     expect(media.setPointerCapture).not.toHaveBeenCalled();
   });
 
-  it("scrubs sprite trickplay from a touch press-and-hold", async () => {
+  it("scrubs sprite trickplay from a horizontal touch drag", async () => {
     vi.useFakeTimers();
     const { container } = render(EntityThumbnail, {
       props: {
@@ -101,9 +101,8 @@ describe("EntityThumbnail", () => {
     });
 
     media.dispatchEvent(touchEvent("touchstart", [{ clientX: 10, clientY: 10 }]));
-    // Press-and-hold arms scrubbing; the drag then preventDefaults to stop the row scrolling.
-    await vi.advanceTimersByTimeAsync(400);
-    const move = touchEvent("touchmove", [{ clientX: 90, clientY: 10 }]);
+    // A horizontal drag scrubs immediately and preventDefaults to stop the row scrolling.
+    const move = touchEvent("touchmove", [{ clientX: 90, clientY: 12 }]);
     media.dispatchEvent(move);
     await vi.advanceTimersByTimeAsync(0);
 
@@ -113,7 +112,7 @@ describe("EntityThumbnail", () => {
     expect(overlay?.style.backgroundPosition).toContain("100%");
   });
 
-  it("lets a quick touch swipe scroll without scrubbing", async () => {
+  it("lets a vertical touch swipe scroll without scrubbing", async () => {
     vi.useFakeTimers();
     const { container } = render(EntityThumbnail, {
       props: {
@@ -128,10 +127,9 @@ describe("EntityThumbnail", () => {
     });
 
     media.dispatchEvent(touchEvent("touchstart", [{ clientX: 10, clientY: 10 }]));
-    // Movement before the hold fires cancels arming, so the row keeps scrolling.
-    media.dispatchEvent(touchEvent("touchmove", [{ clientX: 60, clientY: 12 }]));
-    await vi.advanceTimersByTimeAsync(400);
-    const move = touchEvent("touchmove", [{ clientX: 90, clientY: 12 }]);
+    // A vertical drag is a scroll: it resolves to "scroll" and never preventDefaults.
+    media.dispatchEvent(touchEvent("touchmove", [{ clientX: 12, clientY: 60 }]));
+    const move = touchEvent("touchmove", [{ clientX: 12, clientY: 90 }]);
     media.dispatchEvent(move);
 
     expect(move.defaultPrevented).toBe(false);

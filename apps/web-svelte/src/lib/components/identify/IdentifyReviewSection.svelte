@@ -10,6 +10,8 @@
     meta?: string | null;
     panelId: string;
     title: string;
+    /** Render the section collapsed on first mount. The content stays unmounted until expanded. */
+    startCollapsed?: boolean;
   }
 
   let {
@@ -20,9 +22,11 @@
     meta = null,
     panelId,
     title,
+    startCollapsed = false,
   }: Props = $props();
 
-  let collapsed = $state(false);
+  // svelte-ignore state_referenced_locally
+  let collapsed = $state(startCollapsed);
   const contentId = $derived(`${panelId}-content`);
   const sectionClass = $derived(
     `surface-panel overflow-hidden${lazy ? " identify-lazy-section" : ""}${collapsed ? " is-collapsed" : ""}`,

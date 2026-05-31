@@ -108,13 +108,13 @@
           disabled={busy}
         >
           <Play class="h-3.5 w-3.5" />
-          Resume
+          <span class="entity-action-button-label">Resume</span>
         </button>
       {/if}
       {#if canStartOver && onStartOver}
         <button type="button" class="entity-action-button" onclick={onStartOver} disabled={busy}>
           <RotateCcw class="h-3.5 w-3.5" />
-          Start over
+          <span class="entity-action-button-label">Start over</span>
         </button>
       {/if}
     </div>

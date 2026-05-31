@@ -14,6 +14,7 @@
   import { cn } from "@prismedia/ui-svelte";
   import EntityThumbnail from "$lib/components/thumbnails/EntityThumbnail.svelte";
   import IdentifyReviewSection from "./IdentifyReviewSection.svelte";
+  import IdentifyTargetPreview from "./IdentifyTargetPreview.svelte";
   import {
     buildRootReviewApplyPayload,
     currentFieldValueForReview,
@@ -189,6 +190,9 @@
 </script>
 
 <div class="flex flex-col gap-4">
+  <!-- Preview of what we are identifying (collapsed by default) -->
+  <IdentifyTargetPreview {entity} />
+
   <!-- Context bar -->
   <div class="grid grid-cols-[auto_1fr_auto_auto_auto] items-center gap-4 rounded-sm border border-border-subtle bg-surface-1 p-3.5 shadow-well">
     {#if contextPosterUrl}

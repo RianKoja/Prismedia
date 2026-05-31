@@ -17,6 +17,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - Fresh instances now serve generated thumbnails as soon as the API starts, so newly scanned media no longer shows broken cover links when the cache directory did not exist yet.
 - Prismedia branding now uses the cleaned primary and NSFW logos throughout the app, with a larger sidebar brand lockup and a scalable vector line mark.
 - Mobile install metadata now presents Prismedia with the correct app name, theme colors, and safer icon spacing for browser and home-screen surfaces.
+- Identify now leads with a collapsible "To Identify" preview (collapsed by default) on both the search and review screens, so you can confirm what you are matching: each item shows its library thumbnail — hover or drag to scrub video previews — while series and seasons show a few example episode thumbnails since they have no file of their own.
 
 ### Added
 - Jellyfin clients like Infuse now get a closer match to real Jellyfin: Movies appear as their own library (alongside Videos, Series, and Collections) and play with their poster and backdrop artwork; TV episodes carry their series and season artwork (logo, backdrop, thumbnail, and series poster) so "Up Next" and episode tiles show the right images, even when opened directly; a Next Up shelf surfaces shows you're partway through; and detail pages no longer error while probing for trailers, bonus features, or skip markers.
@@ -46,6 +47,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - Added a worker status badge to Job Control so stalled queues show when the background worker is offline.
 
 ### Changed
+- The command palette now shows only a few results per category, each grouped in its own section with a "See all" link to the full search filtered to that category, so high-count categories like People no longer bury everything else.
 - Refined the Settings API Access panel: the server key is now clearly labeled and masked, profile toggles for NSFW and Enabled use the design-system switches with at-a-glance status, the add-profile form uses the standard inputs and checkbox, and an empty state explains how to get started.
 - API routes now require the generated API key, while the native web app receives it automatically as a same-origin HttpOnly cookie so normal browser use remains frictionless.
 - Jellyfin-compatible item responses now expose richer Prismedia metadata to clients like Infuse, including dates, ratings, credits, studios, tags, provider IDs, chapters, subtitles, technical dimensions, and additional artwork tags.
@@ -91,6 +93,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - Updated web app manifest and mobile browser metadata for home-screen installation and browser UI theme colors.
 
 ### Fixed
+- Restored mobile lightbox gestures: swipe left/right to move between items and swipe down to dismiss now work again.
+- The comic reader's paged mode now supports swipe left/right to turn pages and swipe down to close, alongside the existing tap zones.
+- Mobile thumbnail scrubbing no longer blocks tapping to open an item: a tap opens it, a vertical drag scrolls, and a horizontal drag scrubs the preview (left off inside horizontal rows like cast so they keep scrolling).
+- Fixed the progress panel's Resume and Start Over buttons overflowing on narrow phones; they now collapse to icon-only buttons like the app's other actions.
 - Fixed subtitle selection and rendering in the new player: automatic subtitle language selection now recovers when a stale per-video preference is cleared, and embedded ASS/SSA subtitles are served as raw styled subtitle sources so the ASS renderer can display them.
 - Fixed the Videos library showing no items in Jellyfin clients like Infuse: standalone videos are now reported as the Video type (not Movie), so they appear in the home-videos library while movies stay in their own library.
 - Fixed "Start Over" from Jellyfin clients like Infuse: starting an item from the beginning now clears its saved resume point, and rapid pause/resume reports no longer fail with a server error or silently lose a playback update.

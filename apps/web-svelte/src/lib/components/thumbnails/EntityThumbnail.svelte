@@ -92,16 +92,18 @@
   let scrubPointerType = "mouse";
   let suppressNextFocusPreview = false;
   let suppressNextActivation = false;
-  // Touch scrubbing: a press-and-hold arms it, then a non-passive touchmove preventDefault stops
-  // the row from scrolling so the same element supports both swipe-to-scroll and hold-to-scrub.
+  // Touch scrubbing uses directional disambiguation: a tap navigates, a vertical drag
+  // scrolls the page, and a horizontal drag scrubs the preview — no press-and-hold. A
+  // non-passive touchmove preventDefault keeps the page still once a horizontal scrub is
+  // locked in. Inside a horizontal scroller (e.g. a cast rail) horizontal means scroll, so
+  // scrub is left off there and the row pans normally.
   let mediaEl: HTMLElement | undefined = $state();
-  let touchScrubArmed = false;
   let touchScrubbing = false;
-  let touchScrubTimer: number | null = null;
+  let touchDirection: "none" | "scrub" | "scroll" = "none";
+  let touchAllowHorizontalScroll = false;
   let touchStartX = 0;
   let touchStartY = 0;
-  const TOUCH_SCRUB_HOLD_MS = 350;
-  const TOUCH_SCRUB_SLOP = 10;
+  const TOUCH_DIR_SLOP = 10;
 
   let spriteFrames = $state<TrickplayFrame[] | null>(null);
   let spriteError = $state(false);
@@ -174,10 +176,19 @@
     hoverIntentTimer = null;
   }
 
-  function clearTouchScrubTimer() {
-    if (!touchScrubTimer) return;
-    window.clearTimeout(touchScrubTimer);
-    touchScrubTimer = null;
+  // Walks up from the media element to see if any ancestor scrolls horizontally.
+  // When one does, a horizontal drag is meant to pan that row, so touch scrub is
+  // disabled and the gesture is left to the browser.
+  function isInHorizontalScroller(): boolean {
+    let element: HTMLElement | null = mediaEl?.parentElement ?? null;
+    while (element) {
+      if (element.scrollWidth > element.clientWidth + 1) {
+        const overflowX = getComputedStyle(element).overflowX;
+        if (overflowX === "auto" || overflowX === "scroll") return true;
+      }
+      element = element.parentElement;
+    }
+    return false;
   }
 
   function ratioFromClientX(clientX: number): number {
@@ -195,18 +206,10 @@
     const touch = event.touches[0];
     touchStartX = touch.clientX;
     touchStartY = touch.clientY;
-    touchScrubArmed = false;
     touchScrubbing = false;
-    clearTouchScrubTimer();
-    // Arm scrubbing only after a deliberate, still press-and-hold. Any earlier movement cancels it
-    // (handled in touchmove), leaving the browser free to scroll the row.
-    touchScrubTimer = window.setTimeout(() => {
-      touchScrubTimer = null;
-      touchScrubArmed = true;
-      latestPointerRatio = ratioFromClientX(touchStartX);
-      pointerRatio = latestPointerRatio;
-      void ensureSpriteLoaded();
-    }, TOUCH_SCRUB_HOLD_MS);
+    touchDirection = "none";
+    // Decided once per gesture: inside a horizontal rail, horizontal drags scroll the row.
+    touchAllowHorizontalScroll = isInHorizontalScroller();
   }
 
   function handleTouchMove(event: TouchEvent) {
@@ -215,34 +218,48 @@
       return;
     }
 
-    if (touchScrubArmed) {
-      // Cancel the scroll so the hold-then-drag scrubs instead. A non-passive touchmove
-      // preventDefault stops scrolling even when touch-action permits panning.
-      event.preventDefault();
-      touchScrubbing = true;
-      suppressNextActivation = true;
-      pointerRatio = ratioFromClientX(touch.clientX);
-      void ensureSpriteLoaded();
+    // A vertical drag already resolved to a scroll — leave it to the browser.
+    if (touchDirection === "scroll") {
       return;
     }
 
-    if (Math.abs(touch.clientX - touchStartX) > TOUCH_SCRUB_SLOP ||
-      Math.abs(touch.clientY - touchStartY) > TOUCH_SCRUB_SLOP) {
-      // The user is swiping to scroll — abandon the hold and any preview.
-      clearTouchScrubTimer();
-      clearHoverIntentTimer();
-      pointerRatio = null;
+    if (touchDirection === "none") {
+      const dx = touch.clientX - touchStartX;
+      const dy = touch.clientY - touchStartY;
+      if (Math.max(Math.abs(dx), Math.abs(dy)) < TOUCH_DIR_SLOP) {
+        return;
+      }
+      // Horizontal drags scrub, unless this card lives in a horizontal scroller where
+      // horizontal means scroll. Everything else (vertical) is a scroll gesture.
+      if (Math.abs(dx) > Math.abs(dy) && !touchAllowHorizontalScroll) {
+        touchDirection = "scrub";
+        touchScrubbing = true;
+        suppressNextActivation = true;
+        void ensureSpriteLoaded();
+      } else {
+        touchDirection = "scroll";
+        clearHoverIntentTimer();
+        pointerRatio = null;
+        return;
+      }
+    }
+
+    if (touchDirection === "scrub") {
+      // Cancel the scroll so the horizontal drag scrubs. A non-passive touchmove
+      // preventDefault stops scrolling even when touch-action permits panning.
+      event.preventDefault();
+      pointerRatio = ratioFromClientX(touch.clientX);
+      void ensureSpriteLoaded();
     }
   }
 
   function handleTouchEnd() {
-    clearTouchScrubTimer();
     if (touchScrubbing) {
       pointerRatio = null;
     }
 
-    touchScrubArmed = false;
     touchScrubbing = false;
+    touchDirection = "none";
   }
 
   function capturePointer(element: HTMLElement, pointerId: number) {
@@ -477,7 +494,6 @@
 
   onDestroy(() => {
     clearHoverIntentTimer();
-    clearTouchScrubTimer();
   });
 </script>
 

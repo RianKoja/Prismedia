@@ -214,6 +214,10 @@
     }
   }
 
+  // A committed swipe must travel at least this far; shorter drags are neither a
+  // tap nor a swipe and are ignored so a slightly imprecise tap does nothing.
+  const READER_SWIPE_THRESHOLD = 50;
+
   function handleReaderPointerDown(event: PointerEvent) {
     if ((event.target as HTMLElement).closest("[data-reader-control]")) return;
     readerPointerGesture = {
@@ -222,6 +226,11 @@
       startY: event.clientY,
       moved: false,
     };
+    // Capture so a paged swipe that drifts off the stage still resolves here.
+    // Webtoon mode scrolls natively, so it must not capture the pointer.
+    if (readerMode === "paged" && event.pointerType !== "mouse") {
+      (event.currentTarget as HTMLElement).setPointerCapture?.(event.pointerId);
+    }
   }
 
   function handleReaderPointerMove(event: PointerEvent) {
@@ -237,12 +246,48 @@
     readerPointerGesture = null;
   }
 
-  function handleReaderTap(event: PointerEvent) {
+  function handleReaderPointerUp(event: PointerEvent) {
     const target = event.target as HTMLElement;
-    if (target.closest("[data-reader-control]")) return;
+    if (target.closest("[data-reader-control]")) {
+      clearReaderPointerGesture();
+      return;
+    }
     const gesture = readerPointerGesture;
     clearReaderPointerGesture();
-    if (gesture && gesture.pointerId === event.pointerId && gesture.moved) return;
+
+    // Swipe detection needs the gesture's start point. A pointerup without a tracked
+    // pointerdown (e.g. a synthetic mouse click) still falls through to the tap zones.
+    if (gesture && gesture.pointerId === event.pointerId) {
+      const dx = event.clientX - gesture.startX;
+      const dy = event.clientY - gesture.startY;
+      const absX = Math.abs(dx);
+      const absY = Math.abs(dy);
+
+      // Touch swipes (paged mode only): horizontal turns the page, a downward swipe
+      // dismisses the reader — matching the lightbox gestures. Webtoon mode scrolls
+      // vertically, so it keeps tap-only navigation.
+      if (
+        readerMode === "paged" &&
+        event.pointerType !== "mouse" &&
+        Math.max(absX, absY) > READER_SWIPE_THRESHOLD
+      ) {
+        if (absX > absY * 1.3) {
+          if (dx < 0) goNext();
+          else goPrev();
+          return;
+        }
+        if (absY > absX * 1.3 && dy > 0) {
+          onClose();
+          return;
+        }
+        return;
+      }
+
+      // Moved past the tap slop but didn't commit to a swipe — ignore it.
+      if (gesture.moved) return;
+    }
+
+    // Tap zones: left/right turn pages on touch, centre toggles controls.
     const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
     const zone = comicTapZone(event.clientX - rect.left, rect.width);
     if (event.pointerType === "mouse") {
@@ -425,7 +470,7 @@
       class="reader-stage overflow-y-auto bg-black"
       onpointerdown={handleReaderPointerDown}
       onpointermove={handleReaderPointerMove}
-      onpointerup={handleReaderTap}
+      onpointerup={handleReaderPointerUp}
       onpointercancel={clearReaderPointerGesture}
       onscroll={handleWebtoonScroll}
     >
@@ -470,10 +515,10 @@
   {:else}
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div
-      class="reader-stage items-center justify-center overflow-hidden bg-black p-0 sm:px-14 sm:py-3"
+      class="reader-stage reader-stage-paged items-center justify-center overflow-hidden bg-black p-0 sm:px-14 sm:py-3"
       onpointerdown={handleReaderPointerDown}
       onpointermove={handleReaderPointerMove}
-      onpointerup={handleReaderTap}
+      onpointerup={handleReaderPointerUp}
       onpointercancel={clearReaderPointerGesture}
     >
       {#if images.length > 1 || hasEndAction}
@@ -585,6 +630,12 @@
     min-height: 0;
     flex: 1 1 auto;
     touch-action: manipulation;
+  }
+
+  /* Paged mode has no native scroll, so claim every touch gesture for our
+     swipe handlers instead of letting the browser pan or navigate back. */
+  .reader-stage-paged {
+    touch-action: none;
   }
 
   .reader-hover-zone {

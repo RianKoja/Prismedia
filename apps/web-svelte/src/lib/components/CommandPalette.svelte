@@ -11,8 +11,8 @@
   import { entityTerms } from "$lib/terminology";
   import { recentSearches } from "$lib/stores/recent-searches.svelte";
   import { buildHrefWithFrom } from "$lib/back-navigation";
-  import type { SearchResponse } from "$lib/search/models";
-  import { firstSearchResult, flattenSearchResults, searchEntities } from "$lib/search/entity-search";
+  import type { SearchEntityKind, SearchResponse } from "$lib/search/models";
+  import { firstSearchResult, searchEntities } from "$lib/search/entity-search";
 
   const search = useSearch();
   const nsfw = useNsfw();
@@ -31,9 +31,21 @@
   const hasResults = $derived(
     results != null && results.groups.some((group) => group.items.length > 0),
   );
-  const flatResults = $derived(flattenSearchResults(results));
+  // Show only a few results per entity kind so high-count kinds (e.g. People)
+  // don't bury everything else. The per-section "see all" row links to the full
+  // search page filtered to that kind.
+  const PER_KIND_LIMIT = 3;
+  const displayGroups = $derived(
+    (results?.groups ?? [])
+      .filter((group) => group.items.length > 0)
+      .map((group) => ({
+        group,
+        shownItems: group.items.slice(0, PER_KIND_LIMIT),
+      })),
+  );
+  const flatResults = $derived(displayGroups.flatMap((entry) => entry.shownItems));
   const activeResult = $derived(
-    flatResults.find((item) => item.id === activeResultId) ?? firstSearchResult(results),
+    flatResults.find((item) => item.id === activeResultId) ?? flatResults[0] ?? null,
   );
 
   function closePalette() {
@@ -96,6 +108,14 @@
     recent.add(trimmed);
     closePalette();
     void goto(`/search?q=${encodeURIComponent(trimmed)}`);
+  }
+
+  function seeAllForKind(kind: SearchEntityKind) {
+    const trimmed = query.trim();
+    if (!trimmed) return;
+    recent.add(trimmed);
+    closePalette();
+    void goto(`/search?q=${encodeURIComponent(trimmed)}&kinds=${kind}`);
   }
 
   function moveActiveResult(delta: number) {
@@ -265,13 +285,13 @@
           </div>
         {:else if results && hasResults}
           <div class="py-1">
-            {#each results.groups.filter((group) => group.items.length > 0) as group (group.kind)}
+            {#each displayGroups as { group, shownItems } (group.kind)}
               <div class="py-1">
                 <div class="flex items-center justify-between px-4 py-1.5">
                   <span class="text-kicker">{group.label}</span>
                   <span class="text-[0.6rem] text-text-disabled">{group.total}</span>
                 </div>
-                {#each group.items as item, itemIndex (item.id)}
+                {#each shownItems as item, itemIndex (item.id)}
                   <SearchResultCard
                     {item}
                     index={itemIndex}
@@ -281,6 +301,16 @@
                     onSelect={navigateTo}
                   />
                 {/each}
+                {#if group.total > shownItems.length}
+                  <button
+                    type="button"
+                    class="flex w-full items-center justify-between px-4 py-1.5 text-left text-[0.72rem] text-text-muted transition-colors duration-fast hover:bg-surface-2 hover:text-text-accent"
+                    onclick={() => seeAllForKind(group.kind)}
+                  >
+                    <span>See all {group.total} {group.label.toLowerCase()}</span>
+                    <ArrowRight class="h-3 w-3 shrink-0" />
+                  </button>
+                {/if}
               </div>
             {/each}
           </div>
