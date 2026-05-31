@@ -1,3 +1,5 @@
+using Prismedia.Api.Jellyfin;
+
 namespace Prismedia.Api;
 
 /// <summary>
@@ -12,23 +14,6 @@ public static class SpaDevProxy {
         "/api",
         "/assets",
         "/openapi"
-    ];
-
-    private static readonly string[] JellyfinApiPrefixes =
-    [
-        "/System",
-        "/Users",
-        "/UserViews",
-        "/Items",
-        "/Shows",
-        "/Videos",
-        "/Sessions",
-        "/UserPlayedItems",
-        "/UserItems",
-        "/MediaSegments",
-        "/Library",
-        "/Branding",
-        "/DisplayPreferences"
     ];
 
     public static void UseSpaDevServer(this WebApplication app, string viteUrl) {
@@ -116,7 +101,7 @@ public static class SpaDevProxy {
             }
         }
 
-        foreach (var prefix in JellyfinApiPrefixes) {
+        foreach (var prefix in JellyfinRoutes.Prefixes) {
             if (path.StartsWith(prefix, StringComparison.Ordinal)) {
                 return true;
             }

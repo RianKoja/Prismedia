@@ -541,7 +541,7 @@ public static class JellyfinCompatibilityEndpoints {
         var query = ItemQueryFrom(httpContext.Request) with {
             ParentId = seriesId,
             Recursive = false,
-            IncludeItemTypes = ["Season"]
+            IncludeItemTypes = [JellyfinProtocol.ItemTypes.Season]
         };
         var result = await catalog.GetItemsAsync(
             query,
@@ -562,7 +562,7 @@ public static class JellyfinCompatibilityEndpoints {
         var query = ItemQueryFrom(httpContext.Request) with {
             ParentId = seasonId ?? seriesId,
             Recursive = seasonId is null,
-            IncludeItemTypes = ["Episode"]
+            IncludeItemTypes = [JellyfinProtocol.ItemTypes.Episode]
         };
         var result = await catalog.GetItemsAsync(
             query,
@@ -761,9 +761,9 @@ public static class JellyfinCompatibilityEndpoints {
 
     private static string VirtualFolderCollectionType(JellyfinBaseItemDto item) =>
         item.CollectionType switch {
-            "tvshows" => "tvshows",
-            "boxsets" => "boxsets",
-            _ => "movies"
+            JellyfinProtocol.CollectionTypes.Shows => JellyfinProtocol.CollectionTypes.Shows,
+            JellyfinProtocol.CollectionTypes.BoxSets => JellyfinProtocol.CollectionTypes.BoxSets,
+            _ => JellyfinProtocol.CollectionTypes.Movies
         };
 
     private static IReadOnlyList<string> SplitCsv(string? value) =>

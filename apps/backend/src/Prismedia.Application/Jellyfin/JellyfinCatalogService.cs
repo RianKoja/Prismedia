@@ -45,10 +45,10 @@ public sealed class JellyfinCatalogService {
     public JellyfinQueryResult<JellyfinBaseItemDto> GetUserViews(string serverId) {
         var views = new[]
         {
-            VirtualFolder(MoviesViewId, "Movies", "movies", serverId),
-            VirtualFolder(VideosViewId, "Videos", "homevideos", serverId),
-            VirtualFolder(SeriesViewId, "Series", "tvshows", serverId),
-            VirtualFolder(CollectionsViewId, "Collections", "boxsets", serverId)
+            VirtualFolder(MoviesViewId, "Movies", JellyfinProtocol.CollectionTypes.Movies, serverId),
+            VirtualFolder(VideosViewId, "Videos", JellyfinProtocol.CollectionTypes.HomeVideos, serverId),
+            VirtualFolder(SeriesViewId, "Series", JellyfinProtocol.CollectionTypes.Shows, serverId),
+            VirtualFolder(CollectionsViewId, "Collections", JellyfinProtocol.CollectionTypes.BoxSets, serverId)
         };
         return new JellyfinQueryResult<JellyfinBaseItemDto>(views, views.Length, 0);
     }
@@ -107,19 +107,19 @@ public sealed class JellyfinCatalogService {
         }
 
         if (id == MoviesViewId) {
-            return VirtualFolder(MoviesViewId, "Movies", "movies", serverId);
+            return VirtualFolder(MoviesViewId, "Movies", JellyfinProtocol.CollectionTypes.Movies, serverId);
         }
 
         if (id == VideosViewId) {
-            return VirtualFolder(VideosViewId, "Videos", "homevideos", serverId);
+            return VirtualFolder(VideosViewId, "Videos", JellyfinProtocol.CollectionTypes.HomeVideos, serverId);
         }
 
         if (id == SeriesViewId) {
-            return VirtualFolder(SeriesViewId, "Series", "tvshows", serverId);
+            return VirtualFolder(SeriesViewId, "Series", JellyfinProtocol.CollectionTypes.Shows, serverId);
         }
 
         if (id == CollectionsViewId) {
-            return VirtualFolder(CollectionsViewId, "Collections", "boxsets", serverId);
+            return VirtualFolder(CollectionsViewId, "Collections", JellyfinProtocol.CollectionTypes.BoxSets, serverId);
         }
 
         var entity = await GetDetailedCardAsync(id, hideNsfw, cancellationToken);
@@ -248,7 +248,7 @@ public sealed class JellyfinCatalogService {
             status: "in-progress");
         var mapped = response.Items.Select(item => MapThumbnail(item, serverId)).ToArray();
         var episodes = await HydrateCatalogItemsAsync(
-            mapped.Where(item => item.Type.Equals("Episode", StringComparison.OrdinalIgnoreCase)).ToArray(),
+            mapped.Where(item => item.Type.Equals(JellyfinProtocol.ItemTypes.Episode, StringComparison.OrdinalIgnoreCase)).ToArray(),
             serverId,
             hideNsfw,
             cancellationToken);
@@ -413,8 +413,8 @@ public sealed class JellyfinCatalogService {
     }
 
     private static bool ShouldHydrateCatalogItem(JellyfinBaseItemDto item) =>
-        item.MediaType?.Equals("Video", StringComparison.OrdinalIgnoreCase) == true ||
-        item.Type is "Series" or "Season" or "BoxSet";
+        item.MediaType?.Equals(JellyfinProtocol.MediaTypes.Video, StringComparison.OrdinalIgnoreCase) == true ||
+        item.Type is JellyfinProtocol.ItemTypes.Series or JellyfinProtocol.ItemTypes.Season or JellyfinProtocol.ItemTypes.BoxSet;
 
     private async Task<IReadOnlyList<JellyfinBaseItemDto>> ItemsByIdAsync(
         IReadOnlyList<Guid> ids,
@@ -479,7 +479,7 @@ public sealed class JellyfinCatalogService {
             Etag = EtagFor(item.Id, item.CoverUrl ?? item.Title),
             SortName = item.Title,
             Type = JellyfinType(item.Kind, item.ParentEntityId),
-            MediaType = isPlayable ? "Video" : null,
+            MediaType = isPlayable ? JellyfinProtocol.MediaTypes.Video : null,
             Path = isPlayable ? VirtualItemPath(item.Id) : null,
             LocationType = isPlayable ? "FileSystem" : null,
             PlayAccess = isPlayable ? "Full" : null,
@@ -577,7 +577,7 @@ public sealed class JellyfinCatalogService {
             ExternalUrls = ExternalUrls(links),
             RemoteTrailers = RemoteTrailers(links),
             Type = JellyfinType(item.Kind, item.ParentEntityId),
-            MediaType = isPlayable ? "Video" : null,
+            MediaType = isPlayable ? JellyfinProtocol.MediaTypes.Video : null,
             Path = isPlayable ? source?.Path ?? VirtualItemPath(item.Id) : null,
             LocationType = isPlayable ? "FileSystem" : null,
             PlayAccess = isPlayable ? "Full" : null,
@@ -631,7 +631,7 @@ public sealed class JellyfinCatalogService {
             Id = id,
             Name = name,
             ServerId = serverId,
-            Type = "CollectionFolder",
+            Type = JellyfinProtocol.ItemTypes.CollectionFolder,
             CollectionType = collectionType,
             IsFolder = true,
             Etag = EtagFor(id, collectionType),
@@ -718,7 +718,7 @@ public sealed class JellyfinCatalogService {
         }
 
         var audioIndex = streams
-            .Where(stream => stream.Type.Equals("Audio", StringComparison.OrdinalIgnoreCase))
+            .Where(stream => stream.Type.Equals(JellyfinProtocol.MediaTypes.Audio, StringComparison.OrdinalIgnoreCase))
             .Select(stream => (int?)stream.Index)
             .FirstOrDefault();
 
@@ -743,7 +743,7 @@ public sealed class JellyfinCatalogService {
         var streams = new List<JellyfinCatalogMediaStreamDto> {
             new JellyfinCatalogMediaStreamDto {
                 Index = 0,
-                Type = "Video",
+                Type = JellyfinProtocol.MediaTypes.Video,
                 Codec = technical?.Codec,
                 DisplayTitle = StreamDisplayTitle(technical, container),
                 Width = technical?.Width,
@@ -762,7 +762,7 @@ public sealed class JellyfinCatalogService {
         if (technical?.Channels is not null || technical?.SampleRate is not null) {
             streams.Add(new JellyfinCatalogMediaStreamDto {
                 Index = nextIndex++,
-                Type = "Audio",
+                Type = JellyfinProtocol.MediaTypes.Audio,
                 Channels = technical?.Channels,
                 ChannelLayout = ChannelLayout(technical?.Channels),
                 SampleRate = technical?.SampleRate,
@@ -773,7 +773,7 @@ public sealed class JellyfinCatalogService {
         if (subtitles?.Items.Count > 0) {
             streams.AddRange(subtitles.Items.Select(subtitle => new JellyfinCatalogMediaStreamDto {
                 Index = nextIndex++,
-                Type = "Subtitle",
+                Type = JellyfinProtocol.MediaTypes.Subtitle,
                 Codec = subtitle.Format,
                 Language = EmptyAsNull(subtitle.Language),
                 DisplayTitle = EmptyAsNull(subtitle.Label) ?? subtitle.Language,
@@ -801,7 +801,7 @@ public sealed class JellyfinCatalogService {
         [
             new JellyfinCatalogMediaStreamDto {
                 Index = 0,
-                Type = "Video",
+                Type = JellyfinProtocol.MediaTypes.Video,
                 Codec = item.Meta.FirstOrDefault(meta => meta.Icon.Equals("video", StringComparison.OrdinalIgnoreCase) &&
                     !meta.Label.Contains("p", StringComparison.OrdinalIgnoreCase) &&
                     !meta.Label.Equals(container, StringComparison.OrdinalIgnoreCase))?.Label,
@@ -1332,18 +1332,18 @@ public sealed class JellyfinCatalogService {
 
     private static string JellyfinType(string kind, Guid? parentId) =>
         kind.Trim().ToLowerInvariant() switch {
-            "movie" => "Movie",
-            "video" => parentId is null ? "Movie" : "Episode",
-            "video-series" => "Series",
-            "video-season" => "Season",
-            "collection" => "BoxSet",
-            _ => "Folder"
+            "movie" => JellyfinProtocol.ItemTypes.Movie,
+            "video" => parentId is null ? JellyfinProtocol.ItemTypes.Movie : JellyfinProtocol.ItemTypes.Episode,
+            "video-series" => JellyfinProtocol.ItemTypes.Series,
+            "video-season" => JellyfinProtocol.ItemTypes.Season,
+            "collection" => JellyfinProtocol.ItemTypes.BoxSet,
+            _ => JellyfinProtocol.ItemTypes.Folder
         };
 
     private static string? CollectionType(string kind) =>
         kind.Trim().ToLowerInvariant() switch {
-            "video-series" => "tvshows",
-            "collection" => "boxsets",
+            "video-series" => JellyfinProtocol.CollectionTypes.Shows,
+            "collection" => JellyfinProtocol.CollectionTypes.BoxSets,
             _ => null
         };
 
