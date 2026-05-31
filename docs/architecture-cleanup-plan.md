@@ -1,6 +1,6 @@
 # Architecture Cleanup & Consolidation Plan
 
-Status: **in progress** — coordination document for a multi-phase cleanup pass.
+Status: **complete** — all phases landed; retained as a record of the cleanup pass.
 Date opened: 2026-05-31.
 
 ## Progress (2026-05-31)
@@ -15,14 +15,15 @@ Date opened: 2026-05-31.
 - **Phase 3 (capability/relation tidy): done.** Subtitle extraction timestamp moved onto
   `CapabilitySubtitles.ExtractedAt` (no migration — column kept on `video_details`).
   Capability model + credits projection documented in the architecture contract.
-- **Phase 4 (decompose large files): partially done / deferred.** `SettingsService`
-  library-root use cases split into a partial. The remaining splits — the playback hot
-  paths `JellyfinCatalogService` (1381) and `HlsAssetService` (1167),
-  `JellyfinCompatibilityEndpoints`, `EfEntityReadService`, `IdentifyPluginService`,
-  `PluginCatalogService` — are **deferred**. Rationale: partial-class splits do not reduce
-  LOC or sprawl (they add files and spread one class), and mechanically cutting
-  streaming/Jellyfin hot-path code is best done as small, individually-reviewed PRs rather
-  than batched. Recommend doing them one file per PR with `verify`.
+- **Phase 4 (decompose large files): done.** Partial-class splits (repo
+  `ClassName.Responsibility.cs` convention) applied to `SettingsService` (LibraryRoots),
+  `EfEntityReadService` (Thumbnails), `JellyfinCompatibilityEndpoints` (Catalog, Users),
+  `PluginCatalogService` (Acquisition), `IdentifyPluginService` (StructuralProposals),
+  `HlsAssetService` (Generation, Encoding), and `JellyfinCatalogService` (Mapping,
+  MediaStreams, Metadata). `JellyfinDtos` split by domain (System/Media/Library). Every
+  logic file is now ≤ ~555 lines. `AppSettingsRegistry` (~594) is left intact on purpose:
+  it is a single declarative definition table where splitting the builder would scatter
+  cohesive data. All pure moves — no behavior change, verified by the full suite.
 - **Phase 5 (closeout): done.** Audit script clean; full backend suite + frontend
   typecheck green; LOC delta captured below.
 
