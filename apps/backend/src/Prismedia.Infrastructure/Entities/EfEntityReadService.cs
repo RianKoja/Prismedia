@@ -699,7 +699,7 @@ public sealed class EfEntityReadService : IEntityReadService {
         CancellationToken cancellationToken) {
         var linksQuery = _db.EntityRelationshipLinks.AsNoTracking()
             .Where(link => link.EntityId == entityId &&
-                           link.RelationshipCode == "cast" &&
+                           (link.RelationshipCode == "cast" || link.RelationshipCode == "credits") &&
                            link.TargetKindCode == EntityKindRegistry.Person.Code);
         if (hideNsfw) {
             linksQuery = linksQuery.Where(link =>
@@ -746,6 +746,7 @@ public sealed class EfEntityReadService : IEntityReadService {
     private static string RelationshipLabel(string code) =>
         code switch {
             "cast" => "Cast",
+            "credits" => "Credits",
             "studio" => "Studios",
             "tags" => "Tags",
             "related" => "Related",

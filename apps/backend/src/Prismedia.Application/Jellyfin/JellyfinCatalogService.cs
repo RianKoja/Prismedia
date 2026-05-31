@@ -5,6 +5,9 @@ using Prismedia.Application.Entities;
 using Prismedia.Contracts.Collections;
 using Prismedia.Contracts.Entities;
 using Prismedia.Contracts.Jellyfin;
+using Prismedia.Contracts.Media;
+using Prismedia.Contracts.Series;
+using Prismedia.Contracts.Videos;
 
 namespace Prismedia.Application.Jellyfin;
 
@@ -16,6 +19,18 @@ public sealed class JellyfinCatalogService {
     public static readonly Guid CollectionsViewId = Guid.Parse("10000000-0000-0000-0000-000000000004");
 
     private const int MaxBrowseItems = 5000;
+    private static readonly string[] PremiereDatePriority = [
+        "premiere",
+        "release",
+        "released",
+        "air",
+        "aired",
+        "first-aired",
+        "published",
+        "date",
+        "birth",
+        "career-start"
+    ];
 
     private readonly IEntityReadService _entities;
     private readonly ICollectionItemReadService _collections;
@@ -101,7 +116,7 @@ public sealed class JellyfinCatalogService {
             return VirtualFolder(CollectionsViewId, "Collections", "boxsets", serverId);
         }
 
-        var entity = await _entities.GetAsync(id, hideNsfw, cancellationToken);
+        var entity = await GetDetailedCardAsync(id, hideNsfw, cancellationToken);
         return entity is null ? null : MapCard(entity, serverId);
     }
 
@@ -165,8 +180,14 @@ public sealed class JellyfinCatalogService {
             return [];
         }
 
+        var indexesByType = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         return ImageAssets(entity.Capabilities)
-            .Select((asset, index) => new JellyfinImageInfo(JellyfinImageType(asset.Kind), index, EtagFor(id, asset.Path)))
+            .Select(asset => {
+                var type = JellyfinImageType(asset.Kind);
+                indexesByType.TryGetValue(type, out var index);
+                indexesByType[type] = index + 1;
+                return new JellyfinImageInfo(type, index, EtagFor(id, asset.Path));
+            })
             .ToArray();
     }
 
@@ -278,11 +299,23 @@ public sealed class JellyfinCatalogService {
                 continue;
             }
 
-            var detail = await _entities.GetAsync(item.Id, hideNsfw, cancellationToken);
+            var detail = await GetDetailedCardAsync(item.Id, hideNsfw, cancellationToken);
             hydrated.Add(detail is null ? item : MapCard(detail, serverId, ItemContext.From(item)));
         }
 
         return hydrated;
+    }
+
+    private async Task<IEntityCard?> GetDetailedCardAsync(
+        Guid id,
+        bool hideNsfw,
+        CancellationToken cancellationToken) {
+        var card = await _entities.GetAsync(id, hideNsfw, cancellationToken);
+        if (card is null) {
+            return null;
+        }
+
+        return await _entities.GetDetailAsync(id, card.Kind, hideNsfw, cancellationToken) ?? card;
     }
 
     private static bool ShouldHydrateCatalogItem(JellyfinBaseItemDto item) =>
@@ -384,21 +417,50 @@ public sealed class JellyfinCatalogService {
         var flags = item.Capabilities.OfType<FlagsCapability>().FirstOrDefault();
         var description = item.Capabilities.OfType<DescriptionCapability>().FirstOrDefault();
         var position = item.Capabilities.OfType<PositionCapability>().FirstOrDefault();
-        var image = PrimaryAndBackdrop(item.Capabilities);
+        var rating = item.Capabilities.OfType<RatingCapability>().FirstOrDefault();
+        var dates = item.Capabilities.OfType<DatesCapability>().FirstOrDefault();
+        var lifetime = item.Capabilities.OfType<LifetimeCapability>().FirstOrDefault();
+        var classification = item.Capabilities.OfType<ClassificationCapability>().FirstOrDefault();
+        var links = item.Capabilities.OfType<LinksCapability>().FirstOrDefault();
+        var subtitles = item.Capabilities.OfType<SubtitlesCapability>().FirstOrDefault();
+        var markers = item.Capabilities.OfType<MarkersCapability>().FirstOrDefault();
+        var image = ImageMetadata(item.Id, item.Capabilities);
         var source = SourceFile(item);
         var isPlayable = IsPlayableVideo(item.Kind);
         long? runtimeTicks = isPlayable ? technical?.Duration?.Ticks ?? 0 : null;
         var container = isPlayable ? technical?.Container ?? ContainerFromPath(source?.Path) : null;
-        var streams = isPlayable ? CatalogStreams(technical, container) : null;
+        var streams = isPlayable ? CatalogStreams(technical, container, subtitles) : null;
         var childCount = item.ChildrenByKind.Sum(group => group.Entities.Count);
+        var tags = TagItems(item);
+        var studios = StudioItems(item);
+        var premiereDate = PremiereDateFrom(dates);
+        var startDate = ToDateTimeOffset(lifetime?.Start);
+        var endDate = ToDateTimeOffset(lifetime?.End);
+        var communityRating = rating?.Value is { } ratingValue ? Math.Clamp(ratingValue, 0, 5) * 2f : (float?)null;
 
         return new JellyfinBaseItemDto {
             Id = item.Id,
             Name = item.Title,
             ServerId = serverId,
             Etag = EtagFor(item.Id, image.PrimaryPath ?? item.Title),
+            OriginalTitle = item.Title,
             SortName = item.Title,
+            StartDate = startDate,
+            EndDate = endDate,
+            PremiereDate = premiereDate,
+            ProductionYear = ProductionYearFrom(premiereDate, dates, lifetime),
             Overview = description?.Value,
+            OfficialRating = EmptyAsNull(classification?.Value),
+            CustomRating = EmptyAsNull(classification?.Value),
+            CommunityRating = communityRating,
+            Genres = tags.Count == 0 ? null : tags.Select(tag => tag.Name).ToArray(),
+            GenreItems = tags.Count == 0 ? null : tags,
+            Tags = tags.Count == 0 ? null : tags.Select(tag => tag.Name).ToArray(),
+            People = People(item),
+            Studios = studios.Count == 0 ? null : studios,
+            ProviderIds = ProviderIds(links),
+            ExternalUrls = ExternalUrls(links),
+            RemoteTrailers = RemoteTrailers(links),
             Type = JellyfinType(item.Kind, item.ParentEntityId),
             MediaType = IsPlayableVideo(item.Kind) ? "Video" : null,
             Path = isPlayable ? source?.Path ?? VirtualItemPath(item.Id) : null,
@@ -408,6 +470,12 @@ public sealed class JellyfinCatalogService {
             MediaSourceCount = isPlayable ? 1 : null,
             SupportsResume = isPlayable ? true : null,
             SupportsSync = isPlayable ? true : null,
+            CanDownload = isPlayable ? true : null,
+            HasSubtitles = subtitles?.Items.Count > 0 ? true : null,
+            Width = technical?.Width,
+            Height = technical?.Height,
+            AspectRatio = AspectRatio(technical?.Width, technical?.Height),
+            IsHD = IsHd(technical),
             CollectionType = CollectionType(item.Kind),
             ParentId = context?.ParentId ?? item.ParentEntityId,
             IsFolder = IsFolder(item.Kind),
@@ -420,12 +488,13 @@ public sealed class JellyfinCatalogService {
             SeriesName = context?.SeriesName,
             SeasonId = context?.SeasonId,
             SeasonName = context?.SeasonName,
-            ImageTags = image.PrimaryTag is null ? new Dictionary<string, string>() : new Dictionary<string, string> { ["Primary"] = image.PrimaryTag },
-            BackdropImageTags = image.BackdropTag is null ? [] : [image.BackdropTag],
-            PrimaryImageAspectRatio = image.PrimaryTag is null ? null : 0.6667,
+            ImageTags = image.Tags,
+            BackdropImageTags = image.BackdropImageTags,
+            PrimaryImageAspectRatio = image.PrimaryImageAspectRatio,
             UserData = UserDataFor(item.Id, flags?.IsFavorite == true, playback),
             MediaSources = isPlayable ? [CatalogMediaSource(item.Id, item.Title, source?.Path ?? VirtualItemPath(item.Id), container, source?.Path, runtimeTicks, streams ?? [])] : null,
-            MediaStreams = streams
+            MediaStreams = streams,
+            Chapters = Chapters(markers)
         };
     }
 
@@ -496,8 +565,9 @@ public sealed class JellyfinCatalogService {
 
     private static IReadOnlyList<JellyfinCatalogMediaStreamDto> CatalogStreams(
         TechnicalCapability? technical,
-        string? container) =>
-        [
+        string? container,
+        SubtitlesCapability? subtitles) {
+        var streams = new List<JellyfinCatalogMediaStreamDto> {
             new JellyfinCatalogMediaStreamDto {
                 Index = 0,
                 Type = "Video",
@@ -508,7 +578,22 @@ public sealed class JellyfinCatalogService {
                 AverageFrameRate = technical?.FrameRate,
                 BitRate = technical?.BitRate
             }
-        ];
+        };
+
+        if (subtitles?.Items.Count > 0) {
+            streams.AddRange(subtitles.Items.Select((subtitle, index) => new JellyfinCatalogMediaStreamDto {
+                Index = index + 1,
+                Type = "Subtitle",
+                Codec = subtitle.Format,
+                Language = EmptyAsNull(subtitle.Language),
+                DisplayTitle = EmptyAsNull(subtitle.Label) ?? subtitle.Language,
+                IsDefault = subtitle.IsDefault,
+                IsForced = false
+            }));
+        }
+
+        return streams;
+    }
 
     private static IReadOnlyList<JellyfinCatalogMediaStreamDto> CatalogStreams(
         EntityThumbnail item,
@@ -617,19 +702,54 @@ public sealed class JellyfinCatalogService {
     private static IReadOnlyList<EntityImageAsset> ImageAssets(IReadOnlyList<EntityCapability> capabilities) =>
         capabilities.OfType<ImagesCapability>().FirstOrDefault()?.Items ?? [];
 
-    private static (string? PrimaryTag, string? PrimaryPath, string? BackdropTag, string? BackdropPath) PrimaryAndBackdrop(
-        IReadOnlyList<EntityCapability> capabilities) {
+    private static JellyfinImageMetadata ImageMetadata(Guid id, IReadOnlyList<EntityCapability> capabilities) {
         var images = ImageAssets(capabilities);
-        var primary = images.FirstOrDefault(image =>
-            image.Kind.Equals("thumbnail", StringComparison.OrdinalIgnoreCase) ||
-            image.Kind.Equals("poster", StringComparison.OrdinalIgnoreCase) ||
-            image.Kind.Equals("cover", StringComparison.OrdinalIgnoreCase)) ?? images.FirstOrDefault();
-        var backdrop = images.FirstOrDefault(image => image.Kind.Equals("backdrop", StringComparison.OrdinalIgnoreCase));
-        return (
-            primary is null ? null : EtagFor(Guid.Empty, primary.Path),
+        var tags = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var backdrops = new List<string>();
+        foreach (var asset in images) {
+            var type = JellyfinImageType(asset.Kind);
+            var tag = EtagFor(id, asset.Path);
+            if (type.Equals("Backdrop", StringComparison.OrdinalIgnoreCase)) {
+                backdrops.Add(tag);
+                continue;
+            }
+
+            tags.TryAdd(type, tag);
+        }
+
+        var imageCapability = capabilities.OfType<ImagesCapability>().FirstOrDefault();
+        var primary = PrimaryImageAsset(images, imageCapability);
+        if (primary is not null) {
+            tags["Primary"] = EtagFor(id, primary.Path);
+        }
+
+        return new JellyfinImageMetadata(
+            tags,
+            backdrops,
             primary?.Path,
-            backdrop is null ? null : EtagFor(Guid.Empty, backdrop.Path),
-            backdrop?.Path);
+            primary is null ? null : 0.6667);
+    }
+
+    private static EntityImageAsset? PrimaryImageAsset(
+        IReadOnlyList<EntityImageAsset> images,
+        ImagesCapability? imageCapability) {
+        var primary = images.FirstOrDefault(image =>
+            image.Kind.Equals("poster", StringComparison.OrdinalIgnoreCase) ||
+            image.Kind.Equals("cover", StringComparison.OrdinalIgnoreCase) ||
+            image.Kind.Equals("thumbnail", StringComparison.OrdinalIgnoreCase) ||
+            image.Kind.Equals("primary", StringComparison.OrdinalIgnoreCase)) ?? images.FirstOrDefault(image =>
+            !JellyfinImageType(image.Kind).Equals("Backdrop", StringComparison.OrdinalIgnoreCase));
+        if (primary is not null) {
+            return primary;
+        }
+
+        if (!string.IsNullOrWhiteSpace(imageCapability?.CoverUrl)) {
+            return new EntityImageAsset("cover", imageCapability.CoverUrl, null);
+        }
+
+        return string.IsNullOrWhiteSpace(imageCapability?.ThumbnailUrl)
+            ? null
+            : new EntityImageAsset("thumbnail", imageCapability.ThumbnailUrl, null);
     }
 
     private static (string? Primary, string? Backdrop) ImageTags(Guid id, string? primary, string? backdrop) =>
@@ -637,10 +757,327 @@ public sealed class JellyfinCatalogService {
 
     private static string JellyfinImageType(string prismediaKind) =>
         prismediaKind.Trim().ToLowerInvariant() switch {
-            "backdrop" => "Backdrop",
-            "logo" => "Logo",
+            "art" => "Art",
+            "backdrop" or "background" or "fanart" => "Backdrop",
+            "banner" => "Banner",
+            "box" => "Box",
+            "disc" or "disc-art" => "Disc",
+            "logo" or "clearlogo" => "Logo",
+            "screenshot" => "Screenshot",
+            "thumb" => "Thumb",
             _ => "Primary"
         };
+
+    private static IReadOnlyList<JellyfinNameGuidPairDto> TagItems(IEntityCard item) =>
+        RelationshipPairs(item, group =>
+            group.Kind.Equals("tag", StringComparison.OrdinalIgnoreCase) ||
+            group.Kind.Equals("genre", StringComparison.OrdinalIgnoreCase) ||
+            group.Code?.Equals("tags", StringComparison.OrdinalIgnoreCase) == true ||
+            group.Code?.Equals("genres", StringComparison.OrdinalIgnoreCase) == true);
+
+    private static IReadOnlyList<JellyfinNameGuidPairDto> StudioItems(IEntityCard item) =>
+        RelationshipPairs(item, group =>
+            group.Kind.Equals("studio", StringComparison.OrdinalIgnoreCase) ||
+            group.Code?.Equals("studio", StringComparison.OrdinalIgnoreCase) == true ||
+            group.Code?.Equals("studios", StringComparison.OrdinalIgnoreCase) == true);
+
+    private static IReadOnlyList<JellyfinNameGuidPairDto> RelationshipPairs(
+        IEntityCard item,
+        Func<EntityGroup, bool> predicate) {
+        var pairs = new List<JellyfinNameGuidPairDto>();
+        var seen = new HashSet<Guid>();
+        foreach (var group in item.Relationships.Where(predicate)) {
+            foreach (var entity in group.Entities) {
+                if (seen.Add(entity.Id)) {
+                    pairs.Add(new JellyfinNameGuidPairDto(entity.Title, entity.Id));
+                }
+            }
+        }
+
+        return pairs;
+    }
+
+    private static IReadOnlyList<JellyfinBaseItemPersonDto>? People(IEntityCard item) {
+        var groups = item.Relationships
+            .Where(group => group.Kind.Equals("person", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+        if (groups.Length == 0) {
+            return null;
+        }
+
+        var creditMetadata = CreditMetadata(item)
+            .GroupBy(credit => credit.PersonId)
+            .ToDictionary(group => group.Key, group => group.First());
+        var people = new List<JellyfinBaseItemPersonDto>();
+        foreach (var group in groups) {
+            foreach (var person in group.Entities) {
+                creditMetadata.TryGetValue(person.Id, out var credit);
+                var type = PersonType(credit?.Role, group);
+                people.Add(new JellyfinBaseItemPersonDto(
+                    person.Title,
+                    person.Id,
+                    PersonRole(credit, type, group),
+                    type,
+                    person.CoverUrl is null ? null : EtagFor(person.Id, person.CoverUrl)));
+            }
+        }
+
+        return people.Count == 0 ? null : people;
+    }
+
+    private static IReadOnlyList<EntityCreditMetadata> CreditMetadata(IEntityCard item) =>
+        item switch {
+            VideoDetail detail => detail.CreditMetadata,
+            VideoSeriesDetail detail => detail.CreditMetadata,
+            VideoSeasonDetail detail => detail.CreditMetadata,
+            GalleryDetail detail => detail.CreditMetadata,
+            _ => []
+        };
+
+    private static string PersonType(string? role, EntityGroup group) {
+        var code = EmptyAsNull(role) ?? EmptyAsNull(group.Code) ?? group.Label;
+        return code.Trim().ToLowerInvariant() switch {
+            "actor" or "cast" or "performer" or "performers" => "Actor",
+            "composer" => "Composer",
+            "creator" => "Creator",
+            "director" => "Director",
+            "producer" => "Producer",
+            "writer" => "Writer",
+            "artist" => "Artist",
+            "narrator" => "Narrator",
+            _ => "Person"
+        };
+    }
+
+    private static string? PersonRole(EntityCreditMetadata? credit, string type, EntityGroup group) {
+        if (!string.IsNullOrWhiteSpace(credit?.Character)) {
+            return credit.Character;
+        }
+
+        if (!string.IsNullOrWhiteSpace(credit?.Role) &&
+            !credit.Role.Equals("actor", StringComparison.OrdinalIgnoreCase)) {
+            return TitleLabel(credit.Role);
+        }
+
+        if (!string.IsNullOrWhiteSpace(group.Code) &&
+            !group.Code.Equals("cast", StringComparison.OrdinalIgnoreCase) &&
+            !group.Code.Equals("credits", StringComparison.OrdinalIgnoreCase)) {
+            return TitleLabel(group.Code);
+        }
+
+        return type.Equals("Actor", StringComparison.OrdinalIgnoreCase) ? null : type;
+    }
+
+    private static DateTimeOffset? PremiereDateFrom(DatesCapability? dates) =>
+        ToDateTimeOffset(DateByPriority(dates?.Items, PremiereDatePriority));
+
+    private static EntityDate? DateByPriority(IReadOnlyList<EntityDate>? dates, IReadOnlyList<string> priority) {
+        if (dates is null || dates.Count == 0) {
+            return null;
+        }
+
+        foreach (var code in priority) {
+            var match = dates.FirstOrDefault(date => date.Code.Equals(code, StringComparison.OrdinalIgnoreCase));
+            if (match is not null) {
+                return match;
+            }
+        }
+
+        return dates.FirstOrDefault(date => date.SortableValue is not null) ?? dates[0];
+    }
+
+    private static DateTimeOffset? ToDateTimeOffset(EntityDate? date) {
+        if (date is null) {
+            return null;
+        }
+
+        if (date.SortableValue is { } sortableValue) {
+            return new DateTimeOffset(sortableValue.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);
+        }
+
+        if (DateOnly.TryParse(date.Value, out var dateOnly)) {
+            return new DateTimeOffset(dateOnly.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);
+        }
+
+        if (DateTimeOffset.TryParse(date.Value, out var dateTimeOffset)) {
+            return dateTimeOffset.ToUniversalTime();
+        }
+
+        return int.TryParse(date.Value, out var year) && year is >= 1 and <= 9999
+            ? new DateTimeOffset(year, 1, 1, 0, 0, 0, TimeSpan.Zero)
+            : null;
+    }
+
+    private static int? ProductionYearFrom(
+        DateTimeOffset? premiereDate,
+        DatesCapability? dates,
+        LifetimeCapability? lifetime) {
+        if (premiereDate is { } date) {
+            return date.Year;
+        }
+
+        var candidate = DateByPriority(dates?.Items, PremiereDatePriority) ?? lifetime?.Start ?? lifetime?.End;
+        if (candidate?.SortableValue is { } sortableValue) {
+            return sortableValue.Year;
+        }
+
+        var value = candidate?.Value?.Trim();
+        if (string.IsNullOrWhiteSpace(value)) {
+            return null;
+        }
+
+        if (value.Length >= 4 && int.TryParse(value[..4], out var year) && year is >= 1 and <= 9999) {
+            return year;
+        }
+
+        return DateTimeOffset.TryParse(value, out var parsed) ? parsed.Year : null;
+    }
+
+    private static IReadOnlyDictionary<string, string>? ProviderIds(LinksCapability? links) {
+        if (links?.ExternalIds.Count is not > 0) {
+            return null;
+        }
+
+        var providerIds = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var id in links.ExternalIds) {
+            if (!string.IsNullOrWhiteSpace(id.Provider) &&
+                !string.IsNullOrWhiteSpace(id.Value) &&
+                !providerIds.ContainsKey(id.Provider)) {
+                providerIds[id.Provider] = id.Value;
+            }
+        }
+
+        return providerIds.Count == 0 ? null : providerIds;
+    }
+
+    private static IReadOnlyList<JellyfinExternalUrlDto>? ExternalUrls(LinksCapability? links) {
+        if (links is null) {
+            return null;
+        }
+
+        var urls = new List<JellyfinExternalUrlDto>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var url in links.Urls) {
+            AddExternalUrl(urls, seen, EmptyAsNull(url.Label) ?? LabelForUrl(url.Value), url.Value);
+        }
+
+        foreach (var id in links.ExternalIds.Where(id => !string.IsNullOrWhiteSpace(id.Url))) {
+            AddExternalUrl(urls, seen, ProviderLabel(id.Provider), id.Url!);
+        }
+
+        return urls.Count == 0 ? null : urls;
+    }
+
+    private static IReadOnlyList<JellyfinMediaUrlDto>? RemoteTrailers(LinksCapability? links) {
+        if (links is null) {
+            return null;
+        }
+
+        var trailers = links.Urls
+            .Where(url => IsTrailerUrl(url))
+            .Select(url => new JellyfinMediaUrlDto(EmptyAsNull(url.Label) ?? "Trailer", url.Value))
+            .ToArray();
+        return trailers.Length == 0 ? null : trailers;
+    }
+
+    private static void AddExternalUrl(
+        List<JellyfinExternalUrlDto> urls,
+        HashSet<string> seen,
+        string name,
+        string? value) {
+        if (string.IsNullOrWhiteSpace(value) || !seen.Add(value)) {
+            return;
+        }
+
+        urls.Add(new JellyfinExternalUrlDto(name, value));
+    }
+
+    private static bool IsTrailerUrl(EntityUrl url) =>
+        url.Label?.Contains("trailer", StringComparison.OrdinalIgnoreCase) == true ||
+        url.Value.Contains("trailer", StringComparison.OrdinalIgnoreCase) ||
+        url.Value.Contains("youtube.com", StringComparison.OrdinalIgnoreCase) ||
+        url.Value.Contains("youtu.be", StringComparison.OrdinalIgnoreCase);
+
+    private static string LabelForUrl(string url) =>
+        Uri.TryCreate(url, UriKind.Absolute, out var uri) && !string.IsNullOrWhiteSpace(uri.Host)
+            ? uri.Host.Replace("www.", string.Empty, StringComparison.OrdinalIgnoreCase)
+            : "Link";
+
+    private static string ProviderLabel(string provider) =>
+        provider.Trim().ToLowerInvariant() switch {
+            "anidb" => "AniDB",
+            "imdb" => "IMDb",
+            "tmdb" => "TMDb",
+            "tvdb" => "TVDb",
+            _ => TitleLabel(provider)
+        };
+
+    private static IReadOnlyList<JellyfinChapterInfoDto>? Chapters(MarkersCapability? markers) {
+        if (markers?.Items.Count is not > 0) {
+            return null;
+        }
+
+        return markers.Items
+            .Select(marker => new JellyfinChapterInfoDto {
+                Name = marker.Title,
+                StartPositionTicks = TicksFromSeconds(marker.Seconds)
+            })
+            .ToArray();
+    }
+
+    private static long TicksFromSeconds(double seconds) =>
+        TimeSpan.FromSeconds(double.IsFinite(seconds) ? Math.Max(0, seconds) : 0).Ticks;
+
+    private static string? AspectRatio(int? width, int? height) {
+        if (width is not > 0 || height is not > 0) {
+            return null;
+        }
+
+        var divisor = GreatestCommonDivisor(width.Value, height.Value);
+        return $"{width.Value / divisor}:{height.Value / divisor}";
+    }
+
+    private static int GreatestCommonDivisor(int left, int right) {
+        left = Math.Abs(left);
+        right = Math.Abs(right);
+        while (right != 0) {
+            var next = left % right;
+            left = right;
+            right = next;
+        }
+
+        return left == 0 ? 1 : left;
+    }
+
+    private static bool? IsHd(TechnicalCapability? technical) =>
+        technical is null ? null : technical.Height is >= 720 || technical.Width is >= 1280;
+
+    private static string TitleLabel(string value) {
+        var words = value.Replace('_', '-')
+            .Split('-', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (words.Length == 0) {
+            return value;
+        }
+
+        return string.Join(" ", words.Select(word =>
+            word.Length == 0
+                ? word
+                : string.Create(word.Length, word, static (chars, state) => {
+                    chars[0] = char.ToUpperInvariant(state[0]);
+                    if (state.Length > 1) {
+                        state.AsSpan(1).CopyTo(chars[1..]);
+                    }
+                })));
+    }
+
+    private static string? EmptyAsNull(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private sealed record JellyfinImageMetadata(
+        IReadOnlyDictionary<string, string> Tags,
+        IReadOnlyList<string> BackdropImageTags,
+        string? PrimaryPath,
+        double? PrimaryImageAspectRatio);
 
     private static JellyfinUserItemDataDto UserDataFor(Guid id, bool isFavorite, PlaybackCapability? playback) {
         var resumeTicks = playback is null ? 0 : TimeSpan.FromSeconds(playback.ResumeSeconds).Ticks;

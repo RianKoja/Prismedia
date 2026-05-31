@@ -11,6 +11,7 @@ using Prismedia.Contracts.Collections;
 using Prismedia.Contracts.Entities;
 using Prismedia.Contracts.Jellyfin;
 using Prismedia.Contracts.Security;
+using Prismedia.Contracts.Videos;
 
 namespace Prismedia.Api.Tests;
 
@@ -262,6 +263,68 @@ public sealed partial class SecurityEndpointTests : IDisposable {
         Assert.Single(showEpisode.MediaSources!);
     }
 
+    [Fact]
+    public async Task JellyfinItemDetailExposesPrismediaMetadataFields() {
+        using var factory = CreateFactory(new JellyfinMetadataEntityReadService());
+        using var client = factory.CreateClient();
+        var auth = await AuthenticateAsync(client, "Prismedia", TestAuth.ApiKey);
+
+        var item = await JellyfinGetFromJsonAsync<JellyfinBaseItemDto>(
+            client,
+            $"/Items/{JellyfinMetadataEntityReadService.VideoId:D}",
+            auth.AccessToken);
+
+        Assert.NotNull(item);
+        Assert.Equal("Rich Movie", item.Name);
+        Assert.Equal("A mapped Prismedia overview.", item.Overview);
+        Assert.Equal(new DateTimeOffset(2024, 5, 4, 0, 0, 0, TimeSpan.Zero), item.PremiereDate);
+        Assert.Equal(2024, item.ProductionYear);
+        Assert.Equal("R", item.OfficialRating);
+        Assert.Equal(8, item.CommunityRating);
+        Assert.Equal(1920, item.Width);
+        Assert.Equal(1080, item.Height);
+        Assert.Equal("16:9", item.AspectRatio);
+        Assert.True(item.IsHD);
+        Assert.True(item.HasSubtitles);
+        Assert.Contains("Logo", item.ImageTags.Keys);
+        Assert.Single(item.BackdropImageTags);
+
+        Assert.Equal(["Adventure", "Cozy"], item.Tags);
+        Assert.Equal(["Adventure", "Cozy"], item.Genres);
+        Assert.Equal(["Adventure", "Cozy"], item.GenreItems!.Select(genre => genre.Name).ToArray());
+
+        var studio = Assert.Single(item.Studios!);
+        Assert.Equal("Studio One", studio.Name);
+        Assert.Equal(JellyfinMetadataEntityReadService.StudioId, studio.Id);
+
+        Assert.Equal("tt1234567", item.ProviderIds!["imdb"]);
+        Assert.Contains(item.ExternalUrls!, url => url.Name == "IMDb" && url.Url == "https://www.imdb.com/title/tt1234567/");
+
+        Assert.Equal(["Opening"], item.Chapters!.Select(chapter => chapter.Name).ToArray());
+        Assert.Equal(TimeSpan.FromSeconds(12).Ticks, item.Chapters![0].StartPositionTicks);
+
+        var people = item.People!.OrderBy(person => person.Name, StringComparer.Ordinal).ToArray();
+        Assert.Collection(
+            people,
+            person => {
+                Assert.Equal("Actor One", person.Name);
+                Assert.Equal(JellyfinMetadataEntityReadService.ActorId, person.Id);
+                Assert.Equal("Hero", person.Role);
+                Assert.Equal("Actor", person.Type);
+            },
+            person => {
+                Assert.Equal("Director One", person.Name);
+                Assert.Equal(JellyfinMetadataEntityReadService.DirectorId, person.Id);
+                Assert.Equal("Director", person.Role);
+                Assert.Equal("Director", person.Type);
+            });
+
+        Assert.Contains(item.MediaStreams!, stream =>
+            stream.Type == "Subtitle" &&
+            stream.Language == "en" &&
+            stream.DisplayTitle == "English SDH");
+    }
+
     public void Dispose() {
         if (Directory.Exists(_webRoot)) {
             Directory.Delete(_webRoot, recursive: true);
@@ -493,6 +556,134 @@ public sealed partial class SecurityEndpointTests : IDisposable {
                 null,
                 [],
                 [new EntityThumbnailMeta("duration", "42:00"), new EntityThumbnailMeta("video", "1080p"), new EntityThumbnailMeta("video", "H264"), new EntityThumbnailMeta("video", "mkv")],
+                null,
+                false,
+                false,
+                true);
+    }
+
+    private sealed class JellyfinMetadataEntityReadService : IEntityReadService {
+        public static readonly Guid VideoId = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+        public static readonly Guid ActorId = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
+        public static readonly Guid DirectorId = Guid.Parse("cccccccc-cccc-cccc-cccc-cccccccccccc");
+        public static readonly Guid StudioId = Guid.Parse("dddddddd-dddd-dddd-dddd-dddddddddddd");
+        private static readonly Guid AdventureTagId = Guid.Parse("eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee");
+        private static readonly Guid CozyTagId = Guid.Parse("ffffffff-ffff-ffff-ffff-ffffffffffff");
+
+        public Task<EntityListResponse> ListAsync(
+            string? kind,
+            string? query,
+            string? cursor,
+            bool? hideNsfw,
+            int? limit,
+            CancellationToken cancellationToken,
+            Guid? referencedBy = null,
+            string? relationshipCode = null,
+            string? sort = null,
+            string? sortDir = null,
+            int? seed = null,
+            bool? favorite = null,
+            bool? organized = null,
+            int? ratingMin = null,
+            int? ratingMax = null,
+            bool? unrated = null,
+            string? status = null) =>
+            Task.FromResult(new EntityListResponse([Thumbnail(VideoId, "video", "Rich Movie", null, null)], null, 1));
+
+        public Task<EntityCard?> GetAsync(Guid id, bool hideNsfw, CancellationToken cancellationToken) =>
+            Task.FromResult<EntityCard?>(id == VideoId ? Card() : null);
+
+        public Task<EntityThumbnailBatchResponse> GetThumbnailsAsync(
+            IReadOnlyList<Guid> ids,
+            bool hideNsfw,
+            CancellationToken cancellationToken) =>
+            Task.FromResult(new EntityThumbnailBatchResponse([]));
+
+        public Task<IEntityCard?> GetDetailAsync(Guid id, string kind, bool hideNsfw, CancellationToken cancellationToken) =>
+            Task.FromResult<IEntityCard?>(id == VideoId && kind == "video" ? Detail() : null);
+
+        private static EntityCard Card() =>
+            new() {
+                Id = VideoId,
+                Kind = "video",
+                Title = "Rich Movie",
+                ParentEntityId = null,
+                SortOrder = null,
+                Capabilities = Capabilities(),
+                ChildrenByKind = [],
+                Relationships = Relationships()
+            };
+
+        private static VideoDetail Detail() =>
+            new() {
+                Id = VideoId,
+                Kind = "video",
+                Title = "Rich Movie",
+                ParentEntityId = null,
+                SortOrder = null,
+                Capabilities = Capabilities(),
+                ChildrenByKind = [],
+                Relationships = Relationships(),
+                CreditMetadata = [
+                    new EntityCreditMetadata(ActorId, "actor", "Hero"),
+                    new EntityCreditMetadata(DirectorId, "director", null)
+                ],
+                SubtitlesExtractedAt = null
+            };
+
+        private static IReadOnlyList<EntityCapability> Capabilities() =>
+            [
+                new DescriptionCapability("A mapped Prismedia overview."),
+                new RatingCapability(4),
+                new FlagsCapability(IsFavorite: true, IsNsfw: false, IsOrganized: true),
+                new TechnicalCapability(TimeSpan.FromMinutes(95), 1920, 1080, 24, 6_000_000, null, null, "h264", "mkv", "matroska"),
+                new DatesCapability([
+                    new EntityDate("release", "2024-05-04", new DateOnly(2024, 5, 4), "day")
+                ]),
+                new ClassificationCapability("R", "mpaa"),
+                new LinksCapability(
+                    [new EntityUrl("https://example.test/rich-movie", "Home")],
+                    [new EntityExternalId("imdb", "tt1234567", "https://www.imdb.com/title/tt1234567/")]),
+                new ImagesCapability(
+                    ["thumbnail", "poster", "backdrop", "logo"],
+                    [
+                        new EntityImageAsset("poster", "/assets/poster.jpg", "image/jpeg"),
+                        new EntityImageAsset("backdrop", "/assets/backdrop.jpg", "image/jpeg"),
+                        new EntityImageAsset("logo", "/assets/logo.png", "image/png")
+                    ],
+                    "/assets/poster-thumb.jpg",
+                    "/assets/poster.jpg"),
+                new FilesCapability([new EntityFile("source", "/media/rich-movie.mkv", "video/x-matroska")]),
+                new MarkersCapability([new EntityMarker(Guid.Parse("99999999-9999-9999-9999-999999999999"), "Opening", 12, null)]),
+                new SubtitlesCapability([
+                    new EntitySubtitle(Guid.Parse("12121212-1212-1212-1212-121212121212"), "en", "English SDH", "vtt", "external", "/subs/rich.en.vtt", "srt", "/subs/rich.en.srt", true)
+                ])
+            ];
+
+        private static IReadOnlyList<EntityGroup> Relationships() =>
+            [
+                new EntityGroup("person", "Cast", [Thumbnail(ActorId, "person", "Actor One", null, null)]) { Code = "cast" },
+                new EntityGroup("person", "Credits", [Thumbnail(DirectorId, "person", "Director One", null, null)]) { Code = "credits" },
+                new EntityGroup("studio", "Studios", [Thumbnail(StudioId, "studio", "Studio One", null, null)]) { Code = "studio" },
+                new EntityGroup("tag", "Tags", [
+                    Thumbnail(AdventureTagId, "tag", "Adventure", null, null),
+                    Thumbnail(CozyTagId, "tag", "Cozy", null, null)
+                ]) { Code = "tags" }
+            ];
+
+        private static EntityThumbnail Thumbnail(Guid id, string kind, string title, Guid? parentId, int? sortOrder) =>
+            new(
+                id,
+                kind,
+                title,
+                parentId,
+                sortOrder,
+                null,
+                null,
+                "none",
+                null,
+                [],
+                [],
                 null,
                 false,
                 false,

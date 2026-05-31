@@ -40,6 +40,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ### Changed
 - API routes now require the generated API key, while the native web app receives it automatically as a same-origin HttpOnly cookie so normal browser use remains frictionless.
+- Jellyfin-compatible item responses now expose richer Prismedia metadata to clients like Infuse, including dates, ratings, credits, studios, tags, provider IDs, chapters, subtitles, technical dimensions, and additional artwork tags.
 - Scrubbing-preview (trickplay) generation is dramatically lighter on the CPU: each video is now sampled in a single ffmpeg pass instead of launching a separate process for every preview frame, and all background media generation (thumbnails, preview clips, trickplay, waveforms) runs at below-normal priority with a capped thread count. Libraries with many videos no longer peg every core or make playback and browsing stutter while previews are being built.
 - Library scans now take priority over the thumbnail and preview work they queue, so newly added media shows up in the library promptly instead of waiting behind a long backlog of preview generation.
 - Entity grids now lazy-load cover images and request the small thumbnail variant, dramatically cutting the network and image-decoding work needed to render large libraries.

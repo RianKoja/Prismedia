@@ -119,14 +119,65 @@ public sealed record JellyfinBaseItemDto {
     [JsonPropertyName("Etag")]
     public string? Etag { get; init; }
 
+    [JsonPropertyName("OriginalTitle")]
+    public string? OriginalTitle { get; init; }
+
     [JsonPropertyName("DateCreated")]
     public DateTimeOffset? DateCreated { get; init; }
+
+    [JsonPropertyName("StartDate")]
+    public DateTimeOffset? StartDate { get; init; }
+
+    [JsonPropertyName("EndDate")]
+    public DateTimeOffset? EndDate { get; init; }
 
     [JsonPropertyName("SortName")]
     public string? SortName { get; init; }
 
+    [JsonPropertyName("PremiereDate")]
+    public DateTimeOffset? PremiereDate { get; init; }
+
+    [JsonPropertyName("ProductionYear")]
+    public int? ProductionYear { get; init; }
+
     [JsonPropertyName("Overview")]
     public string? Overview { get; init; }
+
+    [JsonPropertyName("OfficialRating")]
+    public string? OfficialRating { get; init; }
+
+    [JsonPropertyName("CustomRating")]
+    public string? CustomRating { get; init; }
+
+    [JsonPropertyName("CommunityRating")]
+    public float? CommunityRating { get; init; }
+
+    [JsonPropertyName("CriticRating")]
+    public float? CriticRating { get; init; }
+
+    [JsonPropertyName("Genres")]
+    public IReadOnlyList<string>? Genres { get; init; }
+
+    [JsonPropertyName("GenreItems")]
+    public IReadOnlyList<JellyfinNameGuidPairDto>? GenreItems { get; init; }
+
+    [JsonPropertyName("Tags")]
+    public IReadOnlyList<string>? Tags { get; init; }
+
+    [JsonPropertyName("People")]
+    public IReadOnlyList<JellyfinBaseItemPersonDto>? People { get; init; }
+
+    [JsonPropertyName("Studios")]
+    public IReadOnlyList<JellyfinNameGuidPairDto>? Studios { get; init; }
+
+    [JsonPropertyName("ProviderIds")]
+    public IReadOnlyDictionary<string, string>? ProviderIds { get; init; }
+
+    [JsonPropertyName("ExternalUrls")]
+    public IReadOnlyList<JellyfinExternalUrlDto>? ExternalUrls { get; init; }
+
+    [JsonPropertyName("RemoteTrailers")]
+    public IReadOnlyList<JellyfinMediaUrlDto>? RemoteTrailers { get; init; }
 
     [JsonPropertyName("Type")]
     public required string Type { get; init; }
@@ -154,6 +205,24 @@ public sealed record JellyfinBaseItemDto {
 
     [JsonPropertyName("SupportsSync")]
     public bool? SupportsSync { get; init; }
+
+    [JsonPropertyName("CanDownload")]
+    public bool? CanDownload { get; init; }
+
+    [JsonPropertyName("HasSubtitles")]
+    public bool? HasSubtitles { get; init; }
+
+    [JsonPropertyName("Width")]
+    public int? Width { get; init; }
+
+    [JsonPropertyName("Height")]
+    public int? Height { get; init; }
+
+    [JsonPropertyName("AspectRatio")]
+    public string? AspectRatio { get; init; }
+
+    [JsonPropertyName("IsHD")]
+    public bool? IsHD { get; init; }
 
     [JsonPropertyName("CollectionType")]
     public string? CollectionType { get; init; }
@@ -208,6 +277,50 @@ public sealed record JellyfinBaseItemDto {
 
     [JsonPropertyName("MediaStreams")]
     public IReadOnlyList<JellyfinCatalogMediaStreamDto>? MediaStreams { get; init; }
+
+    [JsonPropertyName("Chapters")]
+    public IReadOnlyList<JellyfinChapterInfoDto>? Chapters { get; init; }
+}
+
+/// <summary>Jellyfin-compatible name/id pair used by genre, studio, and related item arrays.</summary>
+public sealed record JellyfinNameGuidPairDto(
+    [property: JsonPropertyName("Name")] string Name,
+    [property: JsonPropertyName("Id")] Guid Id);
+
+/// <summary>Jellyfin-compatible external URL reference.</summary>
+public sealed record JellyfinExternalUrlDto(
+    [property: JsonPropertyName("Name")] string Name,
+    [property: JsonPropertyName("Url")] string Url);
+
+/// <summary>Jellyfin-compatible media URL reference, used for remote trailers.</summary>
+public sealed record JellyfinMediaUrlDto(
+    [property: JsonPropertyName("Name")] string Name,
+    [property: JsonPropertyName("Url")] string Url);
+
+/// <summary>Jellyfin-compatible credited person entry.</summary>
+public sealed record JellyfinBaseItemPersonDto(
+    [property: JsonPropertyName("Name")] string Name,
+    [property: JsonPropertyName("Id")] Guid Id,
+    [property: JsonPropertyName("Role")] string? Role,
+    [property: JsonPropertyName("Type")] string Type,
+    [property: JsonPropertyName("PrimaryImageTag")] string? PrimaryImageTag);
+
+/// <summary>Jellyfin-compatible chapter marker.</summary>
+public sealed record JellyfinChapterInfoDto {
+    [JsonPropertyName("StartPositionTicks")]
+    public long StartPositionTicks { get; init; }
+
+    [JsonPropertyName("Name")]
+    public required string Name { get; init; }
+
+    [JsonPropertyName("ImagePath")]
+    public string? ImagePath { get; init; }
+
+    [JsonPropertyName("ImageDateModified")]
+    public DateTimeOffset? ImageDateModified { get; init; }
+
+    [JsonPropertyName("ImageTag")]
+    public string? ImageTag { get; init; }
 }
 
 /// <summary>Minimal Jellyfin-compatible media source embedded in catalog item DTOs.</summary>
@@ -262,6 +375,9 @@ public sealed record JellyfinCatalogMediaStreamDto {
 
     [JsonPropertyName("Codec")]
     public string? Codec { get; init; }
+
+    [JsonPropertyName("Language")]
+    public string? Language { get; init; }
 
     [JsonPropertyName("DisplayTitle")]
     public string? DisplayTitle { get; init; }
