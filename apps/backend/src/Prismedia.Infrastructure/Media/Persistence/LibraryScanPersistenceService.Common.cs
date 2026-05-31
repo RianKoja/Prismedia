@@ -76,6 +76,21 @@ public sealed partial class LibraryScanPersistenceService {
 
     }
 
+    private async Task ClearStructuralChildLinkAsync(
+        Guid childId,
+        DateTimeOffset now,
+        CancellationToken cancellationToken) {
+        var child = _db.Entities.Local.FirstOrDefault(row => row.Id == childId)
+            ?? await _db.Entities.FirstOrDefaultAsync(row => row.Id == childId, cancellationToken);
+        if (child is null || child.ParentEntityId is null && child.SortOrder is null) {
+            return;
+        }
+
+        child.ParentEntityId = null;
+        child.SortOrder = null;
+        child.UpdatedAt = now;
+    }
+
     private async Task EnsureEntityFileAsync(
         Guid entityId,
         EntityFileRole role,

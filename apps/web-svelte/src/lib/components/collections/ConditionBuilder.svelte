@@ -3,6 +3,7 @@
     BookOpen,
     Calendar,
     ChevronDown,
+    Clapperboard,
     Film,
     FolderOpen,
     Hash,
@@ -38,6 +39,7 @@
 
   const entityKinds: { value: CollectionEntityType; label: string; icon: Component }[] = [
     { value: "video", label: "Video", icon: Film },
+    { value: "movie", label: "Movie", icon: Clapperboard },
     { value: "video-series", label: "Series", icon: FolderOpen },
     { value: "gallery", label: "Gallery", icon: Images },
     { value: "image", label: "Image", icon: ImageIcon },

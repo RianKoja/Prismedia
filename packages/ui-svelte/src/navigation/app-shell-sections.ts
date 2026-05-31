@@ -12,6 +12,7 @@ export const appShellSections = [
     kicker: "Browse",
     items: [
       { label: "Videos", href: "/videos", icon: "film" },
+      { label: "Movies", href: "/movies", icon: "clapperboard" },
       { label: "Series", href: "/series", icon: "folder" },
       { label: "Images", href: "/images", icon: "image" },
       { label: "Galleries", href: "/galleries", icon: "images" },

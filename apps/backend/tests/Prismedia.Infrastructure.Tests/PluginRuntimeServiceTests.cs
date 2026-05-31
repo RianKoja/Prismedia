@@ -611,6 +611,79 @@ public sealed class PluginRuntimeServiceTests : IDisposable {
     }
 
     [Fact]
+    public async Task IdentifySendsMovieAsVideoToVideoOnlyCompatibleProvider() {
+        var pluginDir = Path.Combine(_tempRoot, "tmdb");
+        Directory.CreateDirectory(pluginDir);
+        await File.WriteAllTextAsync(
+            Path.Combine(pluginDir, "manifest.json"),
+            """
+            {
+              "manifestVersion": 1,
+              "apiTags": ["prismedia"],
+              "id": "tmdb",
+              "name": "TMDB",
+              "version": "1.2.0",
+              "runtime": "dotnet-process",
+              "entry": "Prismedia.Plugin.Tmdb.dll",
+              "compat": {
+                "pluginApiMin": "1.0.0",
+                "pluginApiMax": null,
+                "prismediaMin": "1.0.0",
+                "prismediaMax": null
+              },
+              "auth": [
+                { "key": "apiKey", "label": "API key", "required": true, "url": "https://www.themoviedb.org/settings/api" }
+              ],
+              "supports": [
+                { "entityKind": "video", "actions": ["lookup-id", "lookup-url", "search"] }
+              ]
+            }
+            """);
+
+        await using var db = CreateContext();
+        var now = DateTimeOffset.UtcNow;
+        var providerConfig = new ProviderConfigRow {
+            Id = Guid.NewGuid(),
+            ProviderCode = "tmdb",
+            DisplayName = "TMDB",
+            ProviderType = ProviderType.ExternalProcess,
+            Enabled = true,
+            SettingsJson = "{}",
+            CreatedAt = now,
+            UpdatedAt = now
+        };
+        var movieId = Guid.Parse("99999999-aaaa-4444-8888-999999999999");
+        db.ProviderConfigs.Add(providerConfig);
+        db.ProviderCredentials.Add(new ProviderCredentialRow {
+            Id = Guid.NewGuid(),
+            ProviderConfigId = providerConfig.Id,
+            CredentialKey = "apiKey",
+            EncryptedValue = "secret",
+            CreatedAt = now,
+            UpdatedAt = now
+        });
+        db.Entities.Add(new EntityRow {
+            Id = movieId,
+            KindCode = EntityKindRegistry.Movie.Code,
+            Title = "Friendship",
+            CreatedAt = now,
+            UpdatedAt = now
+        });
+        await db.SaveChangesAsync();
+
+        var executor = new CapturingProcessExecutor();
+        var service = CreateIdentifyService(db, executor, pluginDir);
+
+        var response = await service.IdentifyAsync(movieId, "tmdb", null, hideNsfw: false, CancellationToken.None);
+
+        Assert.True(response.Ok);
+        Assert.Equal("video", executor.CapturedRequest?.Entity.Kind);
+        Assert.Equal("search", executor.CapturedRequest?.Action);
+        Assert.Equal(EntityKindRegistry.Movie.Code, response.Result?.TargetKind);
+        Assert.Equal(movieId, response.Result?.TargetEntityId);
+    }
+
+    [Fact]
     public async Task IdentifyTraversesGenericStructuralChildrenWhenProviderSupportsChildKinds() {
         var pluginDir = Path.Combine(_tempRoot, "tmdb");
         Directory.CreateDirectory(pluginDir);

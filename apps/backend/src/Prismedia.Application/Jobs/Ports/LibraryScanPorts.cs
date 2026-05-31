@@ -16,6 +16,7 @@ public interface ILibraryScanRootPersistence {
 public interface IVideoScanPersistence {
     Task<Guid> UpsertVideoAsync(string filePath, string title, Guid libraryRootId, bool isNsfw, CancellationToken cancellationToken);
     Task<int> RemoveStaleVideosByRootAsync(Guid rootId, IReadOnlySet<string> validPaths, CancellationToken cancellationToken);
+    Task<int> RemoveStaleMoviesByRootAsync(Guid rootId, IReadOnlySet<string> validFolderPaths, CancellationToken cancellationToken);
     Task<int> RemoveOrphanSeriesAndSeasonsAsync(CancellationToken cancellationToken);
 
     /// <summary>
@@ -228,6 +229,7 @@ public sealed record LibrarySettingsData(
 /// <param name="Title">Display title inferred from the filename or imported metadata.</param>
 /// <param name="LibraryRootId">Library root that owns the file.</param>
 /// <param name="IsNsfw">Whether the owning library root marks discovered media as NSFW.</param>
+/// <param name="Movie">Optional movie folder context for single-film releases.</param>
 /// <param name="Series">Optional series folder context for episode-style video files.</param>
 /// <param name="Season">Optional season folder context when the file lives beneath a season grouping.</param>
 /// <param name="EpisodeNumber">Episode number parsed from the filename when available.</param>
@@ -242,7 +244,15 @@ public sealed record VideoUpsertItem(
     VideoSeasonScanInfo? Season = null,
     int? EpisodeNumber = null,
     int? AbsoluteEpisodeNumber = null,
-    VideoSidecarMetadata? Metadata = null);
+    VideoSidecarMetadata? Metadata = null,
+    MovieScanInfo? Movie = null);
+
+/// <summary>
+/// Movie folder context inferred during a scan.
+/// </summary>
+/// <param name="FolderPath">Absolute folder path that identifies the movie in the library.</param>
+/// <param name="Title">Movie title inferred from the folder name or sidecar metadata.</param>
+public sealed record MovieScanInfo(string FolderPath, string Title);
 
 /// <summary>
 /// Series folder context inferred during a scan.

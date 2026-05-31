@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 ### What's New
+- The navigation sidebar is now yours to arrange. An Edit mode (the pencil at the bottom of the rail) lets you rename and reorder sections, create your own sections, drag items between them, and hide the destinations you never use — all saved on your device. Hidden items reappear in Edit mode so you can switch them back on anytime, and Reset restores the original layout.
+- The mobile navigation got a glow-up: a roomier bottom bar that clears the edge of modern phones and a redesigned drawer you can flick open by swiping up from the bar (or tapping the animated chevron) and pull back down to dismiss. From the drawer you can star up to four destinations to pin them to the bottom bar — and reorder that bar with a live preview — plus hide, reorder, and regroup everything just like on desktop.
 - New Auto Identify setting lets trusted plugins identify and fill new media automatically as it is scanned. Turn it on, pick which installed plugins to trust and in what order, choose which kinds of media to cover, and set a confidence threshold (90% by default) above which a match is applied without manual review. It only touches un-organized items by default and stays off until you enable it, with a note that identifying everything can make scans take longer.
 - Library grids now load far faster and scroll smoothly even with hundreds of items. Covers are served as small grid-sized thumbnails and only loaded as cards come into view, so large libraries no longer stutter, lag, or pop in blank tiles while scrolling.
 - Library grids can now sort and filter across the entire collection instead of just the page on screen, including a Random shuffle that reorders the whole library (with a reshuffle button) and a new "Date added (newest)" default ordering.
@@ -14,6 +16,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - Mobile install metadata now presents Prismedia with the correct app name, theme colors, and safer icon spacing for browser and home-screen surfaces.
 
 ### Added
+- Added first-class Movies: same-named single-file movie folders now scan as movie entities with their own Movies section, detail pages, plugin identify support, `movie.nfo` metadata, and poster/header artwork while still keeping the playable file visible in Videos.
 - Added a Jellyfin-compatible API layer so clients like Infuse can discover Prismedia, sign in with configured fake users, browse video libraries, load artwork, and play through Prismedia's existing video streaming pipeline.
 - Added a generated, human-typeable API key with Settings controls to reveal, copy, regenerate, and manage Jellyfin-compatible profile usernames with per-profile NSFW visibility.
 - Added Auto Identify, an opt-in setting that runs scanned media through your chosen plugins during library scans and applies the first match that meets a configurable confidence threshold (or is an exact match) — applying the full proposal exactly like a manual identify, including child entities, relationships, and artwork — then marks the item organized. Includes an ordered, searchable plugin picker, per-kind coverage (video, galleries, images, audio, books), and an option to re-identify already-organized items.

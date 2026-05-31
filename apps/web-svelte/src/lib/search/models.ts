@@ -1,4 +1,5 @@
 export type SearchEntityKind =
+  | "movie"
   | "video"
   | "video-series"
   | "performer"

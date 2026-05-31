@@ -7,6 +7,9 @@ namespace Prismedia.Infrastructure.Plugins;
 public sealed partial class EntityMetadataApplyService {
     private static bool IsKindCompatible(string entityKind, string expectedKind) =>
         entityKind.Equals(expectedKind, StringComparison.OrdinalIgnoreCase) ||
+        (entityKind.Equals(EntityKindRegistry.Movie.Code, StringComparison.OrdinalIgnoreCase) &&
+            (expectedKind.Equals(EntityKindRegistry.Video.Code, StringComparison.OrdinalIgnoreCase) ||
+             expectedKind.Equals("video-movie", StringComparison.OrdinalIgnoreCase))) ||
         (entityKind.Equals(EntityKindRegistry.Video.Code, StringComparison.OrdinalIgnoreCase) &&
             expectedKind.Equals("video-episode", StringComparison.OrdinalIgnoreCase));
 

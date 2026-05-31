@@ -12,6 +12,7 @@ export const ENTITY_KIND = {
   collection: "collection",
   gallery: "gallery",
   image: "image",
+  movie: "movie",
   person: "person",
   studio: "studio",
   tag: "tag",
@@ -86,6 +87,7 @@ const ENTITY_KIND_LABELS: Record<EntityKindCode, string> = {
   [ENTITY_KIND.collection]: "Collections",
   [ENTITY_KIND.gallery]: "Galleries",
   [ENTITY_KIND.image]: "Images",
+  [ENTITY_KIND.movie]: "Movies",
   [ENTITY_KIND.person]: "People",
   [ENTITY_KIND.studio]: "Studios",
   [ENTITY_KIND.tag]: "Tags",
@@ -108,6 +110,7 @@ interface EntityRouteRule {
 
 const ROUTE_RULES: EntityRouteRule[] = [
   { kind: ENTITY_KIND.video, topLevel: true, browsePath: "/videos", resolve: (id) => `/videos/${id}` },
+  { kind: ENTITY_KIND.movie, topLevel: true, browsePath: "/movies", resolve: (id) => `/movies/${id}` },
   { kind: ENTITY_KIND.videoSeries, topLevel: true, browsePath: "/series", resolve: (id) => `/series/${id}` },
   { kind: ENTITY_KIND.videoSeason, topLevel: false, browsePath: "/series", resolve: (id, parent) => parent ? `/series/${parent.id}/seasons/${id}` : undefined },
   { kind: ENTITY_KIND.gallery, topLevel: true, browsePath: "/galleries", resolve: (id) => `/galleries/${id}` },

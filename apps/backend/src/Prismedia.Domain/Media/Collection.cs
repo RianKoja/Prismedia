@@ -10,6 +10,7 @@ public sealed class Collection : Entity {
     private static readonly HashSet<EntityKind> ContainableKinds =
     [
         EntityKind.Video,
+        EntityKind.Movie,
         EntityKind.VideoSeries,
         EntityKind.Gallery,
         EntityKind.Image,

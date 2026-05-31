@@ -37,7 +37,7 @@ public sealed class IdentifyPluginService : IIdentifyProviderService {
         var providers = await _catalog.ListProvidersAsync(cancellationToken);
         return providers
             .Where(provider => entityKind is null || provider.Supports.Any(support =>
-                support.EntityKind.Equals(entityKind, StringComparison.OrdinalIgnoreCase)))
+                PluginEntityKindCompatibility.SupportsKind(support, entityKind)))
             .ToArray();
     }
 
@@ -215,9 +215,7 @@ public sealed class IdentifyPluginService : IIdentifyProviderService {
         string entityKind,
         IdentifyQuery? query,
         IdentifyMatchHints hints) {
-        var supports = manifest.Supports
-            .Where(support => support.EntityKind.Equals(entityKind, StringComparison.OrdinalIgnoreCase))
-            .SelectMany(support => support.Actions)
+        var supports = PluginEntityKindCompatibility.ActionsFor(manifest, entityKind)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         var hasQueryTitle = !string.IsNullOrWhiteSpace(query?.Title);
         var hasQueryId = query?.ExternalIds?.ContainsKey(manifest.Id) == true;
@@ -266,11 +264,12 @@ public sealed class IdentifyPluginService : IIdentifyProviderService {
         var structuralContext = ancestors.Count > 0 || positions.Count > 0
             ? new IdentifyStructuralContext(ancestors, positions)
             : null;
+        var pluginRequestKind = PluginEntityKindCompatibility.RequestKindFor(descriptor.Manifest, entity.KindCode);
         var request = new IdentifyPluginRequest(
             ProtocolVersion: 2,
             Action: ResolveAction(descriptor.Manifest, entity.KindCode, query, hints),
             Auth: auth,
-            Entity: await SnapshotAsync(entity, descriptor.Manifest.Id, cancellationToken),
+            Entity: await SnapshotAsync(entity, descriptor.Manifest.Id, cancellationToken, pluginRequestKind),
             Query: query ?? new IdentifyQuery(null, null, null),
             Hints: hints,
             StructuralContext: structuralContext,
@@ -616,11 +615,12 @@ public sealed class IdentifyPluginService : IIdentifyProviderService {
     private async Task<IdentifyEntitySnapshot> SnapshotAsync(
         EntityRow entity,
         string providerId,
-        CancellationToken cancellationToken) {
+        CancellationToken cancellationToken,
+        string? kindOverride = null) {
         var hints = await _hints.ResolveAsync(entity.Id, providerId, cancellationToken);
         return new IdentifyEntitySnapshot(
             entity.Id,
-            entity.KindCode,
+            kindOverride ?? entity.KindCode,
             entity.Title,
             hints.ExternalIds,
             hints.Urls);
@@ -703,7 +703,7 @@ public sealed class IdentifyPluginService : IIdentifyProviderService {
     }
 
     private static bool SupportsKind(PluginManifest manifest, string kind) =>
-        manifest.Supports.Any(support => support.EntityKind.Equals(kind, StringComparison.OrdinalIgnoreCase));
+        manifest.Supports.Any(support => PluginEntityKindCompatibility.SupportsKind(support, kind));
 
     private sealed record StructuralChild(int? SortOrder, EntityRow Entity);
 }

@@ -2,7 +2,7 @@ import type { EntityThumbnail } from "$lib/api/generated/model";
 
 export type CollectionMode = "manual" | "dynamic" | "hybrid";
 export type CollectionCoverMode = "mosaic" | "custom" | "item";
-export type CollectionEntityType = "video" | "video-series" | "gallery" | "image" | "book" | "audio-track";
+export type CollectionEntityType = "video" | "movie" | "video-series" | "gallery" | "image" | "book" | "audio-track";
 export type CollectionItemSource = "manual" | "dynamic";
 
 /**
@@ -12,6 +12,7 @@ export type CollectionItemSource = "manual" | "dynamic";
  */
 export const COLLECTION_ENTITY_TYPES: readonly CollectionEntityType[] = [
   "video",
+  "movie",
   "video-series",
   "gallery",
   "image",

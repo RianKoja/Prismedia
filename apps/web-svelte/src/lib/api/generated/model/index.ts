@@ -188,6 +188,7 @@ export * from './listVideoSeriesParams';
 export * from './listVideosParams';
 export * from './mediaSourceInfo';
 export * from './mediaStreamInfo';
+export * from './movieDetail';
 export * from './moveFileParams';
 export * from './organizeApplyResponse';
 export * from './organizePlanItem';

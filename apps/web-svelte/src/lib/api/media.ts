@@ -15,6 +15,7 @@ import {
   listVideos,
   listVideoSeries,
 } from "$lib/api/generated/prismedia";
+import { orvalFetch } from "$lib/api/orval-fetch";
 import type {
   AudioLibraryDetail,
   AudioTrackDetail,
@@ -22,6 +23,7 @@ import type {
   EntityListResponse,
   GalleryDetail,
   ImageDetail,
+  MovieDetail,
   VideoDetail,
   VideoSeasonDetail,
   VideoSeriesDetail,
@@ -34,6 +36,7 @@ export type {
   BookDetail,
   GalleryDetail,
   ImageDetail,
+  MovieDetail,
   VideoDetail,
   VideoSeasonDetail,
   VideoSeriesDetail,
@@ -41,6 +44,7 @@ export type {
 
 export type MediaListResponse = EntityListResponse;
 export type VideoListResponse = EntityListResponse;
+export type MovieListResponse = EntityListResponse;
 export type VideoSeriesListResponse = EntityListResponse;
 
 export function fetchVideos(options?: RequestOptions): Promise<VideoListResponse> {
@@ -53,6 +57,20 @@ export function fetchVideo(id: string, options?: RequestOptions): Promise<VideoD
   return getVideo(id, undefined, requestInit(options)).then((response) =>
     unwrapGenerated(response, `Failed to fetch video ${id}`),
   );
+}
+
+export function fetchMovies(options?: RequestOptions): Promise<MovieListResponse> {
+  return orvalFetch<{ data: EntityListResponse; status: number }>(
+    "/api/movies",
+    requestInit(options),
+  ).then((response) => unwrapGenerated(response, "Failed to load movies"));
+}
+
+export function fetchMovie(id: string, options?: RequestOptions): Promise<MovieDetail> {
+  return orvalFetch<{ data: MovieDetail; status: number }>(
+    `/api/movies/${id}`,
+    requestInit(options),
+  ).then((response) => unwrapGenerated(response, `Failed to fetch movie ${id}`));
 }
 
 export function fetchSeriesList(options?: RequestOptions): Promise<VideoSeriesListResponse> {

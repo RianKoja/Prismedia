@@ -48,6 +48,7 @@ public sealed class StashCompatRunner : IIdentifyRunner {
         }
 
         var isVideo = request.Entity.Kind.Equals("video", StringComparison.OrdinalIgnoreCase) ||
+            request.Entity.Kind.Equals("movie", StringComparison.OrdinalIgnoreCase) ||
             request.Entity.Kind.Equals("video-episode", StringComparison.OrdinalIgnoreCase);
         if (!isVideo) {
             return new IdentifyPluginResponse(true, null, $"This scraper cannot identify '{request.Entity.Kind}'.");
@@ -58,10 +59,12 @@ public sealed class StashCompatRunner : IIdentifyRunner {
         try {
             // A URL (direct, from a hint, or carried by a chosen search candidate) is the
             // strongest signal: resolve it to a single confident proposal.
-            if (!string.IsNullOrWhiteSpace(input.Url) && definition.HasCapability("sceneByURL")) {
-                var proposal = await ScrapeProposalAsync(engine, definition, descriptor, "sceneByURL", input, request.Entity.Kind, cancellationToken);
-                if (proposal is not null) {
-                    return new IdentifyPluginResponse(true, proposal, null);
+            if (!string.IsNullOrWhiteSpace(input.Url)) {
+                foreach (var capability in UrlCapabilitiesFor(request.Entity.Kind).Where(definition.HasCapability)) {
+                    var proposal = await ScrapeProposalAsync(engine, definition, descriptor, capability, input, request.Entity.Kind, cancellationToken);
+                    if (proposal is not null) {
+                        return new IdentifyPluginResponse(true, proposal, null);
+                    }
                 }
             }
 
@@ -215,4 +218,9 @@ public sealed class StashCompatRunner : IIdentifyRunner {
 
     private static string? FirstNonEmpty(params string?[] values) =>
         values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
+
+    private static IReadOnlyList<string> UrlCapabilitiesFor(string entityKind) =>
+        entityKind.Equals("movie", StringComparison.OrdinalIgnoreCase)
+            ? ["movieByURL", "sceneByURL"]
+            : ["sceneByURL"];
 }

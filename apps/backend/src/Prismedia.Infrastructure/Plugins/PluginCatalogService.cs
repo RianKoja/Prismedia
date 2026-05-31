@@ -124,7 +124,7 @@ public sealed class PluginCatalogService : IPluginCatalogService {
         return descriptors
             .Where(descriptor => descriptor.Manifest.Id.Equals(providerId, StringComparison.OrdinalIgnoreCase))
             .Where(descriptor => entityKind is null || descriptor.Manifest.Supports.Any(support =>
-                support.EntityKind.Equals(entityKind, StringComparison.OrdinalIgnoreCase)))
+                PluginEntityKindCompatibility.SupportsKind(support, entityKind)))
             .OrderByDescending(descriptor => ParseVersion(descriptor.Manifest.Version))
             .FirstOrDefault();
     }

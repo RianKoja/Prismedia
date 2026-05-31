@@ -153,7 +153,7 @@ export interface CollectionListQuery extends ListQuery {
 }
 
 export interface CollectionItemListQuery extends ListQuery {
-  entityType?: "video" | "video-series" | "gallery" | "image" | "book" | "audio-track";
+  entityType?: "video" | "movie" | "video-series" | "gallery" | "image" | "book" | "audio-track";
 }
 
 // ─── Bulk Operations ────────────────────────────────────────────

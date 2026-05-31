@@ -1,4 +1,5 @@
 import path from "node:path";
+import { parseEpisodeFilename } from "../parsing/parse-episode-filename";
 import { parseSeasonFolder } from "../parsing/parse-season-folder";
 import type {
   LibraryClassificationConfig,
@@ -10,10 +11,8 @@ import type {
  * depth under the library root and the library's scan toggles.
  *
  * This function is pure and synchronous. It reads no files and makes
- * no database calls. It never looks at sibling directories to
- * determine "flat series" vs "series with season folders" — that
- * distinction happens at the series-tree-building layer, which sees
- * the full set of classified files.
+ * no database calls. Movie folder detection depends on the caller providing
+ * the precomputed same-named, single-file folder paths in `movieFolderPaths`.
  */
 export function classifyVideoFile(
   filePath: string,
@@ -48,7 +47,7 @@ export function classifyVideoFile(
 
   if (depth === 0) {
     return {
-      kind: "movie",
+      kind: "video",
       filePath: normalizedFile,
       libraryRootPath: normalizedRoot,
     };
@@ -58,6 +57,25 @@ export function classifyVideoFile(
   const seriesFolderPath = path.join(normalizedRoot, seriesFolderName);
 
   if (depth === 1) {
+    const movieFolderPaths = new Set(
+      (config.movieFolderPaths ?? []).map((folderPath) => path.resolve(folderPath)),
+    );
+    if (
+      movieFolderPaths.has(seriesFolderPath) &&
+      looksLikeMovieFileForFolder(
+        seriesFolderName,
+        path.basename(normalizedFile, path.extname(normalizedFile)),
+      )
+    ) {
+      return {
+        kind: "movie",
+        filePath: normalizedFile,
+        libraryRootPath: normalizedRoot,
+        movieFolderPath: seriesFolderPath,
+        movieFolderName: seriesFolderName,
+      };
+    }
+
     return {
       kind: "episode",
       filePath: normalizedFile,
@@ -90,4 +108,21 @@ export function classifyVideoFile(
     seasonFolderName,
     placementSeasonNumber,
   };
+}
+
+function looksLikeMovieFileForFolder(folderName: string, fileTitle: string): boolean {
+  if (parseEpisodeFilename(fileTitle).seasonNumber != null) {
+    return false;
+  }
+
+  if (fileTitle.toLowerCase() === folderName.toLowerCase()) {
+    return true;
+  }
+
+  if (!fileTitle.toLowerCase().startsWith(folderName.toLowerCase())) {
+    return false;
+  }
+
+  const suffix = fileTitle.slice(folderName.length);
+  return suffix.length > 0 && (["-", "_", "."].includes(suffix[0]) || /^\s/.test(suffix));
 }

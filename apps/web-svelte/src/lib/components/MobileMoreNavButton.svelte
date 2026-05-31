@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { MoreHorizontal } from "@lucide/svelte";
+  import { ChevronUp } from "@lucide/svelte";
   import { cn } from "@prismedia/ui-svelte";
   import { useNsfw } from "$lib/nsfw/store.svelte";
 
@@ -79,7 +79,7 @@
 <button
   type="button"
   class={cn(
-    "flex cursor-pointer select-none touch-manipulation flex-col items-center gap-0.5 px-3 py-1.5 text-[0.65rem] transition-colors duration-fast",
+    "flex flex-1 cursor-pointer select-none touch-manipulation flex-col items-center justify-center gap-1 px-2 py-2 text-[0.65rem] transition-colors duration-fast",
     isMoreActive ? "text-text-accent" : "text-text-disabled hover:text-text-muted",
   )}
   style="-webkit-touch-callout:none"
@@ -92,6 +92,20 @@
   onpointercancel={endPointer}
   onlostpointercapture={clearLongPress}
 >
-  <MoreHorizontal class="h-5 w-5" />
-  <span>More</span>
+  <ChevronUp class={cn("more-chevron h-5 w-5", sheetOpen && "more-chevron-open")} />
+  <span>{sheetOpen ? "Close" : "More"}</span>
 </button>
+
+<style>
+  .more-chevron {
+    transition: transform var(--duration-moderate) var(--ease-mechanical);
+  }
+  .more-chevron-open {
+    transform: rotate(180deg);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .more-chevron {
+      transition: none;
+    }
+  }
+</style>

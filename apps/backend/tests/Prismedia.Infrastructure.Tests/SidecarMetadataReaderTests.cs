@@ -55,6 +55,43 @@ public sealed class SidecarMetadataReaderTests {
     }
 
     [Fact]
+    public async Task VideoReaderReadsMovieFolderNfoWhenFileNfoIsMissing() {
+        var dir = Directory.CreateTempSubdirectory("prismedia-movie-sidecars-");
+        try {
+            var videoPath = Path.Combine(dir.FullName, "Friendship (2025) Bluray-1080p.mp4");
+            await File.WriteAllTextAsync(videoPath, "");
+            await File.WriteAllTextAsync(
+                Path.Combine(dir.FullName, "movie.nfo"),
+                """
+                <movie>
+                  <title>Friendship</title>
+                  <plot>Suburban dad Craig falls hard for his charismatic new neighbor Austin.</plot>
+                  <premiered>2025-05-09</premiered>
+                  <rating>6.677</rating>
+                  <genre>Comedy</genre>
+                  <studio>BoulderLight Pictures</studio>
+                  <actor><name>Tim Robinson</name><role>Craig</role></actor>
+                  <actor><name>Paul Rudd</name><role>Austin</role></actor>
+                  <director>Andrew DeYoung</director>
+                </movie>
+                """);
+
+            var metadata = await new VideoSidecarMetadataReader().ReadAsync(videoPath, CancellationToken.None);
+
+            Assert.NotNull(metadata);
+            Assert.Equal("Friendship", metadata.Title);
+            Assert.Equal("Suburban dad Craig falls hard for his charismatic new neighbor Austin.", metadata.Description);
+            Assert.Equal("2025-05-09", metadata.Date);
+            Assert.Equal("BoulderLight Pictures", metadata.Studio);
+            Assert.Equal(3, metadata.Rating);
+            Assert.Equal(["Comedy"], metadata.Tags);
+            Assert.Equal(["Tim Robinson", "Paul Rudd", "Andrew DeYoung"], metadata.Performers);
+        } finally {
+            dir.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task ComicInfoReaderExtractsMetadataFromCbzArchive() {
         var dir = Directory.CreateTempSubdirectory("prismedia-comicinfo-reader-");
         try {

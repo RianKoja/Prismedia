@@ -26,6 +26,9 @@ public sealed class ScanLibraryJobHandler(
     private static readonly Regex EpisodeTokenPattern = new(
         @"(?:^|[\s._-])[Ss](?<season>\d{1,3})[\s._-]*[Ee](?<episode>\d{1,4})(?:\D|$)",
         RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    private static readonly Regex GeneratedVideoArtifactDirectoryPattern = new(
+        @"(?:^|[-._\s])(?:trickplay)$",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
     public override JobType Type => JobType.ScanLibrary;
 
@@ -47,6 +50,7 @@ public sealed class ScanLibraryJobHandler(
         var settings = await Roots.GetSettingsAsync(cancellationToken);
         var allEntityIds = new List<Guid>(files.Count);
         var validPaths = new HashSet<string>(files.Count, StringComparer.OrdinalIgnoreCase);
+        var validMovieFolders = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         using (timer.Phase("upsert")) {
             for (var batchStart = 0; batchStart < files.Count; batchStart += BatchSize) {
@@ -59,7 +63,12 @@ public sealed class ScanLibraryJobHandler(
                     var sidecar = sidecars is null
                         ? null
                         : await sidecars.ReadAsync(filePath, cancellationToken);
-                    batchItems.Add(BuildVideoUpsertItem(filePath, root, sidecar));
+                    var item = BuildVideoUpsertItem(filePath, root, files, sidecar);
+                    if (item.Movie is { } movie) {
+                        validMovieFolders.Add(movie.FolderPath);
+                    }
+
+                    batchItems.Add(item);
                 }
 
                 var entityIds = await videos.UpsertVideosBatchAsync(batchItems, cancellationToken);
@@ -143,13 +152,17 @@ public sealed class ScanLibraryJobHandler(
             if (removed > 0)
                 logger.LogInformation("ScanLibrary: removed {Count} stale video entities from {Label}", removed, root.Label);
 
+            var staleMovies = await videos.RemoveStaleMoviesByRootAsync(root.Id, validMovieFolders, cancellationToken);
+            if (staleMovies > 0)
+                logger.LogInformation("ScanLibrary: removed {Count} stale movie entities from {Label}", staleMovies, root.Label);
+
             var excluded = await Roots.RemoveEntitiesInExcludedPathsAsync(root.Id, cancellationToken);
             if (excluded > 0)
                 logger.LogInformation("ScanLibrary: removed {Count} excluded entities from {Label}", excluded, root.Label);
 
             orphans = await videos.RemoveOrphanSeriesAndSeasonsAsync(cancellationToken);
             if (orphans > 0)
-                logger.LogInformation("ScanLibrary: removed {Count} orphan series/season entities", orphans);
+                logger.LogInformation("ScanLibrary: removed {Count} orphan movie/series/season entities", orphans);
         }
 
         var report = timer.Finish();
@@ -158,13 +171,31 @@ public sealed class ScanLibraryJobHandler(
             root.Label, files.Count, removed, orphans, report.ToLogString());
     }
 
-    private static VideoUpsertItem BuildVideoUpsertItem(string filePath, LibraryRootData root, VideoSidecarMetadata? metadata = null) {
+    private static VideoUpsertItem BuildVideoUpsertItem(
+        string filePath,
+        LibraryRootData root,
+        IReadOnlyList<string> allFiles,
+        VideoSidecarMetadata? metadata = null) {
         var fallbackTitle = Path.GetFileNameWithoutExtension(filePath);
         var title = string.IsNullOrWhiteSpace(metadata?.Title) ? fallbackTitle : metadata.Title.Trim();
         var episodeToken = ParseEpisodeToken(fallbackTitle);
         var parentFolder = Path.GetDirectoryName(filePath);
 
         if (!string.IsNullOrWhiteSpace(parentFolder)) {
+            if (TryGetMovieFolderInfo(filePath, root.Path, allFiles, out var movieFolderPath, out var movieFolderName)) {
+                return new VideoUpsertItem(
+                    filePath,
+                    title,
+                    root.Id,
+                    root.IsNsfw,
+                    Series: null,
+                    Season: null,
+                    EpisodeNumber: null,
+                    AbsoluteEpisodeNumber: null,
+                    Metadata: metadata,
+                    Movie: new MovieScanInfo(movieFolderPath, string.IsNullOrWhiteSpace(metadata?.Title) ? movieFolderName : metadata.Title.Trim()));
+            }
+
             var parentFolderName = Path.GetFileName(parentFolder);
             if (TryParseSeasonFolder(parentFolderName, out var seasonNumber)) {
                 var seriesFolder = Path.GetDirectoryName(parentFolder);
@@ -215,6 +246,83 @@ public sealed class ScanLibraryJobHandler(
         return new VideoUpsertItem(filePath, title, root.Id, root.IsNsfw, Metadata: metadata);
     }
 
+    private static bool TryGetMovieFolderInfo(
+        string filePath,
+        string rootPath,
+        IReadOnlyList<string> allFiles,
+        out string movieFolderPath,
+        out string movieFolderName) {
+        movieFolderPath = string.Empty;
+        movieFolderName = string.Empty;
+
+        var parentFolder = Path.GetDirectoryName(filePath);
+        if (string.IsNullOrWhiteSpace(parentFolder) || SamePath(parentFolder, rootPath)) {
+            return false;
+        }
+
+        var grandparentFolder = Path.GetDirectoryName(parentFolder);
+        if (string.IsNullOrWhiteSpace(grandparentFolder) || !SamePath(grandparentFolder, rootPath)) {
+            return false;
+        }
+
+        movieFolderName = Path.GetFileName(parentFolder);
+        var fileTitle = Path.GetFileNameWithoutExtension(filePath);
+        if (ParseEpisodeToken(fileTitle) is not null || !LooksLikeMovieFileForFolder(movieFolderName, fileTitle)) {
+            return false;
+        }
+
+        if (Directory.Exists(parentFolder) && HasContentSubdirectories(parentFolder)) {
+            return false;
+        }
+
+        var directFilesInFolder = 0;
+        foreach (var candidate in allFiles) {
+            var candidateParent = Path.GetDirectoryName(candidate);
+            if (string.IsNullOrWhiteSpace(candidateParent)) {
+                continue;
+            }
+
+            if (SamePath(candidateParent, parentFolder)) {
+                directFilesInFolder++;
+                continue;
+            }
+
+            if (IsPathUnderRoot(candidate, parentFolder)) {
+                return false;
+            }
+        }
+
+        if (directFilesInFolder != 1) {
+            return false;
+        }
+
+        movieFolderPath = parentFolder;
+        return true;
+    }
+
+    private static bool LooksLikeMovieFileForFolder(string movieFolderName, string fileTitle) {
+        if (string.Equals(movieFolderName, fileTitle, StringComparison.OrdinalIgnoreCase)) {
+            return true;
+        }
+
+        if (!fileTitle.StartsWith(movieFolderName, StringComparison.OrdinalIgnoreCase)) {
+            return false;
+        }
+
+        var suffix = fileTitle[movieFolderName.Length..];
+        return suffix.Length > 0 && (char.IsWhiteSpace(suffix[0]) || suffix[0] is '-' or '_' or '.');
+    }
+
+    private static bool HasContentSubdirectories(string folderPath) {
+        foreach (var directory in Directory.EnumerateDirectories(folderPath)) {
+            if (!GeneratedVideoArtifactDirectoryPattern.IsMatch(Path.GetFileName(directory))) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private static bool TryParseSeasonFolder(string folderName, out int seasonNumber) {
         var match = SeasonFolderPattern.Match(folderName);
         if (match.Success && int.TryParse(match.Groups["season"].Value, out seasonNumber)) {
@@ -242,6 +350,15 @@ public sealed class ScanLibraryJobHandler(
             Path.TrimEndingDirectorySeparator(left),
             Path.TrimEndingDirectorySeparator(right),
             StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsPathUnderRoot(string path, string rootPath) {
+        var relative = Path.GetRelativePath(
+            Path.TrimEndingDirectorySeparator(rootPath),
+            Path.TrimEndingDirectorySeparator(path));
+        return relative.Length > 0 &&
+            !relative.StartsWith("..", StringComparison.Ordinal) &&
+            !Path.IsPathRooted(relative);
+    }
 
     private sealed record EpisodeToken(int SeasonNumber, int EpisodeNumber);
 }

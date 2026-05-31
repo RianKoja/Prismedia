@@ -63,6 +63,28 @@ describe("EntityIndexPageState", () => {
     expect(state.nextCursor).toBeNull();
   });
 
+  it("routes movie child videos to the movie detail surface", async () => {
+    fetchEntities.mockResolvedValueOnce({
+      items: [
+        entity("video-1", "video", "Friendship", {
+          parentEntityId: "movie-1",
+          parentKind: "movie",
+        }),
+      ],
+      nextCursor: null,
+      totalCount: 1,
+    });
+
+    const state = new EntityIndexPageState({
+      getKind: () => "video",
+      getHideNsfw: () => false,
+    });
+
+    await state.loadInitial();
+
+    expect(state.cards.map((card) => card.href)).toEqual(["/movies/movie-1"]);
+  });
+
   it("reloads the first server page when the grid page size changes", async () => {
     fetchEntities
       .mockResolvedValueOnce({
@@ -130,12 +152,13 @@ describe("EntityIndexPageState", () => {
   });
 });
 
-function entity(id: string, kind: string, title: string): EntityCard {
+function entity(id: string, kind: string, title: string, overrides: Partial<EntityCard> = {}): EntityCard {
   return {
     id,
     kind,
     title,
     parentEntityId: null,
+    parentKind: null,
     sortOrder: null,
     coverUrl: null,
     coverThumbUrl: null,
@@ -147,5 +170,6 @@ function entity(id: string, kind: string, title: string): EntityCard {
     isFavorite: false,
     isNsfw: false,
     isOrganized: false,
+    ...overrides,
   };
 }

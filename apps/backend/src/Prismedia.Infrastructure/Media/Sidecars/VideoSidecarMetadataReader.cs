@@ -24,39 +24,54 @@ public sealed class VideoSidecarMetadataReader : IVideoSidecarMetadataReader {
     private static async Task<VideoSidecarMetadata?> ReadNfoAsync(
         string videoFilePath,
         CancellationToken cancellationToken) {
-        var path = SidecarPath(videoFilePath, ".nfo");
-        if (!File.Exists(path)) {
-            return null;
-        }
-
-        try {
-            var xml = await File.ReadAllTextAsync(path, cancellationToken);
-            var document = ParseXml(xml);
-            if (document is null) {
-                return null;
+        foreach (var path in NfoSidecarCandidates(videoFilePath)) {
+            if (!File.Exists(path)) {
+                continue;
             }
 
-            var rating = FirstElementValue(document, "rating");
-            var urls = Unique(Elements(document, "url").Select(element => element.Value));
-            var tags = Unique(Elements(document, "tag")
-                .Concat(Elements(document, "genre"))
-                .Select(element => element.Value));
+            try {
+                var xml = await File.ReadAllTextAsync(path, cancellationToken);
+                var document = ParseXml(xml);
+                if (document is null) {
+                    return null;
+                }
 
-            return new VideoSidecarMetadata {
-                Title = Clean(FirstElementValue(document, "title")),
-                Description = Clean(FirstElementValue(document, "plot")),
-                Date = Clean(FirstElementValue(document, "aired")),
-                Studio = Clean(FirstElementValue(document, "studio")),
-                Rating = NormalizeRating(rating),
-                Urls = urls,
-                Tags = tags,
-                DurationSeconds = ParseDurationSeconds(
-                    FirstElementValue(document, "duration"),
-                    FirstElementValue(document, "runtime"))
-            };
-        } catch {
-            return null;
+                var rating = FirstElementValue(document, "rating");
+                var urls = Unique(Elements(document, "url").Select(element => element.Value));
+                var tags = Unique(Elements(document, "tag")
+                    .Concat(Elements(document, "genre"))
+                    .Select(element => element.Value));
+                var performers = Unique(Elements(document, "actor")
+                    .Select(actor => actor.Elements().FirstOrDefault(element =>
+                        string.Equals(element.Name.LocalName, "name", StringComparison.OrdinalIgnoreCase))?.Value)
+                    .Concat(Elements(document, "director").Select(element => element.Value))
+                    .Concat(Elements(document, "writer").Select(element => element.Value))
+                    .Concat(Elements(document, "credits").Select(element => element.Value)));
+
+                return new VideoSidecarMetadata {
+                    Title = Clean(FirstElementValue(document, "title")),
+                    Description = Clean(FirstElementValue(document, "plot")),
+                    Date = NormalizeDate(FirstNonEmpty(
+                        FirstElementValue(document, "aired"),
+                        FirstElementValue(document, "premiered"),
+                        FirstElementValue(document, "releasedate"),
+                        FirstElementValue(document, "date"),
+                        FirstElementValue(document, "year"))),
+                    Studio = Clean(FirstElementValue(document, "studio")),
+                    Rating = NormalizeRating(rating),
+                    Urls = urls,
+                    Tags = tags,
+                    Performers = performers,
+                    DurationSeconds = ParseDurationSeconds(
+                        FirstElementValue(document, "duration"),
+                        FirstElementValue(document, "runtime"))
+                };
+            } catch {
+                return null;
+            }
         }
+
+        return null;
     }
 
     private static async Task<VideoSidecarMetadata?> ReadJsonAsync(
@@ -141,11 +156,20 @@ public sealed class VideoSidecarMetadataReader : IVideoSidecarMetadataReader {
             Path.GetDirectoryName(filePath) ?? string.Empty,
             Path.GetFileNameWithoutExtension(filePath) + extension);
 
+    private static IEnumerable<string> NfoSidecarCandidates(string filePath) {
+        var dir = Path.GetDirectoryName(filePath) ?? string.Empty;
+        var stem = Path.GetFileNameWithoutExtension(filePath);
+        yield return Path.Combine(dir, stem + ".nfo");
+        yield return Path.Combine(dir, "movie.nfo");
+    }
+
     private static IEnumerable<string> JsonSidecarCandidates(string filePath) {
         var dir = Path.GetDirectoryName(filePath) ?? string.Empty;
         var stem = Path.GetFileNameWithoutExtension(filePath);
         yield return Path.Combine(dir, stem + ".info.json");
         yield return Path.Combine(dir, stem + ".json");
+        yield return Path.Combine(dir, "movie.info.json");
+        yield return Path.Combine(dir, "movie.json");
     }
 
     private static XDocument? ParseXml(string xml) {

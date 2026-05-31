@@ -412,6 +412,17 @@ public sealed class EfEntityReadService : IEntityReadService {
         }
 
         var ids = rows.Select(entity => entity.Id).ToArray();
+        var parentIds = rows
+            .Select(entity => entity.ParentEntityId)
+            .Where(parentId => parentId is not null)
+            .Select(parentId => parentId!.Value)
+            .Distinct()
+            .ToArray();
+        var parentKindByEntity = parentIds.Length == 0
+            ? new Dictionary<Guid, string>()
+            : await _db.Entities.AsNoTracking()
+                .Where(parent => parentIds.Contains(parent.Id))
+                .ToDictionaryAsync(parent => parent.Id, parent => parent.KindCode, cancellationToken);
         var coverByEntity = await LoadCoverPathsAsync(ids, cancellationToken);
         var hoverFiles = await _db.EntityFiles.AsNoTracking()
             .Where(file => ids.Contains(file.EntityId) && file.Role == EntityFileRole.Trickplay)
@@ -453,7 +464,11 @@ public sealed class EfEntityReadService : IEntityReadService {
                 row.RatingValue,
                 row.IsFavorite,
                 row.IsNsfw,
-                row.IsOrganized);
+                row.IsOrganized) {
+                ParentKind = row.ParentEntityId is { } parentId
+                    ? parentKindByEntity.GetValueOrDefault(parentId)
+                    : null
+            };
         }).ToArray();
     }
 

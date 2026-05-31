@@ -59,7 +59,7 @@
   const mime = $derived(entry?.mimeType ?? "");
   const previewKind = $derived(resolvePreviewKind(entry?.name ?? "", mime, isDirectory));
 
-  const containerKinds = new Set(["gallery", "audio-library", "book", "video-series", "video-season", "collection"]);
+  const containerKinds = new Set(["gallery", "audio-library", "book", "movie", "video-series", "video-season", "collection"]);
   const leafKinds = new Set(["video", "image", "audio-track", "book-page", "book-chapter"]);
 
   const primaryLinked = $derived.by(() => {

@@ -61,6 +61,11 @@ public enum EntityKind {
     [EntityKindMeta(EntityKindCategory.Taxonomy, EntityStorageShape.None, "People", typeof(Prismedia.Domain.Taxonomy.Person))]
     Person,
 
+    /// <summary>Single-film video release grouping with one playable video child.</summary>
+    [Code("movie")]
+    [EntityKindMeta(EntityKindCategory.Media, EntityStorageShape.Folder, "Movies", typeof(Prismedia.Domain.Media.Movie))]
+    Movie,
+
     /// <summary>Studio, publisher, label, or production group.</summary>
     [Code("studio")]
     [EntityKindMeta(EntityKindCategory.Taxonomy, EntityStorageShape.None, "Studios", typeof(Prismedia.Domain.Taxonomy.Studio))]

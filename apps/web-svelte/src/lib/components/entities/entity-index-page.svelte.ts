@@ -1,4 +1,5 @@
 import { fetchEntities, type EntityCard } from "$lib/api/entities";
+import { ENTITY_KIND } from "$lib/entities/entity-codes";
 import { entityCardToThumbnailCard, type EntityGridServerQuery } from "$lib/entities/entity-grid";
 import { resolveEntityHref } from "$lib/entities/entity-routes";
 import type { EntityThumbnailCard } from "$lib/entities/entity-thumbnail";
@@ -135,6 +136,14 @@ export class EntityIndexPageState {
   }
 
   #defaultHref(item: EntityCard): string | undefined {
+    if (
+      item.kind === ENTITY_KIND.video &&
+      item.parentKind === ENTITY_KIND.movie &&
+      item.parentEntityId
+    ) {
+      return resolveEntityHref(ENTITY_KIND.movie, item.parentEntityId);
+    }
+
     return resolveEntityHref(item.kind, item.id);
   }
 

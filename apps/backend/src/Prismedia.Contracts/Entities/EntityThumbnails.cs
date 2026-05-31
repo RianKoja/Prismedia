@@ -27,7 +27,13 @@ public sealed record EntityThumbnail(
     int? Rating,
     bool IsFavorite,
     bool IsNsfw,
-    bool IsOrganized);
+    bool IsOrganized) {
+    /// <summary>
+    /// Structural parent entity kind code when the thumbnail has a parent. Used by
+    /// clients to route child media through richer parent detail surfaces.
+    /// </summary>
+    public string? ParentKind { get; init; }
+}
 
 /// <summary>API-facing grouped entities for child and relationship collections.</summary>
 /// <param name="Kind">Entity kind code represented by the group.</param>

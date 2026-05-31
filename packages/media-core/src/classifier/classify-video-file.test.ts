@@ -7,13 +7,45 @@ const root = {
 
 describe("classifyVideoFile", () => {
   describe("depth 0 — files at library root", () => {
-    it("classifies as movie", () => {
+    it("classifies as standalone video", () => {
       const result = classifyVideoFile("/media/library/Blade Runner (1982).mkv", root);
       expect(result).toEqual({
-        kind: "movie",
+        kind: "video",
         filePath: "/media/library/Blade Runner (1982).mkv",
         libraryRootPath: "/media/library",
       });
+    });
+  });
+
+  describe("depth 1 — same-named movie folders", () => {
+    it("classifies as movie when the caller marks the folder as a movie candidate", () => {
+      const result = classifyVideoFile(
+        "/media/library/Friendship/Friendship.mp4",
+        { ...root, movieFolderPaths: ["/media/library/Friendship"] },
+      );
+      expect(result).toEqual({
+        kind: "movie",
+        filePath: "/media/library/Friendship/Friendship.mp4",
+        libraryRootPath: "/media/library",
+        movieFolderPath: "/media/library/Friendship",
+        movieFolderName: "Friendship",
+      });
+    });
+
+    it("allows a release suffix after the folder title", () => {
+      const result = classifyVideoFile(
+        "/media/library/Friendship (2025)/Friendship (2025) Bluray-1080p.mp4",
+        { ...root, movieFolderPaths: ["/media/library/Friendship (2025)"] },
+      );
+      expect(result.kind).toBe("movie");
+    });
+
+    it("does not treat episode-numbered files as movies", () => {
+      const result = classifyVideoFile(
+        "/media/library/Friendship/Friendship - S01E01.mp4",
+        { ...root, movieFolderPaths: ["/media/library/Friendship"] },
+      );
+      expect(result.kind).toBe("episode");
     });
   });
 

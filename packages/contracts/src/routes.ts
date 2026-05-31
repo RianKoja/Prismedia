@@ -108,6 +108,8 @@ export const apiRoutes = {
   // Unified /videos route (backed by video_episodes + video_movies)
   videos: "/videos",
   videoDetail: "/videos/:id",
+  movies: "/movies",
+  movieDetail: "/movies/:id",
   videoStats: "/videos/stats",
   videoResetMetadata: "/videos/:id/reset-metadata",
   videoSubtitles: "/videos/:id/subtitles",

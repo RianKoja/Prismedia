@@ -3,6 +3,7 @@
   import {
     Film,
     BookOpen,
+    Clapperboard,
     Layers,
     Image as ImageIcon,
     Music,
@@ -31,6 +32,7 @@
 
   const SECTION_DEFS: Omit<DashboardSection, "items" | "cards">[] = [
     { kind: "video", label: "Videos", icon: Film, href: "/videos" },
+    { kind: "movie", label: "Movies", icon: Clapperboard, href: "/movies" },
     { kind: "video-series", label: "Series", icon: FolderOpen, href: "/series" },
     { kind: "gallery", label: "Galleries", icon: Layers, href: "/galleries" },
     { kind: "book", label: "Books", icon: BookOpen, href: "/books" },

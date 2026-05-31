@@ -77,6 +77,7 @@ export interface EntityThumbnailEntity {
   kind: string;
   title: string;
   parentEntityId: string | null;
+  parentKind?: string | null;
   sortOrder: number | string | null;
   capabilities: EntityCapability[];
   childrenByKind: EntityCard["childrenByKind"];
@@ -154,7 +155,7 @@ export function toAspectRatioNumeric(ratio: EntityThumbnailAspectRatio): number 
 /** Chooses the default thumbnail frame for a referenced entity kind. */
 export function aspectRatioForKind(kind: string): EntityThumbnailAspectRatio {
   if (kind === ENTITY_KIND.video) return "video";
-  if (kind === ENTITY_KIND.videoSeries || kind === ENTITY_KIND.videoSeason) return "poster";
+  if (kind === ENTITY_KIND.movie || kind === ENTITY_KIND.videoSeries || kind === ENTITY_KIND.videoSeason) return "poster";
   if (kind === ENTITY_KIND.book || kind === ENTITY_KIND.bookChapter || kind === ENTITY_KIND.bookPage || kind === ENTITY_KIND.bookVolume) return "poster";
   if (kind === ENTITY_KIND.person) return { width: 4, height: 5 };
   if (kind === ENTITY_KIND.studio) return "wide";
@@ -182,6 +183,7 @@ export function entityReferenceToThumbnailCard(
       kind: entity.kind,
       title: entity.title,
       parentEntityId: null,
+      parentKind: null,
       sortOrder: null,
       capabilities: [],
       childrenByKind: [],
@@ -202,6 +204,7 @@ export function thumbnailToEntityShell(entity: EntityThumbnail): EntityThumbnail
     kind: entity.kind,
     title: entity.title,
     parentEntityId: entity.parentEntityId,
+    parentKind: entity.parentKind,
     sortOrder: entity.sortOrder,
     capabilities: [],
     childrenByKind: [],
@@ -229,7 +232,7 @@ export function pickHoverAsset(card: EntityThumbnailCard, pointerRatio: number):
 export function iconForKind(kind: string): EntityThumbnailMetaIcon {
   if (kind === ENTITY_KIND.audio || kind === ENTITY_KIND.audioLibrary || kind === ENTITY_KIND.audioTrack) return "audio";
   if (kind === ENTITY_KIND.book || kind === ENTITY_KIND.bookChapter || kind === ENTITY_KIND.bookPage || kind === ENTITY_KIND.bookVolume) return "book";
-  if (kind === ENTITY_KIND.video || kind === ENTITY_KIND.videoSeason || kind === ENTITY_KIND.videoSeries) return "video";
+  if (kind === ENTITY_KIND.movie || kind === ENTITY_KIND.video || kind === ENTITY_KIND.videoSeason || kind === ENTITY_KIND.videoSeries) return "video";
   if (kind === ENTITY_KIND.gallery) return "gallery";
   if (kind === ENTITY_KIND.image) return "image";
   if (kind === ENTITY_KIND.person) return "person";

@@ -13,6 +13,8 @@ export interface EntityThumbnail {
   title: string;
   /** @nullable */
   parentEntityId: string | null;
+  /** @nullable */
+  parentKind?: string | null;
   /**
      * @nullable
      * @pattern ^-?(?:0|[1-9]\d*)$

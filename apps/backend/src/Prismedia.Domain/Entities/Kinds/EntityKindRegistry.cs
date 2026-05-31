@@ -75,6 +75,7 @@ public static class EntityKindRegistry {
     public static EntityKindDescriptor Collection => Describe(EntityKind.Collection);
     public static EntityKindDescriptor Gallery => Describe(EntityKind.Gallery);
     public static EntityKindDescriptor Image => Describe(EntityKind.Image);
+    public static EntityKindDescriptor Movie => Describe(EntityKind.Movie);
     public static EntityKindDescriptor Person => Describe(EntityKind.Person);
     public static EntityKindDescriptor Studio => Describe(EntityKind.Studio);
     public static EntityKindDescriptor Tag => Describe(EntityKind.Tag);

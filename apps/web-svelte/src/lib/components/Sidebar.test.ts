@@ -19,6 +19,39 @@ vi.mock("$lib/nsfw/store.svelte", () => ({
   useNsfw: () => ({ mode: nsfwMode.value }),
 }));
 
+vi.mock("$lib/stores/nav-customization.svelte", async () => {
+  const { buildNavCatalog, resolveNav, defaultNavPrefs } = await import("$lib/nav/nav-catalog");
+  const catalog = buildNavCatalog();
+  const prefs = defaultNavPrefs(catalog);
+  const store = {
+    catalog,
+    prefs,
+    editing: false,
+    favoritesFull: false,
+    resolvedSections: resolveNav(catalog, prefs),
+    resolvedFavorites: [],
+    isFavorite: () => false,
+    toggleEdit: () => {},
+    setEditing: () => {},
+    setLayout: () => {},
+    renameSection: () => {},
+    addSection: () => "",
+    removeSection: () => {},
+    setSectionOrder: () => {},
+    moveSectionByOffset: () => {},
+    setSectionItems: () => {},
+    moveItemWithinSection: () => {},
+    moveItemToSection: () => {},
+    toggleHidden: () => {},
+    toggleFavorite: () => true,
+    reset: () => {},
+  };
+  return {
+    useNavCustomization: () => store,
+    provideNavCustomization: () => store,
+  };
+});
+
 vi.mock("./LogoMark.svelte", () => ({
   default: () => "LogoMark",
 }));

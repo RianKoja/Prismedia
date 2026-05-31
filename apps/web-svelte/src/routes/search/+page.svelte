@@ -135,6 +135,7 @@
   });
 
   function kindLabel(kind: SearchEntityKind): string {
+    if (kind === "movie") return entityTerms.movies;
     if (kind === "video") return entityTerms.videos;
     if (kind === "performer") return entityTerms.performers;
     if (kind === "studio") return entityTerms.studios;
@@ -182,6 +183,8 @@
 
   function gridClassFor(kind: SearchEntityKind): string {
     switch (kind) {
+      case "movie":
+        return "grid gap-2 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5";
       case "video":
         return "grid gap-2 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4";
       case "video-series":

@@ -36,6 +36,16 @@ describe("/videos/[id] detail layout", () => {
     expect(pageSource).toContain('posterSize="none"');
   });
 
+  it("redirects movie child videos to the movie player route", () => {
+    const pageSource = readLocalSource("./+page.svelte");
+
+    expect(pageSource).toContain("redirectMovieChildVideo(nextVideo)");
+    expect(pageSource).toContain("fetchEntity(nextVideo.parentEntityId)");
+    expect(pageSource).toContain("parent?.kind !== ENTITY_KIND.movie");
+    expect(pageSource).toContain("const movieHref = resolveEntityHref(ENTITY_KIND.movie, parent.id)");
+    expect(pageSource).toContain("goto(movieHref, { replaceState: true })");
+  });
+
   it("uses app-shell breadcrumbs instead of a page-local back link", () => {
     const pageSource = readLocalSource("./+page.svelte");
 

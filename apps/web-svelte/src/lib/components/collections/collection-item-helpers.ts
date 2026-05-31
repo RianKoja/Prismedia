@@ -4,6 +4,9 @@ import type { CollectionItem } from "$lib/collections/models";
 export function getEntityHref(item: CollectionItem, from?: string): string {
   let base: string;
   switch (item.entityType) {
+    case "movie":
+      base = `/movies/${item.entityId}`;
+      break;
     case "video":
       base = `/videos/${item.entityId}`;
       break;

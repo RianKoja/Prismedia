@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { goto } from "$app/navigation";
   import { page } from "$app/state";
   import {
     Captions,
@@ -12,6 +13,7 @@
   } from "@lucide/svelte";
   import { cn } from "@prismedia/ui-svelte";
   import EntityDetailSkeleton from "$lib/components/entities/EntityDetailSkeleton.svelte";
+  import { fetchEntity } from "$lib/api/entities";
   import { fetchVideo, type VideoDetail } from "$lib/api/media";
   import { fetchSettingsValues, type LibrarySettings } from "$lib/api/settings";
   import {
@@ -39,6 +41,7 @@
     type EntityThumbnailCard,
   } from "$lib/entities/entity-relationship-thumbnails";
   import { resolveEntityHref } from "$lib/entities/entity-routes";
+  import { ENTITY_KIND } from "$lib/entities/entity-codes";
   import { extractVideoPlayerProps, getPlaybackState } from "$lib/entities/video-capabilities";
   import { useNsfw } from "$lib/nsfw/store.svelte";
   import { useAppChrome } from "$lib/stores/app-chrome.svelte";
@@ -339,6 +342,7 @@
     errorMessage = null;
     try {
       const nextVideo = await fetchVideo(page.params.id ?? "");
+      if (await redirectMovieChildVideo(nextVideo)) return;
       video = nextVideo;
       const [nextPlaybackInfo] = await Promise.all([
         loadPlaybackInfo(nextVideo.id),
@@ -374,6 +378,19 @@
     studioCards = relationships.studioCards;
     creditCards = relationships.creditCards;
     relationshipTags = relationships.relationshipTags;
+  }
+
+  async function redirectMovieChildVideo(nextVideo: VideoDetail) {
+    if (!nextVideo.parentEntityId) return false;
+
+    const parent = await fetchEntity(nextVideo.parentEntityId).catch(() => null);
+    if (parent?.kind !== ENTITY_KIND.movie) return false;
+
+    const movieHref = resolveEntityHref(ENTITY_KIND.movie, parent.id);
+    if (!movieHref) return false;
+
+    await goto(movieHref, { replaceState: true });
+    return true;
   }
 
   async function loadPlaybackInfo(

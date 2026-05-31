@@ -401,6 +401,259 @@ public sealed class ScanJobHandlerTests {
     }
 
     [Fact]
+    public async Task VideoScanClassifiesSingleSameNamedFolderFileAsMovie() {
+        var root = new LibraryRootData(
+            Guid.Parse("11111111-1111-1111-1111-111111111111"),
+            "/media/videos",
+            "Videos",
+            Enabled: true,
+            Recursive: true,
+            ScanVideos: true,
+            ScanImages: false,
+            ScanAudio: false,
+            ScanBooks: false,
+            IsNsfw: false);
+        var videoId = Guid.Parse("22222222-2222-2222-2222-222222222222");
+        var persistence = new FakeScanPersistence([root]) {
+            Settings = DisabledGeneratedWorkSettings,
+            UpsertedVideoIds = [videoId],
+            DownstreamNeedsById = new Dictionary<Guid, DownstreamNeeds> {
+                [videoId] = new(
+                    NeedsProbe: false,
+                    MissingOshash: false,
+                    MissingMd5: false,
+                    NeedsPreview: false,
+                    NeedsTrickplay: false,
+                    NeedsSubtitleExtraction: false,
+                    NeedsGridThumbnail: false)
+            }
+        };
+        var discovery = new RecordingFileDiscovery([
+            "/media/videos/Friendship/Friendship.mp4"
+        ]);
+        var handler = new ScanLibraryJobHandler(
+            NullLogger<ScanLibraryJobHandler>.Instance,
+            discovery,
+            persistence,
+            persistence,
+            persistence);
+        var job = new JobRunSnapshot(
+            Guid.NewGuid(),
+            JobType.ScanLibrary,
+            JobRunStatus.Running,
+            Progress: 0,
+            Message: null,
+            PayloadJson: $$"""{"libraryRootId":"{{root.Id}}"}""",
+            TargetEntityKind: "library-root",
+            TargetEntityId: root.Id.ToString(),
+            TargetLabel: root.Label,
+            CreatedAt: DateTimeOffset.UtcNow,
+            StartedAt: DateTimeOffset.UtcNow,
+            FinishedAt: null);
+
+        await handler.HandleAsync(new JobContext(job, new RecordingJobQueue()), CancellationToken.None);
+
+        var item = Assert.Single(persistence.UpsertedVideoItems);
+        Assert.Equal("Friendship", item.Movie?.Title);
+        Assert.Equal("/media/videos/Friendship", item.Movie?.FolderPath);
+        Assert.Null(item.Series);
+        Assert.Null(item.Season);
+        Assert.Null(item.EpisodeNumber);
+        Assert.Equal(["/media/videos/Friendship"], persistence.ValidMoviePaths);
+    }
+
+    [Fact]
+    public async Task VideoScanClassifiesMovieFolderWithReleaseSuffixAndGeneratedArtifacts() {
+        var tempRoot = Path.Combine(Path.GetTempPath(), $"prismedia-movie-scan-{Guid.NewGuid():N}");
+        try {
+            var movieFolder = Path.Combine(tempRoot, "Friendship (2025)");
+            Directory.CreateDirectory(Path.Combine(movieFolder, "Friendship (2025) Bluray-1080p.trickplay"));
+            File.WriteAllText(Path.Combine(movieFolder, "movie.nfo"), "<movie />");
+            File.WriteAllText(Path.Combine(movieFolder, "folder.jpg"), "poster");
+            var videoPath = Path.Combine(movieFolder, "Friendship (2025) Bluray-1080p.mp4");
+            File.WriteAllText(videoPath, "video");
+
+            var root = new LibraryRootData(
+                Guid.Parse("11111111-1111-1111-1111-111111111111"),
+                tempRoot,
+                "Videos",
+                Enabled: true,
+                Recursive: true,
+                ScanVideos: true,
+                ScanImages: false,
+                ScanAudio: false,
+                ScanBooks: false,
+                IsNsfw: false);
+            var videoId = Guid.Parse("22222222-2222-2222-2222-222222222222");
+            var persistence = new FakeScanPersistence([root]) {
+                Settings = DisabledGeneratedWorkSettings,
+                UpsertedVideoIds = [videoId],
+                DownstreamNeedsById = new Dictionary<Guid, DownstreamNeeds> {
+                    [videoId] = new(
+                        NeedsProbe: false,
+                        MissingOshash: false,
+                        MissingMd5: false,
+                        NeedsPreview: false,
+                        NeedsTrickplay: false,
+                        NeedsSubtitleExtraction: false,
+                        NeedsGridThumbnail: false)
+                }
+            };
+            var handler = new ScanLibraryJobHandler(
+                NullLogger<ScanLibraryJobHandler>.Instance,
+                new RecordingFileDiscovery([videoPath]),
+                persistence,
+                persistence,
+                persistence);
+            var job = new JobRunSnapshot(
+                Guid.NewGuid(),
+                JobType.ScanLibrary,
+                JobRunStatus.Running,
+                Progress: 0,
+                Message: null,
+                PayloadJson: $$"""{"libraryRootId":"{{root.Id}}"}""",
+                TargetEntityKind: "library-root",
+                TargetEntityId: root.Id.ToString(),
+                TargetLabel: root.Label,
+                CreatedAt: DateTimeOffset.UtcNow,
+                StartedAt: DateTimeOffset.UtcNow,
+                FinishedAt: null);
+
+            await handler.HandleAsync(new JobContext(job, new RecordingJobQueue()), CancellationToken.None);
+
+            var item = Assert.Single(persistence.UpsertedVideoItems);
+            Assert.Equal("Friendship (2025)", item.Movie?.Title);
+            Assert.Equal(movieFolder, item.Movie?.FolderPath);
+            Assert.Null(item.Series);
+            Assert.Null(item.Season);
+            Assert.Equal([movieFolder], persistence.ValidMoviePaths);
+        }
+        finally {
+            if (Directory.Exists(tempRoot)) {
+                Directory.Delete(tempRoot, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task VideoScanKeepsLibraryRootFilesAsVideos() {
+        var root = new LibraryRootData(
+            Guid.Parse("11111111-1111-1111-1111-111111111111"),
+            "/media/videos",
+            "Videos",
+            Enabled: true,
+            Recursive: true,
+            ScanVideos: true,
+            ScanImages: false,
+            ScanAudio: false,
+            ScanBooks: false,
+            IsNsfw: false);
+        var videoId = Guid.Parse("22222222-2222-2222-2222-222222222222");
+        var persistence = new FakeScanPersistence([root]) {
+            Settings = DisabledGeneratedWorkSettings,
+            UpsertedVideoIds = [videoId],
+            DownstreamNeedsById = new Dictionary<Guid, DownstreamNeeds> {
+                [videoId] = new(
+                    NeedsProbe: false,
+                    MissingOshash: false,
+                    MissingMd5: false,
+                    NeedsPreview: false,
+                    NeedsTrickplay: false,
+                    NeedsSubtitleExtraction: false,
+                    NeedsGridThumbnail: false)
+            }
+        };
+        var handler = new ScanLibraryJobHandler(
+            NullLogger<ScanLibraryJobHandler>.Instance,
+            new RecordingFileDiscovery(["/media/videos/Friendship.mp4"]),
+            persistence,
+            persistence,
+            persistence);
+        var job = new JobRunSnapshot(
+            Guid.NewGuid(),
+            JobType.ScanLibrary,
+            JobRunStatus.Running,
+            Progress: 0,
+            Message: null,
+            PayloadJson: $$"""{"libraryRootId":"{{root.Id}}"}""",
+            TargetEntityKind: "library-root",
+            TargetEntityId: root.Id.ToString(),
+            TargetLabel: root.Label,
+            CreatedAt: DateTimeOffset.UtcNow,
+            StartedAt: DateTimeOffset.UtcNow,
+            FinishedAt: null);
+
+        await handler.HandleAsync(new JobContext(job, new RecordingJobQueue()), CancellationToken.None);
+
+        var item = Assert.Single(persistence.UpsertedVideoItems);
+        Assert.Null(item.Movie);
+        Assert.Null(item.Series);
+        Assert.Null(item.Season);
+        Assert.Empty(persistence.ValidMoviePaths);
+    }
+
+    [Fact]
+    public async Task VideoScanKeepsFolderFileAsSeriesWhenFolderHasNestedVideoFiles() {
+        var root = new LibraryRootData(
+            Guid.Parse("11111111-1111-1111-1111-111111111111"),
+            "/media/videos",
+            "Videos",
+            Enabled: true,
+            Recursive: true,
+            ScanVideos: true,
+            ScanImages: false,
+            ScanAudio: false,
+            ScanBooks: false,
+            IsNsfw: false);
+        var ids = new[] {
+            Guid.Parse("22222222-2222-2222-2222-222222222222"),
+            Guid.Parse("33333333-3333-3333-3333-333333333333")
+        };
+        var persistence = new FakeScanPersistence([root]) {
+            Settings = DisabledGeneratedWorkSettings,
+            UpsertedVideoIds = ids,
+            DownstreamNeedsById = ids.ToDictionary(
+                id => id,
+                _ => new DownstreamNeeds(
+                    NeedsProbe: false,
+                    MissingOshash: false,
+                    MissingMd5: false,
+                    NeedsPreview: false,
+                    NeedsTrickplay: false,
+                    NeedsSubtitleExtraction: false,
+                    NeedsGridThumbnail: false))
+        };
+        var discovery = new RecordingFileDiscovery([
+            "/media/videos/Friendship/Friendship.mp4",
+            "/media/videos/Friendship/Season 1/Friendship - S01E01.mp4"
+        ]);
+        var handler = new ScanLibraryJobHandler(
+            NullLogger<ScanLibraryJobHandler>.Instance,
+            discovery,
+            persistence,
+            persistence,
+            persistence);
+        var job = new JobRunSnapshot(
+            Guid.NewGuid(),
+            JobType.ScanLibrary,
+            JobRunStatus.Running,
+            Progress: 0,
+            Message: null,
+            PayloadJson: $$"""{"libraryRootId":"{{root.Id}}"}""",
+            TargetEntityKind: "library-root",
+            TargetEntityId: root.Id.ToString(),
+            TargetLabel: root.Label,
+            CreatedAt: DateTimeOffset.UtcNow,
+            StartedAt: DateTimeOffset.UtcNow,
+            FinishedAt: null);
+
+        await handler.HandleAsync(new JobContext(job, new RecordingJobQueue()), CancellationToken.None);
+
+        Assert.All(persistence.UpsertedVideoItems, item => Assert.Null(item.Movie));
+        Assert.Empty(persistence.ValidMoviePaths);
+    }
+
+    [Fact]
     public async Task VideoScanPassesRootExclusionsToDiscovery() {
         var root = new LibraryRootData(
             Guid.Parse("11111111-1111-1111-1111-111111111111"),
@@ -958,6 +1211,7 @@ public sealed class ScanJobHandlerTests {
         public List<BookChapterRecord> UpsertedBookChapters { get; } = [];
         public List<BookPageRecord> UpsertedBookPages { get; } = [];
         public IReadOnlyList<string> ValidLooseImagePaths { get; private set; } = [];
+        public IReadOnlyList<string> ValidMoviePaths { get; private set; } = [];
         public Dictionary<Guid, IReadOnlyList<string>> ValidImagePathsByGalleryId { get; } = [];
         public IReadOnlyList<string> ValidGalleryPaths { get; private set; } = [];
         public IReadOnlyList<string> ValidLooseAudioTrackPaths { get; private set; } = [];
@@ -1057,6 +1311,11 @@ public sealed class ScanJobHandlerTests {
 
         public Task<int> RemoveStaleVideosByRootAsync(Guid rootId, IReadOnlySet<string> validPaths, CancellationToken cancellationToken) =>
             Task.FromResult(0);
+
+        public Task<int> RemoveStaleMoviesByRootAsync(Guid rootId, IReadOnlySet<string> validFolderPaths, CancellationToken cancellationToken) {
+            ValidMoviePaths = validFolderPaths.OrderBy(path => path, StringComparer.OrdinalIgnoreCase).ToArray();
+            return Task.FromResult(0);
+        }
 
         public Task<int> RemoveStaleLooseImagesInRootAsync(Guid rootId, IReadOnlySet<string> validPaths, CancellationToken cancellationToken) {
             ValidLooseImagePaths = validPaths.OrderBy(path => path, StringComparer.OrdinalIgnoreCase).ToArray();

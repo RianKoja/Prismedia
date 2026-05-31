@@ -31,6 +31,7 @@
 
   // High-level media kinds auto identify can target. Codes match the backend selector kinds.
   const ENTITY_KINDS: ReadonlyArray<{ key: string; label: string }> = [
+    { key: "movie", label: "Movies" },
     { key: "video", label: "Videos" },
     { key: "gallery", label: "Galleries" },
     { key: "image", label: "Images" },

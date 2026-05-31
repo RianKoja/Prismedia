@@ -1,5 +1,6 @@
 <script module lang="ts">
   export type DeletableEntity =
+    | "movie"
     | "video"
     | "image"
     | "audio-track"
@@ -37,6 +38,7 @@
   }: Props = $props();
 
   const labels: Record<DeletableEntity, { singular: string; plural: string }> = {
+    movie: { singular: "movie", plural: "movies" },
     video: { singular: "video", plural: "videos" },
     image: { singular: "image", plural: "images" },
     "audio-track": { singular: "track", plural: "tracks" },

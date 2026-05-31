@@ -3,6 +3,7 @@ import {
   Activity,
   Building2,
   BookOpen,
+  Clapperboard,
   Film,
   FolderOpen,
   FolderTree,
@@ -26,6 +27,7 @@ import {
 export const appShellNavIconMap: Record<string, Component<Record<string, unknown>>> = {
   "layout-dashboard": LayoutDashboard as unknown as Component<Record<string, unknown>>,
   film: Film as unknown as Component<Record<string, unknown>>,
+  clapperboard: Clapperboard as unknown as Component<Record<string, unknown>>,
   images: Images as unknown as Component<Record<string, unknown>>,
   "book-open": BookOpen as unknown as Component<Record<string, unknown>>,
   image: Image as unknown as Component<Record<string, unknown>>,

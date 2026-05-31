@@ -1,6 +1,7 @@
 import type { Component } from "svelte";
 import {
   BookOpen,
+  Clapperboard,
   Disc3,
   Film,
   FolderOpen,
@@ -14,6 +15,7 @@ import {
 } from "@lucide/svelte";
 
 const KIND_ICON_MAP: Record<string, Component> = {
+  movie: Clapperboard,
   video: Film,
   "video-series": FolderOpen,
   "video-season": Layers,

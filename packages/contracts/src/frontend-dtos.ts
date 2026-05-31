@@ -669,7 +669,7 @@ export interface NormalizedPerformerResult {
 
 // ─── Search DTOs ────────────────────────────────────────────────
 
-export type EntityKind = "video" | "video-series" | "performer" | "studio" | "tag" | "gallery" | "image" | "book" | "audio-library" | "audio-track";
+export type EntityKind = "movie" | "video" | "video-series" | "performer" | "studio" | "tag" | "gallery" | "image" | "book" | "audio-library" | "audio-track";
 
 export interface SearchResultItem {
   id: string;

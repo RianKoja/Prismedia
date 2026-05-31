@@ -1,9 +1,10 @@
 # Library Organization
 
-Prismedia organizes video libraries into two first-class kinds of content:
-**Movies** (single-file releases) and **Series** (multi-episode shows, with
-or without seasons). Each library root has independent toggles for what to
-scan, and the on-disk folder layout decides what every file becomes.
+Prismedia organizes video libraries into three first-class views of content:
+**Videos** (every playable video file), **Movies** (single-file releases in a
+same-named folder), and **Series** (multi-episode shows, with or without
+seasons). Each library root has independent toggles for what to scan, and the
+on-disk folder layout decides what every file becomes.
 
 This doc explains the rules, shows the layouts that work, and calls out the
 ones that don't.
@@ -26,10 +27,19 @@ it accordingly. Counting the library root as depth 0:
 
 | Depth | What it is                            | Becomes                  |
 |-------|---------------------------------------|--------------------------|
-| 0     | File at the library root              | Movie                    |
+| 0     | File at the library root              | Video                    |
+| 1     | Same-named single file in its folder, with no content subfolders | Movie |
 | 1     | File inside one folder                | Episode (flat series)    |
 | 2     | File inside two folders               | Episode (seasoned series)|
 | ≥ 3   | File buried deeper                    | **Rejected** (skipped)   |
+
+The movie rule runs before series detection and only matches the exact
+`Folder Name/Folder Name.ext` shape, or a file that starts with the folder
+name followed by a release suffix like `Bluray-1080p`, when that folder
+contains no content subfolders and no other video files. Artwork, NFO files,
+and generated sidecar folders such as `.trickplay` do not count as content
+subfolders. Everything playable still appears in the Videos tab; movies
+additionally appear in the Movies section.
 
 Series detection is applied automatically: if every file under a series
 folder lives directly inside it, the series is **flat** (one synthetic
@@ -40,7 +50,7 @@ recognized season folder, the whole series is treated as **seasoned**.
 
 ## Good layouts
 
-### Movies-only library
+### Loose video library
 
 ```
 /library/movies
@@ -49,7 +59,28 @@ recognized season folder, the whole series is treated as **seasoned**.
 └── No Country for Old Men (2007).mkv
 ```
 
-All three files are depth 0 → movies. The Videos toggle must be on.
+All three files are depth 0 → standalone videos. They appear in the Videos tab
+without creating movie entities. The Videos toggle must be on.
+
+### Movies library
+
+```
+/library/movies
+├── Blade Runner
+│   └── Blade Runner.mp4
+├── Friendship
+│   └── Friendship.mkv
+├── Friendship (2025)
+│   ├── Friendship (2025) Bluray-1080p.mp4
+│   ├── folder.jpg
+│   ├── movie.nfo
+│   └── Friendship (2025) Bluray-1080p.trickplay/
+└── Heat
+    └── Heat.mp4
+```
+
+Each folder contains exactly one movie media file and no content subfolders,
+so each folder becomes a movie. The child media file still appears in Videos.
 
 ### Flat series (Case A)
 
@@ -84,8 +115,9 @@ placed into Season 1 / Season 2 accordingly.
 
 ```
 /library
-├── Heat (1995).mkv          ← movie (depth 0)
-├── Blade Runner (1982).mkv  ← movie (depth 0)
+├── Trailer Reel.mkv         ← video (depth 0)
+├── Heat
+│   └── Heat.mkv             ← movie + child video
 └── Twin Peaks
     ├── Season 01
     │   └── S01E01.mkv       ← episode (depth 2)
@@ -93,7 +125,8 @@ placed into Season 1 / Season 2 accordingly.
         └── S02E01.mkv       ← episode (depth 2)
 ```
 
-Files at the root become movies, files in nested folders become episodes.
+Files at the root stay as videos, same-named single-file folders become
+movies, and season folders become series episodes.
 
 ### Specials folder
 
@@ -154,12 +187,13 @@ this order (later sources override earlier ones for fields they provide):
 
 1. **Filename parser** — last-resort fallback for title, year, season,
    and episode numbers.
-2. **JSON sidecar** — `<filename>.info.json` next to the video. Lower
-   priority than NFO. Provides title, details, date, studio, rating,
-   tags, people, urls.
-3. **NFO sidecar** — `<filename>.nfo` next to the video. Highest
-   priority. Provides title, plot, aired date, studio, rating, tags,
-   genres, urls.
+2. **JSON sidecar** — `<filename>.info.json` next to the video. Movie
+   folders may also use `movie.info.json` or `movie.json`. Lower priority
+   than NFO. Provides title, details, date, studio, rating, tags, people,
+   urls.
+3. **NFO sidecar** — `<filename>.nfo` next to the video. Movie folders may
+   also use `movie.nfo`. Highest priority. Provides title, plot, release
+   date, studio, rating, tags, genres, urls, and credited people.
 
 User edits made in the Prismedia UI are never overwritten by a re-scan.
 The scanner only fills in fields that are currently empty.

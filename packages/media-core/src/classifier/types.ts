@@ -1,21 +1,30 @@
 /**
  * Video classification result. Given a file's absolute path and its
  * library root configuration, the classifier decides which typed
- * entity the file should become: a movie, an episode, or neither.
+ * entity the file should become: a standalone video, a movie, an episode, or neither.
  *
  * Classification is pure. It never touches the filesystem or the
  * database — it only looks at the path segments and the toggles.
  */
 export type VideoClassification =
+  | VideoClassificationStandaloneVideo
   | VideoClassificationMovie
   | VideoClassificationEpisode
   | VideoClassificationSkipped
   | VideoClassificationRejected;
 
+export interface VideoClassificationStandaloneVideo {
+  kind: "video";
+  filePath: string;
+  libraryRootPath: string;
+}
+
 export interface VideoClassificationMovie {
   kind: "movie";
   filePath: string;
   libraryRootPath: string;
+  movieFolderPath: string;
+  movieFolderName: string;
 }
 
 export interface VideoClassificationEpisode {
@@ -60,4 +69,5 @@ export interface VideoClassificationRejected {
 
 export interface LibraryClassificationConfig {
   libraryRootPath: string;
+  movieFolderPaths?: readonly string[];
 }

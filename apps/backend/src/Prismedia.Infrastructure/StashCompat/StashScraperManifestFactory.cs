@@ -20,7 +20,7 @@ public static class StashScraperManifestFactory {
             ["sceneByName"] = ("video", "search"),
             ["sceneByFragment"] = ("video", "search"),
             ["sceneByQueryFragment"] = ("video", "search"),
-            ["movieByURL"] = ("video", "lookup-url"),
+            ["movieByURL"] = ("movie", "lookup-url"),
             ["performerByURL"] = ("person", "lookup-url"),
             ["performerByName"] = ("person", "search"),
             ["galleryByURL"] = ("gallery", "lookup-url")

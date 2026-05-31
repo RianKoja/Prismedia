@@ -20,6 +20,7 @@ public sealed partial class LibraryScanPersistenceService {
         if (items.Count == 0) return [];
 
         var filePaths = items.Select(i => i.FilePath).ToList();
+        var movieCache = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
         var seriesCache = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
         var seasonCache = new Dictionary<(Guid SeriesId, int SeasonNumber), Guid>();
 
@@ -40,6 +41,7 @@ public sealed partial class LibraryScanPersistenceService {
                     existing.Id,
                     item,
                     now,
+                    movieCache,
                     seriesCache,
                     seasonCache,
                     cancellationToken);
@@ -63,6 +65,7 @@ public sealed partial class LibraryScanPersistenceService {
                 id,
                 item,
                 now,
+                movieCache,
                 seriesCache,
                 seasonCache,
                 cancellationToken);
@@ -77,6 +80,7 @@ public sealed partial class LibraryScanPersistenceService {
         Guid videoId,
         VideoUpsertItem item,
         DateTimeOffset now,
+        Dictionary<string, Guid> movieCache,
         Dictionary<string, Guid> seriesCache,
         Dictionary<(Guid SeriesId, int SeasonNumber), Guid> seasonCache,
         CancellationToken cancellationToken) {
@@ -88,7 +92,25 @@ public sealed partial class LibraryScanPersistenceService {
             await UpsertPositionAsync(videoId, "absolute-episode", absoluteEpisodeNumber, absoluteEpisodeNumber.ToString(), now, cancellationToken);
         }
 
+        if (item.Movie is { } movie) {
+            var movieId = await UpsertMovieFromScanAsync(
+                movie,
+                item.Metadata,
+                item.IsNsfw,
+                now,
+                movieCache,
+                cancellationToken);
+            await UpsertStructuralChildLinkAsync(
+                movieId,
+                videoId,
+                sortOrder: 0,
+                now,
+                cancellationToken);
+            return;
+        }
+
         if (item.Series is null) {
+            await ClearStructuralChildLinkAsync(videoId, now, cancellationToken);
             return;
         }
 
@@ -125,6 +147,73 @@ public sealed partial class LibraryScanPersistenceService {
             sortOrder,
             now,
             cancellationToken);
+    }
+
+    private async Task<Guid> UpsertMovieFromScanAsync(
+        MovieScanInfo movie,
+        VideoSidecarMetadata? metadata,
+        bool isNsfw,
+        DateTimeOffset now,
+        Dictionary<string, Guid> movieCache,
+        CancellationToken cancellationToken) {
+        if (movieCache.TryGetValue(movie.FolderPath, out var cachedMovieId)) {
+            return cachedMovieId;
+        }
+
+        var existing = await FindEntityBySourcePath(EntityKindRegistry.Movie.Code, movie.FolderPath, cancellationToken)
+            ?? await FindEntityBySourceValueAsync(EntityKindRegistry.Movie.Code, "folder", movie.FolderPath, cancellationToken);
+        var movieId = existing?.Id ?? Guid.NewGuid();
+
+        if (existing is null) {
+            _db.Entities.Add(new EntityRow {
+                Id = movieId,
+                KindCode = EntityKindRegistry.Movie.Code,
+                Title = movie.Title,
+                IsNsfw = isNsfw,
+                CreatedAt = now,
+                UpdatedAt = now
+            });
+        } else {
+            var tracked = await _db.Entities.FindAsync([movieId], cancellationToken);
+            if (tracked is not null) {
+                tracked.UpdatedAt = now;
+                if (isNsfw) tracked.IsNsfw = true;
+                ApplyTitleIfScannedFallback(tracked, metadata?.Title, Path.GetFileName(movie.FolderPath), now);
+            }
+        }
+
+        await EnsureEntityFileAsync(movieId, EntityFileRole.Source, movie.FolderPath, sizeBytes: null, now, cancellationToken);
+        await EnsureEntitySourceAsync(movieId, "folder", movie.FolderPath, now, cancellationToken);
+        await ApplyMovieSidecarMetadataAsync(movieId, metadata, isNsfw, now, cancellationToken);
+
+        movieCache[movie.FolderPath] = movieId;
+        return movieId;
+    }
+
+    private async Task ApplyMovieSidecarMetadataAsync(
+        Guid movieId,
+        VideoSidecarMetadata? metadata,
+        bool markNsfw,
+        DateTimeOffset now,
+        CancellationToken cancellationToken) {
+        if (metadata is null) {
+            return;
+        }
+
+        var entity = await _db.Entities.FindAsync([movieId], cancellationToken);
+        if (entity is not null) {
+            ApplyRatingIfMissing(entity, metadata.Rating, now);
+            if (markNsfw) {
+                entity.IsNsfw = true;
+            }
+        }
+
+        await UpsertDescriptionIfMissingAsync(movieId, metadata.Description, now, cancellationToken);
+        await UpsertDateIfMissingAsync(movieId, "release", metadata.Date, now, cancellationToken);
+        await AddUrlsAsync(movieId, metadata.Urls, now, cancellationToken);
+        await AddTagsAsync(movieId, metadata.Tags, now, markNsfw, cancellationToken);
+        await SetStudioIfMissingAsync(movieId, metadata.Studio, now, markNsfw, cancellationToken);
+        await AddCreditsAsync(movieId, metadata.Performers, "performer", now, markNsfw, cancellationToken);
     }
 
     private async Task<Guid> UpsertVideoSeriesFromScanAsync(

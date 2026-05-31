@@ -591,6 +591,13 @@ namespace Prismedia.Infrastructure.Persistence.Migrations
                         },
                         new
                         {
+                            Code = "movie",
+                            Category = "Media",
+                            DisplayName = "Movie",
+                            StorageShape = "folder"
+                        },
+                        new
+                        {
                             Code = "person",
                             Category = "Taxonomy",
                             DisplayName = "Person",

@@ -14,6 +14,7 @@
   import { provideNsfw } from "$lib/nsfw/store.svelte";
   import { browser } from "$app/environment";
   import { provideAppChrome } from "$lib/stores/app-chrome.svelte";
+  import { provideNavCustomization } from "$lib/stores/nav-customization.svelte";
   import { MAIN_SCROLL_TOP_EVENT } from "$lib/stores/main-scroll";
   import { providePageSnapshots, type AppPageSnapshot } from "$lib/stores/page-snapshots.svelte";
   import { provideSearch } from "$lib/stores/search.svelte";
@@ -47,6 +48,7 @@
     hasExplicitMode: readNsfwCookie() !== null || layoutData.hasNsfwModeCookie,
   }));
   const chrome = provideAppChrome(() => layoutData.initialCollapsed);
+  provideNavCustomization();
   provideSearch();
   let mainScroller = $state<HTMLElement | null>(null);
 
@@ -108,7 +110,7 @@
 <div
   class="flex min-h-dvh"
   style:--prismedia-bottom-dock-padding={bottomDockPadding}
-  style:--prismedia-mobile-bottom-clearance="calc(3.5rem + var(--prismedia-bottom-dock-padding))"
+  style:--prismedia-mobile-bottom-clearance="calc(3.65rem + max(1.25rem, env(safe-area-inset-bottom, 0px)) + var(--prismedia-bottom-dock-padding))"
   style:--prismedia-desktop-bottom-clearance="var(--prismedia-bottom-dock-padding)"
 >
   <!-- Desktop sidebar -->

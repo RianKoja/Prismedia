@@ -29,7 +29,7 @@
 
   const href = $derived(buildHrefWithFrom(item.href, currentPath ?? ""));
   const label = $derived(SEARCH_KIND_CONFIG[item.kind]?.label ?? item.kind);
-  const isTallGrid = $derived(item.kind === "video-series" || item.kind === "performer");
+  const isTallGrid = $derived(item.kind === "movie" || item.kind === "video-series" || item.kind === "performer");
   const isRowGrid = $derived(
     item.kind === "studio" ||
       item.kind === "audio-library" ||
@@ -37,11 +37,11 @@
   );
   const compactFrameClass = $derived.by(() => {
     if (item.kind === "video") return "h-8 w-12";
-    if (item.kind === "video-series" || item.kind === "gallery") return "h-10 w-7";
+    if (item.kind === "movie" || item.kind === "video-series" || item.kind === "gallery") return "h-10 w-7";
     return "h-8 w-8";
   });
   const imageUrl = $derived(assetUrl(item.imagePath));
-  const imageFit = $derived(item.kind === "video" || item.kind === "gallery" ? "cover" : "contain");
+  const imageFit = $derived(item.kind === "movie" || item.kind === "video" || item.kind === "gallery" ? "cover" : "contain");
 </script>
 
 {#snippet Thumbnail(className: string)}

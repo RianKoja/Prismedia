@@ -1165,6 +1165,7 @@ function readError(err: unknown): string {
 
 function entityKindLabel(kind: string): string {
   const map: Record<string, string> = {
+    movie: "Movies",
     video: "Videos",
     "video-series": "Series",
     "video-season": "Seasons",

@@ -2,6 +2,7 @@ import type { SearchEntityKind } from "$lib/search/models";
 import {
   Building2,
   BookOpen,
+  Clapperboard,
   Film,
   FolderOpen,
   Image,
@@ -14,6 +15,7 @@ import {
 } from "@lucide/svelte";
 
 export const ALL_SEARCH_KINDS: SearchEntityKind[] = [
+  "movie",
   "video-series",
   "video",
   "performer",
@@ -34,6 +36,7 @@ interface SearchKindConfig {
 }
 
 export const SEARCH_KIND_CONFIG: Record<SearchEntityKind, SearchKindConfig> = {
+  movie: { label: "Movies", icon: Clapperboard, href: "/movies" },
   "video-series": { label: "Series", icon: FolderOpen, href: "/series" },
   video: { label: "Videos", icon: Film, href: "/videos" },
   performer: { label: "People", icon: Users, href: "/people" },

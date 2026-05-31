@@ -15,6 +15,7 @@ public sealed class TypedEntityModelTests {
 
     [Theory]
     [InlineData(typeof(Video), EntityKind.Video)]
+    [InlineData(typeof(Movie), EntityKind.Movie)]
     [InlineData(typeof(VideoSeries), EntityKind.VideoSeries)]
     [InlineData(typeof(VideoSeason), EntityKind.VideoSeason)]
     [InlineData(typeof(AudioLibrary), EntityKind.AudioLibrary)]

@@ -46,6 +46,48 @@ public sealed partial class LibraryScanPersistenceService {
         return await RemoveStaleEntitiesBySourcePath(videoIds, validPaths, cancellationToken);
     }
 
+    public async Task<int> RemoveStaleMoviesByRootAsync(Guid rootId, IReadOnlySet<string> validFolderPaths, CancellationToken cancellationToken) {
+        var rootPath = await _db.LibraryRoots.AsNoTracking()
+            .Where(root => root.Id == rootId)
+            .Select(root => root.Path)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (string.IsNullOrWhiteSpace(rootPath)) {
+            return 0;
+        }
+
+        var movieCode = EntityKindRegistry.Movie.Code;
+        var movieSourceFiles = await _db.EntityFiles.AsNoTracking()
+            .Where(file => file.Role == EntityFileRole.Source)
+            .Join(
+                _db.Entities.AsNoTracking().Where(entity => entity.KindCode == movieCode),
+                file => file.EntityId,
+                entity => entity.Id,
+                (file, entity) => new { file.EntityId, file.Path })
+            .ToListAsync(cancellationToken);
+        var movieIds = movieSourceFiles
+            .Where(file => LibraryScanPathRules.IsPathUnderRoot(file.Path, rootPath))
+            .Select(file => file.EntityId)
+            .ToList();
+
+        var staleMovieIds = await GetStaleEntityIdsBySourcePathAsync(movieIds, validFolderPaths, cancellationToken);
+        if (staleMovieIds.Count == 0) {
+            return 0;
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        var children = await _db.Entities
+            .Where(entity => entity.ParentEntityId != null && staleMovieIds.Contains(entity.ParentEntityId.Value))
+            .ToListAsync(cancellationToken);
+        foreach (var child in children) {
+            child.ParentEntityId = null;
+            child.SortOrder = null;
+            child.UpdatedAt = now;
+        }
+
+        return await RemoveEntitiesByIdAsync(staleMovieIds, cancellationToken);
+    }
+
     public async Task<int> RemoveStaleLooseImagesInRootAsync(Guid rootId, IReadOnlySet<string> validPaths, CancellationToken cancellationToken) {
         var imageIds = await GetLooseRootEntityIdsAsync(rootId, EntityKindRegistry.Image.Code, cancellationToken);
         return await RemoveStaleEntitiesBySourcePath(imageIds, validPaths, cancellationToken);
@@ -120,8 +162,18 @@ public sealed partial class LibraryScanPersistenceService {
     }
 
     public async Task<int> RemoveOrphanSeriesAndSeasonsAsync(CancellationToken cancellationToken) {
+        var movieCode = EntityKindRegistry.Movie.Code;
         var seasonCode = EntityKindRegistry.VideoSeason.Code;
         var seriesCode = EntityKindRegistry.VideoSeries.Code;
+
+        var orphanMovies = await _db.Entities
+            .Where(e => e.KindCode == movieCode
+                && !_db.Entities.Any(child => child.ParentEntityId == e.Id))
+            .ToListAsync(cancellationToken);
+        _db.Entities.RemoveRange(orphanMovies);
+
+        if (orphanMovies.Count > 0)
+            await _db.SaveChangesAsync(cancellationToken);
 
         var orphanSeasons = await _db.Entities
             .Where(e => e.KindCode == seasonCode
@@ -141,7 +193,7 @@ public sealed partial class LibraryScanPersistenceService {
         if (orphanSeries.Count > 0)
             await _db.SaveChangesAsync(cancellationToken);
 
-        return orphanSeasons.Count + orphanSeries.Count;
+        return orphanMovies.Count + orphanSeasons.Count + orphanSeries.Count;
     }
 
 }

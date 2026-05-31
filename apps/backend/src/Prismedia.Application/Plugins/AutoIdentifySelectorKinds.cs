@@ -11,6 +11,7 @@ public static class AutoIdentifySelectorKinds {
     private static readonly IReadOnlyDictionary<string, string> ByEntityKind =
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) {
             ["video"] = "video",
+            ["movie"] = "video",
             ["video-series"] = "video",
             ["gallery"] = "gallery",
             ["image"] = "image",

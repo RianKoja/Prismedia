@@ -8,6 +8,7 @@ public static class EndpointRouteBuilderExtensions {
         routes.MapSecurityEndpoints();
         routes.MapEntityEndpoints();
         routes.MapVideoEndpoints();
+        routes.MapMovieEndpoints();
         routes.MapSeriesEndpoints();
         routes.MapImageEndpoints();
         routes.MapGalleryEndpoints();
