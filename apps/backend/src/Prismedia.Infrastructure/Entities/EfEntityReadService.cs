@@ -776,9 +776,11 @@ public sealed class EfEntityReadService : IEntityReadService {
         Guid entityId,
         bool hideNsfw,
         CancellationToken cancellationToken) {
+        var castCode = RelationshipKind.Cast.ToCode();
+        var creditsCode = RelationshipKind.Credits.ToCode();
         var linksQuery = _db.EntityRelationshipLinks.AsNoTracking()
             .Where(link => link.EntityId == entityId &&
-                           (link.RelationshipCode == "cast" || link.RelationshipCode == "credits") &&
+                           (link.RelationshipCode == castCode || link.RelationshipCode == creditsCode) &&
                            link.TargetKindCode == EntityKindRegistry.Person.Code);
         if (hideNsfw) {
             linksQuery = linksQuery.Where(link =>
@@ -823,14 +825,16 @@ public sealed class EfEntityReadService : IEntityReadService {
             : null;
 
     private static string RelationshipLabel(string code) =>
-        code switch {
-            "cast" => "Cast",
-            "credits" => "Credits",
-            "studio" => "Studios",
-            "tags" => "Tags",
-            "related" => "Related",
-            _ => code.Replace('-', ' ')
-        };
+        code.TryDecodeAs<RelationshipKind>(out var kind)
+            ? kind switch {
+                RelationshipKind.Cast => "Cast",
+                RelationshipKind.Credits => "Credits",
+                RelationshipKind.Studio => "Studios",
+                RelationshipKind.Tags => "Tags",
+                RelationshipKind.Related => "Related",
+                _ => code.Replace('-', ' ')
+            }
+            : code.Replace('-', ' ');
 
     private static string EncodeOffsetCursor(int offset) =>
         Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes($"offset:{offset}"));

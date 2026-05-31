@@ -19,7 +19,7 @@ namespace Prismedia.Infrastructure.Entities;
 /// those mappers and never branches on a concrete entity kind or capability itself.
 /// </summary>
 public sealed class EfEntityRepository : IEntityWriteRepository {
-    private const string RelatedRelationshipCode = "related";
+    private static readonly string RelatedRelationshipCode = RelationshipKind.Related.ToCode();
 
     private readonly PrismediaDbContext _db;
     private readonly IReadOnlyDictionary<EntityKind, IEntityKindMapper> _kindMappers;

@@ -167,14 +167,15 @@ public sealed partial class LibraryScanPersistenceService {
         DateTimeOffset now,
         bool markNsfw,
         CancellationToken cancellationToken) {
-        var order = await NextRelationshipSortOrderAsync(entityId, "tags", cancellationToken);
+        var tagsCode = RelationshipKind.Tags.ToCode();
+        var order = await NextRelationshipSortOrderAsync(entityId, tagsCode, cancellationToken);
         foreach (var name in Unique(tags)) {
             var tag = await FindOrCreateTaxonomyEntityAsync(EntityKindRegistry.Tag.Code, name, now, markNsfw, cancellationToken);
-            if (await RelationshipExistsAsync(entityId, "tags", tag.Id, cancellationToken)) {
+            if (await RelationshipExistsAsync(entityId, tagsCode, tag.Id, cancellationToken)) {
                 continue;
             }
 
-            AddRelationship(entityId, "tags", "Tags", tag, order++, null, now);
+            AddRelationship(entityId, tagsCode, "Tags", tag, order++, null, now);
         }
     }
 
@@ -188,14 +189,15 @@ public sealed partial class LibraryScanPersistenceService {
             return;
         }
 
+        var studioCode = RelationshipKind.Studio.ToCode();
         var hasStudio = await _db.EntityRelationshipLinks
-            .AnyAsync(row => row.EntityId == entityId && row.RelationshipCode == "studio", cancellationToken);
+            .AnyAsync(row => row.EntityId == entityId && row.RelationshipCode == studioCode, cancellationToken);
         if (hasStudio) {
             return;
         }
 
         var studio = await FindOrCreateTaxonomyEntityAsync(EntityKindRegistry.Studio.Code, studioName.Trim(), now, markNsfw, cancellationToken);
-        AddRelationship(entityId, "studio", "Studio", studio, 0, null, now);
+        AddRelationship(entityId, studioCode, "Studio", studio, 0, null, now);
     }
 
     private async Task AddCreditsAsync(
@@ -205,14 +207,15 @@ public sealed partial class LibraryScanPersistenceService {
         DateTimeOffset now,
         bool markNsfw,
         CancellationToken cancellationToken) {
-        var order = await NextRelationshipSortOrderAsync(entityId, "cast", cancellationToken);
+        var castCode = RelationshipKind.Cast.ToCode();
+        var order = await NextRelationshipSortOrderAsync(entityId, castCode, cancellationToken);
         foreach (var name in Unique(names)) {
             var person = await FindOrCreateTaxonomyEntityAsync(EntityKindRegistry.Person.Code, name, now, markNsfw, cancellationToken);
-            if (await RelationshipExistsAsync(entityId, "cast", person.Id, cancellationToken)) {
+            if (await RelationshipExistsAsync(entityId, castCode, person.Id, cancellationToken)) {
                 continue;
             }
 
-            AddRelationship(entityId, "cast", "Cast", person, order++, $$"""{"role":"{{role}}","roles":["{{role}}"]}""", now);
+            AddRelationship(entityId, castCode, "Cast", person, order++, $$"""{"role":"{{role}}","roles":["{{role}}"]}""", now);
         }
     }
 

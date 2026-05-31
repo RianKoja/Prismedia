@@ -21,7 +21,7 @@ namespace Prismedia.Infrastructure.Entities.Mappers.Capabilities;
 /// saving of <c>credit.Person</c> entities for FK integrity.
 /// </summary>
 internal sealed class CreditsCapabilityMapper(PrismediaDbContext db) : IEntityCapabilityMapper {
-    private const string CreditsRelationshipCode = "credits";
+    private static readonly string CreditsRelationshipCode = RelationshipKind.Credits.ToCode();
 
     public async Task HydrateAsync(Entity entity, CancellationToken cancellationToken) {
         var links = await db.EntityRelationshipLinks.AsNoTracking()

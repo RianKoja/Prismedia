@@ -129,8 +129,8 @@ public sealed class CollectionRuleEngine(PrismediaDbContext db) : ICollectionRul
             "date" => TranslateDateField(condition, ctx),
             "organized" => TranslateFlag("is_organized", condition.Operator),
             "isNsfw" => TranslateFlag("is_nsfw", condition.Operator),
-            "tags" => TranslateRelation("tags", "tag", condition, ctx),
-            "performers" => TranslateRelation("cast", "person", condition, ctx),
+            "tags" => TranslateRelation(RelationshipKind.Tags.ToCode(), "tag", condition, ctx),
+            "performers" => TranslateRelation(RelationshipKind.Cast.ToCode(), "person", condition, ctx),
             "studio" => TranslateStudioRelation(condition, ctx),
             "fileSize" => TranslateFileSize(condition, ctx),
             "duration" => TranslateTechnical("duration_seconds", condition, ctx),
@@ -244,7 +244,7 @@ public sealed class CollectionRuleEngine(PrismediaDbContext db) : ICollectionRul
     }
 
     private string? TranslateStudioRelation(CollectionRuleCondition condition, SqlBuildContext ctx) {
-        var relationshipParam = ctx.AddParam("studio", NpgsqlDbType.Text);
+        var relationshipParam = ctx.AddParam(RelationshipKind.Studio.ToCode(), NpgsqlDbType.Text);
         if (condition.Operator is "is_null") {
             return $"NOT EXISTS (SELECT 1 FROM entity_relationship_links sl WHERE sl.entity_id = e.id AND sl.relationship_code = {relationshipParam})";
         }

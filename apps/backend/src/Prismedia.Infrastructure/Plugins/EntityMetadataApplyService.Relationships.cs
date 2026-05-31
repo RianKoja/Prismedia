@@ -41,7 +41,7 @@ public sealed partial class EntityMetadataApplyService {
         }
 
         if (fields.Contains("studio")) {
-            await RemoveRelationshipAsync(owner.Id, "studio", cancellationToken);
+            await RemoveRelationshipAsync(owner.Id, RelationshipKind.Studio.ToCode(), cancellationToken);
             if (!string.IsNullOrWhiteSpace(patch.Studio)) {
                 await SetStudioAsync(owner.Id, patch.Studio, now, markNsfw: false, cancellationToken);
             }
@@ -145,14 +145,14 @@ public sealed partial class EntityMetadataApplyService {
     }
 
     private async Task ReplaceTagsAsync(Guid entityId, IReadOnlyList<string> tags, DateTimeOffset now, bool markNsfw, CancellationToken cancellationToken) {
-        await RemoveRelationshipAsync(entityId, "tags", cancellationToken);
+        await RemoveRelationshipAsync(entityId, RelationshipKind.Tags.ToCode(), cancellationToken);
 
         var order = 0;
         foreach (var name in tags.Where(value => !string.IsNullOrWhiteSpace(value)).Select(value => value.Trim()).Distinct(StringComparer.OrdinalIgnoreCase)) {
             var tag = await FindEntityByKindAndTitleAsync("tag", name, cancellationToken)
                 ?? CreateEntity("tag", name, now);
             MarkNsfwIfRequested(tag, markNsfw, now);
-            AddRelationship(entityId, "tags", "Tags", tag.Id, tag.KindCode, order++, null, now);
+            AddRelationship(entityId, RelationshipKind.Tags.ToCode(), "Tags", tag.Id, tag.KindCode, order++, null, now);
         }
     }
 
@@ -160,12 +160,12 @@ public sealed partial class EntityMetadataApplyService {
         var studio = await FindEntityByKindAndTitleAsync("studio", studioName.Trim(), cancellationToken)
             ?? CreateEntity("studio", studioName.Trim(), now);
         MarkNsfwIfRequested(studio, markNsfw, now);
-        await RemoveRelationshipAsync(entityId, "studio", cancellationToken);
-        AddRelationship(entityId, "studio", "Studio", studio.Id, studio.KindCode, 0, null, now);
+        await RemoveRelationshipAsync(entityId, RelationshipKind.Studio.ToCode(), cancellationToken);
+        AddRelationship(entityId, RelationshipKind.Studio.ToCode(), "Studio", studio.Id, studio.KindCode, 0, null, now);
     }
 
     private async Task ReplaceCreditsAsync(Guid entityId, IReadOnlyList<CreditPatch> credits, DateTimeOffset now, bool markNsfw, CancellationToken cancellationToken) {
-        await RemoveRelationshipAsync(entityId, "cast", cancellationToken);
+        await RemoveRelationshipAsync(entityId, RelationshipKind.Cast.ToCode(), cancellationToken);
 
         var order = 0;
         var resolvedPeople = new Dictionary<string, EntityRow>(StringComparer.OrdinalIgnoreCase);
@@ -198,7 +198,7 @@ public sealed partial class EntityMetadataApplyService {
                 roles = credit.Roles,
                 characters = credit.Characters.Count == 0 ? null : credit.Characters
             });
-            AddRelationship(entityId, "cast", "Cast", credit.Person.Id, credit.Person.KindCode, credit.SortOrder, metadata, now);
+            AddRelationship(entityId, RelationshipKind.Cast.ToCode(), "Cast", credit.Person.Id, credit.Person.KindCode, credit.SortOrder, metadata, now);
         }
     }
 
