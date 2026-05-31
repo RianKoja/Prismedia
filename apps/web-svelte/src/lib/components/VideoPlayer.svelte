@@ -1077,7 +1077,9 @@
     const nextAutoSelectionKey = [
       subtitleDefaults?.autoEnable ? "auto" : "manual",
       subtitleDefaults?.preferredLanguages ?? "",
-      subtitleTracks.map((track) => `${track.id}:${track.language}:${track.label ?? ""}`).join("|"),
+      subtitleTracks
+        .map((track) => `${track.id}:${track.language}:${track.label ?? ""}`)
+        .join("|"),
     ].join("::");
     if (nextAutoSelectionKey !== autoSelectionKey) {
       autoSelectionKey = nextAutoSelectionKey;

@@ -1,7 +1,10 @@
 using Microsoft.EntityFrameworkCore;
 using Prismedia.Application.Videos;
 using Prismedia.Contracts.Media;
+using Prismedia.Domain.Entities;
+using Prismedia.Infrastructure.Media.Processing;
 using Prismedia.Infrastructure.Persistence;
+using Prismedia.Infrastructure.Processes;
 
 namespace Prismedia.Infrastructure.Videos;
 
@@ -10,13 +13,22 @@ namespace Prismedia.Infrastructure.Videos;
 /// </summary>
 public sealed class VideoSubtitleAssetService : IVideoSubtitleAssetService {
     private readonly PrismediaDbContext _db;
+    private readonly ProcessExecutor _processExecutor;
+    private readonly MediaToolOptions _mediaTools;
 
     /// <summary>
     /// Creates a subtitle asset resolver over the database context.
     /// </summary>
     /// <param name="db">Database context used to find subtitle rows.</param>
-    public VideoSubtitleAssetService(PrismediaDbContext db) {
+    /// <param name="processExecutor">Process runner used to extract embedded styled subtitles on demand.</param>
+    /// <param name="mediaTools">Configured ffmpeg and ffprobe executable paths.</param>
+    public VideoSubtitleAssetService(
+        PrismediaDbContext db,
+        ProcessExecutor processExecutor,
+        MediaToolOptions mediaTools) {
         _db = db;
+        _processExecutor = processExecutor;
+        _mediaTools = mediaTools;
     }
 
     /// <summary>
@@ -54,8 +66,10 @@ public sealed class VideoSubtitleAssetService : IVideoSubtitleAssetService {
             .AsNoTracking()
             .Where(subtitle => subtitle.EntityId == videoId && subtitle.Id == trackId)
             .Select(subtitle => new {
+                subtitle.StoragePath,
                 subtitle.SourcePath,
-                subtitle.SourceFormat
+                subtitle.SourceFormat,
+                subtitle.Source
             })
             .SingleOrDefaultAsync(cancellationToken);
 
@@ -65,7 +79,38 @@ public sealed class VideoSubtitleAssetService : IVideoSubtitleAssetService {
             return null;
         }
 
-        return ExistingAsset(row.SourcePath, MediaContentTypes.SsaUtf8);
+        var preservedAsset = ExistingAsset(row.SourcePath, MediaContentTypes.SsaUtf8);
+        if (preservedAsset is not null) {
+            return preservedAsset;
+        }
+
+        if (row.Source != EntitySubtitleSource.Embedded ||
+            !int.TryParse(row.SourcePath, out var streamIndex)) {
+            return null;
+        }
+
+        var sourcePath = await _db.EntityFiles
+            .AsNoTracking()
+            .Where(file => file.EntityId == videoId && file.Role == EntityFileRole.Source)
+            .Select(file => file.Path)
+            .SingleOrDefaultAsync(cancellationToken);
+
+        if (!ExistingSource(sourcePath)) {
+            return null;
+        }
+
+        var outputPath = EmbeddedSubtitleSourcePath(row.StoragePath, row.SourceFormat);
+        if (File.Exists(outputPath)) {
+            return new VideoSubtitleAsset(outputPath, MediaContentTypes.SsaUtf8);
+        }
+
+        var extracted = await ExtractEmbeddedStyledSubtitleAsync(
+            sourcePath!,
+            streamIndex,
+            outputPath,
+            cancellationToken);
+
+        return extracted ? new VideoSubtitleAsset(outputPath, MediaContentTypes.SsaUtf8) : null;
     }
 
     private static VideoSubtitleAsset? ExistingAsset(string? path, string contentType) {
@@ -75,6 +120,41 @@ public sealed class VideoSubtitleAssetService : IVideoSubtitleAssetService {
 
         return new VideoSubtitleAsset(path, contentType);
     }
+
+    private async Task<bool> ExtractEmbeddedStyledSubtitleAsync(
+        string sourcePath,
+        int streamIndex,
+        string outputPath,
+        CancellationToken cancellationToken) {
+        Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
+        var result = await _processExecutor.RunAsync(
+            _mediaTools.FfmpegPath,
+            [
+                "-y",
+                "-v", "error",
+                "-i", sourcePath,
+                "-map", $"0:{streamIndex}",
+                "-c:s", "copy",
+                outputPath
+            ],
+            null,
+            cancellationToken,
+            lowPriority: true);
+
+        return result.ExitCode == 0 && File.Exists(outputPath);
+    }
+
+    private static string EmbeddedSubtitleSourcePath(string storagePath, string sourceFormat) {
+        var extension = string.Equals(sourceFormat, "ssa", StringComparison.OrdinalIgnoreCase)
+            ? ".ssa"
+            : ".ass";
+        return Path.ChangeExtension(storagePath, extension);
+    }
+
+    private static bool ExistingSource(string? path) =>
+        !string.IsNullOrWhiteSpace(path) &&
+        Path.IsPathRooted(path) &&
+        File.Exists(path);
 
     private static bool IsStyledSubtitleFormat(string? format) =>
         string.Equals(format, "ass", StringComparison.OrdinalIgnoreCase) ||

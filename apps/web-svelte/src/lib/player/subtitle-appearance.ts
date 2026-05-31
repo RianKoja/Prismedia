@@ -87,7 +87,12 @@ export function captionClassName(style: SubtitleDisplayStyle): string {
 
 /** Pick the best track for the user's preferred language list. */
 export function pickPreferredSubtitleTrack(
-  tracks: { id: string; language: string; label?: string | null; isDefault?: boolean }[],
+  tracks: {
+    id: string;
+    language: string;
+    label?: string | null;
+    isDefault?: boolean;
+  }[],
   preferredLanguages: string,
 ): string | null {
   if (!tracks.length) return null;
@@ -98,10 +103,14 @@ export function pickPreferredSubtitleTrack(
   if (prefs.length === 0) return tracks[0]!.id;
 
   for (const pref of prefs) {
-    const exact = tracks.find((t) => subtitleTrackTokens(t).some((token) => token === pref));
+    const exact = tracks.find((t) =>
+      subtitleTrackTokens(t).some((token) => token === pref),
+    );
     if (exact) return exact.id;
     const prefix = tracks.find((t) =>
-      subtitleTrackTokens(t).some((token) => token.startsWith(pref) || pref.startsWith(token)),
+      subtitleTrackTokens(t).some(
+        (token) => token.startsWith(pref) || pref.startsWith(token),
+      ),
     );
     if (prefix) return prefix.id;
     const equiv = tracks.find((t) =>
@@ -156,7 +165,13 @@ function subtitleTrackTokens(track: {
     })
     .filter(Boolean);
 
-  return Array.from(new Set(rawTokens.flatMap((token) => [token, LANGUAGE_NAME_ALIASES[token]].filter(Boolean) as string[])));
+  return Array.from(
+    new Set(
+      rawTokens.flatMap((token) =>
+        [token, LANGUAGE_NAME_ALIASES[token]].filter(Boolean) as string[],
+      ),
+    ),
+  );
 }
 
 function iso639Equivalent(a: string, b: string): boolean {

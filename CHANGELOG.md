@@ -90,6 +90,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - Updated web app manifest and mobile browser metadata for home-screen installation and browser UI theme colors.
 
 ### Fixed
+- Fixed subtitle selection and rendering in the new player: automatic subtitle language selection now recovers when a stale per-video preference is cleared, and embedded ASS/SSA subtitles are served as raw styled subtitle sources so the ASS renderer can display them.
 - Fixed the Videos library showing no items in Jellyfin clients like Infuse: standalone videos are now reported as the Video type (not Movie), so they appear in the home-videos library while movies stay in their own library.
 - Fixed "Start Over" from Jellyfin clients like Infuse: starting an item from the beginning now clears its saved resume point, and rapid pause/resume reports no longer fail with a server error or silently lose a playback update.
 - Fixed Auto Identify and movie/video sidecar imports so provider or sidecar ratings no longer overwrite your personal rating field, and automatic Identify now runs one item at a time to avoid provider throttling.

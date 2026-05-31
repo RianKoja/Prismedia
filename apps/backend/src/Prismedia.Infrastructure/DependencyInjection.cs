@@ -233,7 +233,11 @@ public static class DependencyInjection {
         services.AddScoped<IPlaybackInfoService, PlaybackInfoService>();
         services.AddScoped<IPlaybackSessionService, PlaybackSessionService>();
         services.AddScoped<ITrickplayService, TrickplayService>();
-        services.AddScoped<IVideoSubtitleAssetService, VideoSubtitleAssetService>();
+        services.AddScoped<IVideoSubtitleAssetService>(provider =>
+            new VideoSubtitleAssetService(
+                provider.GetRequiredService<PrismediaDbContext>(),
+                provider.GetRequiredService<ProcessExecutor>(),
+                provider.GetRequiredService<MediaToolOptions>()));
     }
 
     private static void RegisterJobsSettingsAndState(IServiceCollection services, string dataDir) {
