@@ -6,43 +6,11 @@ import type {
   SettingValue,
 } from "$lib/api/settings";
 
-export const settingKeys = {
-  visibilityDefaultMode: "visibility.defaultMode",
-  visibilityLanAutoEnable: "visibility.lanAutoEnable",
-  scanAutoScanEnabled: "scan.autoScanEnabled",
-  scanIntervalMinutes: "scan.intervalMinutes",
-  autoIdentifyEnabled: "autoIdentify.enabled",
-  autoIdentifyProviders: "autoIdentify.providers",
-  autoIdentifyEntityKinds: "autoIdentify.entityKinds",
-  autoIdentifyConfidenceThreshold: "autoIdentify.confidenceThreshold",
-  autoIdentifyUnorganizedOnly: "autoIdentify.unorganizedOnly",
-  generationAutoGenerateMetadata: "generation.autoGenerateMetadata",
-  generationAutoGenerateOshash: "generation.autoGenerateOshash",
-  generationAutoGenerateMd5: "generation.autoGenerateMd5",
-  generationGeneratePhash: "generation.generatePhash",
-  generationAutoGeneratePreview: "generation.autoGeneratePreview",
-  generationGenerateTrickplay: "generation.generateTrickplay",
-  generationMetadataStorageDedicated: "generation.metadataStorageDedicated",
-  generationTrickplayIntervalSeconds: "generation.trickplayIntervalSeconds",
-  generationPreviewClipDurationSeconds: "generation.previewClipDurationSeconds",
-  generationThumbnailQuality: "generation.thumbnailQuality",
-  generationTrickplayQuality: "generation.trickplayQuality",
-  jobsBackgroundConcurrency: "jobs.backgroundConcurrency",
-  playbackDefaultMode: "playback.defaultMode",
-  playbackShowCastControls: "playback.showCastControls",
-  playbackAudioPreferredLanguages: "playback.audioPreferredLanguages",
-  subtitlesAutoEnable: "subtitles.autoEnable",
-  subtitlesPreferredLanguages: "subtitles.preferredLanguages",
-  subtitlesStyle: "subtitles.style",
-  subtitlesFontScale: "subtitles.fontScale",
-  subtitlesPositionPercent: "subtitles.positionPercent",
-  subtitlesOpacity: "subtitles.opacity",
-  hlsTranscoderProfile: "hls.transcoderProfile",
-  hlsFfmpegPath: "hls.ffmpegPath",
-  hlsVaapiDevice: "hls.vaapiDevice",
-} as const;
+// Setting keys are generated from the backend AppSettingKeys (see scripts/gen-codes.mjs).
+import { SETTING_KEYS as settingKeys, type SettingKey } from "$lib/api/generated/codes";
 
-export type SettingKey = (typeof settingKeys)[keyof typeof settingKeys];
+export { settingKeys };
+export type { SettingKey };
 
 export const defaultLibrarySettings: LibrarySettings = {
   visibilityDefaultMode: "off",

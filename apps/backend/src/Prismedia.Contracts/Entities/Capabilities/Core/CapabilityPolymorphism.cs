@@ -13,6 +13,13 @@ public static class CapabilityPolymorphism {
     private static readonly Lazy<IReadOnlyList<(Type Type, string Kind)>> DiscoveredCapabilities = new(Discover);
 
     /// <summary>
+    /// The discovered capability discriminator codes, in stable sorted order. Exposed so the
+    /// code-generation surface can publish the same discriminators the serializer uses.
+    /// </summary>
+    public static IReadOnlyList<string> DiscriminatorKinds =>
+        DiscoveredCapabilities.Value.Select(pair => pair.Kind).ToArray();
+
+    /// <summary>
     /// Type-info modifier that adds polymorphism options to <see cref="EntityCapability" />.
     /// Wire it into <c>JsonSerializerOptions.TypeInfoResolver</c> on startup.
     /// </summary>

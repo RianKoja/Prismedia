@@ -1,100 +1,28 @@
-import type { EntityCapability } from "$lib/api/generated/model";
+import {
+  CAPABILITY_KIND,
+  ENTITY_FILE_ROLE,
+  ENTITY_KIND,
+  ENTITY_KIND_LABELS,
+  RELATIONSHIP_CODE,
+  type CapabilityKindCode,
+  type EntityFileRoleCode,
+  type EntityKindCode,
+  type RelationshipCode,
+} from "$lib/api/generated/codes";
 
-/**  entity kind codes emitted by the .NET entity registry. */
-export const ENTITY_KIND = {
-  audio: "audio",
-  audioLibrary: "audio-library",
-  audioTrack: "audio-track",
-  book: "book",
-  bookChapter: "book-chapter",
-  bookPage: "book-page",
-  bookVolume: "book-volume",
-  collection: "collection",
-  gallery: "gallery",
-  image: "image",
-  movie: "movie",
-  person: "person",
-  studio: "studio",
-  tag: "tag",
-  video: "video",
-  videoSeason: "video-season",
-  videoSeries: "video-series",
-} as const;
-
-export type EntityKindCode = (typeof ENTITY_KIND)[keyof typeof ENTITY_KIND];
+// Stable code constants are generated from the backend registries (see
+// scripts/gen-codes.mjs). This module re-exports them and owns only the frontend-specific
+// concerns: the kind label lookup and the route resolution rules.
+export {
+  CAPABILITY_KIND,
+  ENTITY_FILE_ROLE,
+  ENTITY_KIND,
+  ENTITY_KIND_LABELS,
+  RELATIONSHIP_CODE,
+};
+export type { CapabilityKindCode, EntityFileRoleCode, EntityKindCode, RelationshipCode };
 
 export const ENTITY_KINDS = Object.values(ENTITY_KIND) as EntityKindCode[];
-
-/**  capability discriminator codes from the generated OpenAPI union. */
-export const CAPABILITY_KIND = {
-  classification: "classification",
-  dates: "dates",
-  description: "description",
-  files: "files",
-  fingerprints: "fingerprints",
-  flags: "flags",
-  images: "images",
-  links: "links",
-  lifetime: "lifetime",
-  markers: "markers",
-  playback: "playback",
-  position: "position",
-  progress: "progress",
-  rating: "rating",
-  source: "source",
-  stats: "stats",
-  subtitles: "subtitles",
-  technical: "technical",
-} as const satisfies Record<string, EntityCapability["kind"]>;
-
-export type CapabilityKindCode = (typeof CAPABILITY_KIND)[keyof typeof CAPABILITY_KIND];
-
-export const RELATIONSHIP_CODE = {
-  cast: "cast",
-  studio: "studio",
-  tags: "tags",
-} as const;
-
-export type RelationshipCode = (typeof RELATIONSHIP_CODE)[keyof typeof RELATIONSHIP_CODE];
-
-/**  entity file/image role codes used by shared thumbnail and detail surfaces. */
-export const ENTITY_FILE_ROLE = {
-  banner: "banner",
-  backdrop: "backdrop",
-  cover: "cover",
-  full: "full",
-  hero: "hero",
-  logo: "logo",
-  original: "original",
-  poster: "poster",
-  preview: "preview",
-  source: "source",
-  sprite: "sprite",
-  thumbnail: "thumbnail",
-  trickplay: "trickplay",
-} as const;
-
-export type EntityFileRoleCode = (typeof ENTITY_FILE_ROLE)[keyof typeof ENTITY_FILE_ROLE];
-
-const ENTITY_KIND_LABELS: Record<EntityKindCode, string> = {
-  [ENTITY_KIND.audio]: "Audio",
-  [ENTITY_KIND.audioLibrary]: "Audio Libraries",
-  [ENTITY_KIND.audioTrack]: "Audio Tracks",
-  [ENTITY_KIND.book]: "Books",
-  [ENTITY_KIND.bookChapter]: "Book Chapters",
-  [ENTITY_KIND.bookPage]: "Book Pages",
-  [ENTITY_KIND.bookVolume]: "Book Volumes",
-  [ENTITY_KIND.collection]: "Collections",
-  [ENTITY_KIND.gallery]: "Galleries",
-  [ENTITY_KIND.image]: "Images",
-  [ENTITY_KIND.movie]: "Movies",
-  [ENTITY_KIND.person]: "People",
-  [ENTITY_KIND.studio]: "Studios",
-  [ENTITY_KIND.tag]: "Tags",
-  [ENTITY_KIND.video]: "Videos",
-  [ENTITY_KIND.videoSeason]: "Seasons",
-  [ENTITY_KIND.videoSeries]: "Series",
-};
 
 export interface EntityRouteContext {
   kind: EntityKindCode;

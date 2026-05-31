@@ -92,7 +92,6 @@ export function buildLightboxImageSource(entity: UniversalLightboxEntity): Unive
 
   const images = getCapability(entity.capabilities, CAPABILITY_KIND.images);
   const asset =
-    images?.items.find((item) => item.kind === ENTITY_FILE_ROLE.full) ??
     images?.items.find((item) => item.kind === ENTITY_FILE_ROLE.cover) ??
     images?.items.find((item) => item.kind === ENTITY_FILE_ROLE.poster) ??
     images?.items.find((item) => item.kind === ENTITY_FILE_ROLE.thumbnail);

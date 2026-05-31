@@ -1,5 +1,6 @@
 using System.Text.Json.Serialization.Metadata;
 using Prismedia.Api;
+using Prismedia.Api.Codegen;
 using Prismedia.Api.Endpoints;
 using Prismedia.Api.Security;
 using Prismedia.Api.Serialization;
@@ -78,6 +79,7 @@ app.UsePrismediaUiApiKeyCookie();
 
 if (app.Environment.IsDevelopment()) {
     app.MapOpenApi();
+    app.MapPrismediaCodegen();
     app.UseCors("PrismediaDevCors");
     if (staticFileProvider is null) {
         app.UseSpaDevServer("http://localhost:5173");

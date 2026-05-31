@@ -13,7 +13,8 @@
     "sync": "svelte-kit sync",
     "lint": "svelte-check --tsconfig ./tsconfig.json",
     "typecheck": "svelte-check --tsconfig ./tsconfig.json",
-    "api:generate": "orval --config orval.config.ts",
+    "api:generate": "orval --config orval.config.ts && node scripts/gen-codes.mjs",
+    "api:generate:codes": "node scripts/gen-codes.mjs",
     "test": "pnpm test:unit",
     "test:unit": "vitest run --config vitest.config.ts"
   },

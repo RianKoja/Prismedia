@@ -144,6 +144,12 @@ internal static class PrismediaAuthentication {
             return false;
         }
 
+        // Development-only codegen manifest endpoint; mapped only in Development and never
+        // exposed in production, so treating it as public here is safe.
+        if (path.StartsWithSegments(Codegen.CodegenEndpoints.CodegenPrefix)) {
+            return false;
+        }
+
         if (path.StartsWithSegments("/api")) {
             return true;
         }

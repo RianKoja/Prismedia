@@ -225,10 +225,7 @@ function resolveHero(capabilities: EntityCapability[]): EntityDetailHero | null 
   const images = getImagesCapability(capabilities);
   if (!images) return null;
   const coverItem = images.items.find(
-    (item) =>
-      item.kind === ENTITY_FILE_ROLE.backdrop ||
-      item.kind === ENTITY_FILE_ROLE.hero ||
-      item.kind === ENTITY_FILE_ROLE.banner,
+    (item) => item.kind === ENTITY_FILE_ROLE.backdrop,
   );
   if (coverItem) return { src: coverItem.path, alt: String(coverItem.kind) };
   return null;
