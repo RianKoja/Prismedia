@@ -76,7 +76,7 @@ public sealed class EntityImageAssetMutationService(
                 Path = publicPath,
                 MimeType = mimeType,
                 SizeBytes = new FileInfo(physicalPath).Length,
-                Source = "custom",
+                Source = FileSourceKind.Custom.ToCode(),
                 CreatedAt = now,
                 UpdatedAt = now
             });
@@ -84,7 +84,7 @@ public sealed class EntityImageAssetMutationService(
             existing.Path = publicPath;
             existing.MimeType = mimeType;
             existing.SizeBytes = new FileInfo(physicalPath).Length;
-            existing.Source = "custom";
+            existing.Source = FileSourceKind.Custom.ToCode();
             existing.UpdatedAt = now;
         }
 

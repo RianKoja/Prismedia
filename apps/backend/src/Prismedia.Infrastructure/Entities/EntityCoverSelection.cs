@@ -42,7 +42,7 @@ internal static class EntityCoverSelection {
             return 2;
         }
 
-        return source == "custom" ||
+        return source == FileSourceKind.Custom.ToCode() ||
             path.Contains("/custom/artwork/", StringComparison.OrdinalIgnoreCase) ||
             path.Contains("/plugins/artwork/", StringComparison.OrdinalIgnoreCase)
                 ? 0

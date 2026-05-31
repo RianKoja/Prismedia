@@ -60,7 +60,7 @@ public sealed class GridThumbnailService(
                 Path = url,
                 MimeType = "image/jpeg",
                 SizeBytes = size,
-                Source = "scan",
+                Source = FileSourceKind.Scan.ToCode(),
                 CreatedAt = now,
                 UpdatedAt = now
             });

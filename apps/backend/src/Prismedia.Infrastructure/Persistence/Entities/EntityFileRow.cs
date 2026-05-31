@@ -26,7 +26,7 @@ public sealed class EntityFileRow {
     /// <c>"custom"</c> for user-uploaded or scraper-provided assets.
     /// Scan jobs never overwrite custom files.
     /// </summary>
-    public string Source { get; set; } = "scan";
+    public string Source { get; set; } = FileSourceKind.Scan.ToCode();
 
     public DateTimeOffset CreatedAt { get; set; }
 

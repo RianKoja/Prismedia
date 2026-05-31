@@ -120,14 +120,14 @@ public sealed class PluginArtworkDownloader {
                 Role = role,
                 Path = publicPath,
                 MimeType = MimeTypeFromExtension(ext),
-                Source = "custom",
+                Source = FileSourceKind.Custom.ToCode(),
                 CreatedAt = now,
                 UpdatedAt = now
             });
         } else {
             existing.Path = publicPath;
             existing.MimeType = MimeTypeFromExtension(ext);
-            existing.Source = "custom";
+            existing.Source = FileSourceKind.Custom.ToCode();
             existing.UpdatedAt = now;
         }
     }

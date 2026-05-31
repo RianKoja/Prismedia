@@ -163,7 +163,7 @@ public sealed partial class LibraryScanPersistenceService {
 
         if (existing is not null) {
             // Scan-generated writes never overwrite user-uploaded custom assets.
-            if (existing.Source == "custom")
+            if (existing.Source == FileSourceKind.Custom.ToCode())
                 return;
 
             existing.Path = path;
@@ -178,7 +178,7 @@ public sealed partial class LibraryScanPersistenceService {
                 Path = path,
                 MimeType = mimeType,
                 SizeBytes = sizeBytes,
-                Source = "scan",
+                Source = FileSourceKind.Scan.ToCode(),
                 CreatedAt = now,
                 UpdatedAt = now
             });
