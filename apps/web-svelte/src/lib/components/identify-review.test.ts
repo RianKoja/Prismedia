@@ -9,6 +9,7 @@ import {
   defaultFieldSelectionForReview,
   findRelationshipImage,
   groupProposalRows,
+  groupReviewImages,
   isNewRelationshipTitle,
   proposalFieldValue,
   reviewDiffFieldKeys,
@@ -39,6 +40,25 @@ describe("identify review helpers", () => {
     expect(relationshipProposals(root).map((child) => child.proposalId)).toEqual(["actor-1", "studio-1"]);
     expect(reviewChildProposals(root).map((child) => child.proposalId)).toEqual(["season-1", "actor-1", "studio-1"]);
     expect(findRelationshipImage(root, "person", "Series Actor")).toBe("https://example.test/actor.jpg");
+  });
+
+  it("de-duplicates review images by url within a kind so the keyed each cannot crash", () => {
+    const root = proposal("movie", "movie");
+    root.images = [
+      { kind: "poster", url: "https://example.test/dup.jpg", source: "tmdb" },
+      { kind: "poster", url: "https://example.test/dup.jpg", source: "tvdb" },
+      { kind: "poster", url: "https://example.test/other.jpg", source: "tmdb" },
+      { kind: "backdrop", url: "https://example.test/dup.jpg", source: "tmdb" },
+    ];
+
+    const groups = groupReviewImages(root);
+    const poster = groups.find((group) => group.kind === "poster");
+    expect(poster?.images.map((image) => image.url)).toEqual([
+      "https://example.test/dup.jpg",
+      "https://example.test/other.jpg",
+    ]);
+    // The same URL under a different kind is a separate `{#each}`, so it is kept.
+    expect(groups.find((group) => group.kind === "backdrop")?.images).toHaveLength(1);
   });
 
   it("groups structural children and relationships into separate review rows", () => {

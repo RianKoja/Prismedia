@@ -67,7 +67,9 @@
   const relationships = $derived(relationshipProposals(proposal));
   const credits = $derived(relationships.filter((r) => r.targetKind === "person"));
   const nonCreditRelationships = $derived(relationships.filter((r) => r.targetKind !== "person"));
-  const tags = $derived(proposal.patch?.tags ?? []);
+  // De-duplicate tags: the tag chips key their `{#each}` on the tag string, so a
+  // provider repeating a tag would crash rendering with `each_key_duplicate`.
+  const tags = $derived([...new Set(proposal.patch?.tags ?? [])]);
   const existingTagTitles = $derived(relationshipTitlesForDetail(detail, "tag"));
   const looseTags = $derived(tags.filter((tag) => !tagRelationshipForTitle(tag, relationships)));
   const imageGroups = $derived(groupReviewImages(proposal));

@@ -185,7 +185,14 @@ export function defaultImageSelectionForReview(result: EntityMetadataProposal): 
 
 export function groupReviewImages(result: EntityMetadataProposal): Array<{ kind: string; images: ImageCandidate[] }> {
   const groups: Record<string, ImageCandidate[]> = {};
+  const seenUrls: Record<string, Set<string>> = {};
   for (const image of reviewableImages(result.images ?? [], result.targetKind)) {
+    // De-duplicate by URL within each kind: providers occasionally return the same
+    // artwork twice in one kind, and the review grid keys its `{#each}` on the URL,
+    // so a repeat would otherwise crash rendering with `each_key_duplicate`.
+    const seen = seenUrls[image.kind] ?? (seenUrls[image.kind] = new Set());
+    if (seen.has(image.url)) continue;
+    seen.add(image.url);
     groups[image.kind] = [...(groups[image.kind] ?? []), image];
   }
   return Object.entries(groups).map(([kind, images]) => ({ kind, images }));

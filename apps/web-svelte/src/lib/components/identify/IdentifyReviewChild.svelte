@@ -65,7 +65,8 @@
   const relationships = $derived(relationshipProposals(proposal));
   const credits = $derived(relationships.filter((r) => r.targetKind === "person"));
   const nonCreditRelationships = $derived(relationships.filter((r) => r.targetKind !== "person"));
-  const tags = $derived(proposal.patch?.tags ?? []);
+  // De-duplicate tags so repeated provider tags can't crash the keyed `{#each}`.
+  const tags = $derived([...new Set(proposal.patch?.tags ?? [])]);
   const currentScopeEntityId = $derived(parentProposal.targetEntityId ?? entity.id);
   const currentDetail = $derived(store.getReviewDetailForProposal(currentScopeEntityId, proposal));
   const currentDetailEntityId = $derived(store.reviewDetailEntityIdForProposal(currentScopeEntityId, proposal));

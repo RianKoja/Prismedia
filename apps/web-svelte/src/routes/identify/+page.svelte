@@ -147,6 +147,7 @@
 
   <!-- ── Main content area ── -->
   <div class="mt-4">
+    <svelte:boundary onerror={(error) => console.error("[identify] review render failed", error)}>
     {#if store.loading}
       <div class="flex items-center justify-center py-16">
         <Loader2 class="h-6 w-6 animate-spin text-text-accent" />
@@ -166,5 +167,34 @@
         parentProposal={store.view.parentProposal}
       />
     {/if}
+
+    {#snippet failed(error, reset)}
+      <div class="flex flex-col items-center justify-center gap-4 rounded-sm border border-error/40 bg-surface-1 px-4 py-12 text-center">
+        <AlertCircle class="h-7 w-7 text-error-text" />
+        <div class="space-y-1">
+          <p class="font-heading text-[0.9rem] font-semibold text-text-primary">This view couldn't be displayed</p>
+          <p class="mx-auto max-w-md font-mono text-[0.72rem] text-text-muted">
+            {error instanceof Error ? error.message : String(error)}
+          </p>
+        </div>
+        <div class="flex items-center gap-2">
+          <button
+            type="button"
+            class="inline-flex h-9 items-center gap-1.5 rounded-xs border border-border-default bg-surface-2 px-3 text-[0.78rem] text-text-muted transition-colors hover:bg-surface-3"
+            onclick={reset}
+          >
+            Try again
+          </button>
+          <button
+            type="button"
+            class="inline-flex h-9 items-center gap-1.5 rounded-xs border border-border-accent-strong bg-accent-950/40 px-3 text-[0.78rem] text-text-accent transition-colors hover:bg-accent-950/60"
+            onclick={() => { reset(); store.navigateToDashboard(); }}
+          >
+            Back to dashboard
+          </button>
+        </div>
+      </div>
+    {/snippet}
+    </svelte:boundary>
   </div>
 </div>

@@ -380,7 +380,14 @@ export class IdentifyStore {
     }
 
     if (!this.error && afterApply) {
-      await afterApply();
+      try {
+        await afterApply();
+      } catch (err) {
+        // The apply already succeeded; a failed navigation must not strand the
+        // review on a half-removed item. Surface it and fall back to the dashboard.
+        this.error = readError(err);
+        this.navigateToDashboard();
+      }
     }
   }
 

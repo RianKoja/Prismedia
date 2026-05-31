@@ -97,6 +97,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - Fixed searches and related grids so movies appear as movies only, without also showing their playable child video duplicate.
 - Fixed Jellyfin-compatible browsing in Infuse so playable videos include media source metadata and the Videos library only shows standalone videos while Series can return episodes recursively.
 - Fixed Infuse playback for Jellyfin-compatible episode files that need Jellyfin's direct stream route even when they are not browser-native containers.
+- Fixed the Identify review crashing and locking the UI when a provider match contained duplicate artwork, cast, or tags: duplicates are now collapsed so the proposal renders normally, and an unexpected render error shows a recoverable message instead of freezing the page.
 - Fixed Infuse Jellyfin setup so its virtual library validation request returns Jellyfin-shaped folder data instead of the web app's HTML 404.
 - Fixed Infuse Jellyfin setup so its user-view grouping validation request succeeds after sign-in.
 - Fixed Jellyfin-compatible server setup for clients that probe with POST ping, send the login password as `Password`, or use the legacy user-id authentication route.
