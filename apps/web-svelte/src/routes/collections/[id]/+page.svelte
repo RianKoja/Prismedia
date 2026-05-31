@@ -21,6 +21,7 @@
     deleteCollection,
     fetchCollectionItems,
     refreshCollection,
+    removeCollectionItems,
   } from "$lib/api/collections";
   import { unwrapGenerated } from "$lib/api/generated-response";
   import {
@@ -30,6 +31,8 @@
   import { entityCardToDetailCard, type EntityDetailCardFull } from "$lib/entities/entity-detail";
   import { entityCardToThumbnailCard } from "$lib/entities/entity-grid";
   import type { EntityThumbnailCard } from "$lib/entities/entity-thumbnail";
+  import type { EntityGridBulkAction } from "$lib/entities/entity-grid";
+  import type { CollectionItem } from "$lib/collections/models";
   import { getEntityHref } from "$lib/components/collections/collection-item-helpers";
   import EntityDetail, {
     type EntityDetailActionButton,
@@ -50,9 +53,11 @@
   let errorMessage: string | null = $state(null);
   let lastNsfwMode = $state(nsfw.mode);
   let ratingBusy = $state(false);
+  let collectionItems = $state.raw<CollectionItem[]>([]);
   let itemCards = $state<EntityThumbnailCard[]>([]);
   let refreshBusy = $state(false);
   let deleteBusy = $state(false);
+  let removingItems = $state(false);
   let itemMutationError = $state<string | null>(null);
 
   const card = $derived.by((): EntityDetailCardFull | null => {
@@ -63,7 +68,22 @@
       posterCard: collectionPosterCard(detailCard),
     };
   });
+  const canManuallyCurate = $derived(collection?.mode !== "dynamic");
   const canRefreshRules = $derived(collection?.mode === "dynamic" || collection?.mode === "hybrid");
+  // Route-level grid bulk action. Selected cards expose entity ids, so the
+  // handler maps them back to the collection item ids the remove endpoint
+  // expects. Only manual/hybrid collections can drop members.
+  const itemBulkActions = $derived.by((): EntityGridBulkAction[] => {
+    if (!canManuallyCurate) return [];
+    return [
+      {
+        id: "remove-from-collection",
+        label: "Remove from Collection",
+        tone: "danger",
+        onRun: (selectedIds) => void removeSelectedItems(selectedIds),
+      },
+    ];
+  });
   const heroActions = $derived.by((): EntityDetailActionButton[] => {
     if (!card) return [];
     return [
@@ -125,6 +145,7 @@
       const nextCollection = unwrapGenerated<CollectionDetail>(await getCollection(id), `Failed to fetch collection ${id}`);
       const nextItems = await fetchCollectionItems(id);
       collection = nextCollection;
+      collectionItems = nextItems;
       itemCards = nextItems
         .map((item) => item.entity ? entityCardToThumbnailCard(item.entity, getEntityHref(item, `/collections/${id}`)) : null)
         .filter((card): card is EntityThumbnailCard => Boolean(card));
@@ -195,6 +216,25 @@
         : { kind: "none" },
       href: undefined,
     };
+  }
+
+  async function removeSelectedItems(entityIds: string[]) {
+    if (!collection || removingItems || entityIds.length === 0) return;
+    const selected = new Set(entityIds);
+    const itemIds = collectionItems
+      .filter((item) => selected.has(item.entityId))
+      .map((item) => item.id);
+    if (itemIds.length === 0) return;
+    removingItems = true;
+    itemMutationError = null;
+    try {
+      await removeCollectionItems(collection.id, itemIds);
+      await loadCollection();
+    } catch (err) {
+      itemMutationError = err instanceof Error ? err.message : "Failed to remove items.";
+    } finally {
+      removingItems = false;
+    }
   }
 
   async function refreshDynamicItems() {
@@ -299,7 +339,8 @@
         <EntityGrid
           cards={itemCards}
           prefsKey={`collection-${collection?.id}-items`}
-          selectable={false}
+          selectable={canManuallyCurate}
+          bulkActions={itemBulkActions}
           emptyTitle="Empty collection"
           emptyMessage="This collection has no items."
         />
