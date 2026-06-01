@@ -76,9 +76,36 @@ public sealed class PlaybackInfoService : IPlaybackInfoService {
             directStreamAllowed: request?.EnableDirectStream != false,
             transcodingAllowed: transcodingAllowed);
 
-        // Remux execution is not wired yet, so a remux decision is served as a transcode for now;
-        // only a true DirectPlay verdict short-circuits the HLS pipeline.
+        // A DirectPlay verdict serves the raw file; a Remux verdict serves a stream-copy fMP4 HLS
+        // (video copied, audio to AAC) so a client that can decode the codec but not the container
+        // avoids an expensive re-encode; anything else is a full transcode.
         var supportsDirectPlayback = decision.Method == VideoPlaybackMethod.DirectPlay;
+        var serveTranscode = transcodingAllowed && !supportsDirectPlayback;
+        var isRemux = serveTranscode && decision.Method == VideoPlaybackMethod.Remux;
+
+        string? transcodingUrl = null;
+        string? transcodingSubProtocol = null;
+        string? transcodingContainer = null;
+        TranscodingInfoResult? transcodingInfo = null;
+        if (serveTranscode) {
+            transcodingSubProtocol = "hls";
+            if (isRemux) {
+                transcodingUrl = BuildRemuxUrl(itemId, mediaSourceId, playSessionId, selectedAudioStream?.StreamIndex, request?.AccessToken);
+                transcodingContainer = "mp4";
+                transcodingInfo = new TranscodingInfoResult(
+                    "mp4",
+                    source.VideoCodec ?? videoStream?.Codec ?? "hevc",
+                    "aac",
+                    "hls",
+                    IsVideoDirect: true,
+                    IsAudioDirect: false);
+            } else {
+                transcodingUrl = BuildTranscodingUrl(itemId, mediaSourceId, playSessionId, selectedAudioStream?.StreamIndex, request?.AccessToken);
+                transcodingContainer = "ts";
+                transcodingInfo = new TranscodingInfoResult("ts", "h264", "aac", "hls", IsVideoDirect: false, IsAudioDirect: false);
+            }
+        }
+
         var sourceInfo = new MediaSourceInfoResult(
             mediaSourceId,
             source.Path,
@@ -90,15 +117,11 @@ public sealed class PlaybackInfoService : IPlaybackInfoService {
             supportsDirectPlayback,
             supportsDirectPlayback,
             transcodingAllowed,
-            transcodingAllowed && !supportsDirectPlayback
-                ? BuildTranscodingUrl(itemId, mediaSourceId, playSessionId, selectedAudioStream?.StreamIndex, request?.AccessToken)
-                : null,
-            transcodingAllowed && !supportsDirectPlayback ? "hls" : null,
-            transcodingAllowed && !supportsDirectPlayback ? "ts" : null,
+            transcodingUrl,
+            transcodingSubProtocol,
+            transcodingContainer,
             BuildStreams(source, selectedAudioStream?.StreamIndex),
-            transcodingAllowed && !supportsDirectPlayback
-                ? new TranscodingInfoResult("ts", "h264", "aac", "hls", IsVideoDirect: false, IsAudioDirect: false)
-                : null);
+            transcodingInfo);
 
         return new PlaybackInfoResult(playSessionId, [sourceInfo]);
     }
@@ -110,6 +133,22 @@ public sealed class PlaybackInfoService : IPlaybackInfoService {
         int? audioStreamIndex,
         string? accessToken) {
         var url = $"/Videos/{itemId:D}/master.m3u8?MediaSourceId={mediaSourceId}&PlaySessionId={playSessionId}";
+        if (audioStreamIndex is not null) {
+            url = $"{url}&AudioStreamIndex={audioStreamIndex.Value}";
+        }
+
+        return string.IsNullOrWhiteSpace(accessToken)
+            ? url
+            : $"{url}&ApiKey={Uri.EscapeDataString(accessToken)}";
+    }
+
+    private static string BuildRemuxUrl(
+        Guid itemId,
+        string mediaSourceId,
+        string playSessionId,
+        int? audioStreamIndex,
+        string? accessToken) {
+        var url = $"/Videos/{itemId:D}/hls/remux/stream.m3u8?MediaSourceId={mediaSourceId}&PlaySessionId={playSessionId}";
         if (audioStreamIndex is not null) {
             url = $"{url}&AudioStreamIndex={audioStreamIndex.Value}";
         }

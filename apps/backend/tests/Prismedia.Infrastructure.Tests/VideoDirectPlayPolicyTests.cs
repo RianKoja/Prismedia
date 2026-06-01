@@ -46,16 +46,40 @@ public sealed class VideoDirectPlayPolicyTests {
     }
 
     [Fact]
-    public void DolbyVisionTranscodesWhenClientCannotRenderTheRange() {
+    public void DolbyVisionRemuxesToAnHevcClientEvenWithoutAdvertisedRangeSupport() {
         var source = Source("/media/e02.mkv", "matroska", "hevc", "eac3");
 
-        // Client decodes HEVC but never advertised Dolby Vision support, so the video cannot be
-        // copied as-is; it must be tone-mapped, which means a full transcode.
+        // A Dolby Vision MKV to a client that decodes HEVC: the container (mkv) is not directly
+        // playable, but the video is copied unchanged into fMP4 — no tone map — so the client renders
+        // the HDR/DV stream itself. The client need not advertise the dynamic range for a copy.
         var decision = VideoDirectPlayPolicy.Decide(
             source,
             selectedAudioCodec: "eac3",
             range: VideoPlaybackRange.Dovi,
             profile: CapableClient,
+            supportedVideoRangeTypes: ["SDR", "HDR10"],
+            directPlayAllowed: true,
+            directStreamAllowed: true,
+            transcodingAllowed: true);
+
+        Assert.Equal(VideoPlaybackMethod.Remux, decision.Method);
+    }
+
+    [Fact]
+    public void DolbyVisionTranscodesWhenClientCannotDecodeTheVideoCodec() {
+        var source = Source("/media/e02.mkv", "matroska", "hevc", "eac3");
+
+        // A browser-class client that can only decode H.264 cannot copy the HEVC stream, so the only
+        // option is a full transcode (which tone-maps the HDR/DV down to SDR H.264).
+        var h264OnlyClient = new ClientPlaybackProfile(
+            MaxStreamingBitrate: null,
+            DirectPlayProfiles: [new ClientDirectPlayProfile("Video", "mp4", "h264", "aac")]);
+
+        var decision = VideoDirectPlayPolicy.Decide(
+            source,
+            selectedAudioCodec: "eac3",
+            range: VideoPlaybackRange.Dovi,
+            profile: h264OnlyClient,
             supportedVideoRangeTypes: ["SDR", "HDR10"],
             directPlayAllowed: true,
             directStreamAllowed: true,

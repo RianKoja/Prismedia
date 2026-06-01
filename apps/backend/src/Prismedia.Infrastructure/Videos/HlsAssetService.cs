@@ -155,6 +155,16 @@ public sealed partial class HlsAssetService : IHlsAssetService {
         }
 
         var parts = normalizedAssetPath.Split('/');
+
+        // Stream-copy (remux) assets: v/remux/{stream.m3u8|init.mp4|seg_NNNNN.m4s}. The video is
+        // copied into fMP4 HLS rather than transcoded, for clients that can decode the source codec.
+        if (parts.Length == 3 &&
+            parts[0].Equals("v", StringComparison.OrdinalIgnoreCase) &&
+            parts[1].Equals("remux", StringComparison.OrdinalIgnoreCase)) {
+            return await TryGetRemuxAssetAsync(
+                id, source, audioCacheKey, selectedAudioStreamIndex, parts[2], cancellationToken);
+        }
+
         if (parts.Length == 3 &&
             parts[0].Equals("v", StringComparison.OrdinalIgnoreCase) &&
             IsVirtualVariantPlaylist(parts[2])) {

@@ -90,9 +90,12 @@ public static class VideoDirectPlayPolicy {
             return new VideoPlaybackDecision(VideoPlaybackMethod.DirectPlay);
         }
 
-        // Remux: the client can decode the video codec and render the range, but needs a different
-        // container (and possibly a transcoded audio track). Copy the video to avoid re-encoding.
-        if (directStreamAllowed && rangeAllowed && bitrateOk) {
+        // Remux: the client can decode the video codec but needs a different container (and possibly
+        // a transcoded audio track). The video is copied unchanged, so dynamic range is irrelevant
+        // here — there is no tone map to apply and the client renders whatever range the stream
+        // carries (an HDR/Dolby Vision HEVC stream is handed to the client as-is). Only DirectPlay
+        // and Transcode care about the client's advertised range support.
+        if (directStreamAllowed && bitrateOk) {
             foreach (var container in RemuxContainerPreference) {
                 var match = videoProfiles.FirstOrDefault(candidate =>
                     ContainerMatches(candidate.Container, container) &&
