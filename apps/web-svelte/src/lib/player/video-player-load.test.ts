@@ -150,21 +150,21 @@ describe("video-player-load", () => {
     });
   });
 
-  it("bounds adaptive HLS look-ahead so on-demand transcodes are not fanned out", () => {
+  it("buffers deeply (for pause-to-buffer) while keeping memory bounded by bytes", () => {
     const config = adaptiveHlsBufferConfig();
     expect(config).toEqual({
-      backBufferLength: Infinity,
+      backBufferLength: 60,
       capLevelToPlayerSize: false,
       frontBufferFlushThreshold: Infinity,
-      maxBufferLength: 30,
-      maxMaxBufferLength: 48,
-      maxBufferSize: 300_000_000,
+      maxBufferLength: 240,
+      maxMaxBufferLength: 240,
+      maxBufferSize: 800_000_000,
       startLevel: -1,
       startPosition: 0,
     });
-    // Look-ahead must stay under the server's 72s (12-segment) generation reuse window so the
-    // client never requests segments the single forward transcode has not nearly reached.
-    expect(config.maxMaxBufferLength).toBeLessThan(72);
+    // Memory is bounded by the byte cap rather than the time length, so a high-bitrate 4K stream
+    // cannot grow the buffer without limit.
+    expect(config.maxBufferSize).toBeLessThanOrEqual(1_000_000_000);
   });
 
   it("uses the hls2 readiness endpoint before loading adaptive streams", () => {

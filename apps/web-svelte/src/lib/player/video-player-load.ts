@@ -36,16 +36,16 @@ export interface AdaptiveHlsBufferConfig {
   startPosition: number;
 }
 
-// Look-ahead is intentionally bounded. Renditions are transcoded on demand by a single forward
-// ffmpeg per stream, so a client that buffers far ahead forces the server to spawn extra parallel
-// transcodes for the not-yet-reached segments; on hardware encoders (e.g. VideoToolbox) those
-// sessions contend for one encoder and every one drops below real time, which stalls playback.
-// Keeping the forward buffer well under the server's generation reuse window (72s) means the
-// client only ever requests segments the single running transcode already has or is about to
-// produce, so playback stays ahead without fanning out the transcoder.
-const ExtendedHlsMaxBufferLengthSeconds = 30;
-const ExtendedHlsMaxMaxBufferLengthSeconds = 48;
-const ExtendedHlsMaxBufferSizeBytes = 300 * 1000 * 1000;
+// The player buffers deeply so a brief pause builds a large cushion that then drains while playback
+// continues to fill it — the behavior users expect from streaming apps. This is safe because hls.js
+// loads fragments sequentially: it stays right behind the server's single forward transcode rather
+// than leaping ahead, so the server keeps serving one generation (no parallel-transcode fan-out)
+// regardless of how deep the buffer grows. The byte cap, not the time length, is the practical
+// limit and keeps memory bounded on high-bitrate 4K sources.
+const ExtendedHlsMaxBufferLengthSeconds = 240;
+const ExtendedHlsMaxMaxBufferLengthSeconds = 240;
+const ExtendedHlsMaxBufferSizeBytes = 800 * 1000 * 1000;
+const ExtendedHlsBackBufferLengthSeconds = 60;
 
 export interface AdaptiveSeekPlanInput {
   streamMode: VideoPlaybackMode;
@@ -169,7 +169,7 @@ export function adaptiveAutoLevelSelection(): AdaptiveAutoLevelSelection {
 
 export function adaptiveHlsBufferConfig(): AdaptiveHlsBufferConfig {
   return {
-    backBufferLength: Infinity,
+    backBufferLength: ExtendedHlsBackBufferLengthSeconds,
     capLevelToPlayerSize: false,
     frontBufferFlushThreshold: Infinity,
     maxBufferLength: ExtendedHlsMaxBufferLengthSeconds,
