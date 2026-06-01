@@ -92,6 +92,11 @@
     progressDisplay?.chapterId === selectedChapter?.detail.id ? progressDisplay : null,
   );
   const readerPageCount = $derived(selectedChapter?.pages.length ?? 0);
+  // Comics may be organized as volumes with no direct chapters; they are still readable
+  // (the reader resolves the first chapter), so the Read button must appear for them too.
+  const hasReadableContent = $derived(
+    !isSingleFileBook && (readerPageCount > 0 || chapterDetails.length > 0 || volumeCards.length > 0),
+  );
   const primaryReadLabel = $derived(
     selectedProgress ? (selectedProgress.isComplete ? "Re-read" : "Resume") : "Read",
   );
@@ -118,7 +123,7 @@
         variant: "primary",
         onClick: openSingleFileReader,
       });
-    } else if (readerPageCount > 0) {
+    } else if (hasReadableContent) {
       actions.push({
         id: "read-book",
         label: primaryReadLabel,
@@ -310,13 +315,25 @@
   }
 
   function openSelectedReader() {
-    if (!book || !selectedChapter) return;
+    if (!book) return;
+    // With a resolved direct chapter, open it; otherwise (e.g. volume-only comics) open the
+    // book and let the reader resolve the first/last-read chapter.
+    if (selectedChapter) {
+      void goto(bookReaderHref({
+        bookId: book.id,
+        kind: "chapter",
+        id: selectedChapter.detail.id,
+        returnId: book.id,
+        command: selectedProgress && !selectedProgress.isComplete ? "resume" : undefined,
+      }));
+      return;
+    }
     void goto(bookReaderHref({
       bookId: book.id,
-      kind: "chapter",
-      id: selectedChapter.detail.id,
+      kind: "book",
+      id: book.id,
       returnId: book.id,
-      command: selectedProgress && !selectedProgress.isComplete ? "resume" : undefined,
+      command: progressDisplay && !progressDisplay.isComplete ? "resume" : undefined,
     }));
   }
 

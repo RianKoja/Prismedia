@@ -78,11 +78,17 @@
 
   // Brass accent so in-book links read as interactive without the default deep-blue.
   function contentStyles(percent: number): string {
+    // !important so the book's own stylesheet (which often colors links a hard blue) can't win.
     return `
       html { color-scheme: dark; font-size: ${percent}%; }
-      html, body { background: transparent !important; color: #e7e7ea; }
-      a, a:link, a:visited { color: #f2c26a; text-decoration: underline; text-underline-offset: 2px; }
-      a:hover { color: #f7d59a; }
+      html, body { background: transparent !important; color: #e7e7ea !important; }
+      a, a:link, a:visited, a *,
+      a[href], a[href]:link, a[href]:visited, a[href] * {
+        color: #f2c26a !important;
+        text-decoration: underline;
+        text-underline-offset: 2px;
+      }
+      a:hover, a:hover *, a[href]:hover, a[href]:hover * { color: #f7d59a !important; }
       img { background: transparent; }
     `;
   }
@@ -463,6 +469,14 @@
     overflow: hidden;
   }
 
+  /* On desktop the edge arrows are visible, so inset the page content (a static, full-size
+     child) clear of them. On mobile there are no arrows and the page uses the full width. */
+  @media (min-width: 640px) {
+    .book-reader-stage {
+      padding: 0 3.75rem;
+    }
+  }
+
   .book-reader-message {
     position: absolute;
     inset: 0;
@@ -536,7 +550,7 @@
     position: absolute;
     top: 50%;
     z-index: 10;
-    display: flex;
+    display: none;
     height: 2.75rem;
     width: 2.75rem;
     transform: translateY(-50%);
@@ -627,5 +641,12 @@
   .toc-item:disabled {
     color: var(--color-text-muted);
     cursor: default;
+  }
+
+  /* Arrows are desktop-only; mobile relies on tap zones and swipe like the comic reader. */
+  @media (min-width: 640px) {
+    .reader-nav-button {
+      display: flex;
+    }
   }
 </style>
