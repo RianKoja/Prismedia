@@ -97,8 +97,13 @@
   const hasReadableContent = $derived(
     !isSingleFileBook && (readerPageCount > 0 || chapterDetails.length > 0 || volumeCards.length > 0),
   );
+  // Started/completed come straight from the progress capability (same source the grid card uses),
+  // so the label is correct even for volume-only comics whose in-progress chapter isn't a direct child.
+  const comicProgress = $derived(book && !isSingleFileBook ? getCapability(book.capabilities, "progress") : undefined);
+  const comicStarted = $derived(!!comicProgress?.currentEntityId);
+  const comicCompleted = $derived(!!comicProgress?.completedAt);
   const primaryReadLabel = $derived(
-    selectedProgress ? (selectedProgress.isComplete ? "Re-read" : "Resume") : "Read",
+    comicCompleted ? "Re-read" : comicStarted ? "Resume" : "Read",
   );
   const hasCastAndCrew = $derived(studioCards.length > 0 || creditCards.length > 0);
 
@@ -316,15 +321,25 @@
 
   function openSelectedReader() {
     if (!book) return;
-    // With a resolved direct chapter, open it; otherwise (e.g. volume-only comics) open the
-    // book and let the reader resolve the first/last-read chapter.
+    // In progress: resume where they left off (the reader resolves the saved chapter), regardless
+    // of which chapter is selected.
+    if (comicStarted && !comicCompleted) {
+      void goto(bookReaderHref({
+        bookId: book.id,
+        kind: "book",
+        id: book.id,
+        returnId: book.id,
+        command: "resume",
+      }));
+      return;
+    }
+    // Starting fresh (or re-reading): open the selected direct chapter, else the book's first.
     if (selectedChapter) {
       void goto(bookReaderHref({
         bookId: book.id,
         kind: "chapter",
         id: selectedChapter.detail.id,
         returnId: book.id,
-        command: selectedProgress && !selectedProgress.isComplete ? "resume" : undefined,
       }));
       return;
     }
@@ -333,7 +348,6 @@
       kind: "book",
       id: book.id,
       returnId: book.id,
-      command: progressDisplay && !progressDisplay.isComplete ? "resume" : undefined,
     }));
   }
 
