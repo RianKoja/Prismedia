@@ -13,6 +13,7 @@ export interface JellyfinUserItemDataDto {
   IsFavorite: boolean;
   Played: boolean;
   Key: string;
+  ItemId: string;
   /**
      * @nullable
      * @pattern ^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$

@@ -4,6 +4,7 @@
  * Prismedia.Api | v1
  * OpenAPI spec version: 1.0.0
  */
+import type { JellyfinBaseItemDtoImageBlurHashes } from './jellyfinBaseItemDtoImageBlurHashes';
 import type { JellyfinBaseItemDtoImageTags } from './jellyfinBaseItemDtoImageTags';
 import type { JellyfinBaseItemDtoProviderIds } from './jellyfinBaseItemDtoProviderIds';
 import type { JellyfinBaseItemPersonDto } from './jellyfinBaseItemPersonDto';
@@ -93,6 +94,30 @@ export interface JellyfinBaseItemDto {
   /** @nullable */
   CanDownload?: boolean | null;
   /** @nullable */
+  CanDelete?: boolean | null;
+  /** @nullable */
+  EnableMediaSourceDisplay?: boolean | null;
+  /** @nullable */
+  ChannelId?: string | null;
+  /** @nullable */
+  DisplayPreferencesId?: string | null;
+  /** @nullable */
+  VideoType?: string | null;
+  /** @nullable */
+  Taglines?: string[] | null;
+  /** @nullable */
+  ProductionLocations?: string[] | null;
+  /**
+     * @nullable
+     * @pattern ^-?(?:0|[1-9]\d*)$
+     */
+  LocalTrailerCount?: number | string | null;
+  /**
+     * @nullable
+     * @pattern ^-?(?:0|[1-9]\d*)$
+     */
+  SpecialFeatureCount?: number | string | null;
+  /** @nullable */
   HasSubtitles?: boolean | null;
   /**
      * @nullable
@@ -137,6 +162,11 @@ export interface JellyfinBaseItemDto {
      * @nullable
      * @pattern ^-?(?:0|[1-9]\d*)$
      */
+  IndexNumberEnd?: number | string | null;
+  /**
+     * @nullable
+     * @pattern ^-?(?:0|[1-9]\d*)$
+     */
   ParentIndexNumber?: number | string | null;
   /** @nullable */
   SeriesId?: string | null;
@@ -146,8 +176,24 @@ export interface JellyfinBaseItemDto {
   SeasonId?: string | null;
   /** @nullable */
   SeasonName?: string | null;
+  /** @nullable */
+  SeriesPrimaryImageTag?: string | null;
+  /** @nullable */
+  ParentLogoItemId?: string | null;
+  /** @nullable */
+  ParentLogoImageTag?: string | null;
+  /** @nullable */
+  ParentBackdropItemId?: string | null;
+  /** @nullable */
+  ParentBackdropImageTags?: string[] | null;
+  /** @nullable */
+  ParentThumbItemId?: string | null;
+  /** @nullable */
+  ParentThumbImageTag?: string | null;
   ImageTags?: JellyfinBaseItemDtoImageTags;
   BackdropImageTags?: string[];
+  /** @nullable */
+  ImageBlurHashes?: JellyfinBaseItemDtoImageBlurHashes;
   /**
      * @nullable
      * @pattern ^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$

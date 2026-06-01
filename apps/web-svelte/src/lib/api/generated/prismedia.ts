@@ -98,6 +98,7 @@ import type {
   JellyfinProfilesResponse,
   JellyfinPublicSystemInfo,
   JellyfinQueryResultOfJellyfinBaseItemDto,
+  JellyfinQueryResultOfJellyfinMediaSegmentDto,
   JellyfinSpecialViewOptionDto,
   JellyfinSystemInfo,
   JellyfinUserDto,
@@ -166,6 +167,39 @@ import type {
 } from './model';
 
 import { orvalFetch } from '../orval-fetch';
+
+export type getApiCodegenCodesJsonResponse200 = {
+  data: void
+  status: 200
+}
+
+export type getApiCodegenCodesJsonResponseSuccess = (getApiCodegenCodesJsonResponse200) & {
+  headers: Headers;
+};
+;
+
+export type getApiCodegenCodesJsonResponse = (getApiCodegenCodesJsonResponseSuccess)
+
+export const getGetApiCodegenCodesJsonUrl = () => {
+
+
+
+
+  return `/api/_codegen/codes.json`
+}
+
+export const getApiCodegenCodesJson = async ( options?: RequestInit): Promise<getApiCodegenCodesJsonResponse> => {
+
+  return orvalFetch<getApiCodegenCodesJsonResponse>(getGetApiCodegenCodesJsonUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
 
 export type getHealthResponse200 = {
   data: HealthResponse
@@ -1082,6 +1116,138 @@ export const getGetJellyfinSeriesEpisodesUrl = (seriesId: string,) => {
 export const getJellyfinSeriesEpisodes = async (seriesId: string, options?: RequestInit): Promise<getJellyfinSeriesEpisodesResponse> => {
 
   return orvalFetch<getJellyfinSeriesEpisodesResponse>(getGetJellyfinSeriesEpisodesUrl(seriesId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export type getJellyfinNextUpResponse200 = {
+  data: JellyfinQueryResultOfJellyfinBaseItemDto
+  status: 200
+}
+
+export type getJellyfinNextUpResponseSuccess = (getJellyfinNextUpResponse200) & {
+  headers: Headers;
+};
+;
+
+export type getJellyfinNextUpResponse = (getJellyfinNextUpResponseSuccess)
+
+export const getGetJellyfinNextUpUrl = () => {
+
+
+
+
+  return `/Shows/NextUp`
+}
+
+export const getJellyfinNextUp = async ( options?: RequestInit): Promise<getJellyfinNextUpResponse> => {
+
+  return orvalFetch<getJellyfinNextUpResponse>(getGetJellyfinNextUpUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export type getJellyfinLocalTrailersResponse200 = {
+  data: JellyfinBaseItemDto[]
+  status: 200
+}
+
+export type getJellyfinLocalTrailersResponseSuccess = (getJellyfinLocalTrailersResponse200) & {
+  headers: Headers;
+};
+;
+
+export type getJellyfinLocalTrailersResponse = (getJellyfinLocalTrailersResponseSuccess)
+
+export const getGetJellyfinLocalTrailersUrl = (itemId: string,) => {
+
+
+
+
+  return `/Items/${itemId}/LocalTrailers`
+}
+
+export const getJellyfinLocalTrailers = async (itemId: string, options?: RequestInit): Promise<getJellyfinLocalTrailersResponse> => {
+
+  return orvalFetch<getJellyfinLocalTrailersResponse>(getGetJellyfinLocalTrailersUrl(itemId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export type getJellyfinSpecialFeaturesResponse200 = {
+  data: JellyfinBaseItemDto[]
+  status: 200
+}
+
+export type getJellyfinSpecialFeaturesResponseSuccess = (getJellyfinSpecialFeaturesResponse200) & {
+  headers: Headers;
+};
+;
+
+export type getJellyfinSpecialFeaturesResponse = (getJellyfinSpecialFeaturesResponseSuccess)
+
+export const getGetJellyfinSpecialFeaturesUrl = (itemId: string,) => {
+
+
+
+
+  return `/Items/${itemId}/SpecialFeatures`
+}
+
+export const getJellyfinSpecialFeatures = async (itemId: string, options?: RequestInit): Promise<getJellyfinSpecialFeaturesResponse> => {
+
+  return orvalFetch<getJellyfinSpecialFeaturesResponse>(getGetJellyfinSpecialFeaturesUrl(itemId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export type getJellyfinMediaSegmentsResponse200 = {
+  data: JellyfinQueryResultOfJellyfinMediaSegmentDto
+  status: 200
+}
+
+export type getJellyfinMediaSegmentsResponseSuccess = (getJellyfinMediaSegmentsResponse200) & {
+  headers: Headers;
+};
+;
+
+export type getJellyfinMediaSegmentsResponse = (getJellyfinMediaSegmentsResponseSuccess)
+
+export const getGetJellyfinMediaSegmentsUrl = (itemId: string,) => {
+
+
+
+
+  return `/MediaSegments/${itemId}`
+}
+
+export const getJellyfinMediaSegments = async (itemId: string, options?: RequestInit): Promise<getJellyfinMediaSegmentsResponse> => {
+
+  return orvalFetch<getJellyfinMediaSegmentsResponse>(getGetJellyfinMediaSegmentsUrl(itemId),
   {
     ...options,
     method: 'GET'

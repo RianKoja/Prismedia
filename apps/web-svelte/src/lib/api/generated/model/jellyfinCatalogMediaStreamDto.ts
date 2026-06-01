@@ -32,9 +32,33 @@ export interface JellyfinCatalogMediaStreamDto {
   AverageFrameRate?: number | string | null;
   /**
      * @nullable
+     * @pattern ^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$
+     */
+  RealFrameRate?: number | string | null;
+  /**
+     * @nullable
      * @pattern ^-?(?:0|[1-9]\d*)$
      */
   BitRate?: number | string | null;
+  /**
+     * @nullable
+     * @pattern ^-?(?:0|[1-9]\d*)$
+     */
+  Channels?: number | string | null;
+  /** @nullable */
+  ChannelLayout?: string | null;
+  /**
+     * @nullable
+     * @pattern ^-?(?:0|[1-9]\d*)$
+     */
+  SampleRate?: number | string | null;
+  /** @nullable */
+  AspectRatio?: string | null;
+  /** @nullable */
+  VideoRange?: string | null;
+  /** @nullable */
+  VideoRangeType?: string | null;
   IsDefault?: boolean;
   IsForced?: boolean;
+  IsExternal?: boolean;
 }

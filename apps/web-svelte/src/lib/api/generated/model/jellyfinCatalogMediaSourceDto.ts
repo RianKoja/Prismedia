@@ -4,6 +4,7 @@
  * Prismedia.Api | v1
  * OpenAPI spec version: 1.0.0
  */
+import type { JellyfinCatalogMediaSourceDtoRequiredHttpHeaders } from './jellyfinCatalogMediaSourceDtoRequiredHttpHeaders';
 import type { JellyfinCatalogMediaStreamDto } from './jellyfinCatalogMediaStreamDto';
 
 export interface JellyfinCatalogMediaSourceDto {
@@ -20,14 +21,41 @@ export interface JellyfinCatalogMediaSourceDto {
   Size?: number | string | null;
   /** @nullable */
   Name?: string | null;
+  /** @nullable */
+  ETag?: string | null;
   /**
      * @nullable
      * @pattern ^-?(?:0|[1-9]\d*)$
      */
   RunTimeTicks?: number | string | null;
+  /**
+     * @nullable
+     * @pattern ^-?(?:0|[1-9]\d*)$
+     */
+  Bitrate?: number | string | null;
+  VideoType?: string;
   IsRemote?: boolean;
-  SupportsDirectPlay?: boolean;
-  SupportsDirectStream?: boolean;
+  ReadAtNativeFramerate?: boolean;
+  IgnoreDts?: boolean;
+  IgnoreIndex?: boolean;
+  GenPtsInput?: boolean;
   SupportsTranscoding?: boolean;
+  SupportsDirectStream?: boolean;
+  SupportsDirectPlay?: boolean;
+  IsInfiniteStream?: boolean;
+  UseMostCompatibleTranscodingProfile?: boolean;
+  RequiresOpening?: boolean;
+  RequiresClosing?: boolean;
+  RequiresLooping?: boolean;
+  SupportsProbing?: boolean;
+  /**
+     * @nullable
+     * @pattern ^-?(?:0|[1-9]\d*)$
+     */
+  DefaultAudioStreamIndex?: number | string | null;
   MediaStreams?: JellyfinCatalogMediaStreamDto[];
+  MediaAttachments?: unknown[];
+  Formats?: unknown[];
+  RequiredHttpHeaders?: JellyfinCatalogMediaSourceDtoRequiredHttpHeaders;
+  HasSegments?: boolean;
 }

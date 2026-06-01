@@ -4,6 +4,7 @@
  * Prismedia.Api | v1
  * OpenAPI spec version: 1.0.0
  */
+import type { JellyfinBaseItemPersonDtoImageBlurHashes } from './jellyfinBaseItemPersonDtoImageBlurHashes';
 
 export interface JellyfinBaseItemPersonDto {
   Name: string;
@@ -13,4 +14,6 @@ export interface JellyfinBaseItemPersonDto {
   Type: string;
   /** @nullable */
   PrimaryImageTag: string | null;
+  /** @nullable */
+  ImageBlurHashes?: JellyfinBaseItemPersonDtoImageBlurHashes;
 }

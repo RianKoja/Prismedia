@@ -137,10 +137,13 @@ public static partial class JellyfinCompatibilityEndpoints {
         return Results.Ok(result);
     }
 
-    private static IResult EmptyItemListAsync() =>
+    // itemId is bound (though unused) so the {itemId} route token is described as a
+    // path parameter; without it the generated OpenAPI document is invalid and the
+    // frontend client generator (orval) rejects the spec.
+    private static IResult EmptyItemListAsync(Guid itemId) =>
         Results.Ok(Array.Empty<JellyfinBaseItemDto>());
 
-    private static IResult GetMediaSegmentsAsync() =>
+    private static IResult GetMediaSegmentsAsync(Guid itemId) =>
         Results.Ok(new JellyfinQueryResult<JellyfinMediaSegmentDto>([], 0, 0));
 
     private static async Task<IResult> GetSeriesSeasonsAsync(
