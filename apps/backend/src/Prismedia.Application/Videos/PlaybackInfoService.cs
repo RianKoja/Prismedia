@@ -52,15 +52,10 @@ public sealed class PlaybackInfoService : IPlaybackInfoService {
         var playSessionId = string.IsNullOrWhiteSpace(request?.PlaySessionId)
             ? Guid.NewGuid().ToString("N")
             : request.PlaySessionId!;
-        var directPlayAllowed = request?.EnableDirectPlay != false && source.DirectPlayable;
         var transcodingAllowed = request?.EnableTranscoding != false;
         var mediaSourceId = (source.MediaSourceId ?? itemId).ToString("N");
         var videoStream = PrimaryVideoStream(source);
         var videoRange = VideoPlaybackRangePolicy.Classify(videoStream);
-        var directRangeAllowed = VideoPlaybackRangePolicy.AllowsDirectPlayback(
-            videoRange,
-            request?.SupportedVideoRangeTypes);
-        var supportsDirectPlayback = directPlayAllowed && directRangeAllowed;
 
         if (transcodingAllowed) {
             _transcodes.Register(playSessionId, itemId);
@@ -71,6 +66,19 @@ public sealed class PlaybackInfoService : IPlaybackInfoService {
             ? null
             : string.Join(",", (await _settings.GetPlaybackSettingsAsync(cancellationToken)).AudioPreferredLanguages);
         var selectedAudioStream = SelectAudioStream(source, request?.AudioStreamIndex, preferredAudioLanguages);
+        var decision = VideoDirectPlayPolicy.Decide(
+            source,
+            selectedAudioStream?.Codec,
+            videoRange,
+            request?.Profile,
+            request?.SupportedVideoRangeTypes,
+            directPlayAllowed: request?.EnableDirectPlay != false,
+            directStreamAllowed: request?.EnableDirectStream != false,
+            transcodingAllowed: transcodingAllowed);
+
+        // Remux execution is not wired yet, so a remux decision is served as a transcode for now;
+        // only a true DirectPlay verdict short-circuits the HLS pipeline.
+        var supportsDirectPlayback = decision.Method == VideoPlaybackMethod.DirectPlay;
         var sourceInfo = new MediaSourceInfoResult(
             mediaSourceId,
             source.Path,

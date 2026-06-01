@@ -16,8 +16,21 @@ internal static class ApplicationContractMapping {
             EnableTranscoding = request.EnableTranscoding,
             MediaSourceId = request.MediaSourceId,
             PlaySessionId = request.PlaySessionId,
-            SupportedVideoRangeTypes = request.SupportedVideoRangeTypes
+            SupportedVideoRangeTypes = request.SupportedVideoRangeTypes,
+            Profile = request.DeviceProfile.ToApplication()
         };
+
+    private static ClientPlaybackProfile? ToApplication(this DeviceProfileRequest? profile) {
+        if (profile is null) {
+            return null;
+        }
+
+        var directPlayProfiles = profile.DirectPlayProfiles?
+            .Select(entry => new ClientDirectPlayProfile(entry.Type, entry.Container, entry.VideoCodec, entry.AudioCodec))
+            .ToArray() ?? [];
+
+        return new ClientPlaybackProfile(profile.MaxStreamingBitrate ?? profile.MaxStaticBitrate, directPlayProfiles);
+    }
 
     public static PlaybackSessionCommand ToApplication(this PlaybackSessionRequest request) =>
         new() {

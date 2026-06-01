@@ -18,7 +18,37 @@ public sealed record PlaybackInfoQuery {
     public string? PlaySessionId { get; init; }
     public IReadOnlyList<string>? SupportedVideoRangeTypes { get; init; }
     public string? AccessToken { get; init; }
+
+    /// <summary>
+    /// Client device profile describing which container/codec combinations the client can play
+    /// directly. When present it drives the DirectPlay/Remux/Transcode decision; when null the
+    /// server falls back to the container extension heuristic.
+    /// </summary>
+    public ClientPlaybackProfile? Profile { get; init; }
 }
+
+/// <summary>
+/// Subset of a Jellyfin device profile that the playback negotiator needs to choose a delivery
+/// method: the directly playable container/codec combinations and the client bitrate ceiling.
+/// </summary>
+/// <param name="MaxStreamingBitrate">Maximum bits per second the client will accept, or null when unbounded.</param>
+/// <param name="DirectPlayProfiles">Container/codec combinations the client can play without transcoding.</param>
+public sealed record ClientPlaybackProfile(
+    int? MaxStreamingBitrate,
+    IReadOnlyList<ClientDirectPlayProfile> DirectPlayProfiles);
+
+/// <summary>
+/// One directly playable container/codec combination advertised by a client.
+/// </summary>
+/// <param name="Type">Profile media type, such as Video, or null when unspecified.</param>
+/// <param name="Container">Comma-separated containers the client accepts (Jellyfin convention).</param>
+/// <param name="VideoCodec">Comma-separated video codecs the client can decode, or null/empty for any.</param>
+/// <param name="AudioCodec">Comma-separated audio codecs the client can decode, or null/empty for any.</param>
+public sealed record ClientDirectPlayProfile(
+    string? Type,
+    string? Container,
+    string? VideoCodec,
+    string? AudioCodec);
 
 /// <summary>
 /// Application result describing playable media sources for one playback session.

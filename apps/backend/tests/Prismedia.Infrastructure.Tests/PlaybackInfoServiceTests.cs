@@ -154,6 +154,51 @@ public sealed class PlaybackInfoServiceTests {
         Assert.Contains("ApiKey=session%2Ftoken%2Bvalue", source.TranscodingUrl);
     }
 
+    [Fact]
+    public async Task PlaybackInfoDirectPlaysMkvWhenClientProfileDeclaresCodecSupport() {
+        var videoId = Guid.Parse("67676767-6767-6767-6767-676767676767");
+        var service = new PlaybackInfoService(
+            new FakeVideoSourceService(new VideoSourceFile(
+                videoId,
+                "/media/dolby-vision.mkv",
+                "video/x-matroska",
+                // Extension heuristic says "not directly playable"; the device profile overrides it.
+                DirectPlayable: false,
+                DurationSeconds: 60,
+                Width: 3840,
+                Height: 2160,
+                Container: "matroska",
+                VideoCodec: "hevc",
+                AudioCodec: "eac3",
+                Streams:
+                [
+                    new(0, "Video", "hevc", null, "Video", 3840, 2160, 24, null, null, null, true, false) {
+                        DvProfile = 8,
+                        RpuPresentFlag = true,
+                        ColorTransfer = "smpte2084",
+                        ColorPrimaries = "bt2020"
+                    },
+                    new(1, "Audio", "eac3", "eng", "English", null, null, null, null, 48000, 6, true, false)
+                ])),
+            new TranscodeSessionService());
+
+        var info = await service.GetPlaybackInfoAsync(videoId, new PlaybackInfoQuery {
+            EnableDirectPlay = true,
+            EnableDirectStream = true,
+            EnableTranscoding = true,
+            SupportedVideoRangeTypes = ["DOVI", "DOVIWithHDR10", "HDR10"],
+            Profile = new ClientPlaybackProfile(
+                200_000_000,
+                [new ClientDirectPlayProfile("Video", "mkv,mp4,ts", "hevc,h264", "eac3,ac3,aac")])
+        }, CancellationToken.None);
+
+        Assert.NotNull(info);
+        var source = Assert.Single(info.MediaSources);
+        Assert.True(source.SupportsDirectPlay);
+        Assert.Null(source.TranscodingUrl);
+        Assert.Null(source.TranscodingInfo);
+    }
+
     private sealed class FakeVideoSourceService : IVideoSourceService {
         private readonly VideoSourceFile _source;
 

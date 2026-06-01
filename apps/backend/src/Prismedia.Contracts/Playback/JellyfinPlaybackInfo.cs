@@ -38,6 +38,41 @@ public sealed record PlaybackInfoRequest {
 
     [JsonPropertyName("SupportedVideoRangeTypes")]
     public IReadOnlyList<string>? SupportedVideoRangeTypes { get; init; }
+
+    [JsonPropertyName("DeviceProfile")]
+    public DeviceProfileRequest? DeviceProfile { get; init; }
+}
+
+/// <summary>
+/// Jellyfin-compatible device profile. Only the fields used by playback negotiation are modeled;
+/// unknown fields a client sends are ignored.
+/// </summary>
+public sealed record DeviceProfileRequest {
+    [JsonPropertyName("MaxStreamingBitrate")]
+    public int? MaxStreamingBitrate { get; init; }
+
+    [JsonPropertyName("MaxStaticBitrate")]
+    public int? MaxStaticBitrate { get; init; }
+
+    [JsonPropertyName("DirectPlayProfiles")]
+    public IReadOnlyList<DirectPlayProfileRequest>? DirectPlayProfiles { get; init; }
+}
+
+/// <summary>
+/// One directly playable container/codec combination from a Jellyfin device profile.
+/// </summary>
+public sealed record DirectPlayProfileRequest {
+    [JsonPropertyName("Type")]
+    public string? Type { get; init; }
+
+    [JsonPropertyName("Container")]
+    public string? Container { get; init; }
+
+    [JsonPropertyName("VideoCodec")]
+    public string? VideoCodec { get; init; }
+
+    [JsonPropertyName("AudioCodec")]
+    public string? AudioCodec { get; init; }
 }
 
 /// <summary>
