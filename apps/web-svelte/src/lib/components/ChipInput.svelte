@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import { X } from "@lucide/svelte";
   import { cn } from "@prismedia/ui-svelte";
+  import { keepFlyoutOnScreen } from "$lib/actions/keep-flyout-on-screen";
 
   interface Props {
     values: string[];
@@ -124,7 +125,7 @@
   </div>
 
   {#if showDropdown && totalDropdownItems > 0}
-    <div class="autocomplete-dropdown">
+    <div class="autocomplete-dropdown" use:keepFlyoutOnScreen>
       {#each displayItems as s, i (s.name)}
         <!-- svelte-ignore a11y_click_events_have_key_events -->
         <!-- svelte-ignore a11y_no_static_element_interactions -->

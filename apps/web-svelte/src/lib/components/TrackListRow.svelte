@@ -9,6 +9,7 @@
   } from "@lucide/svelte";
   import { cn } from "@prismedia/ui-svelte";
   import type { AudioTrackListItemDto } from "@prismedia/contracts";
+  import { keepFlyoutOnScreen } from "$lib/actions/keep-flyout-on-screen";
   import StarRatingPicker from "./StarRatingPicker.svelte";
 
   interface Props {
@@ -244,6 +245,7 @@
       <div
         role="menu"
         class="absolute right-0 top-8 z-20 min-w-36 overflow-hidden rounded-xs border border-border-default bg-surface-1 py-1 shadow-[0_12px_30px_rgba(0,0,0,0.45)]"
+        use:keepFlyoutOnScreen
       >
         {#if onRename}
           <button

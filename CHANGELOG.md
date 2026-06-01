@@ -99,6 +99,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - Updated web app manifest and mobile browser metadata for home-screen installation and browser UI theme colors.
 
 ### Fixed
+- Kept mobile flyouts and dropdowns inside the screen, including the library grid thumbnail-size slider, filter preset menus, pagination page-size menus, and similar compact controls.
 - Restored mobile lightbox gestures: swipe left/right to move between items and swipe down to dismiss now work again.
 - The comic reader's paged mode now supports swipe left/right to turn pages and swipe down to close, alongside the existing tap zones.
 - Mobile thumbnail scrubbing no longer blocks tapping to open an item: a tap opens it, a vertical drag scrolls, and a horizontal drag scrubs the preview (left off inside horizontal rows like cast so they keep scrolling).

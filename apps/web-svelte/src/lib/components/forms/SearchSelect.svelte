@@ -2,6 +2,7 @@
   import { onMount, tick, type Component } from "svelte";
   import { Check, ChevronDown, Plus, Search, X } from "@lucide/svelte";
   import { cn } from "@prismedia/ui-svelte";
+  import { keepFlyoutOnScreen } from "$lib/actions/keep-flyout-on-screen";
   import FormField from "./FormField.svelte";
 
   export interface SearchOption {
@@ -171,7 +172,7 @@
     </button>
 
     {#if open}
-      <div class="absolute left-0 right-0 top-full z-50 mt-1 surface-elevated overflow-hidden">
+      <div class="absolute left-0 right-0 top-full z-50 mt-1 surface-elevated overflow-hidden" use:keepFlyoutOnScreen>
         <div class="flex items-center gap-2 border-b border-border-subtle bg-surface-1 px-3 py-2">
           <Search class="h-3.5 w-3.5 flex-shrink-0 text-text-disabled" />
           <input

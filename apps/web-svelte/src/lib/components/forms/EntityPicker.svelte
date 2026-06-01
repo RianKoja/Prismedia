@@ -2,6 +2,7 @@
   import { onMount, tick, type Component } from "svelte";
   import { Plus, Search, X } from "@lucide/svelte";
   import { cn } from "@prismedia/ui-svelte";
+  import { keepFlyoutOnScreen } from "$lib/actions/keep-flyout-on-screen";
   import FormField from "./FormField.svelte";
 
   export interface EntityPickerItem {
@@ -257,7 +258,7 @@
 
     <!-- Dropdown -->
     {#if open}
-      <div class="picker-dropdown">
+      <div class="picker-dropdown" use:keepFlyoutOnScreen>
         {#if searching && limited.length === 0}
           <p class="picker-empty">Searching…</p>
         {:else if limited.length === 0 && !showAddOption}

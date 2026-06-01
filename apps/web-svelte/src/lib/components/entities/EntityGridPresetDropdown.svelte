@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Bookmark, Check, Plus, Trash2, X } from "@lucide/svelte";
   import { cn } from "@prismedia/ui-svelte";
+  import { keepFlyoutOnScreen } from "$lib/actions/keep-flyout-on-screen";
   import type { FilterPreset } from "$lib/filter-presets";
 
   interface Props {
@@ -85,7 +86,7 @@
       aria-label="Close preset menu"
       onclick={close}
     ></button>
-    <div class="surface-glass absolute right-0 top-full z-50 mt-1.5 w-56 py-1">
+    <div class="surface-glass absolute right-0 top-full z-50 mt-1.5 w-56 py-1" use:keepFlyoutOnScreen>
       {#if presets.length > 0}
         <div class="tag-scroll-area max-h-48 overflow-y-auto">
           {#each presets as preset (preset.id)}

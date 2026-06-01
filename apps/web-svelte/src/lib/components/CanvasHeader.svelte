@@ -2,6 +2,7 @@
   import { Ellipsis, Search, Settings } from "@lucide/svelte";
   import { page } from "$app/state";
   import { cn } from "@prismedia/ui-svelte";
+  import { keepFlyoutOnScreen } from "$lib/actions/keep-flyout-on-screen";
   import { useAppChrome } from "$lib/stores/app-chrome.svelte";
   import { useSearch } from "$lib/stores/search.svelte";
   import { getCanvasHeaderBreadcrumbItems } from "./canvas-header-breadcrumbs";
@@ -221,6 +222,7 @@
       class="fixed z-[120] w-[min(14rem,calc(100vw-2rem))] rounded-sm border border-border-default bg-glass-2 p-1 shadow-glass backdrop-blur-xl"
       style="left: {breadcrumbMenuPos.left}px; top: {breadcrumbMenuPos.top}px;"
       role="menu"
+      use:keepFlyoutOnScreen
     >
       {#each breadcrumbMenuItems as crumb (crumb.href)}
         <a
