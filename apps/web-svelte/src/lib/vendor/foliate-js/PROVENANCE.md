@@ -9,15 +9,19 @@ published to npm.
 - License: MIT (see `LICENSE`)
 
 Embedding entry point is `view.js`, which defines the `<foliate-view>` custom
-element. `vendor/` holds foliate's own bundled dependencies (zip.js, fflate).
+element. `vendor/` holds foliate's own bundled dependencies (zip.js, fflate, and
+pdf.js/cmaps/standard_fonts under `vendor/pdfjs`). foliate renders both EPUB and PDF,
+so Prismedia's single book reader uses it for both. `pdf.js` and `vendor/pdfjs` load
+lazily and only when a PDF is opened.
 
 Local modifications (re-apply when updating the pinned commit):
 
-- `pdf.js` is **stubbed**. Prismedia uses foliate only for reflowable EPUB; PDFs are
-  rendered by a dedicated pdfjs-dist reader. The upstream `pdf.js` pulled in a ~13MB
-  vendored pdfjs build and used top-level await (unsupported by our build target), so
-  `vendor/pdfjs/` was deleted and `pdf.js` replaced with a throwing stub that keeps
-  `makeBook()`'s dynamic import resolvable.
+- `pdf.js`: the asset base in `pdfjsPath` was made relative (`./vendor/pdfjs/...`) so
+  Vite's `new URL(..., import.meta.url)` resolution accepts it, and the two layer-CSS
+  values are imported at build time via `?raw` instead of being fetched with a
+  module-level top-level `await` (which our build target does not support).
+- `vendor/pdfjs`: the `*.map` source maps (~7.7MB) were omitted; the runtime `.mjs`,
+  CSS, `cmaps/`, and `standard_fonts/` are kept.
 
 Dev/build files (`reader.js`, `reader.html`, `tests/`, `rollup/`, config) were not
 vendored. Update by re-copying the runtime modules from a newer pinned commit.
