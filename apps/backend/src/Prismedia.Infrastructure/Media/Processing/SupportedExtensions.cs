@@ -34,7 +34,7 @@ public static class SupportedExtensions {
     /// </summary>
     public static readonly IReadOnlySet<string> Book = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
     {
-        ".epub"
+        ".epub", ".pdf"
     };
 
     /// <summary>
