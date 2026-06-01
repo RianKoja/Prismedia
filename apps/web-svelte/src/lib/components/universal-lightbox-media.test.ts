@@ -50,22 +50,14 @@ describe("universal-lightbox-media", () => {
     });
   });
 
-  it("falls back to full, cover, and thumbnail image assets when no source role is present", () => {
+  it("falls back to cover then thumbnail image assets when no source role is present", () => {
     const withAssets = entity({
-      capabilities: [
-        {
-          ...imageCapability,
-          items: [
-            { kind: "full", path: "/assets/images/image-1/full.jpg", mimeType: "image/jpeg" },
-            ...imageCapability.items,
-          ],
-        },
-      ],
+      capabilities: [imageCapability],
     });
 
     expect(buildLightboxImageSource(withAssets)).toEqual({
-      src: "/assets/images/image-1/full.jpg",
-      role: "full",
+      src: "/assets/images/image-1/cover.jpg",
+      role: "cover",
     });
   });
 
