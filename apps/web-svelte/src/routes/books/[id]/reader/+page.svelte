@@ -22,10 +22,9 @@
   import { resolveEntityHrefById } from "$lib/entities/entity-route-resolver";
   import { ENTITY_KIND } from "$lib/entities/entity-codes";
   import type { EntityThumbnail } from "$lib/api/generated/model";
-  import type { ImageListItemDto } from "@prismedia/contracts";
-  import { apiAssetUrl } from "$lib/api/orval-fetch";
   import ComicReader from "$lib/components/ComicReader.svelte";
   import BookFileReader from "$lib/components/BookFileReader.svelte";
+  import PdfReader from "$lib/components/PdfReader.svelte";
   import { redirectHiddenEntityNotFound } from "$lib/nsfw/hidden-entity";
   import { useNsfw } from "$lib/nsfw/store.svelte";
 
@@ -64,10 +63,12 @@
   let singleFileSaveFraction = 0;
   let singleFileFlowMode: ReaderFlow = "paginated";
 
-  // PDF reader state: pages are rendered server-side to images and shown in the comic reader.
+  // PDF reader state: a dedicated pdf.js reader (continuous scroll, selectable text).
   let pdfBook = $state(false);
-  let pdfImages = $state.raw<ImageListItemDto[]>([]);
-  let pdfPageCount = 0;
+  let pdfSource = $state("");
+  let pdfInitialPage = $state(0);
+  let pdfLastPage = 0;
+  let pdfLastCount = 0;
 
   const bookId = $derived(page.params.id ?? "");
   const readerPages = $derived(
@@ -176,91 +177,51 @@
     await goto(returnHref);
   }
 
-  // ── PDF reader (server-rendered page images shown in the comic reader) ──
-
-  function pdfPageImage(id: string, index: number): ImageListItemDto {
-    const path = `/books/${id}/pages/${index}`;
-    return {
-      id: `${id}-p${index}`,
-      title: `Page ${index + 1}`,
-      date: null,
-      rating: null,
-      organized: false,
-      isNsfw: false,
-      width: null,
-      height: null,
-      format: null,
-      isVideo: false,
-      fileSize: null,
-      thumbnailPath: path,
-      previewPath: null,
-      fullPath: path,
-      galleryId: null,
-      sortOrder: index,
-      studioId: null,
-      performers: [],
-      tags: [],
-      createdAt: "",
-    };
-  }
+  // ── PDF reader (dedicated pdf.js reader: continuous scroll, selectable text) ──
 
   async function loadPdfReader(nextBook: BookDetail, nextContext: BookReaderRouteContext) {
-    const infoUrl = apiAssetUrl(`/books/${nextBook.id}/pages`);
-    const response = await fetch(infoUrl ?? `/api/books/${nextBook.id}/pages`);
-    if (!response.ok) {
-      throw new Error(`Failed to load PDF pages (${response.status})`);
-    }
-    const info = (await response.json()) as { count?: number };
-    const count = Math.max(0, Number(info.count ?? 0));
-
     const progress = getCapability(nextBook.capabilities, "progress");
     const resume = nextContext.command !== "start-over" && !progress?.completedAt;
-    const startIndex = resume ? clampIndex(Number(progress?.index ?? 0), count) : 0;
-
     pdfBook = true;
-    pdfPageCount = count;
-    pdfImages = Array.from({ length: count }, (_, i) => pdfPageImage(nextBook.id, i));
+    pdfSource = `/entities/${nextBook.id}/files/source`;
+    pdfInitialPage = resume ? Math.max(0, Number(progress?.index ?? 0)) : 0;
+    pdfLastPage = pdfInitialPage;
+    pdfLastCount = Math.max(0, Number(progress?.total ?? 0));
     book = nextBook;
     context = nextContext;
-    readerMode = progress?.mode === "webtoon" ? "webtoon" : "paged";
-    readerIndex = startIndex;
     readerTitle = nextBook.title;
     returnHref = await resolveReaderReturnHref(nextBook.id, nextContext);
     loadState = "ready";
   }
 
-  async function savePdfProgress(index = readerIndex, completed = false) {
-    if (!book || pdfPageCount === 0) return;
+  async function savePdfProgress(page: number, count: number, completed: boolean) {
+    if (!book || count === 0) return;
     await updateEntityProgress(book.id, {
       currentEntityId: book.id,
       unit: "page",
-      index: clampIndex(index, pdfPageCount),
-      total: pdfPageCount,
-      mode: readerMode,
+      index: clampIndex(page, count),
+      total: count,
+      mode: "scrolled",
       completed: completed ? true : null,
     });
   }
 
-  function queuePdfSave(index = readerIndex, completed = false) {
-    const nextSave = progressSaveQueue.catch(() => undefined).then(() => savePdfProgress(index, completed));
+  function queuePdfSave(page: number, count: number, completed: boolean) {
+    const nextSave = progressSaveQueue.catch(() => undefined).then(() => savePdfProgress(page, count, completed));
     progressSaveQueue = nextSave;
     return nextSave;
   }
 
-  function handlePdfIndexChange(index: number) {
-    readerIndex = index;
-    const reachedEnd = pdfPageCount > 0 && index >= pdfPageCount - 1;
-    void queuePdfSave(index, reachedEnd).catch(() => undefined);
-  }
-
-  function handlePdfModeChange(mode: ReaderMode) {
-    readerMode = mode;
-    void queuePdfSave(readerIndex, false).catch(() => undefined);
+  function handlePdfPageChange(page: number, count: number) {
+    pdfLastPage = page;
+    pdfLastCount = count;
+    const reachedEnd = count > 0 && page >= count - 1;
+    void queuePdfSave(page, count, reachedEnd).catch(() => undefined);
   }
 
   async function closePdfReader() {
-    const reachedEnd = pdfPageCount > 0 && readerIndex >= pdfPageCount - 1;
-    await queuePdfSave(readerIndex, reachedEnd).catch(() => undefined);
+    const reachedEnd = pdfLastCount > 0 && pdfLastPage >= pdfLastCount - 1;
+    await queuePdfSave(pdfLastPage, pdfLastCount, reachedEnd).catch(() => undefined);
     await goto(returnHref);
   }
 
@@ -546,15 +507,13 @@
 </svelte:head>
 
 {#if loadState === "ready" && pdfBook}
-  <ComicReader
-    images={pdfImages}
-    initialIndex={readerIndex}
-    initialMode={readerMode}
+  <PdfReader
+    sourceUrl={pdfSource}
     title={readerTitle}
     presentation="page"
     closeIcon="back"
-    onIndexChange={handlePdfIndexChange}
-    onModeChange={handlePdfModeChange}
+    initialPage={pdfInitialPage}
+    onPageChange={handlePdfPageChange}
     onClose={() => void closePdfReader()}
   />
 {:else if loadState === "ready" && singleFileBook}

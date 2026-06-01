@@ -184,8 +184,6 @@ public static class DependencyInjection {
         services.AddSingleton<IComicInfoMetadataReader, ComicInfoMetadataReader>();
         services.AddSingleton<IBookFileMetadataReader, Media.Books.BookFileMetadataReader>();
         services.AddSingleton<IBookCoverImageExtractor, Media.Books.BookCoverImageExtractor>();
-        services.AddSingleton<Application.Media.IPdfPageRenderer>(provider =>
-            new Media.Books.PdfPageRenderer(provider.GetRequiredService<AssetPathService>()));
         services.AddScoped<IMaintenancePersistence>(provider =>
             new MaintenancePersistenceService(provider.GetRequiredService<PrismediaDbContext>(), dataDir));
         services.AddScoped<ICollectionRuleEngine, CollectionRuleEngine>();
