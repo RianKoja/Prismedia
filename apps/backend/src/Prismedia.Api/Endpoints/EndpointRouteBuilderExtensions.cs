@@ -13,6 +13,7 @@ public static class EndpointRouteBuilderExtensions {
         routes.MapImageEndpoints();
         routes.MapGalleryEndpoints();
         routes.MapBookEndpoints();
+        routes.MapBookPageEndpoints();
         routes.MapAudioLibraryEndpoints();
         routes.MapAudioTrackEndpoints();
         routes.MapPeopleEndpoints();

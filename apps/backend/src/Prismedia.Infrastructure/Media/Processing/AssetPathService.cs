@@ -61,6 +61,9 @@ public sealed class AssetPathService {
     public string BookCoverThumbnailPath(Guid entityId) =>
         Path.Combine(_cacheRoot, "book-covers", entityId.ToString(), "thumb.jpg");
 
+    public string BookPdfPagePath(Guid entityId, int pageIndex) =>
+        Path.Combine(_cacheRoot, "book-pdf-pages", entityId.ToString(), $"{pageIndex}.jpg");
+
     public string AudioWaveformPath(Guid entityId) =>
         Path.Combine(_cacheRoot, "audio-tracks", entityId.ToString(), "waveform.json");
 

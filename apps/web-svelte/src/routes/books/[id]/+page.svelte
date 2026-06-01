@@ -79,7 +79,8 @@
   // Single-file books (EPUB/PDF) are read straight from the source file with no chapter entities.
   const isSingleFileBook = $derived(!!book && book.format !== "image-archive");
   const singleFileProgress = $derived(book && isSingleFileBook ? getCapability(book.capabilities, "progress") : null);
-  const singleFileInProgress = $derived(!!singleFileProgress?.location && !singleFileProgress?.completedAt);
+  // Started once a position has been saved (EPUB and PDF both set currentEntityId to the book id).
+  const singleFileInProgress = $derived(!!singleFileProgress?.currentEntityId && !singleFileProgress?.completedAt);
   const peopleLabel = $derived(bookType === "comic" || bookType === "manga" ? "Artists" : "People");
   const bookTitle = $derived(book?.title ?? "Book");
   const chapterSummaries = $derived(combineChapterSummaries(chapterDetails, progressChapterSummary));
