@@ -6,14 +6,24 @@
       "type": "dotnet",
       "request": "launch",
       "projectPath": "${workspaceFolder}/apps/backend/src/Prismedia.Api/Prismedia.Api.csproj",
-      "preLaunchTask": "Prismedia: Docker Up"
+      "preLaunchTask": "Prismedia: Docker Up",
+      "env": {
+        "PATH": "${workspaceFolder}/.tools/jellyfin-ffmpeg:${env:PATH}",
+        "PRISMEDIA_FFMPEG_PATH": "${workspaceFolder}/.tools/jellyfin-ffmpeg/ffmpeg",
+        "PRISMEDIA_FFPROBE_PATH": "${workspaceFolder}/.tools/jellyfin-ffmpeg/ffprobe"
+      }
     },
     {
       "name": "Prismedia: Worker",
       "type": "dotnet",
       "request": "launch",
       "projectPath": "${workspaceFolder}/apps/backend/src/Prismedia.Worker/Prismedia.Worker.csproj",
-      "preLaunchTask": "Prismedia: Docker Up"
+      "preLaunchTask": "Prismedia: Docker Up",
+      "env": {
+        "PATH": "${workspaceFolder}/.tools/jellyfin-ffmpeg:${env:PATH}",
+        "PRISMEDIA_FFMPEG_PATH": "${workspaceFolder}/.tools/jellyfin-ffmpeg/ffmpeg",
+        "PRISMEDIA_FFPROBE_PATH": "${workspaceFolder}/.tools/jellyfin-ffmpeg/ffprobe"
+      }
     },
     {
       "name": "Prismedia: Chrome",

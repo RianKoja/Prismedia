@@ -20,3 +20,6 @@ apps/backend/data/
 
 # Claude Code harness runtime lock
 .claude/scheduled_tasks.lock
+
+# Local dev tools (host-specific binaries, e.g. jellyfin-ffmpeg for the VSCode launch configs)
+.tools/
