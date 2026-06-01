@@ -155,6 +155,12 @@ namespace Prismedia.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("cover_page_entity_id");
 
+                    b.Property<string>("Format")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("format");
+
                     b.Property<Guid?>("LibraryRootId")
                         .HasColumnType("uuid")
                         .HasColumnName("library_root_id");
@@ -591,17 +597,17 @@ namespace Prismedia.Infrastructure.Persistence.Migrations
                         },
                         new
                         {
-                            Code = "movie",
-                            Category = "Media",
-                            DisplayName = "Movie",
-                            StorageShape = "folder"
-                        },
-                        new
-                        {
                             Code = "person",
                             Category = "Taxonomy",
                             DisplayName = "Person",
                             StorageShape = "none"
+                        },
+                        new
+                        {
+                            Code = "movie",
+                            Category = "Media",
+                            DisplayName = "Movie",
+                            StorageShape = "folder"
                         },
                         new
                         {
@@ -817,6 +823,10 @@ namespace Prismedia.Infrastructure.Persistence.Migrations
                     b.Property<int>("Index")
                         .HasColumnType("integer")
                         .HasColumnName("index");
+
+                    b.Property<string>("Location")
+                        .HasColumnType("text")
+                        .HasColumnName("location");
 
                     b.Property<string>("Mode")
                         .HasMaxLength(64)

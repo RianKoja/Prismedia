@@ -1,6 +1,7 @@
 <script lang="ts">
   import { AlertCircle, Check, FolderPlus, Loader2, Search } from "@lucide/svelte";
   import { cn } from "@prismedia/ui-svelte";
+  import { keepFlyoutOnScreen } from "$lib/actions/keep-flyout-on-screen";
   import { addCollectionItems, fetchCollections } from "$lib/api/collections";
   import type { CollectionEntityType } from "$lib/collections/models";
 
@@ -95,7 +96,7 @@
       aria-label="Close add to collection menu"
       onclick={close}
     ></button>
-    <div class="atc-flyout">
+    <div class="atc-flyout" use:keepFlyoutOnScreen>
       <div class="atc-kicker">
         Add {items.length} {items.length === 1 ? "item" : "items"} to…
       </div>

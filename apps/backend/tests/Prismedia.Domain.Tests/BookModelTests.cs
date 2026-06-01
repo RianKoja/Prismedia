@@ -23,7 +23,24 @@ public sealed class BookModelTests {
         Assert.Equal(EntityKind.Book, book.Kind);
         Assert.Equal("The Brass Archive", book.Title);
         Assert.Equal(BookType.Comic, book.BookType);
+        Assert.Equal(BookFormat.ImageArchive, book.Format);
         Assert.Equal(120, book.Stats!.Items.Single(stat => stat.Code == "pages").Value);
+    }
+
+    [Fact]
+    public void BookCarriesExplicitFormatAndFormatCodeRoundTrips() {
+        var book = new Book(
+            Guid.Parse("33333333-3333-3333-3333-333333333333"),
+            "A Game of Thrones",
+            bookType: BookType.Novel,
+            coverPageId: null,
+            format: BookFormat.Epub);
+
+        Assert.Equal(BookFormat.Epub, book.Format);
+        Assert.Equal("epub", book.Format.ToCode());
+        Assert.Equal(BookFormat.Epub, "epub".DecodeAs<BookFormat>());
+        Assert.Equal(BookFormat.Pdf, "pdf".DecodeAs<BookFormat>());
+        Assert.Equal(BookFormat.ImageArchive, "image-archive".DecodeAs<BookFormat>());
     }
 
     [Fact]

@@ -76,6 +76,10 @@
 
   const bookId = $derived(page.params.id ?? "");
   const bookType = $derived(book?.bookType ?? null);
+  // Single-file books (EPUB/PDF) are read straight from the source file with no chapter entities.
+  const isSingleFileBook = $derived(!!book && book.format !== "image-archive");
+  const singleFileProgress = $derived(book && isSingleFileBook ? getCapability(book.capabilities, "progress") : null);
+  const singleFileInProgress = $derived(!!singleFileProgress?.location && !singleFileProgress?.completedAt);
   const peopleLabel = $derived(bookType === "comic" || bookType === "manga" ? "Artists" : "People");
   const bookTitle = $derived(book?.title ?? "Book");
   const chapterSummaries = $derived(combineChapterSummaries(chapterDetails, progressChapterSummary));
@@ -88,8 +92,18 @@
     progressDisplay?.chapterId === selectedChapter?.detail.id ? progressDisplay : null,
   );
   const readerPageCount = $derived(selectedChapter?.pages.length ?? 0);
+  // Comics may be organized as volumes with no direct chapters; they are still readable
+  // (the reader resolves the first chapter), so the Read button must appear for them too.
+  const hasReadableContent = $derived(
+    !isSingleFileBook && (readerPageCount > 0 || chapterDetails.length > 0 || volumeCards.length > 0),
+  );
+  // Started/completed come straight from the progress capability (same source the grid card uses),
+  // so the label is correct even for volume-only comics whose in-progress chapter isn't a direct child.
+  const comicProgress = $derived(book && !isSingleFileBook ? getCapability(book.capabilities, "progress") : undefined);
+  const comicStarted = $derived(!!comicProgress?.currentEntityId);
+  const comicCompleted = $derived(!!comicProgress?.completedAt);
   const primaryReadLabel = $derived(
-    selectedProgress ? (selectedProgress.isComplete ? "Re-read" : "Resume") : "Read",
+    comicCompleted ? "Re-read" : comicStarted ? "Resume" : "Read",
   );
   const hasCastAndCrew = $derived(studioCards.length > 0 || creditCards.length > 0);
 
@@ -105,7 +119,16 @@
   const heroActions = $derived.by((): EntityDetailActionButton[] => {
     const actions: EntityDetailActionButton[] = [];
     if (identifyAction.action) actions.push(identifyAction.action);
-    if (readerPageCount > 0) {
+    if (isSingleFileBook) {
+      actions.push({
+        id: "read-book",
+        label: singleFileInProgress ? "Resume" : singleFileProgress?.completedAt ? "Re-read" : "Read",
+        icon: Play,
+        iconFill: "currentColor",
+        variant: "primary",
+        onClick: openSingleFileReader,
+      });
+    } else if (hasReadableContent) {
       actions.push({
         id: "read-book",
         label: primaryReadLabel,
@@ -297,13 +320,45 @@
   }
 
   function openSelectedReader() {
-    if (!book || !selectedChapter) return;
+    if (!book) return;
+    // In progress: resume where they left off (the reader resolves the saved chapter), regardless
+    // of which chapter is selected.
+    if (comicStarted && !comicCompleted) {
+      void goto(bookReaderHref({
+        bookId: book.id,
+        kind: "book",
+        id: book.id,
+        returnId: book.id,
+        command: "resume",
+      }));
+      return;
+    }
+    // Starting fresh (or re-reading): open the selected direct chapter, else the book's first.
+    if (selectedChapter) {
+      void goto(bookReaderHref({
+        bookId: book.id,
+        kind: "chapter",
+        id: selectedChapter.detail.id,
+        returnId: book.id,
+      }));
+      return;
+    }
     void goto(bookReaderHref({
       bookId: book.id,
-      kind: "chapter",
-      id: selectedChapter.detail.id,
+      kind: "book",
+      id: book.id,
       returnId: book.id,
-      command: selectedProgress && !selectedProgress.isComplete ? "resume" : undefined,
+    }));
+  }
+
+  function openSingleFileReader() {
+    if (!book) return;
+    void goto(bookReaderHref({
+      bookId: book.id,
+      kind: "book",
+      id: book.id,
+      returnId: book.id,
+      command: singleFileInProgress ? "resume" : singleFileProgress?.completedAt ? "start-over" : undefined,
     }));
   }
 

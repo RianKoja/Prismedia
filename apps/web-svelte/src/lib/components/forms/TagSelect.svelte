@@ -2,6 +2,7 @@
   import { onMount, tick, type Component } from "svelte";
   import { Plus, X } from "@lucide/svelte";
   import { cn } from "@prismedia/ui-svelte";
+  import { keepFlyoutOnScreen } from "$lib/actions/keep-flyout-on-screen";
   import FormField from "./FormField.svelte";
 
   export interface TagOption {
@@ -198,7 +199,7 @@
     </label>
 
     {#if open && totalItems > 0}
-      <div class="absolute left-0 right-0 top-full z-50 mt-1 surface-elevated overflow-hidden">
+      <div class="absolute left-0 right-0 top-full z-50 mt-1 surface-elevated overflow-hidden" use:keepFlyoutOnScreen>
         <div role="listbox" class="max-h-64 overflow-y-auto py-1">
           {#each limited as option, i (option.name)}
             {@const active = i === activeIndex}

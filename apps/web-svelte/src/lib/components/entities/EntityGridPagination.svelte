@@ -9,6 +9,7 @@
     LoaderCircle,
   } from "@lucide/svelte";
   import { cn } from "@prismedia/ui-svelte";
+  import { keepFlyoutOnScreen } from "$lib/actions/keep-flyout-on-screen";
 
   interface Props {
     canPageBack: boolean;
@@ -162,7 +163,7 @@
               aria-label="Close page size menu"
               onclick={() => (pageSizeOpen = false)}
             ></button>
-            <div class="page-size-menu">
+            <div class="page-size-menu" use:keepFlyoutOnScreen>
               {#each normalizedPageSizeOptions as option (option)}
                 <button
                   type="button"

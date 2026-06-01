@@ -2,6 +2,7 @@
   import { onMount, tick } from "svelte";
   import { ChevronDown, Search } from "@lucide/svelte";
   import { cn } from "@prismedia/ui-svelte";
+  import { keepFlyoutOnScreen } from "$lib/actions/keep-flyout-on-screen";
   import type { PluginProvider } from "$lib/api/identify-types";
 
   interface Props {
@@ -118,7 +119,7 @@
   </button>
 
   {#if open}
-    <div class="provider-menu">
+    <div class="provider-menu" use:keepFlyoutOnScreen>
       <div class="provider-search-row">
         <Search class="h-3.5 w-3.5 shrink-0 text-text-disabled" />
         <input

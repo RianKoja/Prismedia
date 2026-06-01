@@ -26,6 +26,7 @@
   import { cubicOut } from "svelte/easing";
   import { browser } from "$app/environment";
   import { cn } from "@prismedia/ui-svelte";
+  import { keepFlyoutOnScreen } from "$lib/actions/keep-flyout-on-screen";
   import type { FilterPreset } from "$lib/filter-presets";
   import { entityGridFilterFromId } from "$lib/entities/entity-grid";
   import type {
@@ -261,7 +262,7 @@
               aria-label="Close sort menu"
               onclick={() => (sortOpen = false)}
             ></button>
-            <div class="sort-menu sort-menu-end">
+            <div class="sort-menu sort-menu-end" use:keepFlyoutOnScreen>
               {#each SORT_OPTIONS as opt (opt.value)}
                 <button
                   type="button"
@@ -386,7 +387,7 @@
               aria-label="Close thumbnail size menu"
               onclick={() => (thumbSizeOpen = false)}
             ></button>
-            <div class="thumb-size-popover">
+            <div class="thumb-size-popover" use:keepFlyoutOnScreen>
               <Grid2x2 class="thumb-size-icon thumb-size-icon-min" aria-hidden="true" />
               <span class="sr-only">Thumbnail columns</span>
               <input
@@ -562,7 +563,7 @@
                     aria-label="Close actions menu"
                     onclick={() => (actionsMenuOpen = false)}
                   ></button>
-                  <div class="bulk-flyout">
+                  <div class="bulk-flyout" use:keepFlyoutOnScreen>
                     {#each bulkActions as action (action.id)}
                       <button
                         type="button"

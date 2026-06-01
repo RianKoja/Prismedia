@@ -1,21 +1,16 @@
 <script lang="ts">
-  import { onMount, tick, untrack } from "svelte";
+  import { tick, untrack } from "svelte";
   import {
-    ArrowLeft,
     BookOpen,
     Columns2,
     Rows3,
     ChevronLeft,
     ChevronRight,
     Image as ImageIcon,
-    X,
   } from "@lucide/svelte";
   import type { ImageListItemDto } from "@prismedia/contracts";
-  import { fade } from "svelte/transition";
-  import { dur, ease } from "@prismedia/ui-svelte";
-  import { createNavigationKeyHandler } from "$lib/keyboard/navigation-keyboard";
-  import { portal } from "$lib/actions/portal";
   import { apiAssetUrl as toApiUrl } from "$lib/api/orval-fetch";
+  import ReaderShell from "$lib/components/reader/ReaderShell.svelte";
   import NsfwBlur from "./nsfw/NsfwBlur.svelte";
   import {
     comicPreloadIndexes,
@@ -63,20 +58,17 @@
     onNextChapter,
   }: Props = $props();
 
+  let shell = $state<ReturnType<typeof ReaderShell>>();
   let readerMode = $state<ReaderMode>(untrack(() => initialMode));
   let pageMode = $state<ComicPageMode>("single");
   let firstPageIsCover = $state(true);
   let index = $state(untrack(() => initialIndex));
-  let controlsVisible = $state(true);
-  let controlsTimer: number | null = null;
   let webtoonStage: HTMLElement | undefined = $state();
   let programmaticWebtoonScroll = false;
   let nextChapterBusy = $state(false);
   let readerPointerGesture: ReaderPointerGesture | null = null;
 
   const hasNextChapter = $derived(Boolean(onNextChapter));
-  const closeLabel = $derived(closeIcon === "back" ? "Back" : "Close");
-  const closeTitle = $derived(closeIcon === "back" ? "Back (Esc)" : "Close (Esc)");
   const hasEndAction = $derived(images.length > 0);
   const nextChapterTitle = $derived(nextChapterLabel?.trim() ? nextChapterLabel : "Next chapter");
   const chapterEndTitle = $derived(hasNextChapter ? nextChapterTitle : "No next chapter");
@@ -177,7 +169,7 @@
     try {
       await onNextChapter();
       index = 0;
-      showControlsTemporarily();
+      shell?.showControls();
       if (readerMode === "webtoon") {
         void scrollWebtoonToIndex(0);
       }
@@ -188,30 +180,6 @@
 
   function imageSrc(image: ImageListItemDto) {
     return toApiUrl(image.fullPath ?? image.thumbnailPath) ?? "";
-  }
-
-  function clearControlsTimer() {
-    if (!controlsTimer) return;
-    window.clearTimeout(controlsTimer);
-    controlsTimer = null;
-  }
-
-  function showControlsTemporarily() {
-    controlsVisible = true;
-    clearControlsTimer();
-    controlsTimer = window.setTimeout(() => {
-      controlsVisible = false;
-      controlsTimer = null;
-    }, 2800);
-  }
-
-  function toggleControls() {
-    if (controlsVisible) {
-      controlsVisible = false;
-      clearControlsTimer();
-    } else {
-      showControlsTemporarily();
-    }
   }
 
   // A committed swipe must travel at least this far; shorter drags are neither a
@@ -291,12 +259,12 @@
     const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
     const zone = comicTapZone(event.clientX - rect.left, rect.width);
     if (event.pointerType === "mouse") {
-      if (zone === "controls") toggleControls();
+      if (zone === "controls") shell?.toggleControls();
       return;
     }
     if (zone === "previous") goPrev();
     else if (zone === "next") goNext();
-    else toggleControls();
+    else shell?.toggleControls();
   }
 
   function handleWebtoonScroll(event: Event) {
@@ -336,26 +304,6 @@
     const targetIndex = untrack(() => index);
     void scrollWebtoonToIndex(targetIndex);
   });
-
-  onMount(() => {
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-
-    const onKey = createNavigationKeyHandler({
-      close: onClose,
-      prev: goPrev,
-      next: goNext,
-      extraKeys: { " ": () => goNext() },
-    });
-
-    window.addEventListener("keydown", onKey);
-    showControlsTemporarily();
-    return () => {
-      window.removeEventListener("keydown", onKey);
-      document.body.style.overflow = prevOverflow;
-      clearControlsTimer();
-    };
-  });
 </script>
 
 <svelte:head>
@@ -364,52 +312,19 @@
   {/each}
 </svelte:head>
 
-<div
-  use:portal
-  class={`reader-overlay fixed inset-0 flex flex-col bg-black backdrop-blur-sm ${presentation === "page" ? "reader-page-presentation" : ""}`}
-  role="dialog"
-  aria-modal="true"
-  in:fade={{ duration: dur.normal, easing: ease.enter }}
-  out:fade={{ duration: dur.fast, easing: ease.exit }}
+<ReaderShell
+  bind:this={shell}
+  {title}
+  {presentation}
+  {closeIcon}
+  {onClose}
+  onPrev={goPrev}
+  onNext={goNext}
+  onActivate={goNext}
 >
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div
-    data-reader-hover-zone="top"
-    class="reader-hover-zone reader-hover-zone-top"
-    onpointerenter={showControlsTemporarily}
-  ></div>
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div
-    data-reader-hover-zone="bottom"
-    class="reader-hover-zone reader-hover-zone-bottom"
-    onpointerenter={showControlsTemporarily}
-  ></div>
+  {#snippet counter()}{counterText}{/snippet}
 
-  <div
-    data-reader-control
-    class={`reader-top-layer ${controlsVisible ? "reader-layer-visible" : "reader-layer-hidden"}`}
-  >
-    <button
-      type="button"
-      onclick={onClose}
-      class="reader-icon-button"
-      aria-label={closeLabel}
-      title={closeTitle}
-    >
-      {#if closeIcon === "back"}
-        <ArrowLeft class="h-5 w-5" />
-      {:else}
-        <X class="h-5 w-5" />
-      {/if}
-    </button>
-
-    <div class="min-w-0 flex-1">
-      <h2 class="truncate text-sm font-medium text-text-primary">{title}</h2>
-      <div class="font-mono text-[0.6rem] uppercase tracking-[0.14em] text-text-muted">
-        {counterText}
-      </div>
-    </div>
-
+  {#snippet controls()}
     <div class="flex items-center gap-1">
       <button
         type="button"
@@ -461,7 +376,7 @@
         {/if}
       </div>
     {/if}
-  </div>
+  {/snippet}
 
   {#if readerMode === "webtoon"}
     <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -586,10 +501,9 @@
       </div>
     </div>
   {/if}
-</div>
+</ReaderShell>
 
 <style>
-  .reader-icon-button,
   .reader-mode-button {
     display: inline-flex;
     align-items: center;
@@ -608,19 +522,13 @@
       box-shadow var(--duration-normal) var(--ease-mechanical);
   }
 
-  .reader-overlay {
-    z-index: 2147483000;
-    width: 100vw;
-    height: 100vh;
-    min-height: 100vh;
-    overflow: hidden;
-  }
-
-  @supports (height: 100lvh) {
-    .reader-overlay {
-      height: 100lvh;
-      min-height: 100lvh;
-    }
+  .reader-mode-button:hover,
+  .reader-mode-button:focus-visible,
+  .active-reader-control {
+    border-color: var(--color-border-accent-strong);
+    color: var(--color-text-accent-bright);
+    box-shadow: var(--shadow-glow-accent);
+    outline: none;
   }
 
   .reader-stage {
@@ -636,78 +544,6 @@
      swipe handlers instead of letting the browser pan or navigate back. */
   .reader-stage-paged {
     touch-action: none;
-  }
-
-  .reader-hover-zone {
-    position: absolute;
-    left: 0;
-    right: 0;
-    z-index: 15;
-    height: 5rem;
-  }
-
-  .reader-hover-zone-top {
-    top: 0;
-  }
-
-  .reader-hover-zone-bottom {
-    bottom: 0;
-  }
-
-  .reader-top-layer {
-    position: absolute;
-    left: 0;
-    right: 0;
-    z-index: 20;
-    border-color: var(--color-border-default);
-    background: linear-gradient(
-      to bottom,
-      var(--color-overlay-heavy),
-      rgba(7, 8, 11, 0.48) 68%,
-      transparent
-    );
-    padding: max(0.5rem, env(safe-area-inset-top)) 0.75rem 1.25rem;
-    backdrop-filter: blur(var(--glass-blur-sm));
-    transition:
-      opacity var(--duration-normal) var(--ease-mechanical),
-      transform var(--duration-normal) var(--ease-mechanical);
-  }
-
-  .reader-top-layer {
-    top: 0;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-  }
-
-  .reader-layer-visible {
-    opacity: 1;
-    pointer-events: auto;
-    transform: translateY(0);
-  }
-
-  .reader-layer-hidden {
-    opacity: 0;
-    pointer-events: none;
-  }
-
-  .reader-top-layer.reader-layer-hidden {
-    transform: translateY(-0.75rem);
-  }
-
-  .reader-icon-button {
-    padding: 0.4rem;
-  }
-
-  .reader-mode-button:hover,
-  .reader-mode-button:focus-visible,
-  .reader-icon-button:hover,
-  .reader-icon-button:focus-visible,
-  .active-reader-control {
-    border-color: var(--color-border-accent-strong);
-    color: var(--color-text-accent-bright);
-    box-shadow: var(--shadow-glow-accent);
-    outline: none;
   }
 
   .reader-nav-button {
@@ -826,16 +662,6 @@
   }
 
   @media (min-width: 640px) {
-    .reader-stage {
-      inset: 0;
-    }
-
-    .reader-top-layer {
-      border-bottom: 1px solid var(--color-border-default);
-      background: var(--color-overlay-glass);
-      padding: 0.5rem 0.75rem;
-    }
-
     .reader-nav-button {
       display: flex;
     }
