@@ -258,6 +258,7 @@ public sealed partial class LibraryScanPersistenceService {
                 detail.BookType = BookType.Book;
                 detail.Format = BookFormat.ImageArchive;
             }
+            await ReparentSingleFileBooksUnderSeriesAsync(existing.Id, folderPath, libraryRootId, DateTimeOffset.UtcNow, cancellationToken);
             await _db.SaveChangesAsync(cancellationToken);
             return existing.Id;
         }
@@ -275,10 +276,61 @@ public sealed partial class LibraryScanPersistenceService {
             CreatedAt = now,
             UpdatedAt = now
         });
+        await ReparentSingleFileBooksUnderSeriesAsync(id, folderPath, libraryRootId, now, cancellationToken);
 
         await _db.SaveChangesAsync(cancellationToken);
         return id;
     }
+
+    private async Task ReparentSingleFileBooksUnderSeriesAsync(
+        Guid seriesId,
+        string folderPath,
+        Guid libraryRootId,
+        DateTimeOffset now,
+        CancellationToken cancellationToken) {
+        var folderPrefix = EnsureTrailingSeparator(folderPath);
+        var candidates = await _db.EntityFiles.AsNoTracking()
+            .Where(file => file.Role == EntityFileRole.Source && file.Path.StartsWith(folderPath))
+            .Join(
+                _db.BookDetails,
+                file => file.EntityId,
+                detail => detail.EntityId,
+                (file, detail) => new { file.EntityId, file.Path, detail.LibraryRootId, detail.Format })
+            .Where(candidate => candidate.LibraryRootId == libraryRootId && candidate.Format != BookFormat.ImageArchive)
+            .ToArrayAsync(cancellationToken);
+        var childCandidates = candidates
+            .Where(candidate => IsDescendantSourcePath(candidate.Path, folderPath, folderPrefix))
+            .OrderBy(candidate => candidate.Path, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        for (var sortOrder = 0; sortOrder < childCandidates.Length; sortOrder++) {
+            var child = _db.Entities.Local.FirstOrDefault(row => row.Id == childCandidates[sortOrder].EntityId)
+                ?? await _db.Entities.FirstOrDefaultAsync(row =>
+                    row.Id == childCandidates[sortOrder].EntityId &&
+                    row.KindCode == EntityKindRegistry.Book.Code,
+                    cancellationToken);
+            if (child is null) {
+                continue;
+            }
+
+            child.ParentEntityId = seriesId;
+            child.SortOrder = sortOrder;
+            child.UpdatedAt = now;
+        }
+    }
+
+    private static string EnsureTrailingSeparator(string path) {
+        if (path.EndsWith(Path.DirectorySeparatorChar) ||
+            path.EndsWith(Path.AltDirectorySeparatorChar)) {
+            return path;
+        }
+
+        return path + Path.DirectorySeparatorChar;
+    }
+
+    private static bool IsDescendantSourcePath(string sourcePath, string folderPath, string folderPrefix) =>
+        !sourcePath.Equals(folderPath, StringComparison.OrdinalIgnoreCase) &&
+        sourcePath.StartsWith(folderPrefix, StringComparison.OrdinalIgnoreCase);
 
     public async Task<Guid> UpsertSingleFileBookAsync(
         string sourcePath,

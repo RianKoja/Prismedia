@@ -1061,6 +1061,49 @@ public sealed class LibraryScanPersistenceServiceTests {
     }
 
     [Fact]
+    public async Task UpsertBookSeriesReparentsExistingFlatSingleFileBooksUnderFolder() {
+        await using var db = CreateContext();
+        var service = new LibraryScanPersistenceService(db);
+        var rootId = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+        var firstBookId = await service.UpsertSingleFileBookAsync(
+            "/media/books/Game of Thrones/A Song of Ice and Fire - vol 1 - A Game of Thrones.epub",
+            "A Game of Thrones",
+            rootId,
+            isNsfw: false,
+            BookType.Novel,
+            BookFormat.Epub,
+            Prismedia.Contracts.Media.MediaContentTypes.Epub,
+            parentBookEntityId: null,
+            sortOrder: null,
+            CancellationToken.None);
+        var secondBookId = await service.UpsertSingleFileBookAsync(
+            "/media/books/Game of Thrones/A Song of Ice and Fire - vol 2 - A Clash of Kings.epub",
+            "A Clash of Kings",
+            rootId,
+            isNsfw: false,
+            BookType.Novel,
+            BookFormat.Epub,
+            Prismedia.Contracts.Media.MediaContentTypes.Epub,
+            parentBookEntityId: null,
+            sortOrder: null,
+            CancellationToken.None);
+
+        var seriesId = await service.UpsertBookSeriesAsync(
+            "/media/books/Game of Thrones",
+            "Game of Thrones",
+            rootId,
+            isNsfw: false,
+            CancellationToken.None);
+
+        var firstBook = await db.Entities.FindAsync([firstBookId]);
+        var secondBook = await db.Entities.FindAsync([secondBookId]);
+        Assert.Equal(seriesId, firstBook!.ParentEntityId);
+        Assert.Equal(0, firstBook.SortOrder);
+        Assert.Equal(seriesId, secondBook!.ParentEntityId);
+        Assert.Equal(1, secondBook.SortOrder);
+    }
+
+    [Fact]
     public async Task ApplyVideoSidecarMetadataFillsMissingFieldsAndKeepsExistingDescription() {
         await using var db = CreateContext();
         var videoId = Guid.Parse("aaaaaaaa-1111-1111-1111-111111111111");
