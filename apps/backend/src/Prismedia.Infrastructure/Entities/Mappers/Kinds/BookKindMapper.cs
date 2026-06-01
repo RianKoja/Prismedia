@@ -19,6 +19,7 @@ internal sealed class BookKindMapper(PrismediaDbContext db) : IEntityKindMapper 
             row.Title,
             detail?.BookType ?? BookType.Book,
             detail?.CoverPageEntityId,
+            detail?.Format ?? BookFormat.ImageArchive,
             parentEntityId: row.ParentEntityId,
             sortOrder: row.SortOrder);
     }
@@ -31,6 +32,7 @@ internal sealed class BookKindMapper(PrismediaDbContext db) : IEntityKindMapper 
         var row = await db.BookDetails.FindAsync([entity.Id], cancellationToken)
             ?? Track(new BookDetailRow { EntityId = entity.Id });
         row.BookType = book.BookType;
+        row.Format = book.Format;
         row.CoverPageEntityId = book.CoverPageId;
     }
 
@@ -49,6 +51,7 @@ internal sealed class BookKindMapper(PrismediaDbContext db) : IEntityKindMapper 
                 ChildrenByKind = card.ChildrenByKind,
                 Relationships = card.Relationships,
                 BookType = book.BookType.ToCode(),
+                Format = book.Format.ToCode(),
                 CoverPageId = book.CoverPageId,
             }
             : card;

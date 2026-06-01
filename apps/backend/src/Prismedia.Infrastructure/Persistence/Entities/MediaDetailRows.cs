@@ -17,6 +17,7 @@ public sealed class GalleryDetailRow {
 public sealed class BookDetailRow {
     public Guid EntityId { get; set; }
     public BookType BookType { get; set; } = BookType.Book;
+    public BookFormat Format { get; set; } = BookFormat.ImageArchive;
     public Guid? CoverPageEntityId { get; set; }
     public Guid? LibraryRootId { get; set; }
 }
