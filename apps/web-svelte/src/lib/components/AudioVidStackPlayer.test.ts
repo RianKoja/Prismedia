@@ -60,6 +60,7 @@ function track(id: string, title: string, duration: number): AudioTrackListItemD
     embeddedArtist: null,
     embeddedAlbum: null,
     trackNumber: null,
+    sectionLabel: null,
     waveformPath: null,
     libraryId: "library-1",
     sortOrder: 0,

@@ -102,6 +102,7 @@ function track(id: string, title: string): AudioTrackListItemDto {
     embeddedArtist: "Musopen",
     embeddedAlbum: "The Complete Chopin Collection",
     trackNumber: 1,
+    sectionLabel: null,
     waveformPath: null,
     libraryId: "library-1",
     sortOrder: 1,

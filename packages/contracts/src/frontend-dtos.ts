@@ -669,7 +669,7 @@ export interface NormalizedPerformerResult {
 
 // ─── Search DTOs ────────────────────────────────────────────────
 
-export type EntityKind = "movie" | "video" | "video-series" | "performer" | "studio" | "tag" | "gallery" | "image" | "book" | "audio-library" | "audio-track";
+export type EntityKind = "movie" | "video" | "video-series" | "performer" | "studio" | "tag" | "gallery" | "image" | "book" | "music-artist" | "audio-library" | "audio-track";
 
 export interface SearchResultItem {
   id: string;
@@ -809,6 +809,8 @@ export interface AudioTrackListItemDto {
   embeddedArtist: string | null;
   embeddedAlbum: string | null;
   trackNumber: number | null;
+  /** Album section (disc) label this track belongs to, e.g. "Disc 1"; null when unsectioned. */
+  sectionLabel: string | null;
   waveformPath: string | null;
   libraryId: string | null;
   sortOrder: number;

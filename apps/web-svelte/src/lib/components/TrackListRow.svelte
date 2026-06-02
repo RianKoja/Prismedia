@@ -23,6 +23,8 @@
     onDelete?: (track: AudioTrackListItemDto) => void;
     trackHref?: string;
     ratingAriaPrefix?: string;
+    /** Explicit number to show in the "#" column, overriding the index-based default. Used so multi-disc albums restart numbering per section. */
+    displayNumber?: number;
   }
 
   let {
@@ -36,6 +38,7 @@
     onDelete,
     trackHref,
     ratingAriaPrefix,
+    displayNumber,
   }: Props = $props();
 
   let menuOpen = $state(false);
@@ -44,7 +47,7 @@
   let renameBusy = $state(false);
   let renameError = $state<string | null>(null);
 
-  const displayTrackNumber = $derived((track.trackNumber ?? index) + 1);
+  const displayTrackNumber = $derived(displayNumber ?? (track.trackNumber ?? index) + 1);
 
   function formatDuration(sec: number | null | undefined) {
     if (!sec) return null;

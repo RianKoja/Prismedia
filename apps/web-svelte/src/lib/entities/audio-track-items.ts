@@ -39,6 +39,7 @@ export function entityThumbnailToTrackItem(
 ): AudioTrackListItemDto {
   const durationMeta = thumb.meta.find((m) => m.icon === "duration");
   const codecMeta = thumb.meta.find((m) => m.icon === "audio");
+  const sectionMeta = thumb.meta.find((m) => m.icon === "disc");
 
   return {
     id: thumb.id,
@@ -56,6 +57,7 @@ export function entityThumbnailToTrackItem(
     embeddedArtist: null,
     embeddedAlbum: null,
     trackNumber: toNumber(thumb.sortOrder) ?? null,
+    sectionLabel: sectionMeta?.label ?? null,
     waveformPath: null,
     libraryId,
     sortOrder: toNumber(thumb.sortOrder) ?? 0,
@@ -95,6 +97,7 @@ export function audioTrackDetailToListItem(detail: AudioTrackDetail): AudioTrack
     embeddedArtist: detail.embeddedArtist ?? null,
     embeddedAlbum: detail.embeddedAlbum ?? null,
     trackNumber: toNumber(detail.sortOrder) ?? null,
+    sectionLabel: null,
     waveformPath: waveformFile?.path ?? null,
     libraryId: detail.parentEntityId ?? null,
     sortOrder: toNumber(detail.sortOrder) ?? 0,

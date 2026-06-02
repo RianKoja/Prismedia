@@ -36,6 +36,29 @@
   const totalDuration = $derived(
     tracks.reduce((sum, t) => sum + (t.duration ?? 0), 0),
   );
+
+  // Group consecutive tracks by their section (disc) label. Multi-disc albums render a small
+  // heading per section with track numbering that restarts inside each one; single-section
+  // albums collapse to one unlabelled group and read exactly as before. `globalIndex` keeps a
+  // stable overall position for each row.
+  const sections = $derived.by(() => {
+    const groups: {
+      label: string | null;
+      rows: { track: AudioTrackListItemDto; globalIndex: number; numberInSection: number }[];
+    }[] = [];
+    tracks.forEach((track, globalIndex) => {
+      const label = track.sectionLabel ?? null;
+      let group = groups[groups.length - 1];
+      if (!group || group.label !== label) {
+        group = { label, rows: [] };
+        groups.push(group);
+      }
+      group.rows.push({ track, globalIndex, numberInSection: group.rows.length + 1 });
+    });
+    return groups;
+  });
+
+  const hasSections = $derived(sections.some((group) => group.label !== null));
 </script>
 
 <div class={cn("surface-panel border border-border-subtle overflow-hidden", className)}>
@@ -49,18 +72,28 @@
     <span></span>
   </div>
 
-  {#each tracks as track, index (track.id)}
-    <TrackListRow
-      {track}
-      {index}
-      isActive={track.id === activeTrackId}
-      isPlaying={track.id === activeTrackId && isPlaying}
-      {onPlay}
-      {onRatingChange}
-      {onRename}
-      {onDelete}
-      trackHref={resolveEntityHref("audio-track", track.id)}
-    />
+  {#each sections as section (section.label ?? "__main__")}
+    {#if hasSections && section.label}
+      <div
+        class="border-b border-border-subtle bg-surface-raised/40 px-4 py-1.5 font-mono text-[0.65rem] font-semibold uppercase tracking-widest text-text-disabled"
+      >
+        {section.label}
+      </div>
+    {/if}
+    {#each section.rows as row (row.track.id)}
+      <TrackListRow
+        track={row.track}
+        index={row.globalIndex}
+        displayNumber={hasSections ? row.numberInSection : undefined}
+        isActive={row.track.id === activeTrackId}
+        isPlaying={row.track.id === activeTrackId && isPlaying}
+        {onPlay}
+        {onRatingChange}
+        {onRename}
+        {onDelete}
+        trackHref={resolveEntityHref("audio-track", row.track.id)}
+      />
+    {/each}
   {/each}
 
   {#if tracks.length > 0}
