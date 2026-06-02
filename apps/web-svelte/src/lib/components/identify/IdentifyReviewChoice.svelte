@@ -9,15 +9,11 @@
     X,
   } from "@lucide/svelte";
   import { cn } from "@prismedia/ui-svelte";
-  import EntityThumbnail from "$lib/components/thumbnails/EntityThumbnail.svelte";
   import IdentifyProviderSelect from "./IdentifyProviderSelect.svelte";
   import IdentifyTargetPreview from "./IdentifyTargetPreview.svelte";
   import type { EntitySearchCandidate } from "$lib/api/identify-types";
   import type { EntityCard } from "$lib/api/entities";
-  import {
-    identifyCandidateKey,
-    identifyCandidateToThumbnailCard,
-  } from "./identify-candidate-card";
+  import { identifyCandidateKey } from "./identify-candidate-card";
   import { entityKindIcon } from "./identify-icons";
   import { aspectRatioForKind, toAspectRatioValue } from "$lib/entities/entity-thumbnail";
   import { useIdentifyStore } from "./identify-store.svelte";
@@ -250,7 +246,6 @@
     <div class="flex flex-col gap-2.5 p-3.5">
       {#each localCandidates as candidate, i (identifyCandidateKey(candidate, i))}
         {@const candidateKey = identifyCandidateKey(candidate, i)}
-        {@const card = identifyCandidateToThumbnailCard(candidate, entity.kind, i)}
         {@const hasCover = Boolean(candidate.posterUrl)}
         {@const isChecking = checkingCandidateKey === candidateKey}
         <div
@@ -267,21 +262,24 @@
           onkeydown={(event) => handleCandidateKeydown(event, candidate, candidateKey)}
         >
           <div class="min-w-0">
-            {#if hasCover}
-              <EntityThumbnail
-                {card}
-                linkable={false}
-                hoverPreviewsEnabled={false}
-                interactive={false}
-              />
-            {:else}
-              <div
-                class="grid w-full place-items-center overflow-hidden rounded-xs border border-border-subtle bg-surface-3"
-                style="aspect-ratio: {candidateAspect};"
-              >
+            <div
+              class="relative w-full overflow-hidden rounded-xs border border-border-subtle bg-surface-3"
+              style="aspect-ratio: {candidateAspect};"
+            >
+              <div class="grid h-full w-full place-items-center">
                 <CandidateKindIcon class="h-6 w-6 text-text-disabled" />
               </div>
-            {/if}
+              {#if hasCover}
+                <img
+                  src={candidate.posterUrl}
+                  alt=""
+                  loading="lazy"
+                  decoding="async"
+                  class="absolute inset-0 h-full w-full object-cover"
+                  onerror={(event) => ((event.currentTarget as HTMLImageElement).style.display = "none")}
+                />
+              {/if}
+            </div>
           </div>
 
           <div class="flex min-w-0 flex-col justify-center gap-1.5 py-1">

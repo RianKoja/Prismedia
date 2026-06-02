@@ -256,7 +256,7 @@
 
 <div class={trackItems.length > 0 ? "detail-page has-audio-player" : "detail-page"}>
   {#if loadState === "loading"}
-    <EntityDetailSkeleton />
+    <EntityDetailSkeleton posterAspect="1 / 1" />
   {:else if loadState === "error"}
     <div class="error-notice">
       <p>{errorMessage ?? "Failed to load audio library."}</p>

@@ -5,16 +5,19 @@
     posterSize?: EntityDetailPosterSize;
     showHero?: boolean;
     tabCount?: number;
+    /** CSS aspect-ratio for the poster placeholder (e.g. "1 / 1" for music). Defaults to portrait. */
+    posterAspect?: string;
   }
 
   let {
     posterSize = "large",
     showHero = true,
     tabCount = 3,
+    posterAspect = "2 / 3",
   }: Props = $props();
 </script>
 
-<article class="skeleton" data-poster-size={posterSize} aria-busy="true" aria-label="Loading">
+<article class="skeleton" data-poster-size={posterSize} style:--skeleton-poster-aspect={posterAspect} aria-busy="true" aria-label="Loading">
   {#if showHero}
     <div class="skeleton-hero">
       <div class="skeleton-hero-gradient"></div>
@@ -102,7 +105,7 @@
     position: relative;
     flex-shrink: 0;
     width: var(--poster-width, 7rem);
-    aspect-ratio: 2 / 3;
+    aspect-ratio: var(--skeleton-poster-aspect, 2 / 3);
     border-radius: var(--radius-sm, 6px);
     background: #050505;
     box-shadow:
