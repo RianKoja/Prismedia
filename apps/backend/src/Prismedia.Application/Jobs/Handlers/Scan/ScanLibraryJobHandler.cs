@@ -24,7 +24,7 @@ public sealed class ScanLibraryJobHandler(
         @"^(?:Season\s*(?<season>\d{1,3})|S(?<season>\d{1,3}))$",
         RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
     private static readonly Regex EpisodeTokenPattern = new(
-        @"(?:^|[\s._-])[Ss](?<season>\d{1,3})[\s._-]*[Ee](?<episode>\d{1,4})(?:\D|$)",
+        @"(?:^|[\s._\-(\[])[Ss](?<season>\d{1,3})[\s._-]*[Ee](?<episode>\d{1,4})(?:\D|$)",
         RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
     private static readonly Regex GeneratedVideoArtifactDirectoryPattern = new(
         @"(?:^|[-._\s])(?:trickplay)$",
@@ -267,7 +267,12 @@ public sealed class ScanLibraryJobHandler(
 
         movieFolderName = Path.GetFileName(parentFolder);
         var fileTitle = Path.GetFileNameWithoutExtension(filePath);
-        if (ParseEpisodeToken(fileTitle) is not null || !LooksLikeMovieFileForFolder(movieFolderName, fileTitle)) {
+        // A lone video sitting directly inside a folder under the root is treated as a movie regardless
+        // of how the release filename is spelled (folders rarely match release names like
+        // "Pokemon.The.First.Movie..." or "sweeney-todd-1982.ia"). Episodic tokens still route the file
+        // to series handling instead, and the single-direct-file / no-content-subfolder checks below
+        // keep multi-file or season-structured folders out of the movie path.
+        if (ParseEpisodeToken(fileTitle) is not null) {
             return false;
         }
 
@@ -300,24 +305,17 @@ public sealed class ScanLibraryJobHandler(
         return true;
     }
 
-    private static bool LooksLikeMovieFileForFolder(string movieFolderName, string fileTitle) {
-        if (string.Equals(movieFolderName, fileTitle, StringComparison.OrdinalIgnoreCase)) {
-            return true;
-        }
-
-        if (!fileTitle.StartsWith(movieFolderName, StringComparison.OrdinalIgnoreCase)) {
-            return false;
-        }
-
-        var suffix = fileTitle[movieFolderName.Length..];
-        return suffix.Length > 0 && (char.IsWhiteSpace(suffix[0]) || suffix[0] is '-' or '_' or '.');
-    }
-
     private static bool HasContentSubdirectories(string folderPath) {
         foreach (var directory in Directory.EnumerateDirectories(folderPath)) {
-            if (!GeneratedVideoArtifactDirectoryPattern.IsMatch(Path.GetFileName(directory))) {
-                return true;
+            var name = Path.GetFileName(directory);
+            // Hidden/dot directories (".thumbs", ".actors", ".AppleDouble", …) and generated
+            // artifact directories (a sibling "*.trickplay") are bookkeeping, not real content,
+            // so they must not disqualify an otherwise single-file movie folder.
+            if (name.StartsWith('.') || GeneratedVideoArtifactDirectoryPattern.IsMatch(name)) {
+                continue;
             }
+
+            return true;
         }
 
         return false;

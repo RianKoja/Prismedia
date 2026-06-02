@@ -536,6 +536,209 @@ public sealed class ScanJobHandlerTests {
     }
 
     [Fact]
+    public async Task VideoScanClassifiesParenthesizedEpisodeTokensDirectlyUnderSeries() {
+        var root = new LibraryRootData(
+            Guid.Parse("11111111-1111-1111-1111-111111111111"),
+            "/media/videos",
+            "Videos",
+            Enabled: true,
+            Recursive: true,
+            ScanVideos: true,
+            ScanImages: false,
+            ScanAudio: false,
+            ScanBooks: false,
+            IsNsfw: false);
+        var videoId = Guid.Parse("22222222-2222-2222-2222-222222222222");
+        var persistence = new FakeScanPersistence([root]) {
+            Settings = DisabledGeneratedWorkSettings,
+            UpsertedVideoIds = [videoId],
+            DownstreamNeedsById = new Dictionary<Guid, DownstreamNeeds> {
+                [videoId] = new(
+                    NeedsProbe: false,
+                    MissingOshash: false,
+                    MissingMd5: false,
+                    NeedsPreview: false,
+                    NeedsTrickplay: false,
+                    NeedsSubtitleExtraction: false,
+                    NeedsGridThumbnail: false)
+            }
+        };
+        // Episodes named "(S1E1)" with the token wrapped in parentheses and no Season subfolder must
+        // still route to series handling rather than falling through to a loose Video.
+        var discovery = new RecordingFileDiscovery([
+            "/media/videos/Dragon Ball Super/Dragon Ball Super (S1E1).mp4"
+        ]);
+        var handler = new ScanLibraryJobHandler(
+            NullLogger<ScanLibraryJobHandler>.Instance,
+            discovery,
+            persistence,
+            persistence,
+            persistence);
+        var job = new JobRunSnapshot(
+            Guid.NewGuid(),
+            JobType.ScanLibrary,
+            JobRunStatus.Running,
+            Progress: 0,
+            Message: null,
+            PayloadJson: $$"""{"libraryRootId":"{{root.Id}}"}""",
+            TargetEntityKind: "library-root",
+            TargetEntityId: root.Id.ToString(),
+            TargetLabel: root.Label,
+            CreatedAt: DateTimeOffset.UtcNow,
+            StartedAt: DateTimeOffset.UtcNow,
+            FinishedAt: null);
+
+        await handler.HandleAsync(new JobContext(job, new RecordingJobQueue()), CancellationToken.None);
+
+        var item = Assert.Single(persistence.UpsertedVideoItems);
+        Assert.Equal("Dragon Ball Super", item.Series?.Title);
+        Assert.Equal("/media/videos/Dragon Ball Super", item.Series?.FolderPath);
+        Assert.Null(item.Season);
+        Assert.Equal(1, item.EpisodeNumber);
+        Assert.Null(item.Movie);
+        Assert.Empty(persistence.ValidMoviePaths);
+    }
+
+    [Fact]
+    public async Task VideoScanClassifiesSingleFolderFileAsMovieWhenFilenameDiffersFromFolder() {
+        var root = new LibraryRootData(
+            Guid.Parse("11111111-1111-1111-1111-111111111111"),
+            "/media/videos",
+            "Videos",
+            Enabled: true,
+            Recursive: true,
+            ScanVideos: true,
+            ScanImages: false,
+            ScanAudio: false,
+            ScanBooks: false,
+            IsNsfw: false);
+        var videoId = Guid.Parse("22222222-2222-2222-2222-222222222222");
+        var persistence = new FakeScanPersistence([root]) {
+            Settings = DisabledGeneratedWorkSettings,
+            UpsertedVideoIds = [videoId],
+            DownstreamNeedsById = new Dictionary<Guid, DownstreamNeeds> {
+                [videoId] = new(
+                    NeedsProbe: false,
+                    MissingOshash: false,
+                    MissingMd5: false,
+                    NeedsPreview: false,
+                    NeedsTrickplay: false,
+                    NeedsSubtitleExtraction: false,
+                    NeedsGridThumbnail: false)
+            }
+        };
+        // Standard Radarr/Jellyfin layout: clean folder name, release-style filename that does not begin
+        // with the folder name (accents, dot separators). It must still classify as a movie.
+        var discovery = new RecordingFileDiscovery([
+            "/media/videos/Pokémon - The First Movie (1998)/Pokemon.The.First.Movie.1998.DUBBED.1080p.BluRay.REMUX-DDB.mkv"
+        ]);
+        var handler = new ScanLibraryJobHandler(
+            NullLogger<ScanLibraryJobHandler>.Instance,
+            discovery,
+            persistence,
+            persistence,
+            persistence);
+        var job = new JobRunSnapshot(
+            Guid.NewGuid(),
+            JobType.ScanLibrary,
+            JobRunStatus.Running,
+            Progress: 0,
+            Message: null,
+            PayloadJson: $$"""{"libraryRootId":"{{root.Id}}"}""",
+            TargetEntityKind: "library-root",
+            TargetEntityId: root.Id.ToString(),
+            TargetLabel: root.Label,
+            CreatedAt: DateTimeOffset.UtcNow,
+            StartedAt: DateTimeOffset.UtcNow,
+            FinishedAt: null);
+
+        await handler.HandleAsync(new JobContext(job, new RecordingJobQueue()), CancellationToken.None);
+
+        var item = Assert.Single(persistence.UpsertedVideoItems);
+        Assert.Equal("Pokémon - The First Movie (1998)", item.Movie?.Title);
+        Assert.Equal("/media/videos/Pokémon - The First Movie (1998)", item.Movie?.FolderPath);
+        Assert.Null(item.Series);
+        Assert.Null(item.Season);
+        Assert.Equal(["/media/videos/Pokémon - The First Movie (1998)"], persistence.ValidMoviePaths);
+    }
+
+    [Fact]
+    public async Task VideoScanClassifiesMovieFolderWithHiddenArtifactDirectory() {
+        var tempRoot = Path.Combine(Path.GetTempPath(), $"prismedia-movie-scan-{Guid.NewGuid():N}");
+        try {
+            var movieFolder = Path.Combine(tempRoot, "A Bug's Life (1998)");
+            // A stray hidden directory left by another tool (".thumbs") plus a sibling "*.trickplay"
+            // artifact directory must not disqualify the lone movie file in the folder.
+            Directory.CreateDirectory(Path.Combine(movieFolder, ".thumbs"));
+            Directory.CreateDirectory(Path.Combine(movieFolder, "A Bug's Life (1998) Bluray-2160p.trickplay"));
+            File.WriteAllText(Path.Combine(movieFolder, ".thumbs", "A Bug's Life (1998) Bluray-2160p.jpg"), "thumb");
+            File.WriteAllText(Path.Combine(movieFolder, "movie.nfo"), "<movie />");
+            var videoPath = Path.Combine(movieFolder, "A Bug's Life (1998) Bluray-2160p.mkv");
+            File.WriteAllText(videoPath, "video");
+
+            var root = new LibraryRootData(
+                Guid.Parse("11111111-1111-1111-1111-111111111111"),
+                tempRoot,
+                "Videos",
+                Enabled: true,
+                Recursive: true,
+                ScanVideos: true,
+                ScanImages: false,
+                ScanAudio: false,
+                ScanBooks: false,
+                IsNsfw: false);
+            var videoId = Guid.Parse("22222222-2222-2222-2222-222222222222");
+            var persistence = new FakeScanPersistence([root]) {
+                Settings = DisabledGeneratedWorkSettings,
+                UpsertedVideoIds = [videoId],
+                DownstreamNeedsById = new Dictionary<Guid, DownstreamNeeds> {
+                    [videoId] = new(
+                        NeedsProbe: false,
+                        MissingOshash: false,
+                        MissingMd5: false,
+                        NeedsPreview: false,
+                        NeedsTrickplay: false,
+                        NeedsSubtitleExtraction: false,
+                        NeedsGridThumbnail: false)
+                }
+            };
+            var handler = new ScanLibraryJobHandler(
+                NullLogger<ScanLibraryJobHandler>.Instance,
+                new RecordingFileDiscovery([videoPath]),
+                persistence,
+                persistence,
+                persistence);
+            var job = new JobRunSnapshot(
+                Guid.NewGuid(),
+                JobType.ScanLibrary,
+                JobRunStatus.Running,
+                Progress: 0,
+                Message: null,
+                PayloadJson: $$"""{"libraryRootId":"{{root.Id}}"}""",
+                TargetEntityKind: "library-root",
+                TargetEntityId: root.Id.ToString(),
+                TargetLabel: root.Label,
+                CreatedAt: DateTimeOffset.UtcNow,
+                StartedAt: DateTimeOffset.UtcNow,
+                FinishedAt: null);
+
+            await handler.HandleAsync(new JobContext(job, new RecordingJobQueue()), CancellationToken.None);
+
+            var item = Assert.Single(persistence.UpsertedVideoItems);
+            Assert.Equal("A Bug's Life (1998)", item.Movie?.Title);
+            Assert.Equal(movieFolder, item.Movie?.FolderPath);
+            Assert.Null(item.Series);
+            Assert.Null(item.Season);
+            Assert.Equal([movieFolder], persistence.ValidMoviePaths);
+        }
+        finally {
+            if (Directory.Exists(tempRoot)) {
+                Directory.Delete(tempRoot, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
     public async Task VideoScanKeepsLibraryRootFilesAsVideos() {
         var root = new LibraryRootData(
             Guid.Parse("11111111-1111-1111-1111-111111111111"),
