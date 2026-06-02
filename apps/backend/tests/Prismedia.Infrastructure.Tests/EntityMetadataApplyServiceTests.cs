@@ -244,6 +244,44 @@ public sealed class EntityMetadataApplyServiceTests {
     }
 
     [Fact]
+    public async Task ReApplyingRelationshipsReconcilesWithoutDuplicateKeyTrackingError() {
+        await using var db = CreateContext();
+        var entityId = Guid.Parse("31313131-3131-3131-3131-313131313131");
+        SeedEntity(db, entityId, "video", "Movie");
+        await db.SaveChangesAsync();
+
+        var proposal = new EntityMetadataProposal(
+            ProposalId: "tmdb:movie:7",
+            Provider: "tmdb",
+            TargetKind: "video",
+            Confidence: 1,
+            MatchReason: "external-id",
+            Patch: EmptyPatch() with {
+                Tags = ["Drama", "Mystery"],
+                Studio = "Prismedia Pictures",
+                Credits = [new CreditPatch("Ada Actor", "person", "Lead", 0)]
+            },
+            Images: [],
+            Children: [],
+            Candidates: []);
+
+        var service = new EntityMetadataApplyService(db, new PluginArtworkServiceOptions(Path.GetTempPath()));
+        string[] fields = ["tags", "studio", "credits"];
+
+        await service.ApplyAsync(entityId, proposal, fields, selectedImages: null, CancellationToken.None);
+        // Re-applying re-removes and re-adds the same links; previously this threw a duplicate-key
+        // change-tracker exception because the removed row and the re-added row share a composite key.
+        await service.ApplyAsync(entityId, proposal, fields, selectedImages: null, CancellationToken.None);
+
+        Assert.Equal(1, await db.EntityRelationshipLinks
+            .CountAsync(row => row.EntityId == entityId && row.RelationshipCode == RelationshipKind.Cast.ToCode()));
+        Assert.Equal(2, await db.EntityRelationshipLinks
+            .CountAsync(row => row.EntityId == entityId && row.RelationshipCode == RelationshipKind.Tags.ToCode()));
+        Assert.Equal(1, await db.EntityRelationshipLinks
+            .CountAsync(row => row.EntityId == entityId && row.RelationshipCode == RelationshipKind.Studio.ToCode()));
+    }
+
+    [Fact]
     public async Task ApplySeriesCascadePersistsEpisodeMetadataAndCredits() {
         await using var db = CreateContext();
         var seriesId = Guid.Parse("22222222-2222-2222-2222-222222222222");

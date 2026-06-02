@@ -231,6 +231,32 @@ public sealed partial class EntityMetadataApplyService {
         int sortOrder,
         string? metadataJson,
         DateTimeOffset now) {
+        // The composite key is (EntityId, RelationshipCode, TargetEntityId). The same link can be
+        // produced more than once in a single apply — a remove pass marks the persisted row Deleted
+        // before it is re-added, and several entities in a tree (e.g. a book's volumes and chapters)
+        // resolve their relationship owner to the same parent and each re-apply its credits/tags. EF
+        // cannot track two instances of the same key, so reconcile against the change tracker: update
+        // the already-tracked link in place (reviving a Deleted one) rather than adding a duplicate.
+        var tracked = _db.ChangeTracker.Entries<EntityRelationshipLinkRow>()
+            .FirstOrDefault(entry =>
+                entry.Entity.EntityId == entityId &&
+                entry.Entity.RelationshipCode == code &&
+                entry.Entity.TargetEntityId == targetEntityId);
+        if (tracked is not null) {
+            tracked.Entity.Label = label;
+            tracked.Entity.TargetKindCode = targetKindCode;
+            tracked.Entity.SortOrder = sortOrder;
+            tracked.Entity.MetadataJson = metadataJson;
+            if (tracked.State == EntityState.Deleted) {
+                // The row exists in the database; revive and update it instead of delete-then-insert.
+                tracked.Entity.CreatedAt = now;
+                tracked.State = EntityState.Modified;
+            }
+            // An Added entry stays Added (its updated values are inserted); Unchanged becomes Modified
+            // automatically via property change detection.
+            return;
+        }
+
         _db.EntityRelationshipLinks.Add(new EntityRelationshipLinkRow {
             EntityId = entityId,
             RelationshipCode = code,
