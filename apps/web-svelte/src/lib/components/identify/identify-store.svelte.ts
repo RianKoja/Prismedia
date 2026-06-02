@@ -138,6 +138,7 @@ export class IdentifyStore {
   #childAbort = new Map<string, AbortController>();
   #childQueue: string[] = [];
   #childPumpActive = false;
+  #childIdentifyProposalId: string | null = null;
   #childContext: { parentEntityId: string; provider: string; childEntities: StructuralChildEntity[]; parentExternalIds: Record<string, string> } | null = null;
   #stopApplyProgressPolling: (() => void) | null = null;
 
@@ -659,7 +660,12 @@ export class IdentifyStore {
     provider: string,
     childEntities: StructuralChildEntity[],
   ) {
+    // Identify a parent's children exactly once. Re-opening the review (navigating away and back)
+    // must not restart the lookups: results already live in the persisted proposal, and the
+    // per-child status map is kept so the grid renders the same state.
+    if (this.#childIdentifyProposalId === proposal.proposalId) return;
     this.#resetChildIdentification();
+    this.#childIdentifyProposalId = proposal.proposalId;
     this.#childContext = {
       parentEntityId,
       provider,
@@ -780,14 +786,26 @@ export class IdentifyStore {
   }
 
   #updateActiveProposal(update: (proposal: EntityMetadataProposal) => EntityMetadataProposal) {
+    // Accumulate resolved children into the PARENT's persisted proposal (its queue item), regardless
+    // of whether the user has drilled into a child — so results survive navigation and the proposal
+    // ends up exactly as if everything had been identified up front. Sync the live view only when it
+    // is the parent's own review.
+    const context = this.#childContext;
+    if (!context) return;
+    const queued = this.queue.find((item) => item.entityId === context.parentEntityId);
+    if (!queued?.proposal) return;
+    const nextProposal = update(queued.proposal);
+    this.#upsertQueueItem({ ...queued, proposal: nextProposal });
+
     const view = this.view;
-    if (view.kind !== "review-parent" && view.kind !== "review-child") return;
-    const nextProposal = update(view.proposal);
-    this.view = { ...view, proposal: nextProposal };
-    const queued = this.queue.find((item) => item.entityId === view.entity.id);
-    if (queued) {
-      this.#upsertQueueItem({ ...queued, proposal: nextProposal });
+    if (view.kind === "review-parent" && view.entity.id === context.parentEntityId) {
+      this.view = { ...view, proposal: nextProposal };
     }
+  }
+
+  /** Returns the currently-persisted identify proposal for an entity (used to reopen a live review). */
+  liveProposalFor(entityId: string): EntityMetadataProposal | null {
+    return this.queue.find((item) => item.entityId === entityId)?.proposal ?? null;
   }
 
   nextQueueItem(currentEntityId: string): IdentifyQueueItem | null {

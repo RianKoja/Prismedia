@@ -3,7 +3,7 @@
   import { cn } from "@prismedia/ui-svelte";
   import { assetUrl } from "$lib/api/orval-fetch";
   import type { EntityMetadataProposal } from "$lib/api/identify-types";
-  import type { StructuralChildEntity } from "$lib/components/identify-review";
+  import { reviewImagePreviewUrl, type StructuralChildEntity } from "$lib/components/identify-review";
   import { aspectRatioForKind, toAspectRatioValue } from "$lib/entities/entity-thumbnail";
   import { useIdentifyStore } from "./identify-store.svelte";
 
@@ -28,8 +28,11 @@
 
   function coverFor(childId: string, fallback: string | null): string | undefined {
     const matched = matchedProposal(childId);
+    // The matched proposal's image is an external provider URL (e.g. Cover Art Archive); resolve it
+    // through the review helper rather than assetUrl, which only handles local relative paths.
     const image = matched?.images?.find((img) => img.kind === "cover" || img.kind === "poster" || img.kind === "thumbnail");
-    return assetUrl(image?.url ?? fallback ?? undefined) || undefined;
+    if (image) return reviewImagePreviewUrl(image, matched?.targetKind);
+    return assetUrl(fallback ?? undefined) || undefined;
   }
 </script>
 

@@ -40,6 +40,7 @@
   } from "./identify-review-helpers";
   import type { EntityMetadataProposal } from "$lib/api/identify-types";
   import type { EntityCard } from "$lib/api/entities";
+  import { aspectRatioForKind } from "$lib/entities/entity-thumbnail";
   import { useIdentifyStore } from "./identify-store.svelte";
 
   interface Props {
@@ -84,6 +85,8 @@
     children.filter((child) => store.isReviewProposalSelected(child.proposalId)).length,
   );
   const contextTitle = $derived(proposal.patch?.title?.trim() || "Child");
+  // Music artists/albums/tracks use a square cover rather than a portrait poster.
+  const coverIsSquare = $derived(aspectRatioForKind(proposal.targetKind) === "square");
   const contextPosterUrl = $derived(
     selectedProposalImageUrl(proposal, ["poster", "thumbnail", "cover", "logo"], selectedImages, proposal.proposalId, store)
     ?? proposalImageUrl(proposal, ["poster", "thumbnail", "cover", "logo"]),
@@ -166,7 +169,8 @@
 
   function goBackToParent() {
     if (ancestors.length <= 1) {
-      store.navigateTo({ kind: "review-parent", entity, proposal: parentProposal });
+      // Reopen the parent with its live proposal so children resolved while drilled in still show.
+      store.navigateTo({ kind: "review-parent", entity, proposal: store.liveProposalFor(entity.id) ?? parentProposal });
       return;
     }
     const nextAncestors = ancestors.slice(0, -1);
@@ -226,9 +230,9 @@
   <!-- Context bar -->
   <div class="grid grid-cols-[auto_1fr_auto_auto] items-center gap-4 rounded-sm border border-border-subtle bg-surface-1 p-3.5 shadow-well">
     {#if contextPosterUrl}
-      <img src={contextPosterUrl} alt="" class="h-16 w-11 rounded-xs object-cover" decoding="async" />
+      <img src={contextPosterUrl} alt="" class={cn("rounded-xs object-cover", coverIsSquare ? "h-14 w-14" : "h-16 w-11")} decoding="async" />
     {:else}
-      <div class="grid h-16 w-11 place-items-center rounded-xs bg-surface-3">
+      <div class={cn("grid place-items-center rounded-xs bg-surface-3", coverIsSquare ? "h-14 w-14" : "h-16 w-11")}>
         <Layers class="h-5 w-5 text-text-disabled" />
       </div>
     {/if}
@@ -432,7 +436,7 @@
                 ? "border-border-accent-strong shadow-[0_0_16px_rgba(242,194,106,0.2)]"
                 : "border-border-default hover:border-border-accent",
             )}
-            style="aspect-ratio: {group.kind === 'poster' || group.kind === 'cover' ? '2/3' : group.kind === 'backdrop' ? '16/9' : '2/1'};"
+            style="aspect-ratio: {group.kind === 'poster' || group.kind === 'cover' ? (coverIsSquare ? '1/1' : '2/3') : group.kind === 'backdrop' ? '16/9' : '2/1'};"
             onclick={() => setImageSelected(group.kind, selectedImages[group.kind] === image.url ? null : image.url)}
           >
             <img
