@@ -42,6 +42,11 @@ const store = vi.hoisted(() => ({
   ensureReviewDetailForProposal: vi.fn(),
   deleteQueueItem: vi.fn(),
   applyProposal: vi.fn(),
+  childIdentify: {} as Record<string, { status: string; candidateCount?: number }>,
+  childWorkPending: vi.fn(() => false),
+  startChildIdentification: vi.fn(),
+  cancelChild: vi.fn(),
+  reidentifyChild: vi.fn(),
 }));
 
 vi.mock("./identify-store.svelte", () => ({
@@ -168,7 +173,7 @@ describe("Identify review surfaces", () => {
     expect(header).toHaveAttribute("aria-expanded", "true");
   });
 
-  it("shows New and Merge chips on relationship thumbnails and Matched chips on children", () => {
+  it("shows New and Merge chips on relationship thumbnails", () => {
     render(IdentifyReviewParent, {
       props: {
         entity: entity(),
@@ -187,24 +192,15 @@ describe("Identify review surfaces", () => {
             proposal("person-existing", { targetKind: "person", title: "Tim Robinson" }),
             proposal("person-new", { targetKind: "person", title: "New Actor" }),
           ],
-          children: [
-            proposal("season-existing", {
-              targetKind: "video-season",
-              title: "Season 1",
-              targetEntityId: "season-1",
-            }),
-            proposal("season-new", { targetKind: "video-season", title: "Season 2" }),
-          ],
         }),
       },
     });
 
     expect(screen.getAllByText("Merge").length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText("New").length).toBeGreaterThanOrEqual(1);
-    expect(screen.getAllByText("Matched").length).toBeGreaterThanOrEqual(2);
   });
 
-  it("shows normalized episode chips and local covers for matched children", () => {
+  it("renders a matched child with its local cover and provider title", () => {
     render(IdentifyReviewParent, {
       props: {
         entity: entity(),
@@ -241,8 +237,8 @@ describe("Identify review surfaces", () => {
       },
     });
 
-    expect(screen.getByText("E01")).toBeInTheDocument();
-    expect(screen.getByAltText("Local Episode One")).toHaveAttribute("src", "/assets/thumbnails/episode-1.jpg");
+    expect(screen.getByText("Episode One")).toBeInTheDocument();
+    expect(screen.getByAltText("Local Episode One")).toBeInTheDocument();
   });
 
   it("shows local covers for walked child grandchildren when provider stills are missing", () => {

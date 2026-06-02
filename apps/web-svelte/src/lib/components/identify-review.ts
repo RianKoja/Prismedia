@@ -1,5 +1,6 @@
 import type {
   EntityCard,
+  EntityGroup,
   EntityThumbnail,
 } from "$lib/api/generated/model";
 import { getCapability, getDescription, getImagesCapability } from "$lib/api/capabilities";
@@ -573,9 +574,35 @@ function titlesForRelationship(
     .filter((title): title is string => Boolean(title));
 }
 
-function isRelationshipKind(kind: string): boolean {
+export function isRelationshipKind(kind: string): boolean {
   const normalized = kind.toLowerCase();
   return normalized === "person" || normalized === "studio" || normalized === "tag";
+}
+
+/** A local structural child of an entity that can be identified on its own (album, episode, track). */
+export interface StructuralChildEntity {
+  id: string;
+  kind: string;
+  title: string;
+  coverUrl: string | null;
+}
+
+/**
+ * Enumerates an entity's local structural children from its detail `childrenByKind` groups
+ * (excluding relationship kinds) so the review screen can identify each one incrementally.
+ */
+export function structuralChildEntities(
+  childrenByKind: EntityGroup[] | null | undefined,
+): StructuralChildEntity[] {
+  return (childrenByKind ?? [])
+    .filter((group) => !isRelationshipKind(group.kind))
+    .flatMap((group) => group.entities)
+    .map((thumbnail) => ({
+      id: thumbnail.id,
+      kind: thumbnail.kind,
+      title: thumbnail.title,
+      coverUrl: thumbnail.coverUrl ?? null,
+    }));
 }
 
 function entityKindLabel(kind: string): string {

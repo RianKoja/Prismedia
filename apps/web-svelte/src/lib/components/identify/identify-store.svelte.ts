@@ -9,6 +9,7 @@ import {
   fetchIdentifyApplyProgress,
   fetchIdentifyQueue,
   fetchIdentifyQueueItem,
+  identifyEntityTransient,
   searchIdentifyQueueItem,
 } from "$lib/api/identify-client";
 import { fetchPluginProviders } from "$lib/api/plugins";
@@ -29,7 +30,24 @@ import {
   buildRootReviewApplyPayload,
   defaultFieldSelectionForReview,
   defaultImageSelectionForReview,
+  type StructuralChildEntity,
 } from "$lib/components/identify-review";
+
+/** Per-child identify status used to drive the incremental review children grid. */
+export type ChildIdentifyStatus =
+  | "queued"
+  | "loading"
+  | "matched"
+  | "candidates"
+  | "none"
+  | "error"
+  | "cancelled";
+
+export interface ChildIdentifyEntry {
+  status: ChildIdentifyStatus;
+  candidateCount?: number;
+  error?: string | null;
+}
 
 /** Options shared by the auto-identify path that controls whether resolving a queue item also navigates the review view. */
 interface IdentifyResolveOptions {
@@ -115,6 +133,12 @@ export class IdentifyStore {
   reviewTagSelections = $state<Record<string, Record<string, boolean>>>({});
   reviewDetailsByEntityId = $state<Record<string, EntityDetailCard | null>>({});
   reviewDetailLoadingByEntityId = $state<Record<string, boolean>>({});
+  /** Per-child-entity identify status for the active review, keyed by child entity id. */
+  childIdentify = $state<Record<string, ChildIdentifyEntry>>({});
+  #childAbort = new Map<string, AbortController>();
+  #childQueue: string[] = [];
+  #childPumpActive = false;
+  #childContext: { parentEntityId: string; provider: string; childEntities: StructuralChildEntity[] } | null = null;
   #stopApplyProgressPolling: (() => void) | null = null;
 
   constructor(getHideNsfw: () => boolean = () => false) {
@@ -620,6 +644,145 @@ export class IdentifyStore {
       ...this.reviewCascadeSelections,
       [proposalId]: false,
     };
+  }
+
+  // ── Incremental child identify ──────────────────────────────────────────
+  // After the parent proposal is reviewed, each local structural child is identified one at a
+  // time (serial, to stay within provider rate limits). A matched child is appended to the active
+  // proposal's `children` so the existing apply payload includes it; children awaiting a pick or
+  // that failed stay out of the apply. The Accept button is gated until the queue drains.
+
+  /** Begins identifying the entity's local structural children that the provider didn't already return. */
+  startChildIdentification(
+    parentEntityId: string,
+    proposal: EntityMetadataProposal,
+    provider: string,
+    childEntities: StructuralChildEntity[],
+  ) {
+    this.#resetChildIdentification();
+    this.#childContext = { parentEntityId, provider, childEntities };
+    const resolved = new Set(
+      (proposal.children ?? [])
+        .map((child) => child.targetEntityId)
+        .filter((id): id is string => Boolean(id)),
+    );
+    const next: Record<string, ChildIdentifyEntry> = {};
+    for (const child of childEntities) {
+      if (resolved.has(child.id)) continue;
+      next[child.id] = { status: "queued" };
+      this.#childQueue.push(child.id);
+    }
+    this.childIdentify = next;
+    void this.#runChildPump();
+  }
+
+  /** Aborts the in-flight child lookup (if any), deselects the child, and lets the pump continue. */
+  cancelChild(childEntityId: string) {
+    this.#childAbort.get(childEntityId)?.abort();
+    this.#childAbort.delete(childEntityId);
+    this.#childQueue = this.#childQueue.filter((id) => id !== childEntityId);
+    this.#removeChildProposal(childEntityId);
+    this.#setChildStatus(childEntityId, { status: "cancelled" });
+  }
+
+  /** Re-queues a cancelled or errored child for another identify attempt. */
+  reidentifyChild(childEntityId: string) {
+    if (!this.#childContext) return;
+    this.#removeChildProposal(childEntityId);
+    this.#setChildStatus(childEntityId, { status: "queued" });
+    if (!this.#childQueue.includes(childEntityId)) this.#childQueue.push(childEntityId);
+    void this.#runChildPump();
+  }
+
+  /** True while any child is still queued or being identified (used to gate the Accept button). */
+  childWorkPending(): boolean {
+    return Object.values(this.childIdentify).some(
+      (entry) => entry.status === "queued" || entry.status === "loading",
+    );
+  }
+
+  #resetChildIdentification() {
+    this.#childAbort.forEach((controller) => controller.abort());
+    this.#childAbort.clear();
+    this.#childQueue = [];
+    this.#childContext = null;
+    this.childIdentify = {};
+  }
+
+  async #runChildPump() {
+    if (this.#childPumpActive) return;
+    this.#childPumpActive = true;
+    try {
+      while (this.#childQueue.length > 0) {
+        const childId = this.#childQueue.shift()!;
+        if (this.childIdentify[childId]?.status !== "queued") continue;
+        await this.#identifyOneChild(childId);
+      }
+    } finally {
+      this.#childPumpActive = false;
+    }
+  }
+
+  async #identifyOneChild(childEntityId: string) {
+    const context = this.#childContext;
+    const child = context?.childEntities.find((c) => c.id === childEntityId) ?? null;
+    if (!context || !child) {
+      this.#setChildStatus(childEntityId, { status: "none" });
+      return;
+    }
+
+    const controller = new AbortController();
+    this.#childAbort.set(childEntityId, controller);
+    this.#setChildStatus(childEntityId, { status: "loading" });
+    try {
+      const result = await identifyEntityTransient(child.id, context.provider, null, { signal: controller.signal });
+      if (this.childIdentify[childEntityId]?.status === "cancelled") return;
+      if (result?.patch?.title && result.proposalId) {
+        this.#appendChildProposal({ ...result, targetEntityId: child.id });
+        this.#setChildStatus(childEntityId, { status: "matched" });
+      } else if ((result?.candidates?.length ?? 0) > 0) {
+        this.#setChildStatus(childEntityId, { status: "candidates", candidateCount: result.candidates.length });
+      } else {
+        this.#setChildStatus(childEntityId, { status: "none" });
+      }
+    } catch (err) {
+      if (controller.signal.aborted || this.childIdentify[childEntityId]?.status === "cancelled") return;
+      this.#setChildStatus(childEntityId, { status: "error", error: readError(err) });
+    } finally {
+      this.#childAbort.delete(childEntityId);
+    }
+  }
+
+  #setChildStatus(childEntityId: string, entry: ChildIdentifyEntry) {
+    this.childIdentify = { ...this.childIdentify, [childEntityId]: entry };
+  }
+
+  #appendChildProposal(childProposal: EntityMetadataProposal) {
+    this.#updateActiveProposal((proposal) => ({
+      ...proposal,
+      children: [
+        ...(proposal.children ?? []).filter((child) => child.targetEntityId !== childProposal.targetEntityId),
+        childProposal,
+      ],
+    }));
+  }
+
+  #removeChildProposal(childEntityId: string) {
+    this.#updateActiveProposal((proposal) => ({
+      ...proposal,
+      children: (proposal.children ?? []).filter((child) => child.targetEntityId !== childEntityId),
+    }));
+  }
+
+  #updateActiveProposal(update: (proposal: EntityMetadataProposal) => EntityMetadataProposal) {
+    const view = this.view;
+    if (view.kind !== "review-parent" && view.kind !== "review-child") return;
+    const nextProposal = update(view.proposal);
+    this.view = { ...view, proposal: nextProposal };
+    const queued = this.queue.find((item) => item.entityId === view.entity.id);
+    if (queued) {
+      this.#upsertQueueItem({ ...queued, proposal: nextProposal });
+    }
   }
 
   nextQueueItem(currentEntityId: string): IdentifyQueueItem | null {

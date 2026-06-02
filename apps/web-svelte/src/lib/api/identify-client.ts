@@ -1,6 +1,7 @@
 import {
   addIdentifyQueueItem as addIdentifyQueueItemRequest,
   applyIdentifyProposal as applyIdentifyProposalRequest,
+  identifyEntity as identifyEntityRequest,
   applyIdentifyQueueItem as applyIdentifyQueueItemRequest,
   deleteIdentifyQueueItem as deleteIdentifyQueueItemRequest,
   getIdentifyQueueItem as getIdentifyQueueItemRequest,
@@ -12,6 +13,7 @@ import {
 import type {
   ApplyIdentifyProposalRequest,
   ApplyIdentifyQueueItemRequest,
+  IdentifyEntityRequest,
   IdentifyQueueSearchRequest,
   ListIdentifyQueueParams,
 } from "$lib/api/generated/model";
@@ -149,6 +151,27 @@ export function deleteIdentifyQueueItem(entityId: string, options?: RequestOptio
 
 export function fetchIdentifyEntity(entityId: string, options?: RequestOptions): Promise<EntityDetailCard> {
   return fetchEntity(entityId, options);
+}
+
+/**
+ * Runs a single transient identify for one entity (no queue side effects). Used to identify a
+ * structural child on demand: the result is an {@link EntityMetadataProposal} carrying either a
+ * matched patch or search candidates. Pass `options.signal` to abort an in-flight lookup.
+ */
+export function identifyEntityTransient(
+  entityId: string,
+  provider: string,
+  query?: IdentifyQuery | null,
+  options?: RequestOptions & { signal?: AbortSignal },
+): Promise<EntityMetadataProposal> {
+  return identifyEntityRequest(
+    entityId,
+    { provider, query: query ?? null } as IdentifyEntityRequest,
+    undefined,
+    { ...requestInit(options), signal: options?.signal },
+  ).then((response) =>
+    unwrapGenerated(response, "Failed to identify entity") as EntityMetadataProposal,
+  );
 }
 
 export function fetchIdentifyEntities(
