@@ -26,13 +26,37 @@ public sealed partial class IdentifyPluginService {
         // incrementally by the client (one POST /entities/{childId} at a time), so a parent identify
         // is a single provider request that returns just the parent plus the provider-advertised tree.
         var boundProviderProposal = await BindLocalStructuralTargetsAsync(providerProposal, entity.Id, cancellationToken);
+        var titledProposal = EnsureMeaningfulTitle(boundProviderProposal, entity.Title);
 
-        return boundProviderProposal with {
+        return titledProposal with {
             TargetKind = entity.KindCode,
             TargetEntityId = entity.Id,
-            Children = boundProviderProposal.Children,
-            Relationships = EntityMetadataProposalTraversal.Relationships(boundProviderProposal)
+            Children = titledProposal.Children,
+            Relationships = EntityMetadataProposalTraversal.Relationships(titledProposal)
         };
+    }
+
+    /// <summary>
+    /// Guards against a proposal whose title is just the provider's own identifier. Some providers
+    /// fall back to the raw external id for the title when a detail lookup returns nothing (e.g. a
+    /// transient upstream failure), which would otherwise surface — and apply — a bare GUID as the
+    /// entity's name. When the proposed title is empty or equals one of the proposal's own external
+    /// id values, fall back to the local entity's existing title so the UI and apply never write a
+    /// raw id. This is provider-agnostic: any plugin that degrades this way is covered.
+    /// </summary>
+    private static EntityMetadataProposal EnsureMeaningfulTitle(EntityMetadataProposal proposal, string localTitle) {
+        var patch = proposal.Patch;
+        if (patch is null || string.IsNullOrWhiteSpace(localTitle)) {
+            return proposal;
+        }
+
+        var title = patch.Title?.Trim();
+        var titleIsRawId = string.IsNullOrEmpty(title) ||
+            (patch.ExternalIds is not null &&
+             patch.ExternalIds.Values.Any(value => string.Equals(value, title, StringComparison.OrdinalIgnoreCase)));
+        return titleIsRawId
+            ? proposal with { Patch = patch with { Title = localTitle } }
+            : proposal;
     }
 
     private async Task<EntityMetadataProposal> BindLocalStructuralTargetsAsync(
@@ -70,7 +94,7 @@ public sealed partial class IdentifyPluginService {
                 childProposal with { TargetEntityId = localChild.Entity.Id },
                 localChild.Entity.Id,
                 cancellationToken);
-            children.Add(boundChild);
+            children.Add(EnsureMeaningfulTitle(boundChild, localChild.Entity.Title));
         }
 
         return proposal with { Children = children };

@@ -887,6 +887,57 @@ public sealed class PluginRuntimeServiceTests : IDisposable {
     }
 
     [Fact]
+    public async Task IdentifyFallsBackToLocalTitleWhenProposalTitleIsJustTheProviderId() {
+        // A provider that degrades a failed detail lookup to its raw id must not surface (or apply) a
+        // bare id as the entity's name: the local title wins.
+        var pluginDir = Path.Combine(_tempRoot, "musicbrainz");
+        Directory.CreateDirectory(pluginDir);
+        await File.WriteAllTextAsync(
+            Path.Combine(pluginDir, "manifest.json"),
+            """
+            {
+              "manifestVersion": 1,
+              "apiTags": ["prismedia"],
+              "id": "musicbrainz",
+              "name": "MusicBrainz",
+              "version": "1.0.0",
+              "runtime": "dotnet-process",
+              "entry": "Prismedia.Plugin.MusicBrainz.dll",
+              "compat": { "pluginApiMin": "1.0.0", "pluginApiMax": null, "prismediaMin": "1.0.0", "prismediaMax": null },
+              "auth": [],
+              "supports": [
+                { "entityKind": "audio-library", "actions": ["search"] }
+              ]
+            }
+            """);
+
+        await using var db = CreateContext();
+        var now = DateTimeOffset.UtcNow;
+        db.ProviderConfigs.Add(new ProviderConfigRow {
+            Id = Guid.NewGuid(),
+            ProviderCode = "musicbrainz",
+            DisplayName = "MusicBrainz",
+            ProviderType = ProviderType.ExternalProcess,
+            Enabled = true,
+            SettingsJson = "{}",
+            CreatedAt = now,
+            UpdatedAt = now
+        });
+        var albumId = Guid.Parse("cccc3333-aaaa-4444-8888-cccccccccccc");
+        db.Entities.Add(new EntityRow { Id = albumId, KindCode = "audio-library", Title = "Evolve", CreatedAt = now, UpdatedAt = now });
+        await db.SaveChangesAsync();
+
+        var providerId = "dd87fb34-57e1-41cb-9c68-3fad83068dd5";
+        var executor = new RawIdTitleProposalProcessExecutor("audio-library", providerId);
+        var service = CreateIdentifyService(db, executor, pluginDir);
+
+        var response = await service.IdentifyAsync(albumId, "musicbrainz", null, parentExternalIds: null, hideNsfw: false, CancellationToken.None);
+
+        Assert.True(response.Ok);
+        Assert.Equal("Evolve", response.Result!.Patch.Title);
+    }
+
+    [Fact]
     public async Task IdentifyKeepsFullProviderEpisodeTreeWhenIdentifyingSeasonDirectly() {
         var pluginDir = Path.Combine(_tempRoot, "tmdb");
         Directory.CreateDirectory(pluginDir);
@@ -1556,6 +1607,32 @@ public sealed class PluginRuntimeServiceTests : IDisposable {
                 0.9m,
                 "external-id",
                 EmptyPatch() with { Title = title },
+                [],
+                [],
+                []);
+            return new ProcessExecutionResult(0, SerializeAsWire(proposal), string.Empty);
+        }
+    }
+
+    private sealed class RawIdTitleProposalProcessExecutor(string kind, string providerId) : ProcessExecutor {
+        public override async Task<ProcessExecutionResult> RunAsync(
+            string fileName,
+            IReadOnlyList<string> arguments,
+            IReadOnlyDictionary<string, string>? environment,
+            CancellationToken cancellationToken, bool lowPriority = false) {
+            await Task.CompletedTask;
+            // Mimics a provider that degraded a failed detail lookup to its raw id: the title is just
+            // the external id value.
+            var proposal = new EntityMetadataProposal(
+                $"musicbrainz:release:{providerId}",
+                "musicbrainz",
+                kind,
+                0.9m,
+                "parent-context",
+                EmptyPatch() with {
+                    Title = providerId,
+                    ExternalIds = new Dictionary<string, string> { ["musicbrainz"] = providerId }
+                },
                 [],
                 [],
                 []);
