@@ -2,7 +2,10 @@
   import { onMount } from "svelte";
   import {
     ListMusic,
+    Minimize2,
     Music,
+    Music2,
+    Music4,
     Pause,
     Play,
     Repeat,
@@ -34,6 +37,7 @@
   let waveformData = $state<number[] | null>(null);
   let timelineDragging = $state(false);
   let queueOpen = $state(false);
+  let collapsed = $state(false);
 
   let timelineDraggingRef = false;
   let currentSrcTrackId: string | null = null;
@@ -55,6 +59,11 @@
   // Album label: a single-album context wins; otherwise fall back to the track's own album
   // so mixed-album queues (e.g. an artist Play All) still show the right album per track.
   const albumLabel = $derived(ctx?.albumTitle ?? activeTrack?.embeddedAlbum ?? null);
+
+  function collapse() {
+    collapsed = true;
+    queueOpen = false;
+  }
 
   function isKeyboardShortcutSuppressed(target: EventTarget | null): boolean {
     if (!(target instanceof HTMLElement)) return false;
@@ -315,15 +324,51 @@
 <!-- Hidden audio element -->
 <audio bind:this={audioEl} preload="auto"></audio>
 
+{#if collapsed}
+  <!-- Collapsed: just the artwork with animated notes; tap to expand. -->
+  <button
+    bind:this={rootEl}
+    type="button"
+    onclick={() => (collapsed = false)}
+    title="Expand player"
+    aria-label="Expand audio player"
+    class={cn(
+      "audio-mini fixed bottom-[calc(3.65rem+max(1.25rem,env(safe-area-inset-bottom,0px))+0.5rem)] left-3 z-[55] h-14 w-14 overflow-visible rounded-xl border border-white/10 bg-surface-1/70 shadow-[0_14px_40px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.07)] backdrop-blur-2xl transition-transform hover:scale-105 md:bottom-4 md:left-64",
+    )}
+  >
+    {#if playing}
+      <span class="audio-notes" aria-hidden="true">
+        <Music2 class="audio-note audio-note-1 h-3 w-3" />
+        <Music4 class="audio-note audio-note-2 h-3.5 w-3.5" />
+        <Music class="audio-note audio-note-3 h-2.5 w-2.5" />
+      </span>
+    {/if}
+    <span class="block h-full w-full overflow-hidden rounded-xl">
+      {#if coverUrl}
+        <img src={coverUrl} alt="" class="h-full w-full object-cover" decoding="async" />
+      {:else}
+        <span class="flex h-full w-full items-center justify-center bg-black/20 text-accent-500/80">
+          <Music class="h-5 w-5" />
+        </span>
+      {/if}
+    </span>
+  </button>
+{:else}
 <div
   bind:this={rootEl}
   class={cn(
-    "fixed bottom-16 left-3 right-3 z-[55] mx-auto max-w-3xl rounded-xl border border-white/10 bg-surface-1/70 shadow-[0_18px_56px_rgba(0,0,0,0.6),inset_0_1px_0_rgba(255,255,255,0.07)] backdrop-blur-2xl md:bottom-4 md:left-64 md:right-4",
+    "fixed bottom-[calc(3.65rem+max(1.25rem,env(safe-area-inset-bottom,0px))+0.5rem)] left-3 right-3 z-[55] mx-auto max-w-3xl rounded-xl border border-white/10 bg-surface-1/70 shadow-[0_18px_56px_rgba(0,0,0,0.6),inset_0_1px_0_rgba(255,255,255,0.07)] backdrop-blur-2xl md:bottom-4 md:left-64 md:right-4",
   )}
 >
   <!-- Now-playing + progress -->
   <div class="flex items-center gap-2.5 px-3 pt-2.5 pb-1">
-    <div class="player-artwork relative h-9 w-9 shrink-0 overflow-hidden rounded-md">
+    <button
+      type="button"
+      onclick={collapse}
+      title="Minimize player"
+      aria-label="Minimize player"
+      class="player-artwork relative h-9 w-9 shrink-0 overflow-hidden rounded-md transition-opacity hover:opacity-80"
+    >
       {#if coverUrl}
         <img src={coverUrl} alt="" class="h-full w-full object-cover" decoding="async" />
       {:else}
@@ -331,7 +376,7 @@
           <Music class="h-4 w-4" />
         </div>
       {/if}
-    </div>
+    </button>
 
     <div class="min-w-0 flex-1">
       {#if activeTrack}
@@ -484,7 +529,16 @@
       </button>
     </div>
 
-    <div class="flex min-w-0 items-center justify-end">
+    <div class="flex min-w-0 items-center justify-end gap-0.5">
+      <button
+        type="button"
+        onclick={collapse}
+        title="Minimize player"
+        aria-label="Minimize player"
+        class="p-1.5 text-text-disabled transition-colors hover:text-text-muted"
+      >
+        <Minimize2 class="h-3.5 w-3.5" />
+      </button>
       <div class="relative">
         <button
           type="button"
@@ -501,3 +555,36 @@
     </div>
   </div>
 </div>
+{/if}
+
+<style>
+  /* Animated notes drifting out of the collapsed artwork while playing. */
+  .audio-notes {
+    position: absolute;
+    left: 50%;
+    top: 0;
+    width: 0;
+    height: 0;
+    pointer-events: none;
+  }
+  .audio-notes :global(.audio-note) {
+    position: absolute;
+    color: #f2c26a;
+    opacity: 0;
+    filter: drop-shadow(0 0 4px rgba(242, 194, 106, 0.55));
+    animation: audio-note-float 2.4s ease-out infinite;
+  }
+  .audio-notes :global(.audio-note-1) { left: -8px; animation-delay: 0s; }
+  .audio-notes :global(.audio-note-2) { left: 0; animation-delay: 0.8s; }
+  .audio-notes :global(.audio-note-3) { left: 8px; animation-delay: 1.6s; }
+
+  @keyframes audio-note-float {
+    0% { opacity: 0; transform: translate(0, 4px) scale(0.7) rotate(-8deg); }
+    18% { opacity: 0.95; }
+    100% { opacity: 0; transform: translate(9px, -28px) scale(1.05) rotate(10deg); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .audio-notes :global(.audio-note) { animation: none; opacity: 0; }
+  }
+</style>
