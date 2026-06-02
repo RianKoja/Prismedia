@@ -1580,6 +1580,56 @@ public sealed class ScanJobHandlerTests {
         Assert.Equal([targetRoot.Id], persistence.LastScannedRootIds);
     }
 
+    [Fact]
+    public async Task AllRootsScanProgressReportsCountWithoutLeakingLibraryNames() {
+        // The all-roots scan job (no root payload) is not scoped to a single target, so the jobs list
+        // cannot redact it for SFW viewers. Its progress message must therefore never name a library —
+        // otherwise an NSFW library name leaks into the dashboard even in SFW mode (APP-125).
+        var sfwRoot = new LibraryRootData(
+            Guid.Parse("11111111-1111-1111-1111-111111111111"),
+            "/media/one",
+            "Family Movies",
+            Enabled: true,
+            Recursive: true,
+            ScanVideos: true,
+            ScanImages: false,
+            ScanAudio: false,
+            ScanBooks: false,
+            IsNsfw: false);
+        var nsfwRoot = sfwRoot with {
+            Id = Guid.Parse("22222222-2222-2222-2222-222222222222"),
+            Path = "/media/secret",
+            Label = "Secret Adult Stash",
+            IsNsfw = true
+        };
+        var persistence = new FakeScanPersistence([sfwRoot, nsfwRoot]);
+        var handler = new RecordingScanHandler(persistence);
+        var queue = new RecordingJobQueue();
+        var job = new JobRunSnapshot(
+            Guid.NewGuid(),
+            JobType.ScanLibrary,
+            JobRunStatus.Running,
+            Progress: 0,
+            Message: null,
+            PayloadJson: "{}",
+            TargetEntityKind: null,
+            TargetEntityId: null,
+            TargetLabel: null,
+            CreatedAt: DateTimeOffset.UtcNow,
+            StartedAt: DateTimeOffset.UtcNow,
+            FinishedAt: null);
+
+        await handler.HandleAsync(new JobContext(job, queue), CancellationToken.None);
+
+        Assert.Equal([sfwRoot.Id, nsfwRoot.Id], handler.ScannedRootIds);
+        Assert.True(persistence.LoadedEnabledRoots);
+        Assert.DoesNotContain(queue.ProgressMessages, message => message is not null && message.Contains(nsfwRoot.Label));
+        Assert.DoesNotContain(queue.ProgressMessages, message => message is not null && message.Contains(sfwRoot.Label));
+        Assert.Equal(
+            ["Scanned 1 of 2 libraries", "Scanned 2 of 2 libraries"],
+            queue.ProgressMessages);
+    }
+
     private static void CreateZip(string path, IReadOnlyList<string> members) {
         using var stream = File.Create(path);
         using var archive = new ZipArchive(stream, ZipArchiveMode.Create);
@@ -2019,6 +2069,7 @@ public sealed class ScanJobHandlerTests {
 
     private sealed class RecordingJobQueue : IJobQueueService {
         public List<EnqueueJobRequest> Enqueued { get; } = [];
+        public List<string?> ProgressMessages { get; } = [];
 
         public Task<IReadOnlyList<JobRunSnapshot>> ListAsync(bool hideNsfw, CancellationToken cancellationToken) => Task.FromResult<IReadOnlyList<JobRunSnapshot>>([]);
         public Task<JobRunSnapshot> EnqueueAsync(JobType type, CancellationToken cancellationToken) => throw new NotSupportedException();
@@ -2039,7 +2090,10 @@ public sealed class ScanJobHandlerTests {
         public Task<int> ClearFailuresAsync(JobType? type, CancellationToken cancellationToken) => Task.FromResult(0);
         public Task<JobRunSnapshot?> ClaimNextAsync(string workerId, CancellationToken cancellationToken) => Task.FromResult<JobRunSnapshot?>(null);
         public Task<int> RecoverStaleRunningAsync(string currentWorkerId, TimeSpan staleAfter, CancellationToken cancellationToken) => Task.FromResult(0);
-        public Task UpdateProgressAsync(Guid id, int progress, string? message, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task UpdateProgressAsync(Guid id, int progress, string? message, CancellationToken cancellationToken) {
+            ProgressMessages.Add(message);
+            return Task.CompletedTask;
+        }
         public Task CompleteAsync(Guid id, string? message, CancellationToken cancellationToken) => Task.CompletedTask;
         public Task FailAsync(Guid id, string message, TimeSpan retryDelay, CancellationToken cancellationToken) => Task.CompletedTask;
         public Task<IReadOnlyList<JobQueueCount>> GetQueueCountsAsync(bool hideNsfw, CancellationToken cancellationToken) => Task.FromResult<IReadOnlyList<JobQueueCount>>([]);

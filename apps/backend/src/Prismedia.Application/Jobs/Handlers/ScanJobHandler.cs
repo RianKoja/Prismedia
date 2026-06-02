@@ -24,8 +24,13 @@ public abstract class ScanJobHandler(
             for (var i = 0; i < eligible.Count; i++) {
                 await ScanRootAsync(context, eligible[i], cancellationToken);
                 await roots.UpdateRootLastScannedAsync(eligible[i].Id, cancellationToken);
+                // Never name the individual root here: the all-roots scan job is not scoped to a
+                // single (potentially NSFW) target, so it is not redacted by the jobs list, and this
+                // message is persisted and shown to every client regardless of their SFW mode.
+                // A count keeps progress useful without leaking library names.
                 await context.ReportProgressAsync((i + 1) * 100 / eligible.Count,
-                    $"Scanned {eligible[i].Label}", cancellationToken);
+                    $"Scanned {i + 1} of {eligible.Count} {(eligible.Count == 1 ? "library" : "libraries")}",
+                    cancellationToken);
             }
         } else {
             var root = await roots.GetLibraryRootAsync(payload.RootId, cancellationToken);
