@@ -64,6 +64,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - Identify no longer shows (or applies) a raw provider id as an item's title when a provider's detail lookup briefly fails. The MusicBrainz plugin now retries those transient hiccups so the real data loads, and as a provider-agnostic safety net any proposal whose title is just its own external id falls back to the item's existing title.
 
 ### Changed
+- The home dashboard's per-type rows (Videos, Movies, Series, Books, and so on) now lead with your most recently added items instead of an A–Z list, so new media shows up at the front of each row.
 - Audio scans now enforce the `Album/Songs` and `Artist/Album/Songs` folder layouts instead of turning every folder level into a nested album. Existing music libraries reconcile themselves the next time they scan: an artist folder that was previously read as a containing "album" becomes a proper artist grouping, and disc subfolders fold into their album as sections.
 - The top-level library tiles in Jellyfin clients like Infuse (Movies, Videos, Series, Collections) now show poster artwork drawn from a recent item in each library, instead of a generic folder icon.
 - Collections now show poster artwork in Jellyfin clients like Infuse. A collection without its own cover falls back to its configured cover item, or the first item in the collection, so box-set tiles render a poster instead of a blank folder.

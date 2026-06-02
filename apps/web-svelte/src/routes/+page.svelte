@@ -84,7 +84,13 @@
 
     const sectionsPromise = Promise.allSettled(
       SECTION_DEFS.map(async (def) => {
-        const response = await fetchEntities({ kind: def.kind, hideNsfw });
+        const response = await fetchEntities({
+          kind: def.kind,
+          sort: "added",
+          sortDir: "desc",
+          hideNsfw,
+          limit: 20,
+        });
         return { def, items: response.items };
       }),
     );
