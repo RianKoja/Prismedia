@@ -90,6 +90,7 @@ export const JOB_TYPE = {
   refreshEntity: "refresh-entity",
   bulkIdentify: "bulk-identify",
   autoIdentify: "auto-identify",
+  identifyCascade: "identify-cascade",
 } as const;
 
 export type JobTypeCode = (typeof JOB_TYPE)[keyof typeof JOB_TYPE];

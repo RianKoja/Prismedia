@@ -140,6 +140,7 @@ describe("IdentifyStore", () => {
         action: "search",
         candidates: [],
         proposal: proposal("series-proposal"),
+        cascadeRunning: false,
         entity: entity("series-1"),
         detail: detail("series-1", {
           kind: "video-series",
@@ -375,29 +376,64 @@ describe("IdentifyStore", () => {
     expect(store.view.kind).toBe("review-choice");
   });
 
-  it("clears in-progress child identification when returning to search", async () => {
+  it("polls the queue item while a cascade streams children and stops when it completes", async () => {
+    vi.useFakeTimers();
+    try {
+      const store = new IdentifyStore();
+      const artist = entity("artist-1", { kind: "music-artist", title: "Imagine Dragons" });
+      const seed = proposal("musicbrainz:artist:1", { targetKind: "music-artist", title: "Imagine Dragons" });
+      store.queue = [{
+        ...queueItem("artist-1", { state: "proposal", provider: "musicbrainz", proposal: seed, cascadeRunning: true }),
+        entity: artist,
+        detail: detail("artist-1", { kind: "music-artist", title: "Imagine Dragons" }),
+      }];
+
+      // The cascade has finished server-side: the polled item carries a child and is no longer running.
+      const child = proposal("musicbrainz:release:9", { targetKind: "audio-library", title: "Evolve" });
+      const completed = {
+        ...queueItem("artist-1", {
+          state: "proposal",
+          provider: "musicbrainz",
+          proposal: { ...seed, children: [{ ...child, targetEntityId: "album-1" }] },
+          cascadeRunning: false,
+        }),
+      };
+      fetchIdentifyQueueItem.mockResolvedValue(completed);
+
+      store.ensureCascadePoll("artist-1");
+      await vi.advanceTimersByTimeAsync(400);
+
+      const item = store.queue.find((q) => q.entityId === "artist-1");
+      expect(item?.cascadeRunning).toBe(false);
+      expect(item?.proposal?.children).toHaveLength(1);
+      expect(store.cascadeRunning("artist-1")).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("stops cascade polling when returning to search", async () => {
     const store = new IdentifyStore();
     const artist = entity("artist-1", { kind: "music-artist", title: "Imagine Dragons" });
-    const artistProposal = proposal("musicbrainz:artist:1", {
-      targetKind: "music-artist",
-      title: "Imagine Dragons",
-    });
+    const seed = proposal("musicbrainz:artist:1", { targetKind: "music-artist", title: "Imagine Dragons" });
     store.queue = [{
-      ...queueItem("artist-1", { state: "proposal", provider: "musicbrainz", proposal: artistProposal }),
+      ...queueItem("artist-1", { state: "proposal", provider: "musicbrainz", proposal: seed, cascadeRunning: true }),
       entity: artist,
       detail: detail("artist-1", { kind: "music-artist", title: "Imagine Dragons" }),
     }];
 
-    store.startChildIdentification("artist-1", artistProposal, "musicbrainz", [
-      { id: "album-1", kind: "audio-library", title: "Evolve", coverUrl: null },
-      { id: "album-2", kind: "audio-library", title: "Origins", coverUrl: null },
-    ]);
-    expect(Object.keys(store.childIdentify)).toHaveLength(2);
+    fetchIdentifyQueueItem.mockResolvedValue(queueItem("artist-1", { state: "proposal", proposal: seed, cascadeRunning: true }));
+    store.ensureCascadePoll("artist-1");
 
-    searchIdentifyQueueItem.mockResolvedValue(queueItem("artist-1", { state: "search" }));
+    searchIdentifyQueueItem.mockResolvedValue(queueItem("artist-1", {
+      state: "search",
+      provider: "musicbrainz",
+      candidates: [{ externalIds: { musicbrainz: "1" }, title: "Imagine Dragons" }],
+    }));
     await store.backToSearch(artist, "musicbrainz");
 
-    expect(store.childIdentify).toEqual({});
+    expect(store.view.kind).toBe("review-choice");
+    expect(store.cascadeRunning("artist-1")).toBe(false);
   });
 
   it("keeps apply progress visible briefly before navigating away", async () => {
@@ -537,6 +573,7 @@ function queueItem(
     }>;
     proposal?: EntityMetadataProposal | null;
     error?: string | null;
+    cascadeRunning?: boolean;
   } = {},
 ) {
   return {
@@ -552,6 +589,7 @@ function queueItem(
     candidates: options.candidates ?? [],
     proposal: options.proposal ?? null,
     error: options.error ?? null,
+    cascadeRunning: options.cascadeRunning ?? false,
     createdAt: "2026-05-25T00:00:00Z",
     updatedAt: "2026-05-25T00:00:00Z",
     completedAt: null,

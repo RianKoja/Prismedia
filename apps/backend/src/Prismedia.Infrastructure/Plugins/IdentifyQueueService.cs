@@ -1,5 +1,7 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Prismedia.Application.Jobs;
+using Prismedia.Application.Jobs.Ports;
 using Prismedia.Application.Plugins;
 using Prismedia.Contracts.Plugins;
 using Prismedia.Domain.Entities;
@@ -20,14 +22,17 @@ public sealed class IdentifyQueueService : IIdentifyQueueService {
     private readonly PrismediaDbContext _db;
     private readonly IdentifyPluginService _identify;
     private readonly IIdentifyApplyProgressStore _progress;
+    private readonly IJobQueueService _jobs;
 
     public IdentifyQueueService(
         PrismediaDbContext db,
         IdentifyPluginService identify,
-        IIdentifyApplyProgressStore progress) {
+        IIdentifyApplyProgressStore progress,
+        IJobQueueService jobs) {
         _db = db;
         _identify = identify;
         _progress = progress;
+        _jobs = jobs;
     }
 
     /// <summary>
@@ -109,13 +114,21 @@ public sealed class IdentifyQueueService : IIdentifyQueueService {
         var entity = await LoadEntityAsync(entityId, cancellationToken)
             ?? throw new KeyNotFoundException($"Entity '{entityId}' was not found.");
         var now = DateTimeOffset.UtcNow;
+
+        // A fresh search abandons any cascade still streaming the previous result.
+        await CancelCascadeAsync(row, cancellationToken);
+
+        // Seed only: identify the entity and bind whatever children the provider returned in its own
+        // proposal, but do NOT walk the local child tree here — that runs in the background cascade job
+        // so the request stays fast. The full tree is streamed onto the proposal afterwards.
         var response = await _identify.IdentifyAsync(
             entityId,
             request.Provider,
             request.Query,
             parentExternalIds: null,
             hideNsfw,
-            cancellationToken);
+            cancellationToken,
+            cascadeChildren: false);
 
         row.ProviderCode = request.Provider;
         row.Action = GuessAction(request.Query);
@@ -147,6 +160,7 @@ public sealed class IdentifyQueueService : IIdentifyQueueService {
             row.Error = null;
             row.CandidatesJson = null;
             row.ProposalJson = JsonSerializer.Serialize(response.Result, JsonOptions);
+            await EnqueueCascadeIfNeededAsync(row, entity, request, hideNsfw, cancellationToken);
         } else if (response.Result?.Candidates is { Count: > 0 } candidates) {
             row.State = IdentifyQueueState.Search;
             row.Error = null;
@@ -161,6 +175,110 @@ public sealed class IdentifyQueueService : IIdentifyQueueService {
 
         await _db.SaveChangesAsync(cancellationToken);
         return MapRow(row, entity);
+    }
+
+    /// <summary>
+    /// Enqueues a background cascade to stream the entity's full child tree onto the seeded proposal,
+    /// when the entity is an identify container that actually has local structural children to walk.
+    /// </summary>
+    private async Task EnqueueCascadeIfNeededAsync(
+        IdentifyQueueItemRow row,
+        EntityRow entity,
+        IdentifyQueueSearchRequest request,
+        bool hideNsfw,
+        CancellationToken cancellationToken) {
+        if (!EntityKindRegistry.EnumeratesIdentifyChildren(entity.KindCode)) {
+            return;
+        }
+
+        var hasChildren = await _db.Entities
+            .AsNoTracking()
+            .AnyAsync(child => child.ParentEntityId == entity.Id && child.DeletedAt == null, cancellationToken);
+        if (!hasChildren) {
+            return;
+        }
+
+        var payload = new IdentifyCascadePayload(entity.Id, request.Provider, request.Query, hideNsfw);
+        var job = await _jobs.EnqueueAsync(
+            new EnqueueJobRequest(
+                JobType.IdentifyCascade,
+                payload.ToJson(),
+                TargetEntityKind: entity.KindCode,
+                TargetEntityId: entity.Id.ToString(),
+                TargetLabel: entity.Title),
+            cancellationToken);
+        row.CascadeJobId = job.Id;
+    }
+
+    /// <summary>Cancels the in-flight cascade job for a row, if any, and clears its marker.</summary>
+    private async Task CancelCascadeAsync(IdentifyQueueItemRow row, CancellationToken cancellationToken) {
+        if (row.CascadeJobId is not { } jobId) {
+            return;
+        }
+
+        try {
+            await _jobs.CancelRunAsync(jobId, cancellationToken);
+        } catch {
+            // Best-effort: the job may already be terminal.
+        }
+
+        row.CascadeJobId = null;
+    }
+
+    /// <summary>Clears the cascade marker for an entity once its background walk finishes.</summary>
+    public async Task ClearCascadeJobAsync(Guid entityId, CancellationToken cancellationToken) {
+        var row = await _db.IdentifyQueueItems
+            .FirstOrDefaultAsync(item => item.EntityId == entityId, cancellationToken);
+        if (row?.CascadeJobId is null) {
+            return;
+        }
+
+        row.CascadeJobId = null;
+        row.UpdatedAt = DateTimeOffset.UtcNow;
+        await _db.SaveChangesAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Runs the background full-tree cascade for a queued entity, streaming the growing proposal onto
+    /// the queue item as each child resolves and clearing the cascade marker when finished.
+    /// </summary>
+    public async Task RunCascadeAsync(IdentifyCascadePayload payload, CancellationToken cancellationToken) {
+        try {
+            var sink = new QueueProposalSink(this, payload.EntityId);
+            var response = await _identify.IdentifyAsync(
+                payload.EntityId,
+                payload.Provider,
+                payload.Query,
+                parentExternalIds: null,
+                payload.HideNsfw,
+                cancellationToken,
+                cascadeChildren: true,
+                sink: sink);
+
+            if (response.Ok && response.Result?.Patch is not null) {
+                // Persist the final tree (the last stream flush already carries it, but make the
+                // terminal state explicit and resilient to a 0-child cascade that never flushed).
+                await SaveProposalSafelyAsync(payload.EntityId, response.Result, cancellationToken);
+            }
+        } finally {
+            await ClearCascadeJobAsync(payload.EntityId, CancellationToken.None);
+        }
+    }
+
+    private async Task SaveProposalSafelyAsync(Guid entityId, EntityMetadataProposal proposal, CancellationToken cancellationToken) {
+        try {
+            await SaveProposalAsync(entityId, proposal, cancellationToken);
+        } catch (KeyNotFoundException) {
+            // The item was deleted mid-cascade; nothing to persist.
+        } catch (InvalidOperationException) {
+            // The stored proposal was replaced (e.g. a new search); skip this stale write.
+        }
+    }
+
+    /// <summary>Streams partial cascade roots onto the queue item via <see cref="SaveProposalAsync"/>.</summary>
+    private sealed class QueueProposalSink(IdentifyQueueService owner, Guid entityId) : IIdentifyCascadeSink {
+        public Task OnEntityResolvedAsync(EntityMetadataProposal partialRoot, CancellationToken cancellationToken) =>
+            owner.SaveProposalSafelyAsync(entityId, partialRoot, cancellationToken);
     }
 
     /// <summary>
@@ -271,6 +389,7 @@ public sealed class IdentifyQueueService : IIdentifyQueueService {
         var entity = await LoadEntityAsync(entityId, cancellationToken)
             ?? throw new KeyNotFoundException($"Entity '{entityId}' was not found.");
         var now = DateTimeOffset.UtcNow;
+        await CancelCascadeAsync(row, cancellationToken);
         row.State = IdentifyQueueState.Deleted;
         row.Error = null;
         row.UpdatedAt = now;
@@ -325,6 +444,7 @@ public sealed class IdentifyQueueService : IIdentifyQueueService {
             Deserialize<IReadOnlyList<EntitySearchCandidate>>(row.CandidatesJson) ?? [],
             Deserialize<EntityMetadataProposal>(row.ProposalJson),
             row.Error,
+            row.CascadeJobId is not null,
             row.CreatedAt,
             row.UpdatedAt,
             row.CompletedAt);
@@ -341,6 +461,7 @@ public sealed class IdentifyQueueService : IIdentifyQueueService {
         row.CandidatesJson = null;
         row.ProposalJson = null;
         row.Error = null;
+        row.CascadeJobId = null;
         row.UpdatedAt = now;
         row.CompletedAt = null;
     }

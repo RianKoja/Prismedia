@@ -29,6 +29,9 @@ public enum EntityKindCategory {
 /// <param name="Category">Broad category used by metadata rows.</param>
 /// <param name="StorageShape">Filesystem storage shape used by scan and organize rules.</param>
 /// <param name="ClrType">Concrete domain entity type, or null for kinds with no concrete type.</param>
+/// <param name="EnumeratesIdentifyChildren">Whether this kind is an identify container whose local
+/// structural children are separately identifiable works (e.g. a series' seasons, an album's tracks);
+/// leaf-content kinds such as a movie leave this false.</param>
 public sealed record EntityKindDescriptor(
     EntityKind Value,
     string Code,
@@ -36,7 +39,8 @@ public sealed record EntityKindDescriptor(
     string GroupLabel,
     EntityKindCategory Category,
     EntityStorageShape StorageShape,
-    Type? ClrType) {
+    Type? ClrType,
+    bool EnumeratesIdentifyChildren) {
     /// <summary>Allows descriptors to flow into domain-only metadata APIs.</summary>
     public static implicit operator EntityKind(EntityKindDescriptor descriptor) => descriptor.Value;
 }
@@ -87,6 +91,15 @@ public static class EntityKindRegistry {
     /// <summary>Gets the full descriptor for a domain entity kind.</summary>
     public static EntityKindDescriptor Describe(EntityKind kind) => ByKind[kind];
 
+    /// <summary>
+    /// Whether a kind (by stable code) is an identify container whose local structural children
+    /// should be separately identified during a cascade. Unknown codes are treated as leaves.
+    /// </summary>
+    public static bool EnumeratesIdentifyChildren(string code) =>
+        !string.IsNullOrWhiteSpace(code) &&
+        ByCode.TryGetValue(code, out var descriptor) &&
+        descriptor.EnumeratesIdentifyChildren;
+
     /// <summary>Encodes a domain entity kind to its stable storage code.</summary>
     public static string ToCode(EntityKind kind) => ByKind[kind].Code;
 
@@ -128,6 +141,7 @@ public static class EntityKindRegistry {
             meta.GroupLabel,
             meta.Category,
             meta.StorageShape,
-            meta.ClrType);
+            meta.ClrType,
+            meta.EnumeratesIdentifyChildren);
     }
 }

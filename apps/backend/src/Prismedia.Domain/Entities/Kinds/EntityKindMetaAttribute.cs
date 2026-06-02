@@ -12,12 +12,19 @@ namespace Prismedia.Domain.Entities;
 /// <param name="groupLabel">Plural display label used when grouping entities by kind in
 /// shared UI surfaces (e.g. "Videos", "Audio Tracks", "People").</param>
 /// <param name="clrType">Concrete domain entity type, or null for kinds with no concrete type.</param>
+/// <param name="enumeratesIdentifyChildren">Whether this kind is an identify <em>container</em> whose
+/// local structural children are themselves separately identifiable works (e.g. a series' seasons, an
+/// album's tracks). Leaf-content kinds (a movie, a standalone video, an image) leave this false so the
+/// identify flow treats them as a single work and never walks into their own media file. The gate keys
+/// off the <em>parent</em> kind: an episode is a <c>video</c> (false) but is still identified because
+/// its parent season is a container.</param>
 [AttributeUsage(AttributeTargets.Field, AllowMultiple = false, Inherited = false)]
 public sealed class EntityKindMetaAttribute(
     EntityKindCategory category,
     EntityStorageShape storageShape,
     string groupLabel,
-    Type? clrType = null) : Attribute {
+    Type? clrType = null,
+    bool enumeratesIdentifyChildren = false) : Attribute {
     /// <summary>Broad category for this kind.</summary>
     public EntityKindCategory Category { get; } = category;
 
@@ -29,4 +36,10 @@ public sealed class EntityKindMetaAttribute(
 
     /// <summary>Concrete domain CLR type for this kind, or null when it has none.</summary>
     public Type? ClrType { get; } = clrType;
+
+    /// <summary>
+    /// Whether this kind is an identify container whose structural children are separately
+    /// identifiable. See the constructor parameter for the full rule.
+    /// </summary>
+    public bool EnumeratesIdentifyChildren { get; } = enumeratesIdentifyChildren;
 }

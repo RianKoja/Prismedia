@@ -173,6 +173,7 @@ internal static partial class PrismediaModelConfiguration {
             entity.Property(row => row.CandidatesJson).HasColumnName("candidates_json").HasColumnType("jsonb");
             entity.Property(row => row.ProposalJson).HasColumnName("proposal_json").HasColumnType("jsonb");
             entity.Property(row => row.Error).HasColumnName("error");
+            entity.Property(row => row.CascadeJobId).HasColumnName("cascade_job_id");
             entity.Property(row => row.CreatedAt).HasColumnName("created_at");
             entity.Property(row => row.UpdatedAt).HasColumnName("updated_at");
             entity.Property(row => row.CompletedAt).HasColumnName("completed_at");

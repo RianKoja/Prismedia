@@ -9,8 +9,6 @@ import {
   fetchIdentifyApplyProgress,
   fetchIdentifyQueue,
   fetchIdentifyQueueItem,
-  identifyEntityTransient,
-  saveIdentifyQueueProposal,
   searchIdentifyQueueItem,
 } from "$lib/api/identify-client";
 import { fetchPluginProviders } from "$lib/api/plugins";
@@ -31,24 +29,15 @@ import {
   buildRootReviewApplyPayload,
   defaultFieldSelectionForReview,
   defaultImageSelectionForReview,
-  type StructuralChildEntity,
 } from "$lib/components/identify-review";
 
-/** Per-child identify status used to drive the incremental review children grid. */
-export type ChildIdentifyStatus =
-  | "queued"
-  | "loading"
-  | "matched"
-  | "candidates"
-  | "none"
-  | "error"
-  | "cancelled";
-
-export interface ChildIdentifyEntry {
-  status: ChildIdentifyStatus;
-  candidateCount?: number;
-  error?: string | null;
-}
+/**
+ * Status of one local structural child in the review grid, derived from the streamed proposal and
+ * whether the background cascade is still running. "matched" means the child resolved into the
+ * proposal; "loading" means the cascade is still walking; "none" means the cascade finished without
+ * a match for it.
+ */
+export type ChildIdentifyStatus = "matched" | "loading" | "none";
 
 /** Options shared by the auto-identify path that controls whether resolving a queue item also navigates the review view. */
 interface IdentifyResolveOptions {
@@ -81,6 +70,8 @@ export interface IdentifyQueueItem {
   candidates: EntitySearchCandidate[];
   proposal?: EntityMetadataProposal | null;
   errorMessage?: string | null;
+  /** True while a background cascade is still streaming this item's child tree into the proposal. */
+  cascadeRunning: boolean;
   entity: EntityCard;
   detail?: EntityDetailCard | null;
   completedAt?: string | null;
@@ -134,16 +125,9 @@ export class IdentifyStore {
   reviewTagSelections = $state<Record<string, Record<string, boolean>>>({});
   reviewDetailsByEntityId = $state<Record<string, EntityDetailCard | null>>({});
   reviewDetailLoadingByEntityId = $state<Record<string, boolean>>({});
-  /** Per-child-entity identify status for the active review, keyed by child entity id. */
-  childIdentify = $state<Record<string, ChildIdentifyEntry>>({});
-  #childAbort = new Map<string, AbortController>();
-  #childQueue: string[] = [];
-  #childPumpActive = false;
-  #childIdentifyProposalId: string | null = null;
-  #childContext: { parentEntityId: string; provider: string; childEntities: StructuralChildEntity[]; parentExternalIds: Record<string, string> } | null = null;
-  #proposalSaveEntityId: string | null = null;
-  #proposalSaveInFlight = false;
   #stopApplyProgressPolling: (() => void) | null = null;
+  #cascadePollEntityId: string | null = null;
+  #stopCascadePoll: (() => void) | null = null;
 
   constructor(getHideNsfw: () => boolean = () => false) {
     this.#getHideNsfw = getHideNsfw;
@@ -365,9 +349,8 @@ export class IdentifyStore {
     }
 
     // Returning to search abandons the current proposal, so drop any in-progress child
-    // identification: its results no longer have a proposal to attach to, and re-picking a
-    // candidate must start the children fresh rather than leave stale tiles in the grid.
-    this.#resetChildIdentification();
+    // identification: stop polling the abandoned cascade so re-picking starts cleanly.
+    this.stopCascadePoll();
     return this.identifyEntity(entity, selectedProvider, { title: entity.title, requireChoice: true });
   }
 
@@ -601,6 +584,7 @@ export class IdentifyStore {
       action: "search",
       candidates: [],
       proposal,
+      cascadeRunning: false,
       entity,
     });
   }
@@ -654,190 +638,70 @@ export class IdentifyStore {
     };
   }
 
-  // ── Incremental child identify ──────────────────────────────────────────
-  // After the parent proposal is reviewed, each local structural child is identified one at a
-  // time (serial, to stay within provider rate limits). A matched child is appended to the active
-  // proposal's `children` so the existing apply payload includes it; children awaiting a pick or
-  // that failed stay out of the apply. The Accept button is gated until the queue drains.
+  // ── Streamed child identify ─────────────────────────────────────────────
+  // Child identification runs as a backend cascade job (enqueued when a candidate is picked). It
+  // streams the growing proposal onto the queue item; the review polls the item so children fill in.
+  // The grid derives each child's status from the proposal + whether the cascade is still running.
 
-  /** Begins identifying the entity's local structural children that the provider didn't already return. */
-  startChildIdentification(
-    parentEntityId: string,
-    proposal: EntityMetadataProposal,
-    provider: string,
-    childEntities: StructuralChildEntity[],
-  ) {
-    // Identify a parent's children exactly once. Re-opening the review (navigating away and back)
-    // must not restart the lookups: results already live in the persisted proposal, and the
-    // per-child status map is kept so the grid renders the same state.
-    if (this.#childIdentifyProposalId === proposal.proposalId) return;
-    this.#resetChildIdentification();
-    this.#childIdentifyProposalId = proposal.proposalId;
-    this.#childContext = {
-      parentEntityId,
-      provider,
-      childEntities,
-      parentExternalIds: proposal.patch?.externalIds ?? {},
-    };
-    const resolved = new Set(
-      (proposal.children ?? [])
-        .map((child) => child.targetEntityId)
-        .filter((id): id is string => Boolean(id)),
-    );
-    const next: Record<string, ChildIdentifyEntry> = {};
-    for (const child of childEntities) {
-      if (resolved.has(child.id)) continue;
-      next[child.id] = { status: "queued" };
-      this.#childQueue.push(child.id);
-    }
-    this.childIdentify = next;
-    void this.#runChildPump();
+  /** Whether the entity's background cascade is still resolving its child tree. */
+  cascadeRunning(entityId: string): boolean {
+    return this.queue.find((item) => item.entityId === entityId)?.cascadeRunning ?? false;
   }
 
-  /** Aborts the in-flight child lookup (if any), deselects the child, and lets the pump continue. */
-  cancelChild(childEntityId: string) {
-    this.#childAbort.get(childEntityId)?.abort();
-    this.#childAbort.delete(childEntityId);
-    this.#childQueue = this.#childQueue.filter((id) => id !== childEntityId);
-    this.#removeChildProposal(childEntityId);
-    this.#setChildStatus(childEntityId, { status: "cancelled" });
+  /** Starts polling the entity's queue item while its cascade streams children in. Idempotent. */
+  ensureCascadePoll(entityId: string) {
+    if (this.#cascadePollEntityId === entityId) return;
+    if (!this.cascadeRunning(entityId)) return;
+    this.stopCascadePoll();
+    this.#cascadePollEntityId = entityId;
+    this.#stopCascadePoll = this.#pollCascade(entityId);
   }
 
-  /** Re-queues a cancelled or errored child for another identify attempt. */
-  reidentifyChild(childEntityId: string) {
-    if (!this.#childContext) return;
-    this.#removeChildProposal(childEntityId);
-    this.#setChildStatus(childEntityId, { status: "queued" });
-    if (!this.#childQueue.includes(childEntityId)) this.#childQueue.push(childEntityId);
-    void this.#runChildPump();
+  stopCascadePoll() {
+    this.#stopCascadePoll?.();
+    this.#stopCascadePoll = null;
+    this.#cascadePollEntityId = null;
   }
 
-  /** True while any child is still queued or being identified (used to gate the Accept button). */
-  childWorkPending(): boolean {
-    return Object.values(this.childIdentify).some(
-      (entry) => entry.status === "queued" || entry.status === "loading",
-    );
-  }
-
-  #resetChildIdentification() {
-    this.#childAbort.forEach((controller) => controller.abort());
-    this.#childAbort.clear();
-    this.#childQueue = [];
-    this.#childContext = null;
-    this.#childIdentifyProposalId = null;
-    this.childIdentify = {};
-  }
-
-  async #runChildPump() {
-    if (this.#childPumpActive) return;
-    this.#childPumpActive = true;
-    try {
-      while (this.#childQueue.length > 0) {
-        const childId = this.#childQueue.shift()!;
-        if (this.childIdentify[childId]?.status !== "queued") continue;
-        await this.#identifyOneChild(childId);
-      }
-    } finally {
-      this.#childPumpActive = false;
-    }
-  }
-
-  async #identifyOneChild(childEntityId: string) {
-    const context = this.#childContext;
-    const child = context?.childEntities.find((c) => c.id === childEntityId) ?? null;
-    if (!context || !child) {
-      this.#setChildStatus(childEntityId, { status: "none" });
-      return;
-    }
-
+  #pollCascade(entityId: string): () => void {
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
     const controller = new AbortController();
-    this.#childAbort.set(childEntityId, controller);
-    this.#setChildStatus(childEntityId, { status: "loading" });
-    try {
-      const result = await identifyEntityTransient(child.id, context.provider, null, context.parentExternalIds, { signal: controller.signal });
-      if (this.childIdentify[childEntityId]?.status === "cancelled") return;
-      if (result?.patch?.title && result.proposalId) {
-        this.#appendChildProposal({ ...result, targetEntityId: child.id });
-        this.#setChildStatus(childEntityId, { status: "matched" });
-      } else if ((result?.candidates?.length ?? 0) > 0) {
-        this.#setChildStatus(childEntityId, { status: "candidates", candidateCount: result.candidates.length });
-      } else {
-        this.#setChildStatus(childEntityId, { status: "none" });
-      }
-    } catch (err) {
-      if (controller.signal.aborted || this.childIdentify[childEntityId]?.status === "cancelled") return;
-      this.#setChildStatus(childEntityId, { status: "error", error: readError(err) });
-    } finally {
-      this.#childAbort.delete(childEntityId);
-    }
-  }
 
-  #setChildStatus(childEntityId: string, entry: ChildIdentifyEntry) {
-    this.childIdentify = { ...this.childIdentify, [childEntityId]: entry };
-  }
+    const tick = async () => {
+      if (stopped) return;
+      try {
+        const apiItem = await fetchIdentifyQueueItem(entityId, { signal: controller.signal });
+        if (stopped) return;
+        const existing = this.queue.find((queued) => queued.entityId === entityId);
+        const merged = queueItemFromApi(apiItem, existing?.entity, existing?.detail);
+        this.#upsertQueueItem(merged);
 
-  #appendChildProposal(childProposal: EntityMetadataProposal) {
-    this.#updateActiveProposal((proposal) => ({
-      ...proposal,
-      children: [
-        ...(proposal.children ?? []).filter((child) => child.targetEntityId !== childProposal.targetEntityId),
-        childProposal,
-      ],
-    }));
-  }
-
-  #removeChildProposal(childEntityId: string) {
-    this.#updateActiveProposal((proposal) => ({
-      ...proposal,
-      children: (proposal.children ?? []).filter((child) => child.targetEntityId !== childEntityId),
-    }));
-  }
-
-  #updateActiveProposal(update: (proposal: EntityMetadataProposal) => EntityMetadataProposal) {
-    // Accumulate resolved children into the PARENT's persisted proposal (its queue item), regardless
-    // of whether the user has drilled into a child — so results survive navigation and the proposal
-    // ends up exactly as if everything had been identified up front. Sync the live view only when it
-    // is the parent's own review.
-    const context = this.#childContext;
-    if (!context) return;
-    const queued = this.queue.find((item) => item.entityId === context.parentEntityId);
-    if (!queued?.proposal) return;
-    const nextProposal = update(queued.proposal);
-    this.#upsertQueueItem({ ...queued, proposal: nextProposal });
-
-    const view = this.view;
-    if (view.kind === "review-parent" && view.entity.id === context.parentEntityId) {
-      this.view = { ...view, proposal: nextProposal };
-    }
-
-    // Persist the accumulated proposal to the backend queue item so resolved children survive a
-    // page refresh. Coalesced so only one save runs at a time and the latest proposal always wins.
-    this.#persistParentProposal(context.parentEntityId);
-  }
-
-  #persistParentProposal(entityId: string) {
-    this.#proposalSaveEntityId = entityId;
-    if (this.#proposalSaveInFlight) return;
-    void this.#runProposalSaveLoop();
-  }
-
-  async #runProposalSaveLoop() {
-    this.#proposalSaveInFlight = true;
-    try {
-      while (this.#proposalSaveEntityId) {
-        const entityId = this.#proposalSaveEntityId;
-        this.#proposalSaveEntityId = null;
-        const proposal = this.queue.find((item) => item.entityId === entityId)?.proposal;
-        if (!proposal) continue;
-        try {
-          await saveIdentifyQueueProposal(entityId, proposal);
-        } catch {
-          // Best-effort persistence; the in-memory proposal is still correct for this session.
+        // Keep the live parent review in sync as children stream in.
+        const view = this.view;
+        if (view.kind === "review-parent" && view.entity.id === entityId && merged.proposal) {
+          this.view = { ...view, proposal: merged.proposal };
         }
+
+        if (!merged.cascadeRunning) {
+          this.stopCascadePoll();
+          return;
+        }
+      } catch (err) {
+        if (stopped || (err instanceof Error && err.name === "AbortError")) return;
       }
-    } finally {
-      this.#proposalSaveInFlight = false;
-    }
+
+      if (!stopped) {
+        timer = setTimeout(tick, 700);
+      }
+    };
+
+    timer = setTimeout(tick, 300);
+    return () => {
+      stopped = true;
+      controller.abort();
+      if (timer) clearTimeout(timer);
+    };
   }
 
   /** Returns the currently-persisted identify proposal for an entity (used to reopen a live review). */
@@ -1013,6 +877,7 @@ export class IdentifyStore {
   destroy() {
     this.#stopApplyProgressPolling?.();
     this.#stopApplyProgressPolling = null;
+    this.stopCascadePoll();
   }
 
   #upsertQueueItem(item: IdentifyQueueItem) {
@@ -1190,6 +1055,7 @@ function queueItemFromApi(
     candidates: item.candidates ?? [],
     proposal: item.proposal ?? null,
     errorMessage: item.error ?? null,
+    cascadeRunning: item.cascadeRunning ?? false,
     entity: card,
     detail: detail ?? null,
     completedAt: item.completedAt ?? null,

@@ -101,6 +101,7 @@ public static class DependencyInjection {
         services.AddSingleton<AutoIdentifyConcurrencyGate>();
         services.AddTransient<IJobHandler, BulkIdentifyJobHandler>();
         services.AddTransient<IJobHandler, AutoIdentifyJobHandler>();
+        services.AddTransient<IJobHandler, IdentifyCascadeJobHandler>();
 
         // Background services
         services.AddSingleton<WorkerRuntimeIdentity>();

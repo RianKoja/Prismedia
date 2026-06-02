@@ -140,6 +140,8 @@ export interface IdentifyQueueItem {
   candidates: EntitySearchCandidate[];
   proposal?: EntityMetadataProposal | null;
   error?: string | null;
+  /** True while a background cascade is still streaming this item's child tree into the proposal. */
+  cascadeRunning: boolean;
   createdAt: string;
   updatedAt: string;
   completedAt?: string | null;

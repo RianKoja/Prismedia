@@ -102,5 +102,9 @@ public enum JobType {
 
     /// <summary>Auto-identifies one scanned entity through the configured plugins and applies the first confident match.</summary>
     [Code("auto-identify")]
-    AutoIdentify
+    AutoIdentify,
+
+    /// <summary>Walks a queued entity's full child tree through a provider, streaming the growing proposal onto the queue item.</summary>
+    [Code("identify-cascade")]
+    IdentifyCascade
 }

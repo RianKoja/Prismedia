@@ -16,6 +16,22 @@ public sealed class EntityKindMetadataTests {
         }
     }
 
+    [Theory]
+    [InlineData("video-series", true)]
+    [InlineData("video-season", true)]
+    [InlineData("audio-library", true)]
+    [InlineData("music-artist", true)]
+    [InlineData("book", true)]
+    [InlineData("book-volume", true)]
+    [InlineData("movie", false)]
+    [InlineData("video", false)]
+    [InlineData("image", false)]
+    [InlineData("audio-track", false)]
+    [InlineData("gallery", false)]
+    public void EnumeratesIdentifyChildrenMatchesContainerClassification(string code, bool expected) {
+        Assert.Equal(expected, EntityKindRegistry.EnumeratesIdentifyChildren(code));
+    }
+
     [Fact]
     public void RegistryRoundTripsEveryKindByCodeAndType() {
         foreach (var kind in Enum.GetValues<EntityKind>()) {

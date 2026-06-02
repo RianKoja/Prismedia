@@ -588,12 +588,38 @@ export interface StructuralChildEntity {
 }
 
 /**
+ * Entity kinds that are identify <em>containers</em>: their local structural children are themselves
+ * separately identifiable works, so the cascade walks into them. Mirrors the backend
+ * `EntityKindRegistry.EnumeratesIdentifyChildren` flag. Leaf-content kinds (a movie, a standalone
+ * video, an image) are absent, so a movie never lists its own playable video as an identify child.
+ */
+const IDENTIFY_CONTAINER_KINDS = new Set([
+  "video-series",
+  "video-season",
+  "book",
+  "book-volume",
+  "audio-library",
+  "music-artist",
+]);
+
+/** Whether an entity of this kind enumerates separately-identifiable structural children. */
+export function kindEnumeratesIdentifyChildren(kind: string | null | undefined): boolean {
+  return kind != null && IDENTIFY_CONTAINER_KINDS.has(kind.toLowerCase());
+}
+
+/**
  * Enumerates an entity's local structural children from its detail `childrenByKind` groups
- * (excluding relationship kinds) so the review screen can identify each one incrementally.
+ * (excluding relationship kinds) so the review screen can identify each one. Returns nothing for
+ * leaf-content parents (e.g. a movie), whose single media file is not a separate identify target.
  */
 export function structuralChildEntities(
+  parentKind: string | null | undefined,
   childrenByKind: EntityGroup[] | null | undefined,
 ): StructuralChildEntity[] {
+  if (!kindEnumeratesIdentifyChildren(parentKind)) {
+    return [];
+  }
+
   return (childrenByKind ?? [])
     .filter((group) => !isRelationshipKind(group.kind))
     .flatMap((group) => group.entities)

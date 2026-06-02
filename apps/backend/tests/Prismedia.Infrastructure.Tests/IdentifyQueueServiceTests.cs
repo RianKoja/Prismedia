@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Prismedia.Application.Jobs;
 using Prismedia.Application.Plugins;
 using Prismedia.Contracts.Plugins;
 using Prismedia.Domain.Entities;
@@ -322,7 +323,40 @@ public sealed class IdentifyQueueServiceTests : IDisposable {
             new IdentifyRunnerSelector([new DotnetPluginProcessRunner(executor, new PluginCatalogOptions([], tempRoot, "1.0.0"))]),
             new EntityMetadataApplyService(db, new PluginArtworkServiceOptions(tempRoot)));
 
-        return new IdentifyQueueService(db, identify, new InMemoryIdentifyApplyProgressStore());
+        return new IdentifyQueueService(db, identify, new InMemoryIdentifyApplyProgressStore(), new RecordingJobQueue());
+    }
+
+    /// <summary>Minimal in-memory job queue for tests: records enqueues, no worker runs the cascade.</summary>
+    private sealed class RecordingJobQueue : IJobQueueService {
+        public List<EnqueueJobRequest> Enqueued { get; } = [];
+
+        public Task<JobRunSnapshot> EnqueueAsync(EnqueueJobRequest request, CancellationToken cancellationToken) {
+            Enqueued.Add(request);
+            var snapshot = new JobRunSnapshot(
+                Guid.NewGuid(), request.Type, JobRunStatus.Queued, 0, null,
+                request.PayloadJson ?? string.Empty, request.TargetEntityKind, request.TargetEntityId,
+                request.TargetLabel, DateTimeOffset.UtcNow, null, null);
+            return Task.FromResult(snapshot);
+        }
+
+        public Task<JobRunSnapshot> EnqueueAsync(JobType type, CancellationToken cancellationToken) =>
+            EnqueueAsync(new EnqueueJobRequest(type), cancellationToken);
+
+        public Task<IReadOnlyList<JobRunSnapshot>> ListAsync(bool hideNsfw, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<JobRunSnapshot>>([]);
+        public Task<bool> HasPendingAsync(JobType type, string? targetEntityId, CancellationToken cancellationToken) => Task.FromResult(false);
+        public Task<int> EnqueueBatchAsync(IReadOnlyList<EnqueueJobRequest> requests, CancellationToken cancellationToken) => Task.FromResult(0);
+        public Task<int> CancelAsync(JobType? type, CancellationToken cancellationToken) => Task.FromResult(0);
+        public Task<bool> CancelRunAsync(Guid id, CancellationToken cancellationToken) => Task.FromResult(true);
+        public Task<int> ClearFailuresAsync(JobType? type, CancellationToken cancellationToken) => Task.FromResult(0);
+        public Task<JobRunSnapshot?> ClaimNextAsync(string workerId, CancellationToken cancellationToken) => Task.FromResult<JobRunSnapshot?>(null);
+        public Task<int> RecoverStaleRunningAsync(string currentWorkerId, TimeSpan staleAfter, CancellationToken cancellationToken) => Task.FromResult(0);
+        public Task UpdateProgressAsync(Guid id, int progress, string? message, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task CompleteAsync(Guid id, string? message, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task FailAsync(Guid id, string message, TimeSpan retryDelay, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task<IReadOnlyList<JobQueueCount>> GetQueueCountsAsync(bool hideNsfw, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<JobQueueCount>>([]);
+        public Task<int> PruneHistoryAsync(TimeSpan retention, CancellationToken cancellationToken) => Task.FromResult(0);
     }
 
     private static void WriteManifest(string root) {

@@ -50,7 +50,9 @@ public sealed partial class IdentifyPluginService : IIdentifyProviderService {
         IdentifyQuery? query,
         IReadOnlyDictionary<string, string>? parentExternalIds,
         bool hideNsfw,
-        CancellationToken cancellationToken) {
+        CancellationToken cancellationToken,
+        bool cascadeChildren = true,
+        IIdentifyCascadeSink? sink = null) {
         if (hideNsfw && await _db.Entities.AsNoTracking()
                 .AnyAsync(entity => entity.Id == entityId && entity.IsNsfw, cancellationToken)) {
             return new IdentifyPluginResponse(false, null, $"Entity '{entityId}' was not found.");
@@ -90,7 +92,9 @@ public sealed partial class IdentifyPluginService : IIdentifyProviderService {
             parentSortOrder: entity.SortOrder,
             includeNsfw: !hideNsfw,
             visited: [],
-            cancellationToken);
+            cancellationToken,
+            cascadeChildren,
+            sink);
 
         if (directResult.Ok && directResult.Result?.Patch is not null) {
             return ApplyNsfwPolicies(directResult, providerIsNsfw);
@@ -277,7 +281,9 @@ public sealed partial class IdentifyPluginService : IIdentifyProviderService {
         int? parentSortOrder,
         bool includeNsfw,
         HashSet<Guid> visited,
-        CancellationToken cancellationToken) {
+        CancellationToken cancellationToken,
+        bool cascadeChildren = true,
+        IIdentifyCascadeSink? sink = null) {
         if (!visited.Add(entity.Id)) {
             return new IdentifyPluginResponse(false, null, $"Cycle detected while identifying entity '{entity.Id}'.");
         }
@@ -323,7 +329,9 @@ public sealed partial class IdentifyPluginService : IIdentifyProviderService {
             [await SnapshotFromProposalAsync(entity, descriptor.Manifest.Id, response.Result, cancellationToken), .. ancestors],
             includeNsfw,
             visited,
-            cancellationToken);
+            cancellationToken,
+            cascadeChildren,
+            sink);
         visited.Remove(entity.Id);
         return response with { Result = proposal };
     }

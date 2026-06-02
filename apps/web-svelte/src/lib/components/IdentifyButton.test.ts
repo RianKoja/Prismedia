@@ -119,6 +119,7 @@ function queueItem(id: string, options: Partial<IdentifyQueueItem> = {}): Identi
     candidates: options.candidates ?? [],
     proposal: options.proposal ?? null,
     error: options.error ?? null,
+    cascadeRunning: options.cascadeRunning ?? false,
     createdAt: options.createdAt ?? "2026-05-25T00:00:00Z",
     updatedAt: options.updatedAt ?? "2026-05-25T00:00:00Z",
     completedAt: options.completedAt ?? null,

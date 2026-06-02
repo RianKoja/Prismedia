@@ -15,6 +15,8 @@ namespace Prismedia.Contracts.Plugins;
 /// <param name="Candidates">Search candidates waiting for user selection.</param>
 /// <param name="Proposal">Hydrated metadata proposal waiting for review.</param>
 /// <param name="Error">Latest identify or apply error, when present.</param>
+/// <param name="CascadeRunning">Whether a background cascade job is still streaming this item's child
+/// tree into the proposal. The review screen shows children filling in and gates Accept while true.</param>
 /// <param name="CreatedAt">When the item was first queued.</param>
 /// <param name="UpdatedAt">When queue state last changed.</param>
 /// <param name="CompletedAt">When the item reached a terminal state.</param>
@@ -31,6 +33,7 @@ public sealed record IdentifyQueueItem(
     IReadOnlyList<EntitySearchCandidate> Candidates,
     EntityMetadataProposal? Proposal,
     string? Error,
+    bool CascadeRunning,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt,
     DateTimeOffset? CompletedAt);

@@ -23,6 +23,7 @@ export interface IdentifyQueueItem {
   proposal: null | EntityMetadataProposal;
   /** @nullable */
   error: string | null;
+  cascadeRunning: boolean;
   createdAt: string;
   updatedAt: string;
   /** @nullable */

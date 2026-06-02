@@ -106,6 +106,14 @@ public sealed class IdentifyQueueItemRow {
     public string? CandidatesJson { get; set; }
     public string? ProposalJson { get; set; }
     public string? Error { get; set; }
+
+    /// <summary>
+    /// Id of the background <see cref="Prismedia.Domain.Entities.JobType.IdentifyCascade"/> run
+    /// currently streaming this item's child tree, or null when none is in flight. The review screen
+    /// treats a non-null value as "still resolving children" and gates Accept until it clears.
+    /// </summary>
+    public Guid? CascadeJobId { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
     public DateTimeOffset? CompletedAt { get; set; }

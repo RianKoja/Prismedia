@@ -13,7 +13,7 @@ public enum EntityKind {
 
     /// <summary>Audio library, album, audiobook, or podcast grouping.</summary>
     [Code("audio-library")]
-    [EntityKindMeta(EntityKindCategory.Media, EntityStorageShape.Folder, "Audio Libraries", typeof(Prismedia.Domain.Media.AudioLibrary))]
+    [EntityKindMeta(EntityKindCategory.Media, EntityStorageShape.Folder, "Audio Libraries", typeof(Prismedia.Domain.Media.AudioLibrary), enumeratesIdentifyChildren: true)]
     AudioLibrary,
 
     /// <summary>Playable audio track.</summary>
@@ -23,12 +23,12 @@ public enum EntityKind {
 
     /// <summary>Book, comic, manga, or other page-based media item.</summary>
     [Code("book")]
-    [EntityKindMeta(EntityKindCategory.Media, EntityStorageShape.Archive, "Books", typeof(Prismedia.Domain.Media.Book))]
+    [EntityKindMeta(EntityKindCategory.Media, EntityStorageShape.Archive, "Books", typeof(Prismedia.Domain.Media.Book), enumeratesIdentifyChildren: true)]
     Book,
 
     /// <summary>Structural book volume.</summary>
     [Code("book-volume")]
-    [EntityKindMeta(EntityKindCategory.Media, EntityStorageShape.None, "Volumes", typeof(Prismedia.Domain.Media.BookVolume))]
+    [EntityKindMeta(EntityKindCategory.Media, EntityStorageShape.None, "Volumes", typeof(Prismedia.Domain.Media.BookVolume), enumeratesIdentifyChildren: true)]
     BookVolume,
 
     /// <summary>Structural book chapter.</summary>
@@ -62,7 +62,7 @@ public enum EntityKind {
     /// groups images.
     /// </summary>
     [Code("music-artist")]
-    [EntityKindMeta(EntityKindCategory.Media, EntityStorageShape.Folder, "Artists", typeof(Prismedia.Domain.Media.MusicArtist))]
+    [EntityKindMeta(EntityKindCategory.Media, EntityStorageShape.Folder, "Artists", typeof(Prismedia.Domain.Media.MusicArtist), enumeratesIdentifyChildren: true)]
     MusicArtist,
 
     /// <summary>Person taxonomy entity.</summary>
@@ -92,11 +92,11 @@ public enum EntityKind {
 
     /// <summary>Video series grouping.</summary>
     [Code("video-series")]
-    [EntityKindMeta(EntityKindCategory.Media, EntityStorageShape.Folder, "Series", typeof(Prismedia.Domain.Media.VideoSeries))]
+    [EntityKindMeta(EntityKindCategory.Media, EntityStorageShape.Folder, "Series", typeof(Prismedia.Domain.Media.VideoSeries), enumeratesIdentifyChildren: true)]
     VideoSeries,
 
     /// <summary>Structural video season.</summary>
     [Code("video-season")]
-    [EntityKindMeta(EntityKindCategory.Media, EntityStorageShape.Folder, "Seasons", typeof(Prismedia.Domain.Media.VideoSeason))]
+    [EntityKindMeta(EntityKindCategory.Media, EntityStorageShape.Folder, "Seasons", typeof(Prismedia.Domain.Media.VideoSeason), enumeratesIdentifyChildren: true)]
     VideoSeason
 }

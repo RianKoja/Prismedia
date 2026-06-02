@@ -81,10 +81,10 @@
   const selectedChildCount = $derived(
     children.filter((child) => store.isReviewProposalSelected(child.proposalId)).length,
   );
-  const localChildEntities = $derived(structuralChildEntities(detail?.childrenByKind));
-  const childWorkPending = $derived(store.childWorkPending());
+  const localChildEntities = $derived(structuralChildEntities(entity.kind, detail?.childrenByKind));
+  const cascadeRunning = $derived(store.cascadeRunning(entity.id));
   const childrenMeta = $derived(
-    childWorkPending
+    cascadeRunning
       ? "identifying…"
       : `${children.length} of ${localChildEntities.length} matched`,
   );
@@ -133,13 +133,12 @@
     store.setReviewTagSelections(proposal.proposalId, selectedTags);
   });
 
-  // Start streaming this parent's structural children one identify at a time, once the entity's
-  // children are known (the detail can load after the proposal). Runs once per parent proposal.
-  let childStartProposalId = $state<string | null>(null);
+  // The child tree is resolved by a background cascade that streams onto the queue item. Poll it
+  // while the cascade runs so children fill in; the poll stops itself when the cascade completes.
   $effect(() => {
-    if (localChildEntities.length === 0 || childStartProposalId === proposal.proposalId) return;
-    childStartProposalId = proposal.proposalId;
-    store.startChildIdentification(entity.id, proposal, proposal.provider, localChildEntities);
+    if (!cascadeRunning) return;
+    store.ensureCascadePoll(entity.id);
+    return () => store.stopCascadePoll();
   });
 
   function setRelationshipSelected(result: EntityMetadataProposal, selected: boolean) {
@@ -469,7 +468,7 @@
       {#snippet icon()}
         <Layers class="h-3.5 w-3.5 text-text-accent" />
       {/snippet}
-      <IdentifyChildrenGrid childEntities={localChildEntities} {proposal} onWalkChild={walkChild} />
+      <IdentifyChildrenGrid {cascadeRunning} childEntities={localChildEntities} {proposal} onWalkChild={walkChild} />
     </IdentifyReviewSection>
   {/if}
 
@@ -554,8 +553,8 @@
     </span>
     <div class="hidden flex-1 md:block"></div>
 
-    {#if childWorkPending}
-      <span class="font-mono text-[0.7rem] text-text-muted">All children must be identified first</span>
+    {#if cascadeRunning}
+      <span class="font-mono text-[0.7rem] text-text-muted">Identifying children… Accept unlocks when finished</span>
     {/if}
 
     <!-- Accept buttons: full-width stacked on mobile -->
@@ -563,7 +562,7 @@
       <button
         type="button"
         class="btn-accent-glow inline-flex h-10 items-center justify-center gap-1.5 rounded-xs border border-border-accent-strong px-3 text-[0.78rem] text-text-primary transition-all disabled:cursor-not-allowed disabled:opacity-40 md:h-9"
-        disabled={store.applying || childWorkPending}
+        disabled={store.applying || cascadeRunning}
         onclick={() => handleApply(false)}
       >
         {#if store.applying}
@@ -578,7 +577,7 @@
           type="button"
           class="inline-flex h-10 items-center justify-center gap-1.5 rounded-xs border border-border-accent-strong px-3 text-[0.78rem] text-text-primary transition-all disabled:cursor-not-allowed disabled:opacity-40 md:h-9"
           style="background: linear-gradient(135deg, rgba(242,194,106,0.24), rgba(242,194,106,0.1)); box-shadow: 0 0 18px rgba(242,194,106,0.16);"
-          disabled={store.applying || childWorkPending}
+          disabled={store.applying || cascadeRunning}
           onclick={() => handleApply(true)}
         >
           {#if store.applying}

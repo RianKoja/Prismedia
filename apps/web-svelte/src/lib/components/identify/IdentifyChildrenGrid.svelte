@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Check, Loader2, ScanSearch, X } from "@lucide/svelte";
+  import { Check, Loader2 } from "@lucide/svelte";
   import { cn } from "@prismedia/ui-svelte";
   import { assetUrl } from "$lib/api/orval-fetch";
   import type { EntityMetadataProposal } from "$lib/api/identify-types";
@@ -10,20 +10,18 @@
   interface Props {
     childEntities: StructuralChildEntity[];
     proposal: EntityMetadataProposal;
+    /** True while the background cascade is still streaming children into this proposal. */
+    cascadeRunning?: boolean;
     /** Called when a matched child is activated, to drill into its own review. */
     onWalkChild?: (child: EntityMetadataProposal) => void;
   }
 
-  let { childEntities, proposal, onWalkChild }: Props = $props();
+  let { childEntities, proposal, cascadeRunning = false, onWalkChild }: Props = $props();
 
   const store = useIdentifyStore();
 
   function matchedProposal(childId: string): EntityMetadataProposal | null {
     return (proposal.children ?? []).find((child) => child.targetEntityId === childId) ?? null;
-  }
-
-  function statusOf(childId: string) {
-    return store.childIdentify[childId]?.status ?? "queued";
   }
 
   function coverFor(childId: string, fallback: string | null): string | undefined {
@@ -39,10 +37,9 @@
 <div class="grid grid-cols-2 gap-2 p-3.5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
   {#each childEntities as child (child.id)}
     {@const matched = matchedProposal(child.id)}
-    {@const status = matched ? "matched" : statusOf(child.id)}
+    {@const status = matched ? "matched" : cascadeRunning ? "loading" : "none"}
     {@const cover = coverFor(child.id, child.coverUrl)}
-    {@const busy = status === "loading" || status === "queued"}
-    {@const noMatch = !matched && !busy}
+    {@const noMatch = status === "none"}
     {@const selected = matched ? store.isReviewProposalSelected(matched.proposalId) : false}
     <div class={cn("child-tile", selected && "is-selected")}>
       <div class="child-cover-wrap">
@@ -61,8 +58,6 @@
 
           {#if status === "loading"}
             <div class="child-overlay"><Loader2 class="h-5 w-5 animate-spin" /><span>Identifying…</span></div>
-          {:else if status === "queued"}
-            <div class="child-overlay child-overlay-muted"><Loader2 class="h-4 w-4" /><span>Queued</span></div>
           {:else if noMatch}
             <div class="child-overlay child-overlay-muted"><span>No match found</span></div>
           {/if}
@@ -83,18 +78,6 @@
       <div class={cn("child-title", noMatch && "is-muted")} title={matched?.patch?.title ?? child.title}>
         {matched?.patch?.title ?? child.title}
       </div>
-
-      <div class="child-actions">
-        {#if busy}
-          <button type="button" class="child-action" onclick={() => store.cancelChild(child.id)}>
-            <X class="h-3 w-3" /> Cancel
-          </button>
-        {:else if noMatch}
-          <button type="button" class="child-action child-action-accent" onclick={() => store.reidentifyChild(child.id)}>
-            <ScanSearch class="h-3 w-3" /> Retry
-          </button>
-        {/if}
-      </div>
     </div>
   {/each}
 </div>
@@ -114,8 +97,4 @@
   .child-select.is-on { background: var(--color-border-accent-strong, #d59a2a); border-color: var(--color-border-accent-strong, #d59a2a); color: #0c0f15; }
   .child-title { font-size: 0.72rem; line-height: 1.2; color: var(--color-text-primary, #f2eed8); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .child-title.is-muted { color: var(--color-text-muted, #8a93a6); }
-  .child-actions { min-height: 1.1rem; }
-  .child-action { display: inline-flex; align-items: center; gap: 0.2rem; font-size: 0.64rem; color: var(--color-text-muted, #8a93a6); background: none; border: none; cursor: pointer; padding: 0; }
-  .child-action-accent { color: var(--color-text-accent, #f2c26a); }
-  .child-action:hover { opacity: 0.8; }
 </style>

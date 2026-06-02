@@ -42,11 +42,9 @@ const store = vi.hoisted(() => ({
   ensureReviewDetailForProposal: vi.fn(),
   deleteQueueItem: vi.fn(),
   applyProposal: vi.fn(),
-  childIdentify: {} as Record<string, { status: string; candidateCount?: number }>,
-  childWorkPending: vi.fn(() => false),
-  startChildIdentification: vi.fn(),
-  cancelChild: vi.fn(),
-  reidentifyChild: vi.fn(),
+  cascadeRunning: vi.fn(() => false),
+  ensureCascadePoll: vi.fn(),
+  stopCascadePoll: vi.fn(),
 }));
 
 vi.mock("./identify-store.svelte", () => ({

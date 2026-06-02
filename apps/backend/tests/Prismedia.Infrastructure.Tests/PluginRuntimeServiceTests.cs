@@ -830,10 +830,10 @@ public sealed class PluginRuntimeServiceTests : IDisposable {
     }
 
     [Fact]
-    public async Task IdentifyDoesNotCascadeIntoLocalChildrenAbsentFromProviderTree() {
-        // A parent identify is a single provider request. Local structural children the provider did
-        // not return in its own proposal (e.g. an artist's albums) are NOT fetched here — the client
-        // identifies them incrementally, one at a time.
+    public async Task IdentifyCascadesIntoLocalChildrenAbsentFromProviderTree() {
+        // A container identify walks its local structural children even when the provider did not
+        // return them in its own proposal (e.g. an artist's albums), identifying each with the
+        // parent's context and merging it into the returned tree.
         var pluginDir = Path.Combine(_tempRoot, "musicbrainz");
         Directory.CreateDirectory(pluginDir);
         await File.WriteAllTextAsync(
@@ -875,15 +875,74 @@ public sealed class PluginRuntimeServiceTests : IDisposable {
             new EntityRow { Id = albumId, KindCode = "audio-library", Title = "Evolve", ParentEntityId = artistId, SortOrder = 0, CreatedAt = now, UpdatedAt = now });
         await db.SaveChangesAsync();
 
-        var executor = new ParentOnlyProposalProcessExecutor("music-artist", "Imagine Dragons");
+        var executor = new EchoProposalProcessExecutor();
         var service = CreateIdentifyService(db, executor, pluginDir);
 
         var response = await service.IdentifyAsync(artistId, "musicbrainz", null, parentExternalIds: null, hideNsfw: false, CancellationToken.None);
 
         Assert.True(response.Ok);
-        Assert.Equal([artistId], executor.Requests.Select(request => request.Entity.Id).ToArray());
-        Assert.Empty(response.Result!.Children);
+        // Both the artist and its album were identified, and the album is a child of the artist tree.
+        Assert.Contains(artistId, executor.Requests.Select(request => request.Entity.Id));
+        Assert.Contains(albumId, executor.Requests.Select(request => request.Entity.Id));
         Assert.Equal("Imagine Dragons", response.Result!.Patch.Title);
+        var albumChild = Assert.Single(response.Result!.Children);
+        Assert.Equal(albumId, albumChild.TargetEntityId);
+        Assert.Equal("Evolve", albumChild.Patch.Title);
+    }
+
+    [Fact]
+    public async Task IdentifyDoesNotCascadeIntoAMovieLeafChild() {
+        // A movie is leaf content: its single playable video is the same work, so identifying the
+        // movie must not surface (or identify) that video as a structural child.
+        var pluginDir = Path.Combine(_tempRoot, "tmdb-movie");
+        Directory.CreateDirectory(pluginDir);
+        await File.WriteAllTextAsync(
+            Path.Combine(pluginDir, "manifest.json"),
+            """
+            {
+              "manifestVersion": 1,
+              "apiTags": ["prismedia"],
+              "id": "tmdb",
+              "name": "TMDB",
+              "version": "1.0.0",
+              "runtime": "dotnet-process",
+              "entry": "Prismedia.Plugin.Tmdb.dll",
+              "compat": { "pluginApiMin": "1.0.0", "pluginApiMax": null, "prismediaMin": "1.0.0", "prismediaMax": null },
+              "auth": [],
+              "supports": [
+                { "entityKind": "movie", "actions": ["search"] },
+                { "entityKind": "video", "actions": ["search"] }
+              ]
+            }
+            """);
+
+        await using var db = CreateContext();
+        var now = DateTimeOffset.UtcNow;
+        db.ProviderConfigs.Add(new ProviderConfigRow {
+            Id = Guid.NewGuid(),
+            ProviderCode = "tmdb",
+            DisplayName = "TMDB",
+            ProviderType = ProviderType.ExternalProcess,
+            Enabled = true,
+            SettingsJson = "{}",
+            CreatedAt = now,
+            UpdatedAt = now
+        });
+        var movieId = Guid.Parse("dddd4444-aaaa-4444-8888-dddddddddddd");
+        var videoId = Guid.Parse("eeee5555-aaaa-4444-8888-eeeeeeeeeeee");
+        db.Entities.AddRange(
+            new EntityRow { Id = movieId, KindCode = "movie", Title = "Friendship", CreatedAt = now, UpdatedAt = now },
+            new EntityRow { Id = videoId, KindCode = "video", Title = "Friendship", ParentEntityId = movieId, SortOrder = 0, CreatedAt = now, UpdatedAt = now });
+        await db.SaveChangesAsync();
+
+        var executor = new EchoProposalProcessExecutor();
+        var service = CreateIdentifyService(db, executor, pluginDir);
+
+        var response = await service.IdentifyAsync(movieId, "tmdb", null, parentExternalIds: null, hideNsfw: false, CancellationToken.None);
+
+        Assert.True(response.Ok);
+        Assert.Empty(response.Result!.Children);
+        Assert.Equal([movieId], executor.Requests.Select(request => request.Entity.Id).ToArray());
     }
 
     [Fact]
@@ -1587,7 +1646,12 @@ public sealed class PluginRuntimeServiceTests : IDisposable {
         }
     }
 
-    private sealed class ParentOnlyProposalProcessExecutor(string kind, string title) : ProcessExecutor {
+    /// <summary>
+    /// Echoes whatever entity was requested back as its own proposal (no provider-advertised
+    /// children), so the cascade's own local-child walk is what produces the tree. Records every
+    /// request so a test can assert which entities were identified.
+    /// </summary>
+    private sealed class EchoProposalProcessExecutor : ProcessExecutor {
         public List<IdentifyPluginRequest> Requests { get; } = [];
 
         public override async Task<ProcessExecutionResult> RunAsync(
@@ -1601,12 +1665,15 @@ public sealed class PluginRuntimeServiceTests : IDisposable {
             Requests.Add(request);
 
             var proposal = new EntityMetadataProposal(
-                "musicbrainz:parent",
-                "musicbrainz",
-                kind,
+                $"echo:{request.Entity.Kind}:{request.Entity.Id}",
+                request.Entity.Kind == "video" ? "tmdb" : "musicbrainz",
+                request.Entity.Kind,
                 0.9m,
                 "external-id",
-                EmptyPatch() with { Title = title },
+                EmptyPatch() with {
+                    Title = request.Entity.Title,
+                    ExternalIds = new Dictionary<string, string> { ["provider"] = request.Entity.Id.ToString() }
+                },
                 [],
                 [],
                 []);
