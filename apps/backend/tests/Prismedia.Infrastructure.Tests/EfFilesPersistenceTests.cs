@@ -20,6 +20,7 @@ public sealed class EfFilesPersistenceTests {
         var persistence = new EfFilesPersistence(db);
 
         var hidden = await persistence.ListHiddenPathsAsync(
+            rootPath,
             [folderPath, videoPath],
             CancellationToken.None);
 
@@ -41,6 +42,7 @@ public sealed class EfFilesPersistenceTests {
         var persistence = new EfFilesPersistence(db);
 
         var hidden = await persistence.ListHiddenPathsAsync(
+            rootPath,
             [rootPath, videosPath, nsfwFolderPath, nsfwVideoPath, safeVideoPath],
             CancellationToken.None);
 

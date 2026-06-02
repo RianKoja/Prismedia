@@ -54,6 +54,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - Added a worker status badge to Job Control so stalled queues show when the background worker is offline.
 
 ### Fixed
+- The Files tab no longer slows to a crawl on large libraries. Opening a folder used to scan every media file's path in the whole library to decide what to hide in SFW mode; it now looks only inside the folder you're viewing, and the file detail panel fetches just the fields it shows.
 - Scanning every library at once no longer names the library it is working on in the progress text, so an NSFW library's name can't slip into the scan status while you are browsing in SFW mode. The status now reads as a count ("Scanned 2 of 5 libraries") instead.
 - Dolby Vision Profile 5 videos no longer play with a purple/green color cast in the browser. Profile 5 has no standard HDR base layer, so copying it straight through to the player rendered the wrong colors; these videos are now tone-mapped to SDR like other HDR content. Dolby Vision with an HDR10- or HLG-compatible base layer (Profile 8) still streams directly for fast, light playback.
 - The MusicBrainz plugin now paces its requests to stay within MusicBrainz's rate limit, so identifying an artist (which cascades through its albums and tracks) no longer overruns the provider and comes back empty. The Identify button now shows on artist and album pages, and the Identify screen labels music sections correctly ("Artists" with a mic icon, "Albums") instead of raw codes.

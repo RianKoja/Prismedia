@@ -50,6 +50,8 @@ public sealed class EfFilesPersistence(PrismediaDbContext db) : IFilesPersistenc
         bool hideNsfw,
         CancellationToken cancellationToken) {
         var normalized = Path.GetFullPath(absolutePath);
+        // Project only the columns the Files page renders (id, kind, title) plus the NSFW flag used
+        // to filter, rather than hydrating full entity rows for every linked source.
         var entityQuery = db.EntityFiles.AsNoTracking()
             .Where(file => file.Role == EntityFileRole.Source &&
                            (file.Path == normalized || EF.Functions.Like(file.Path, normalized + Path.DirectorySeparatorChar + "%")))
@@ -57,7 +59,7 @@ public sealed class EfFilesPersistence(PrismediaDbContext db) : IFilesPersistenc
                 db.Entities.AsNoTracking().Where(entity => entity.DeletedAt == null),
                 file => file.EntityId,
                 entity => entity.Id,
-                (_, entity) => entity)
+                (_, entity) => new { entity.Id, entity.KindCode, entity.Title, entity.IsNsfw })
             .Distinct();
         if (hideNsfw) {
             entityQuery = entityQuery.Where(entity => !entity.IsNsfw);
@@ -90,6 +92,7 @@ public sealed class EfFilesPersistence(PrismediaDbContext db) : IFilesPersistenc
 
     /// <inheritdoc />
     public async Task<IReadOnlySet<string>> ListHiddenPathsAsync(
+        string scopeDirectory,
         IReadOnlyList<string> absolutePaths,
         CancellationToken cancellationToken) {
         if (absolutePaths.Count == 0) {
@@ -99,8 +102,14 @@ public sealed class EfFilesPersistence(PrismediaDbContext db) : IFilesPersistenc
         var candidates = absolutePaths
             .Select(path => Path.TrimEndingDirectorySeparator(Path.GetFullPath(path)))
             .ToArray();
+        // Every candidate lives at or under the scope directory, so only source files in that
+        // subtree can own or contain one. Bounding the query here keeps the Files tab responsive on
+        // large libraries instead of loading every source path in the catalog on each folder open.
+        var scope = Path.TrimEndingDirectorySeparator(Path.GetFullPath(scopeDirectory));
+        var scopePrefix = scope + Path.DirectorySeparatorChar;
         var sourceVisibilities = await db.EntityFiles.AsNoTracking()
-            .Where(file => file.Role == EntityFileRole.Source)
+            .Where(file => file.Role == EntityFileRole.Source &&
+                           (file.Path == scope || EF.Functions.Like(file.Path, scopePrefix + "%")))
             .Join(
                 db.Entities.AsNoTracking().Where(entity => entity.DeletedAt == null),
                 file => file.EntityId,

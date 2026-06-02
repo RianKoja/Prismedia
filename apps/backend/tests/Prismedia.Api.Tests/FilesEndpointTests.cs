@@ -118,6 +118,7 @@ public sealed class FilesEndpointTests : IDisposable {
             Task.FromResult<IReadOnlyList<FileLinkedEntity>>([]);
 
         public Task<IReadOnlySet<string>> ListHiddenPathsAsync(
+            string scopeDirectory,
             IReadOnlyList<string> absolutePaths,
             CancellationToken cancellationToken) =>
             Task.FromResult<IReadOnlySet<string>>(new HashSet<string>(StringComparer.OrdinalIgnoreCase));

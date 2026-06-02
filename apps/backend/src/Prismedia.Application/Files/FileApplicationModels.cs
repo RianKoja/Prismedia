@@ -46,8 +46,17 @@ public interface IFilesPersistence {
         bool hideNsfw,
         CancellationToken cancellationToken);
 
-    /// <summary>Returns candidate paths that are hidden because an NSFW source entity owns or contains them.</summary>
+    /// <summary>
+    /// Returns candidate paths that are hidden because an NSFW source entity owns or contains them.
+    /// </summary>
+    /// <param name="scopeDirectory">
+    /// Absolute path bounding the lookup: only source files at or under this directory are
+    /// considered. Every candidate must live within it, which lets the query load just the sources
+    /// in the viewed subtree instead of the whole library.
+    /// </param>
+    /// <param name="absolutePaths">Candidate absolute paths to test for visibility.</param>
     Task<IReadOnlySet<string>> ListHiddenPathsAsync(
+        string scopeDirectory,
         IReadOnlyList<string> absolutePaths,
         CancellationToken cancellationToken);
 

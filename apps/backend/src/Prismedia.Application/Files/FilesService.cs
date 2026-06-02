@@ -259,7 +259,7 @@ public sealed class FilesService(
         var absolutePaths = entries
             .Select(entry => AbsolutePathForEntry(directory.Root.Path, entry.Path))
             .ToArray();
-        var hidden = await persistence.ListHiddenPathsAsync(absolutePaths, cancellationToken);
+        var hidden = await persistence.ListHiddenPathsAsync(directory.AbsolutePath, absolutePaths, cancellationToken);
         if (hidden.Count == 0) {
             return entries;
         }
@@ -308,7 +308,7 @@ public sealed class FilesService(
             return;
         }
 
-        var hidden = await persistence.ListHiddenPathsAsync([path.AbsolutePath], cancellationToken);
+        var hidden = await persistence.ListHiddenPathsAsync(path.AbsolutePath, [path.AbsolutePath], cancellationToken);
         if (hidden.Contains(path.AbsolutePath)) {
             throw new FileOperationException("not_found", "File or folder was not found.");
         }
