@@ -23,6 +23,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - Images and Galleries now have a Feed view alongside Grid and List: a single, full-width column where each item shows at its real shape (tall, wide, or square) with the full title wrapped beneath it. Animated images play inline and keep playing as you scroll — the one on screen plus the next couple above and below — and a tap opens the lightbox, so the feed itself stays purely for browsing. Your filters, sort, and paging all carry over, and the choice is remembered per device.
 
 ### Added
+- Music libraries now understand artists, albums, and discs. Folders are read as one of two stable layouts — `Album/Songs` or `Artist/Album/Songs` — and an **Artist** is a first-class grouping (like a gallery is for images) with its own page, metadata, and band **members** (people credited with a role such as Drummer or Vocals, modeled like a series cast). A disc subfolder inside an album (`Disc 1`, `CD2`, `Side A`, …) becomes a section of that one album, with track numbering that restarts per disc, so multi-disc and box sets stay together as a single album. The MusicBrainz plugin can now identify an artist — pulling its members, origin, formed year, and genres — in addition to albums and tracks.
 - Added EPUB and PDF as single-file book formats: `.epub` and `.pdf` files scan into one book entity each (no chapter/page entities), with title/author/description read from the file (VersOne.Epub / PdfPig) and a cover taken from the EPUB's embedded image or the PDF's rendered first page (PDFtoImage). EPUB opens in a foliate-js reflowable reader (paged/scrolled, adjustable text size, comic-style tap zones, CFI resume). PDF opens in a dedicated pdf.js reader: continuous scroll with selectable text, zoom (fit-width / fit-page / buttons / pinch), gapless toggle, in-document search, internal/external links, download, an outline popup, and a paged mode (tap/swipe/arrow navigation) — resuming by page. Both stream the source file from the entities API.
 - Jellyfin clients like Infuse now get a closer match to real Jellyfin: Movies appear as their own library (alongside Videos, Series, and Collections) and play with their poster and backdrop artwork; TV episodes carry their series and season artwork (logo, backdrop, thumbnail, and series poster) so "Up Next" and episode tiles show the right images, even when opened directly; a Next Up shelf surfaces shows you're partway through; and detail pages no longer error while probing for trailers, bonus features, or skip markers.
 - Added first-class Movies: same-named single-file movie folders now scan as movie entities with their own Movies section, detail pages, plugin identify support, `movie.nfo` metadata, and poster/header artwork while still keeping the playable file visible in Videos.
@@ -51,6 +52,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - Added a worker status badge to Job Control so stalled queues show when the background worker is offline.
 
 ### Changed
+- Audio scans now enforce the `Album/Songs` and `Artist/Album/Songs` folder layouts instead of turning every folder level into a nested album. Existing music libraries reconcile themselves the next time they scan: an artist folder that was previously read as a containing "album" becomes a proper artist grouping, and disc subfolders fold into their album as sections.
 - The top-level library tiles in Jellyfin clients like Infuse (Movies, Videos, Series, Collections) now show poster artwork drawn from a recent item in each library, instead of a generic folder icon.
 - Collections now show poster artwork in Jellyfin clients like Infuse. A collection without its own cover falls back to its configured cover item, or the first item in the collection, so box-set tiles render a poster instead of a blank folder.
 - The Jellyfin "Continue/Resume" and "Up Next" shelves now lead with what you played most recently rather than what was added most recently, so the right titles surface first.
@@ -284,6 +286,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 ### Removed
 
 ### Docs
+- Documented the music library folder contract in the library organization guide: the supported `Album/Songs` and `Artist/Album/Songs` layouts, how folders are classified leaf-first, disc sections for multi-disc albums, and artist members.
 - Replaced stale README and documentation screenshots with fresh captures from the current Prismedia app shell.
 - Added a books and comics browsing screenshot to show book detail progress, resume, and volume context.
 - Updated the subtitle view options screenshot and related playback/settings copy.

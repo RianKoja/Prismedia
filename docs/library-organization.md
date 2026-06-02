@@ -180,6 +180,85 @@ title automatically.
 
 ---
 
+## Music libraries
+
+Audio roots (the **Audio** scan toggle) follow a separate, stricter folder
+contract that matches what every other music app expects. There are exactly
+two supported layouts, plus a multi-disc extension — Prismedia does not chain
+folders arbitrarily.
+
+### Supported layouts
+
+```text
+# Album → Songs
+Music/
+  Evolve/
+    01 - Next to Me.flac
+    02 - Believer.flac
+
+# Artist → Album → Songs
+Music/
+  Imagine Dragons/            ← Artist (a grouping, like a gallery is for images)
+    Evolve/                   ← Album
+      01 - Next to Me.flac
+    Night Visions/            ← Album
+      01 - Radioactive.flac
+```
+
+An **Artist** folder is a first-class grouping entity with its own metadata
+and **members** (people credited with a role such as Drummer, Vocals, or
+Composer — modeled exactly like a series links its cast). It gathers an
+artist's albums; it is not itself playable.
+
+### How folders are classified
+
+Prismedia resolves the tree leaf-first, from the folders that directly hold
+audio files:
+
+| Folder contents                                   | Becomes                         |
+|---------------------------------------------------|---------------------------------|
+| Holds audio files directly                        | **Album**                       |
+| Only subfolders, none holding audio directly      | **Artist** (groups albums)      |
+| A disc subfolder *inside* an album                | **Section** of that album       |
+
+Maximum nesting is **Artist → Album → Section**. Anything deeper is folded
+into sections rather than creating more entities.
+
+### Multi-disc albums (sections)
+
+A disc/box-set subfolder inside an album becomes a **section** of that one
+album rather than a separate album. Its tracks appear under a section heading
+(the folder name) with track numbering that restarts per section:
+
+```text
+# Album with discs (no artist)        # Artist → Album with discs
+Greatest Hits/                         Pink Floyd/
+  Disc 1/                                The Wall/
+    01 - ....flac                          Disc 1/
+  Disc 2/                                    01 - ....flac
+    01 - ....flac                          Disc 2/
+                                             01 - ....flac
+```
+
+Section folders are recognized by name — `Disc 1`, `CD2`, `Side A`, `Vol. 3`,
+`Part II`, `Disc One`, and similar. This is also how Prismedia tells
+`Artist/Album/Songs` apart from `Album/Disc 1/Songs` when tracks sit two
+folders deep: if a folder's track-bearing children are *all* disc-named, the
+folder is an album with sections; otherwise it is an artist of albums.
+
+Loose audio files sitting directly in the library root are kept as standalone
+tracks.
+
+### Metadata
+
+Albums are identified against release providers (e.g. MusicBrainz releases)
+and artists against artist providers (MusicBrainz artists), which fill the
+artist's members, origin, formed year, and genres. Re-scans reconcile the
+structure: if you reorganize an album into an `Artist/Album` layout, the next
+scan moves it under the new artist grouping automatically.
+
+---
+
 ## Metadata source priority
 
 When Prismedia imports a file, it merges metadata from several sources in
