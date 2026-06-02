@@ -113,6 +113,7 @@
 <div
   class="flex min-h-dvh"
   style:--prismedia-bottom-dock-padding={bottomDockPadding}
+  style:--prismedia-mobile-nav-height="calc(3.65rem + max(1.25rem, env(safe-area-inset-bottom, 0px)))"
   style:--prismedia-mobile-bottom-clearance="calc(3.65rem + max(1.25rem, env(safe-area-inset-bottom, 0px)) + var(--prismedia-bottom-dock-padding))"
   style:--prismedia-desktop-bottom-clearance="var(--prismedia-bottom-dock-padding)"
 >
@@ -125,13 +126,13 @@
     bind:this={mainScroller}
     class={cn(
       "flex flex-1 flex-col transition-[margin-left] duration-moderate",
-      "h-[calc(100dvh-var(--prismedia-mobile-bottom-clearance))] overflow-y-auto [scrollbar-gutter:stable] md:h-[calc(100dvh-var(--prismedia-desktop-bottom-clearance))]",
+      "h-[calc(100dvh-var(--prismedia-mobile-nav-height))] overflow-y-auto [scrollbar-gutter:stable] md:h-dvh",
       chrome.sidebarCollapsed ? "md:ml-14" : "md:ml-60",
     )}
     style:transition-timing-function="var(--ease-mechanical)"
   >
     <CanvasHeader />
-    <div class="flex-1 p-5">
+    <div class="flex-1 p-5" style:padding-bottom="calc(1.25rem + var(--prismedia-bottom-dock-padding))">
       {@render pageContent()}
     </div>
   </main>
