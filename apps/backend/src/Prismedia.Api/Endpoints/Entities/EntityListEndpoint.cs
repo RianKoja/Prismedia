@@ -24,6 +24,8 @@ internal static class EntityListEndpoint {
             int? ratingMax,
             bool? unrated,
             string? status,
+            string? bookType,
+            string? bookFormat,
             HttpContext httpContext,
             IEntityReadService entities,
             CancellationToken cancellationToken) => {
@@ -48,7 +50,9 @@ internal static class EntityListEndpoint {
                     ratingMin,
                     ratingMax,
                     unrated,
-                    status));
+                    status,
+                    bookType,
+                    bookFormat));
             })
             .WithName("ListEntities")
             .WithSummary("List Entities.")

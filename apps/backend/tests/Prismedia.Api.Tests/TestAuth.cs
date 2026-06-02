@@ -43,7 +43,9 @@ internal static class TestAuth {
             int? ratingMin = null,
             int? ratingMax = null,
             bool? unrated = null,
-            string? status = null) =>
+            string? status = null,
+            string? bookType = null,
+            string? bookFormat = null) =>
             Task.FromResult(new EntityListResponse([], null, 0));
 
         public Task<EntityCard?> GetAsync(Guid id, bool hideNsfw, CancellationToken cancellationToken) =>

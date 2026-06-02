@@ -32,6 +32,14 @@ public interface IEntityReadService {
     /// Engagement status filter that adapts to the entity: <c>watched</c>/<c>read</c>
     /// (completed), <c>unwatched</c>/<c>unread</c> (no engagement), or <c>in-progress</c>.
     /// </param>
+    /// <param name="bookType">
+    /// Comma-separated book type codes (<c>book</c>, <c>comic</c>, <c>manga</c>, <c>novel</c>).
+    /// Books matching any listed type are kept; unrecognized codes are ignored.
+    /// </param>
+    /// <param name="bookFormat">
+    /// Comma-separated book format codes (<c>image-archive</c>, <c>epub</c>, <c>pdf</c>).
+    /// Books matching any listed format are kept; unrecognized codes are ignored.
+    /// </param>
     Task<EntityListResponse> ListAsync(
         string? kind,
         string? query,
@@ -49,7 +57,9 @@ public interface IEntityReadService {
         int? ratingMin = null,
         int? ratingMax = null,
         bool? unrated = null,
-        string? status = null);
+        string? status = null,
+        string? bookType = null,
+        string? bookFormat = null);
 
     /// <summary>
     /// Gets one active entity as the shared entity card read model.

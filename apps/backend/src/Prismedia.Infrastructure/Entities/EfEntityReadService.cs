@@ -54,7 +54,9 @@ public sealed partial class EfEntityReadService : IEntityReadService {
         int? ratingMin = null,
         int? ratingMax = null,
         bool? unrated = null,
-        string? status = null) {
+        string? status = null,
+        string? bookType = null,
+        string? bookFormat = null) {
         var pageSize = Math.Clamp(limit ?? DefaultPageSize, 1, MaxPageSize);
         var normalizedRelationshipCode = string.IsNullOrWhiteSpace(relationshipCode)
             ? null
@@ -88,7 +90,7 @@ public sealed partial class EfEntityReadService : IEntityReadService {
         }
 
         entityQuery = ApplyNsfwVisibility(entityQuery, hideNsfw == true);
-        entityQuery = ApplyListFilters(entityQuery, favorite, organized, ratingMin, ratingMax, unrated, status);
+        entityQuery = ApplyListFilters(entityQuery, favorite, organized, ratingMin, ratingMax, unrated, status, bookType, bookFormat);
 
         // Snapshot the unbounded filtered total before applying the cursor; this is what
         // drives the client's page-of-pages and seek-to-end behaviour and must stay
@@ -145,6 +147,27 @@ public sealed partial class EfEntityReadService : IEntityReadService {
         Rating,
         Random,
         LastPlayed,
+    }
+
+    /// <summary>
+    /// Parses a comma-separated list of stable enum codes into the recognized enum values,
+    /// silently dropping blanks and unknown codes. Used to turn filter query parameters such as
+    /// <c>comic,manga</c> into the closed-set values applied to the book detail filter.
+    /// </summary>
+    private static List<TValue> ParseCodeList<TValue>(string? value)
+        where TValue : struct, Enum {
+        if (string.IsNullOrWhiteSpace(value)) {
+            return [];
+        }
+
+        var parsed = new List<TValue>();
+        foreach (var code in value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)) {
+            if (code.TryDecodeAs<TValue>(out var decoded) && !parsed.Contains(decoded)) {
+                parsed.Add(decoded);
+            }
+        }
+
+        return parsed;
     }
 
     private static ListSort ParseSort(string? sort) =>
@@ -229,9 +252,23 @@ public sealed partial class EfEntityReadService : IEntityReadService {
         int? ratingMin,
         int? ratingMax,
         bool? unrated,
-        string? status) {
+        string? status,
+        string? bookType = null,
+        string? bookFormat = null) {
         if (favorite == true) {
             query = query.Where(entity => entity.IsFavorite);
+        }
+
+        var bookTypes = ParseCodeList<BookType>(bookType);
+        if (bookTypes.Count > 0) {
+            query = query.Where(entity =>
+                _db.BookDetails.Any(detail => detail.EntityId == entity.Id && bookTypes.Contains(detail.BookType)));
+        }
+
+        var bookFormats = ParseCodeList<BookFormat>(bookFormat);
+        if (bookFormats.Count > 0) {
+            query = query.Where(entity =>
+                _db.BookDetails.Any(detail => detail.EntityId == entity.Id && bookFormats.Contains(detail.Format)));
         }
 
         if (organized is { } wantsOrganized) {

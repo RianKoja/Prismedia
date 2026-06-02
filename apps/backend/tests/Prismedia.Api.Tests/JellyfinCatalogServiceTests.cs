@@ -251,7 +251,9 @@ public sealed class JellyfinCatalogServiceTests {
             int? ratingMin = null,
             int? ratingMax = null,
             bool? unrated = null,
-            string? status = null) {
+            string? status = null,
+            string? bookType = null,
+            string? bookFormat = null) {
             IReadOnlyList<EntityThumbnail> items;
             if (referencedBy is { } personId) {
                 ReferencedByCalls.Add(personId);

@@ -396,7 +396,9 @@ public sealed partial class SecurityEndpointTests : IDisposable {
             int? ratingMin = null,
             int? ratingMax = null,
             bool? unrated = null,
-            string? status = null) =>
+            string? status = null,
+            string? bookType = null,
+            string? bookFormat = null) =>
             Task.FromResult(new EntityListResponse([Thumbnail(NsfwVideoId, isNsfw: true)], null, 1));
 
         public Task<EntityCard?> GetAsync(Guid id, bool hideNsfw, CancellationToken cancellationToken) {
@@ -484,7 +486,9 @@ public sealed partial class SecurityEndpointTests : IDisposable {
             int? ratingMin = null,
             int? ratingMax = null,
             bool? unrated = null,
-            string? status = null) {
+            string? status = null,
+            string? bookType = null,
+            string? bookFormat = null) {
             IReadOnlyList<EntityThumbnail> items = kind switch {
                 "video" => [Thumbnail(StandaloneId, "video", "Standalone Video", null, null), Thumbnail(EpisodeId, "video", "Pilot", SeasonId, 1)],
                 "video-series" => [Thumbnail(SeriesId, "video-series", "The Chair Company", null, null)],
@@ -593,7 +597,9 @@ public sealed partial class SecurityEndpointTests : IDisposable {
             int? ratingMin = null,
             int? ratingMax = null,
             bool? unrated = null,
-            string? status = null) =>
+            string? status = null,
+            string? bookType = null,
+            string? bookFormat = null) =>
             Task.FromResult(new EntityListResponse([Thumbnail(VideoId, "video", "Rich Movie", null, null)], null, 1));
 
         public Task<EntityCard?> GetAsync(Guid id, bool hideNsfw, CancellationToken cancellationToken) =>

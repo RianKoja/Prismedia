@@ -1197,6 +1197,56 @@ public sealed class EfEntityReadServiceTests {
         Assert.Equal([playedToday, playedLastWeek, neverPlayed], result.Items.Select(item => item.Id).ToArray());
     }
 
+    [Fact]
+    public async Task ListAsyncFiltersBooksByTypeAndFormat() {
+        await using var db = CreateContext();
+        var now = DateTimeOffset.UtcNow;
+        var comicCbz = Guid.Parse("11111111-1111-1111-1111-111111111111");
+        var comicPdf = Guid.Parse("22222222-2222-2222-2222-222222222222");
+        var novelEpub = Guid.Parse("33333333-3333-3333-3333-333333333333");
+        var mangaCbz = Guid.Parse("44444444-4444-4444-4444-444444444444");
+        db.Entities.AddRange(
+            new EntityRow { Id = comicCbz, KindCode = EntityKindRegistry.Book.Code, Title = "Comic Archive", CreatedAt = now, UpdatedAt = now },
+            new EntityRow { Id = comicPdf, KindCode = EntityKindRegistry.Book.Code, Title = "Comic PDF", CreatedAt = now, UpdatedAt = now },
+            new EntityRow { Id = novelEpub, KindCode = EntityKindRegistry.Book.Code, Title = "Novel EPUB", CreatedAt = now, UpdatedAt = now },
+            new EntityRow { Id = mangaCbz, KindCode = EntityKindRegistry.Book.Code, Title = "Manga Archive", CreatedAt = now, UpdatedAt = now });
+        db.BookDetails.AddRange(
+            new BookDetailRow { EntityId = comicCbz, BookType = BookType.Comic, Format = BookFormat.ImageArchive },
+            new BookDetailRow { EntityId = comicPdf, BookType = BookType.Comic, Format = BookFormat.Pdf },
+            new BookDetailRow { EntityId = novelEpub, BookType = BookType.Novel, Format = BookFormat.Epub },
+            new BookDetailRow { EntityId = mangaCbz, BookType = BookType.Manga, Format = BookFormat.ImageArchive });
+        await db.SaveChangesAsync();
+
+        var service = CreateService(db);
+
+        // Single type: only comics, regardless of format.
+        var comics = await service.ListAsync(
+            EntityKindRegistry.Book.Code, null, null, null, null, CancellationToken.None, bookType: "comic");
+        Assert.Equal([comicCbz, comicPdf], comics.Items.Select(item => item.Id).Order().ToArray());
+        Assert.Equal(2, comics.TotalCount);
+
+        // Multiple types are OR-ed within the family.
+        var comicsAndManga = await service.ListAsync(
+            EntityKindRegistry.Book.Code, null, null, null, null, CancellationToken.None, bookType: "comic,manga");
+        Assert.Equal([comicCbz, comicPdf, mangaCbz], comicsAndManga.Items.Select(item => item.Id).Order().ToArray());
+
+        // Single format: only PDFs.
+        var pdfs = await service.ListAsync(
+            EntityKindRegistry.Book.Code, null, null, null, null, CancellationToken.None, bookFormat: "pdf");
+        Assert.Equal(comicPdf, Assert.Single(pdfs.Items).Id);
+
+        // Type and format combine with AND across families.
+        var comicArchives = await service.ListAsync(
+            EntityKindRegistry.Book.Code, null, null, null, null, CancellationToken.None,
+            bookType: "comic", bookFormat: "image-archive");
+        Assert.Equal(comicCbz, Assert.Single(comicArchives.Items).Id);
+
+        // Unknown codes are ignored, leaving the result unfiltered by that family.
+        var unknown = await service.ListAsync(
+            EntityKindRegistry.Book.Code, null, null, null, null, CancellationToken.None, bookType: "nonsense");
+        Assert.Equal(4, unknown.TotalCount);
+    }
+
     private static EfEntityReadService CreateService(PrismediaDbContext db) {
         var repository = new EfEntityRepository(db, EntityMappers.Kinds(db), EntityMappers.Capabilities(db));
         return new EfEntityReadService(db, repository, EntityMappers.Kinds(db));
