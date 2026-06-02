@@ -71,6 +71,97 @@
     playback.clear();
   }
 
+  // --- Collapsed mini-player drag (fling left/right, snap with momentum) --------
+  const MINI_WIDTH = 56; // h-14 / w-14
+  let collapsedSide = $state<"left" | "right">("left");
+  let dragX = $state<number | null>(null); // live translateX while dragging / null = at rest
+  let dragging = $state(false);
+  let maxTravel = $state(0);
+  let snapDuration = $state(0.42);
+
+  let dragPointer: number | null = null;
+  let dragStartX = 0;
+  let dragStartTranslate = 0;
+  let dragMoved = false;
+  let lastX = 0;
+  let lastT = 0;
+  let velocity = 0; // px/ms, signed
+  let suppressBubbleClick = false;
+
+  const restTranslate = $derived(collapsedSide === "right" ? maxTravel : 0);
+  const appliedTranslate = $derived(dragX ?? restTranslate);
+
+  function computeMaxTravel(): number {
+    if (typeof window === "undefined") return 0;
+    const desktop = window.innerWidth >= 768;
+    const leftBase = desktop ? 256 : 12; // md:left-64 (16rem) vs left-3 (0.75rem)
+    const rightMargin = desktop ? 16 : 12; // md:right-4 vs right-3
+    return Math.max(0, window.innerWidth - rightMargin - MINI_WIDTH - leftBase);
+  }
+
+  function bubblePointerDown(event: PointerEvent) {
+    if (event.button !== 0) return;
+    maxTravel = computeMaxTravel();
+    dragPointer = event.pointerId;
+    dragStartX = event.clientX;
+    dragStartTranslate = restTranslate;
+    dragMoved = false;
+    lastX = event.clientX;
+    lastT = event.timeStamp;
+    velocity = 0;
+    (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+  }
+
+  function bubblePointerMove(event: PointerEvent) {
+    if (event.pointerId !== dragPointer) return;
+    const dx = event.clientX - dragStartX;
+    if (!dragMoved && Math.abs(dx) < 4) return;
+    dragMoved = true;
+    dragging = true;
+    const dt = event.timeStamp - lastT;
+    if (dt > 0) velocity = (event.clientX - lastX) / dt;
+    lastX = event.clientX;
+    lastT = event.timeStamp;
+    dragX = Math.max(0, Math.min(maxTravel, dragStartTranslate + dx));
+  }
+
+  function bubblePointerUp(event: PointerEvent) {
+    if (dragPointer !== null && event.pointerId !== dragPointer) return;
+    const wasDrag = dragMoved;
+    dragPointer = null;
+    if (wasDrag) {
+      const current = dragX ?? restTranslate;
+      // Project the throw forward a little so a flick keeps its momentum into a side.
+      const projected = current + velocity * 140;
+      const goRight = Math.abs(velocity) > 0.35 ? velocity > 0 : projected > maxTravel / 2;
+      // Snappier when thrown hard, gentler when nudged — both ease into place.
+      snapDuration = Math.min(0.5, Math.max(0.2, 0.46 - Math.abs(velocity) * 0.22));
+      collapsedSide = goRight ? "right" : "left";
+      suppressBubbleClick = true;
+      setTimeout(() => (suppressBubbleClick = false), 360);
+    }
+    dragging = false;
+    dragX = null;
+  }
+
+  function bubbleClick() {
+    if (suppressBubbleClick) {
+      suppressBubbleClick = false;
+      return;
+    }
+    collapsed = false;
+  }
+
+  // Keep the docked position correct across viewport changes.
+  $effect(() => {
+    const onResize = () => {
+      if (!dragging) maxTravel = computeMaxTravel();
+    };
+    onResize();
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  });
+
   function isKeyboardShortcutSuppressed(target: EventTarget | null): boolean {
     if (!(target instanceof HTMLElement)) return false;
     if (target.isContentEditable) return true;
@@ -335,12 +426,22 @@
   <button
     bind:this={rootEl}
     type="button"
-    onclick={() => (collapsed = false)}
-    title="Expand player"
+    onclick={bubbleClick}
+    onpointerdown={bubblePointerDown}
+    onpointermove={bubblePointerMove}
+    onpointerup={bubblePointerUp}
+    onpointercancel={bubblePointerUp}
+    title="Expand player — drag to move"
     aria-label="Expand audio player"
     class={cn(
-      "audio-mini fixed bottom-[calc(3.65rem+max(1.25rem,env(safe-area-inset-bottom,0px))+1.1rem)] left-3 z-[55] h-14 w-14 overflow-visible rounded-xl border border-white/10 bg-surface-1/70 shadow-[0_14px_40px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.07)] backdrop-blur-2xl transition-transform hover:scale-105 md:bottom-4 md:left-64",
+      "audio-mini fixed bottom-[calc(3.65rem+max(1.25rem,env(safe-area-inset-bottom,0px))+1.1rem)] left-3 z-[55] h-14 w-14 touch-none select-none overflow-visible rounded-xl border border-white/10 bg-surface-1/70 backdrop-blur-2xl md:bottom-4 md:left-64",
+      dragging
+        ? "shadow-[0_22px_60px_rgba(0,0,0,0.6),inset_0_1px_0_rgba(255,255,255,0.1)]"
+        : "shadow-[0_14px_40px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.07)]",
     )}
+    style:transform={`translateX(${appliedTranslate}px) scale(${dragging ? 1.08 : 1})`}
+    style:transition={dragging ? "none" : `transform ${snapDuration}s cubic-bezier(0.22, 1, 0.36, 1)`}
+    style:cursor={dragging ? "grabbing" : "grab"}
   >
     {#if playing}
       <span class="audio-notes" aria-hidden="true">
