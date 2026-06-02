@@ -375,6 +375,31 @@ describe("server-resolved filters and sorting", () => {
     expect(buildServerQueryFromFilters(["flags:organized:false"])).toEqual({ organized: false });
   });
 
+  it("folds book type and format filters into comma-separated server params", () => {
+    const server = buildServerQueryFromFilters([
+      "book-type:comic",
+      "book-type:manga",
+      "book-format:pdf",
+    ]);
+    expect(server.bookType).toBe("comic,manga");
+    expect(server.bookFormat).toBe("pdf");
+  });
+
+  it("treats book type and format filters as server-resolved", () => {
+    expect(isServerResolvedFilterId("book-type:comic")).toBe(true);
+    expect(isServerResolvedFilterId("book-format:epub")).toBe(true);
+  });
+
+  it("does not re-filter the loaded page on book type/format filters", () => {
+    const cards = [
+      entityCardToThumbnailCard(thumbnailEntity("a", "book", "Comic A")),
+      entityCardToThumbnailCard(thumbnailEntity("b", "book", "Novel B")),
+    ];
+    // Thumbnails carry no book type, so the server result must pass through untouched.
+    const visible = applyEntityGridState(cards, gridState({ filterIds: ["book-type:comic"] }));
+    expect(visible.map((card) => card.entity.id).sort()).toEqual(["a", "b"]);
+  });
+
   it("emits a stable seed for the random sort", () => {
     const request = entityGridRequestFromState(gridState({ sortBy: "random", randomSeed: 4242 }), []);
     expect(request.server.sort).toBe("random");

@@ -34,4 +34,6 @@ ratingMin?: number | string;
 ratingMax?: number | string;
 unrated?: boolean;
 status?: string;
+bookType?: string;
+bookFormat?: string;
 };

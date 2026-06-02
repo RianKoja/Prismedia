@@ -52,6 +52,10 @@ export interface EntityGridServerQuery {
   ratingMax?: number;
   unrated?: boolean;
   status?: string;
+  /** Comma-separated book type codes (book/comic/manga/novel). */
+  bookType?: string;
+  /** Comma-separated book format codes (image-archive/epub/pdf). */
+  bookFormat?: string;
 }
 
 export interface EntityGridKindTab {
@@ -461,6 +465,35 @@ export const STATUS_FILTER_DEFS = [
 const STATUS_VALUE_BY_ID = new Map<string, string>(STATUS_FILTER_DEFS.map((def) => [def.id, def.value]));
 
 /**
+ * Book type filter options (the {@link BookType} closed set). These are resolved
+ * entirely server-side against the book detail row — list thumbnails do not carry
+ * the type — so they are surfaced only on the Books grid and skipped by the
+ * client-side pass in {@link applyEntityGridState}.
+ */
+export const BOOK_TYPE_FILTER_DEFS = [
+  { id: "book-type:book", code: "book", label: "Book" },
+  { id: "book-type:comic", code: "comic", label: "Comic" },
+  { id: "book-type:manga", code: "manga", label: "Manga" },
+  { id: "book-type:novel", code: "novel", label: "Novel" },
+] as const;
+
+/** Book format filter options (the {@link BookFormat} closed set). Server-resolved like the types. */
+export const BOOK_FORMAT_FILTER_DEFS = [
+  { id: "book-format:image-archive", code: "image-archive", label: "Comic Archive" },
+  { id: "book-format:epub", code: "epub", label: "EPUB" },
+  { id: "book-format:pdf", code: "pdf", label: "PDF" },
+] as const;
+
+const BOOK_TYPE_LABEL_BY_ID = new Map<string, { id: string; code: string; label: string }>(
+  BOOK_TYPE_FILTER_DEFS.map((def) => [def.id, def]),
+);
+const BOOK_FORMAT_LABEL_BY_ID = new Map<string, { id: string; code: string; label: string }>(
+  BOOK_FORMAT_FILTER_DEFS.map((def) => [def.id, def]),
+);
+const BOOK_TYPE_PREFIX = "book-type:";
+const BOOK_FORMAT_PREFIX = "book-format:";
+
+/**
  * Filter IDs whose effect is resolved by the list endpoint across the whole
  * matching set rather than by client-side card inspection. These are skipped by
  * {@link applyEntityGridState} so the loaded page is not re-filtered (often with
@@ -475,7 +508,9 @@ export function isServerResolvedFilterId(id: string): boolean {
     id === "rating:unrated" ||
     id.startsWith("rating:min:") ||
     id.startsWith("rating:max:") ||
-    id.startsWith("status:")
+    id.startsWith("status:") ||
+    id.startsWith(BOOK_TYPE_PREFIX) ||
+    id.startsWith(BOOK_FORMAT_PREFIX)
   );
 }
 
@@ -486,6 +521,8 @@ export function isServerResolvedFilterId(id: string): boolean {
  */
 export function buildServerQueryFromFilters(filterIds: string[]): EntityGridServerQuery {
   const server: EntityGridServerQuery = {};
+  const bookTypes: string[] = [];
+  const bookFormats: string[] = [];
   for (const id of filterIds) {
     if (id === "flags:favorite") {
       server.favorite = true;
@@ -503,8 +540,16 @@ export function buildServerQueryFromFilters(filterIds: string[]): EntityGridServ
       if (Number.isFinite(value)) server.ratingMax = Math.min(server.ratingMax ?? value, value);
     } else if (STATUS_VALUE_BY_ID.has(id)) {
       server.status = STATUS_VALUE_BY_ID.get(id);
+    } else if (id.startsWith(BOOK_TYPE_PREFIX)) {
+      bookTypes.push(id.slice(BOOK_TYPE_PREFIX.length));
+    } else if (id.startsWith(BOOK_FORMAT_PREFIX)) {
+      bookFormats.push(id.slice(BOOK_FORMAT_PREFIX.length));
     }
   }
+  // The book families OR within themselves (any selected type/format matches) and
+  // the server ANDs the two families together.
+  if (bookTypes.length > 0) server.bookType = bookTypes.join(",");
+  if (bookFormats.length > 0) server.bookFormat = bookFormats.join(",");
   return server;
 }
 
@@ -781,6 +826,14 @@ export function entityGridFilterFromId(
   const statusDef = STATUS_FILTER_DEFS.find((def) => def.id === id);
   if (statusDef) {
     return { id, count: 0, label: statusDef.defaultLabel, capabilityKind: CAPABILITY_KIND.progress, value: statusDef.value };
+  }
+  const bookTypeDef = BOOK_TYPE_LABEL_BY_ID.get(id);
+  if (bookTypeDef) {
+    return { id, count: 0, label: bookTypeDef.label, capabilityKind: CAPABILITY_KIND.classification, value: bookTypeDef.code };
+  }
+  const bookFormatDef = BOOK_FORMAT_LABEL_BY_ID.get(id);
+  if (bookFormatDef) {
+    return { id, count: 0, label: bookFormatDef.label, capabilityKind: CAPABILITY_KIND.classification, value: bookFormatDef.code };
   }
   return undefined;
 }

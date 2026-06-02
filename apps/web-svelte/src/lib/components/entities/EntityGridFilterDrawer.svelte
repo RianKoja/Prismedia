@@ -2,7 +2,11 @@
   import { CalendarRange } from "@lucide/svelte";
   import { cn } from "@prismedia/ui-svelte";
   import { CAPABILITY_KIND } from "$lib/entities/entity-codes";
-  import type { EntityGridFilterOption } from "$lib/entities/entity-grid";
+  import {
+    BOOK_FORMAT_FILTER_DEFS,
+    BOOK_TYPE_FILTER_DEFS,
+    type EntityGridFilterOption,
+  } from "$lib/entities/entity-grid";
 
   interface Props {
     activeFilterIds: string[];
@@ -63,6 +67,10 @@
     "book-chapter",
   ]);
   const showStatus = $derived(entityKind == null || ENGAGEMENT_KINDS.has(entityKind));
+
+  // Book type/format are properties of the book detail row, so they only make sense on the
+  // Books grid; the server resolves them across the whole library.
+  const showBookFilters = $derived(entityKind === "book");
 
   const resolutions = ["4K", "1080p", "720p", "480p"];
   const durationChoices = [
@@ -214,6 +222,30 @@
           {#each statusChoices as item (item.id)}
             <button type="button" class={chipClass(item.id)} onclick={() => toggleFilter(item.id)}>
               {item.label}
+            </button>
+          {/each}
+        </div>
+      </section>
+    {/if}
+
+    {#if showBookFilters}
+      <section>
+        <div class="mb-2 text-kicker">Type</div>
+        <div class="flex flex-wrap gap-1">
+          {#each BOOK_TYPE_FILTER_DEFS as type (type.id)}
+            <button type="button" class={chipClass(type.id)} onclick={() => toggleFilter(type.id)}>
+              {type.label}
+            </button>
+          {/each}
+        </div>
+      </section>
+
+      <section>
+        <div class="mb-2 text-kicker">Format</div>
+        <div class="flex flex-wrap gap-1">
+          {#each BOOK_FORMAT_FILTER_DEFS as format (format.id)}
+            <button type="button" class={chipClass(format.id)} onclick={() => toggleFilter(format.id)}>
+              {format.label}
             </button>
           {/each}
         </div>
