@@ -43,6 +43,7 @@
   } from "./identify-review-helpers";
   import type { EntityMetadataProposal } from "$lib/api/identify-types";
   import type { EntityCard, EntityDetailCard } from "$lib/api/entities";
+  import { aspectRatioForKind } from "$lib/entities/entity-thumbnail";
   import { useIdentifyStore } from "./identify-store.svelte";
 
   interface Props {
@@ -108,6 +109,8 @@
     const hasWide = images.some((image) => image.kind === "thumbnail" || image.kind === "still" || image.kind === "backdrop");
     return !hasPoster && hasWide;
   });
+  // Music artists, albums, and tracks use a square cover rather than a portrait poster.
+  const coverIsSquare = $derived(aspectRatioForKind(proposal.targetKind) === "square");
   const applyProgressPercent = $derived.by(() => {
     const progress = store.applyProgress;
     if (!progress) return 0;
@@ -205,9 +208,9 @@
   <!-- Context bar -->
   <div class="grid grid-cols-[auto_1fr_auto_auto_auto] items-center gap-4 rounded-sm border border-border-subtle bg-surface-1 p-3.5 shadow-well">
     {#if contextPosterUrl}
-      <img src={contextPosterUrl} alt="" class={cn("rounded-xs object-cover", contextImageWide ? "h-12 w-[5.5rem]" : "h-16 w-11")} decoding="async" />
+      <img src={contextPosterUrl} alt="" class={cn("rounded-xs object-cover", coverIsSquare ? "h-14 w-14" : contextImageWide ? "h-12 w-[5.5rem]" : "h-16 w-11")} decoding="async" />
     {:else}
-      <div class={cn("grid place-items-center rounded-xs bg-surface-3", contextImageWide ? "h-12 w-[5.5rem]" : "h-16 w-11")}>
+      <div class={cn("grid place-items-center rounded-xs bg-surface-3", coverIsSquare ? "h-14 w-14" : contextImageWide ? "h-12 w-[5.5rem]" : "h-16 w-11")}>
         <Layers class="h-5 w-5 text-text-disabled" />
       </div>
     {/if}
@@ -378,7 +381,7 @@
                 : "border-border-default hover:border-border-accent",
             )}
             style="aspect-ratio: {group.kind === 'poster' || group.kind === 'cover'
-              ? '2/3'
+              ? (coverIsSquare ? '1/1' : '2/3')
               : group.kind === 'backdrop' || group.kind === 'thumbnail' || group.kind === 'still'
                 ? '16/9'
                 : '2/1'};"
