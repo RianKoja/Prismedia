@@ -75,6 +75,11 @@ export class NavCustomizationStore {
     this.mapSections((s) => (s.id === id ? { ...s, label } : s));
   }
 
+  /** Toggle whether a section is collapsed (items hidden) in the expanded sidebar; persists. */
+  toggleSectionCollapsed(id: string) {
+    this.mapSections((s) => (s.id === id ? { ...s, collapsed: !s.collapsed } : s));
+  }
+
   /** Append a new empty section and return its generated id. */
   addSection(label: string): string {
     const trimmed = label.trim() || "New Section";

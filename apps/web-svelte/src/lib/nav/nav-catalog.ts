@@ -27,7 +27,7 @@ export interface NavCatalogItem {
 export interface NavPrefs {
   v: 1;
   /** User-defined sections in display order; `items` are ordered hrefs. */
-  sections: { id: string; label: string; items: string[] }[];
+  sections: { id: string; label: string; items: string[]; collapsed?: boolean }[];
   /** Hrefs hidden from normal (non-edit) rendering. */
   hidden: string[];
   /** Ordered hrefs shown in the mobile bottom bar (max 4). Mobile-only. */
@@ -47,6 +47,8 @@ export interface ResolvedNavSection {
   id: string;
   label: string;
   items: ResolvedNavItem[];
+  /** Whether the section is collapsed (items hidden) in the expanded sidebar. */
+  collapsed: boolean;
 }
 
 /** Largest number of items the mobile bottom bar can show. */
@@ -112,7 +114,7 @@ export function resolveNav(catalog: NavCatalogItem[], prefs: NavPrefs): Resolved
       referenced.add(href);
       items.push({ href: item.href, label: item.label, icon: item.icon, hidden: hidden.has(href) });
     }
-    return { id: section.id, label: section.label, items };
+    return { id: section.id, label: section.label, items, collapsed: section.collapsed === true };
   });
 
   // Append any catalog item not placed by the saved layout.
@@ -121,7 +123,7 @@ export function resolveNav(catalog: NavCatalogItem[], prefs: NavPrefs): Resolved
     referenced.add(item.href);
     let section = sections.find((s) => s.id === item.defaultSectionId);
     if (!section) {
-      section = { id: item.defaultSectionId, label: item.defaultSectionLabel, items: [] };
+      section = { id: item.defaultSectionId, label: item.defaultSectionLabel, items: [], collapsed: false };
       sections.push(section);
     }
     section.items.push({

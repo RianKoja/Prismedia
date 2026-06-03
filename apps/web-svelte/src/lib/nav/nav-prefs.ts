@@ -26,7 +26,7 @@ export const navPrefsStore = createListPrefs<NavPrefs>({
     for (const raw of parsed.sections) {
       if (!isRecord(raw)) continue;
       if (typeof raw.id !== "string" || typeof raw.label !== "string") continue;
-      sections.push({ id: raw.id, label: raw.label, items: asStringArray(raw.items) });
+      sections.push({ id: raw.id, label: raw.label, items: asStringArray(raw.items), collapsed: raw.collapsed === true });
     }
     if (sections.length === 0) return null;
 

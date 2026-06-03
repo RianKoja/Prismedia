@@ -2,6 +2,7 @@
   import {
     BookOpen,
     Check,
+    ChevronRight,
     Eye,
     EyeOff,
     GripVertical,
@@ -325,20 +326,31 @@
     <nav class="flex-1 overflow-y-auto overflow-x-hidden py-3 scrollbar-hidden">
       {#each visibleSections as section (section.id)}
         <div class="mb-4">
-          <div
+          <button
+            type="button"
+            onclick={() => nav.toggleSectionCollapsed(section.id)}
+            tabindex={isExpanded ? 0 : -1}
+            aria-expanded={!section.collapsed}
             class={cn(
-              "px-4 pb-1.5 text-kicker whitespace-nowrap transition-[max-height,opacity] duration-moderate overflow-hidden",
+              "group/sec flex w-full items-center gap-1 px-4 pb-1.5 text-left text-kicker whitespace-nowrap transition-[max-height,opacity] duration-moderate overflow-hidden hover:text-text-muted",
               isExpanded ? "max-h-8 opacity-100" : "max-h-0 opacity-0",
             )}
           >
-            {section.label}
-          </div>
+            <ChevronRight
+              class={cn(
+                "h-3 w-3 shrink-0 text-text-disabled transition-transform duration-fast group-hover/sec:text-text-muted",
+                section.collapsed ? "" : "rotate-90",
+              )}
+            />
+            <span>{section.label}</span>
+          </button>
           <div
             class={cn(
               "mx-auto mb-1 w-6 separator transition-[max-height,opacity] duration-moderate overflow-hidden",
               !isExpanded ? "max-h-2 opacity-100" : "max-h-0 opacity-0",
             )}
           ></div>
+          {#if !(isExpanded && section.collapsed)}
           <ul class="space-y-0.5 px-2">
             {#each section.items as item (item.href)}
               {@const Icon = appShellNavIconMap[item.icon]}
@@ -381,6 +393,7 @@
               </li>
             {/each}
           </ul>
+          {/if}
         </div>
       {/each}
     </nav>

@@ -238,11 +238,11 @@
   `;
 
   function createTree(module: typeof import("@pierre/trees"), initialPaths: string[]): void {
-    const rootPaths = initialPaths.filter((p) => registry.get(p)?.path === "");
     tree = new module.FileTree({
       paths: initialPaths,
       initialExpansion: "closed",
-      initialExpandedPaths: rootPaths,
+      // Start every folder — roots included — collapsed; the user opens what they want.
+      initialExpandedPaths: [],
       icons: { set: "complete", colored: true },
       search: false,
       dragAndDrop: {
@@ -301,11 +301,15 @@
     if (!tree) return;
     const nextKey = paths.join("\n");
     if (nextKey !== lastPathsKey) {
+      // Preserve exactly what the user currently has open across the rebuild. Deriving this from
+      // the tree's live expansion (rather than "every directory we've ever loaded") keeps the
+      // collapsed-by-default behavior intact — loading a folder's children no longer forces other
+      // branches, or the roots, back open.
       const expandedPaths = paths.filter((path) => {
         const meta = registry.get(path);
         if (!meta || meta.kind !== "directory") return false;
-        if (meta.path === "") return true;
-        return loadedKeys.has(`${meta.rootId}:${meta.path}`);
+        const item = tree?.getItem(path);
+        return Boolean(item?.isDirectory() && (item as FileTreeDirectoryHandle).isExpanded());
       });
       tree.resetPaths(paths, { initialExpandedPaths: expandedPaths });
       lastPathsKey = nextKey;
