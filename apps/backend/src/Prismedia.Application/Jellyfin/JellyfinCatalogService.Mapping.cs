@@ -22,19 +22,28 @@ public sealed partial class JellyfinCatalogService {
         ItemContext? context = null) {
         var imageTags = ImageTags(item.Id, item.CoverUrl, null);
         var isPlayable = IsPlayable(item.Kind);
+        var isAudio = IsAudio(item.Kind);
+        var isAlbum = item.Kind.Equals("audio-library", StringComparison.OrdinalIgnoreCase);
+        var isMusic = isAudio || isAlbum || item.Kind.Equals("music-artist", StringComparison.OrdinalIgnoreCase);
+        // Tracks carry their album reference; tracks and albums both carry the album-artist reference.
+        var artistContext = isAudio || isAlbum ? context : null;
         long? runtimeTicks = isPlayable ? RuntimeTicksFrom(item) ?? 0 : null;
-        var container = isPlayable ? ContainerFrom(item) : null;
-        var streams = isPlayable ? CatalogStreams(item, container) : null;
+        // Audio tracks describe an audio stream/container; video items keep the video shape.
+        var container = isAudio ? AudioCodecFrom(item) : isPlayable ? ContainerFrom(item) : null;
+        var streams = isAudio ? CatalogAudioStreams(item) : isPlayable ? CatalogStreams(item, container) : null;
         return new JellyfinBaseItemDto {
             Id = item.Id,
             Name = item.Title,
             ServerId = serverId,
             Etag = EtagFor(item.Id, item.CoverUrl ?? item.Title),
             SortName = item.Title,
+            DateCreated = item.CreatedAt,
             Type = JellyfinType(item.Kind, item.ParentEntityId),
-            MediaType = isPlayable ? JellyfinProtocol.MediaTypes.Video : null,
+            // Strict clients (Manet) decode MediaType into an enum on every item and drop those missing
+            // it, so non-playable items carry "Unknown" rather than null, matching real Jellyfin.
+            MediaType = isAudio ? JellyfinProtocol.MediaTypes.Audio : isPlayable ? JellyfinProtocol.MediaTypes.Video : JellyfinProtocol.MediaTypes.Unknown,
             Path = isPlayable ? VirtualItemPath(item.Id) : null,
-            LocationType = isPlayable ? "FileSystem" : null,
+            LocationType = isPlayable || isMusic ? "FileSystem" : null,
             PlayAccess = isPlayable ? "Full" : null,
             Container = container,
             MediaSourceCount = isPlayable ? 1 : null,
@@ -43,31 +52,45 @@ public sealed partial class JellyfinCatalogService {
             CollectionType = CollectionType(item.Kind),
             ParentId = parentOverride ?? item.ParentEntityId,
             IsFolder = IsFolder(item.Kind),
-            RunTimeTicks = runtimeTicks,
+            // Real Jellyfin always emits these non-null (RunTimeTicks 0, empty Genres/blurhashes);
+            // Manet's typed models treat them as required and drop any item where they are null.
+            RunTimeTicks = runtimeTicks ?? 0,
+            Genres = [],
+            GenreItems = [],
+            ImageBlurHashes = EmptyBlurHashes,
             ImageTags = imageTags.Primary is null ? new Dictionary<string, string>() : new Dictionary<string, string> { ["Primary"] = imageTags.Primary },
             BackdropImageTags = imageTags.Backdrop is null ? [] : [imageTags.Backdrop],
-            PrimaryImageAspectRatio = 0.6667,
-            IndexNumber = item.SortOrder,
+            PrimaryImageAspectRatio = isMusic ? 1.0 : 0.6667,
+            IndexNumber = isAudio ? TrackNumberFrom(item.SortOrder) : item.SortOrder,
             ParentIndexNumber = context?.ParentIndexNumber,
             SeriesId = context?.SeriesId,
             SeriesName = context?.SeriesName,
             SeasonId = context?.SeasonId,
             SeasonName = context?.SeasonName,
             SeriesPrimaryImageTag = context?.SeriesPrimaryImageTag,
+            Album = isAudio ? context?.AlbumName : null,
+            AlbumId = isAudio ? context?.AlbumId : null,
+            AlbumPrimaryImageTag = isAudio ? context?.AlbumPrimaryImageTag : null,
+            AlbumArtist = artistContext?.AlbumArtistName,
+            AlbumArtists = AlbumArtistItems(artistContext),
+            Artists = artistContext?.AlbumArtistName is { } artist ? [artist] : null,
+            ArtistItems = AlbumArtistItems(artistContext),
             ParentLogoItemId = context?.ParentLogoItemId,
             ParentLogoImageTag = context?.ParentLogoImageTag,
             ParentBackdropItemId = context?.ParentBackdropItemId,
             ParentBackdropImageTags = context?.ParentBackdropImageTags,
             ParentThumbItemId = context?.ParentThumbItemId,
             ParentThumbImageTag = context?.ParentThumbImageTag,
-            VideoType = isPlayable ? "VideoFile" : null,
+            VideoType = isPlayable && !isAudio ? "VideoFile" : null,
             CanDelete = isPlayable ? true : null,
             EnableMediaSourceDisplay = isPlayable ? true : null,
             DisplayPreferencesId = item.Id.ToString("N"),
             LocalTrailerCount = isPlayable ? 0 : null,
             SpecialFeatureCount = isPlayable ? 0 : null,
             UserData = UserDataFor(item.Id, item.IsFavorite, null),
-            MediaSources = isPlayable ? [CatalogMediaSource(item.Id, item.Title, VirtualItemPath(item.Id), container, null, runtimeTicks, streams ?? [])] : null,
+            MediaSources = isPlayable
+                ? [CatalogMediaSource(item.Id, item.Title, VirtualItemPath(item.Id), container, null, runtimeTicks, streams ?? [], videoType: isAudio ? null : "VideoFile")]
+                : null,
             MediaStreams = streams
         };
     }
@@ -96,9 +119,15 @@ public sealed partial class JellyfinCatalogService {
         var image = ImageMetadata(item.Id, item.Capabilities);
         var source = SourceFile(media);
         var isPlayable = IsPlayable(item.Kind);
+        var isAudio = IsAudio(item.Kind);
+        var isAlbum = item.Kind.Equals("audio-library", StringComparison.OrdinalIgnoreCase);
+        var isMusic = isAudio || isAlbum || item.Kind.Equals("music-artist", StringComparison.OrdinalIgnoreCase);
+        var artistContext = isAudio || isAlbum ? context : null;
         long? runtimeTicks = isPlayable ? technical?.Duration?.Ticks ?? 0 : null;
-        var container = isPlayable ? technical?.Container ?? ContainerFromPath(source?.Path) : null;
-        var streams = isPlayable ? CatalogStreams(technical, container, subtitles) : null;
+        var container = isAudio
+            ? technical?.Container ?? technical?.Codec ?? ContainerFromPath(source?.Path)
+            : isPlayable ? technical?.Container ?? ContainerFromPath(source?.Path) : null;
+        var streams = isAudio ? CatalogAudioStreams(technical) : isPlayable ? CatalogStreams(technical, container, subtitles) : null;
         var childCount = item.ChildrenByKind.Sum(group => group.Entities.Count);
         var tags = TagItems(item);
         var studios = StudioItems(item);
@@ -122,8 +151,8 @@ public sealed partial class JellyfinCatalogService {
             OfficialRating = EmptyAsNull(classification?.Value),
             CustomRating = EmptyAsNull(classification?.Value),
             CommunityRating = communityRating,
-            Genres = tags.Count == 0 ? null : tags.Select(tag => tag.Name).ToArray(),
-            GenreItems = tags.Count == 0 ? null : tags,
+            Genres = tags.Count == 0 ? [] : tags.Select(tag => tag.Name).ToArray(),
+            GenreItems = tags.Count == 0 ? [] : tags,
             Tags = tags.Count == 0 ? null : tags.Select(tag => tag.Name).ToArray(),
             People = People(item),
             Studios = studios.Count == 0 ? null : studios,
@@ -131,9 +160,9 @@ public sealed partial class JellyfinCatalogService {
             ExternalUrls = ExternalUrls(links),
             RemoteTrailers = RemoteTrailers(links),
             Type = JellyfinType(item.Kind, item.ParentEntityId),
-            MediaType = isPlayable ? JellyfinProtocol.MediaTypes.Video : null,
+            MediaType = isAudio ? JellyfinProtocol.MediaTypes.Audio : isPlayable ? JellyfinProtocol.MediaTypes.Video : JellyfinProtocol.MediaTypes.Unknown,
             Path = isPlayable ? source?.Path ?? VirtualItemPath(item.Id) : null,
-            LocationType = isPlayable ? "FileSystem" : null,
+            LocationType = isPlayable || isMusic ? "FileSystem" : null,
             PlayAccess = isPlayable ? "Full" : null,
             Container = container,
             MediaSourceCount = isPlayable ? 1 : null,
@@ -150,21 +179,30 @@ public sealed partial class JellyfinCatalogService {
             IsFolder = IsFolder(item.Kind),
             ChildCount = childCount == 0 ? null : childCount,
             RecursiveItemCount = childCount == 0 ? null : childCount,
-            RunTimeTicks = runtimeTicks,
-            IndexNumber = PositionValue(position, "episode") ?? PositionValue(position, "sort") ?? item.SortOrder,
+            RunTimeTicks = runtimeTicks ?? 0,
+            IndexNumber = isAudio
+                ? TrackNumberFrom(item.SortOrder)
+                : PositionValue(position, "episode") ?? PositionValue(position, "sort") ?? item.SortOrder,
             ParentIndexNumber = PositionValue(position, "season") ?? context?.ParentIndexNumber,
             SeriesId = context?.SeriesId,
             SeriesName = context?.SeriesName,
             SeasonId = context?.SeasonId,
             SeasonName = context?.SeasonName,
             SeriesPrimaryImageTag = context?.SeriesPrimaryImageTag,
+            Album = isAudio ? context?.AlbumName : null,
+            AlbumId = isAudio ? context?.AlbumId : null,
+            AlbumPrimaryImageTag = isAudio ? context?.AlbumPrimaryImageTag : null,
+            AlbumArtist = artistContext?.AlbumArtistName,
+            AlbumArtists = AlbumArtistItems(artistContext),
+            Artists = artistContext?.AlbumArtistName is { } albumArtist ? [albumArtist] : null,
+            ArtistItems = AlbumArtistItems(artistContext),
             ParentLogoItemId = context?.ParentLogoItemId,
             ParentLogoImageTag = context?.ParentLogoImageTag,
             ParentBackdropItemId = context?.ParentBackdropItemId,
             ParentBackdropImageTags = context?.ParentBackdropImageTags,
             ParentThumbItemId = context?.ParentThumbItemId,
             ParentThumbImageTag = context?.ParentThumbImageTag,
-            VideoType = isPlayable ? "VideoFile" : null,
+            VideoType = isPlayable && !isAudio ? "VideoFile" : null,
             CanDelete = isPlayable ? true : null,
             EnableMediaSourceDisplay = isPlayable ? true : null,
             DisplayPreferencesId = item.Id.ToString("N"),
@@ -172,9 +210,12 @@ public sealed partial class JellyfinCatalogService {
             SpecialFeatureCount = isPlayable ? 0 : null,
             ImageTags = image.Tags,
             BackdropImageTags = image.BackdropImageTags,
-            PrimaryImageAspectRatio = image.PrimaryImageAspectRatio,
+            ImageBlurHashes = EmptyBlurHashes,
+            PrimaryImageAspectRatio = isMusic ? image.PrimaryImageAspectRatio ?? 1.0 : image.PrimaryImageAspectRatio,
             UserData = UserDataFor(item.Id, flags?.IsFavorite == true, playback, runtimeTicks),
-            MediaSources = isPlayable ? [CatalogMediaSource(item.Id, item.Title, source?.Path ?? VirtualItemPath(item.Id), container, source?.Path, runtimeTicks, streams ?? [], technical)] : null,
+            MediaSources = isPlayable
+                ? [CatalogMediaSource(item.Id, item.Title, source?.Path ?? VirtualItemPath(item.Id), container, source?.Path, runtimeTicks, streams ?? [], technical, videoType: isAudio ? null : "VideoFile")]
+                : null,
             MediaStreams = streams,
             Chapters = Chapters(markers)
         };
@@ -185,7 +226,9 @@ public sealed partial class JellyfinCatalogService {
         string name,
         string collectionType,
         string serverId,
-        string? coverPath = null) {
+        string? coverPath = null,
+        int? childCount = null,
+        int? recursiveItemCount = null) {
         // Surface a representative item poster as the library tile artwork so clients like Infuse
         // render a real thumbnail instead of a generic folder icon. The tag is keyed on the resolved
         // cover path so the image endpoint can serve the same asset for the synthetic view id.
@@ -194,9 +237,20 @@ public sealed partial class JellyfinCatalogService {
             Id = id,
             Name = name,
             ServerId = serverId,
+            SortName = name,
             Type = JellyfinProtocol.ItemTypes.CollectionFolder,
             CollectionType = collectionType,
             IsFolder = true,
+            // Match real Jellyfin's CollectionFolder shape. Strict clients (e.g. Manet) decode each
+            // library into a typed model and drop any whose MediaType/LocationType/etc. are null, then
+            // find no music library to sync. These scalar fields plus the counts make the view valid.
+            MediaType = JellyfinProtocol.MediaTypes.Unknown,
+            LocationType = "FileSystem",
+            PlayAccess = "Full",
+            CanDownload = false,
+            CanDelete = false,
+            ChildCount = childCount,
+            RecursiveItemCount = recursiveItemCount,
             Etag = EtagFor(id, collectionType),
             ImageTags = primaryTag is null
                 ? new Dictionary<string, string>()
@@ -210,6 +264,34 @@ public sealed partial class JellyfinCatalogService {
         IEntityCard parent,
         bool hideNsfw,
         CancellationToken cancellationToken) {
+        // Albums (audio-library) parent their tracks: carry the album reference plus the album artist
+        // resolved from the album's own parent (music-artist), so each track DTO is self-describing.
+        if (parent.Kind.Equals("audio-library", StringComparison.OrdinalIgnoreCase)) {
+            var albumImages = ImageMetadata(parent.Id, parent.Capabilities);
+            IEntityCard? artist = null;
+            if (parent.ParentEntityId is { } artistId) {
+                artist = await _entities.GetAsync(artistId, hideNsfw, cancellationToken);
+            }
+
+            return new ItemContext(
+                null, null, null, null, null,
+                ParentId: parent.Id,
+                AlbumId: parent.Id,
+                AlbumName: parent.Title,
+                AlbumPrimaryImageTag: ImageTag(albumImages, "Primary"),
+                AlbumArtistId: artist?.Id,
+                AlbumArtistName: artist?.Title);
+        }
+
+        // Artists (music-artist) parent their albums: each album DTO carries this artist as its album artist.
+        if (parent.Kind.Equals("music-artist", StringComparison.OrdinalIgnoreCase)) {
+            return new ItemContext(
+                null, null, null, null, null,
+                ParentId: parent.Id,
+                AlbumArtistId: parent.Id,
+                AlbumArtistName: parent.Title);
+        }
+
         if (parent.Kind.Equals("video-series", StringComparison.OrdinalIgnoreCase)) {
             // Episodes directly under a series (no season): parent-image fields all come from the series.
             var seriesImages = ImageMetadata(parent.Id, parent.Capabilities);
@@ -269,5 +351,26 @@ public sealed partial class JellyfinCatalogService {
 
     private static string? ImageTag(JellyfinImageMetadata images, string type) =>
         images.Tags.TryGetValue(type, out var tag) ? tag : null;
+
+    /// <summary>Empty blurhash map matching real Jellyfin's always-present <c>ImageBlurHashes</c> object.</summary>
+    private static readonly IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>> EmptyBlurHashes =
+        new Dictionary<string, IReadOnlyDictionary<string, string>>();
+
+    /// <summary>
+    /// Converts a stored album-global sort order (0-based, set from the embedded track tag on
+    /// single-disc albums) into a 1-based Jellyfin <c>IndexNumber</c> track number. Null sort order
+    /// yields a null track number rather than a misleading "1".
+    /// </summary>
+    private static int? TrackNumberFrom(int? sortOrder) =>
+        sortOrder is { } order ? order + 1 : null;
+
+    /// <summary>
+    /// Builds the single-element album-artist name/id pair list used for both <c>ArtistItems</c> and
+    /// <c>AlbumArtists</c>, or null when the context carries no resolved album artist.
+    /// </summary>
+    private static IReadOnlyList<JellyfinNameGuidPairDto>? AlbumArtistItems(ItemContext? context) =>
+        context?.AlbumArtistId is { } artistId && context.AlbumArtistName is { } artistName
+            ? [new JellyfinNameGuidPairDto(artistName, artistId)]
+            : null;
 
 }

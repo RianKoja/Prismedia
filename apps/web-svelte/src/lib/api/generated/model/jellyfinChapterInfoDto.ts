@@ -11,8 +11,7 @@ export interface JellyfinChapterInfoDto {
   Name: string;
   /** @nullable */
   ImagePath?: string | null;
-  /** @nullable */
-  ImageDateModified?: string | null;
+  ImageDateModified?: unknown;
   /** @nullable */
   ImageTag?: string | null;
 }

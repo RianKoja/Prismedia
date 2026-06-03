@@ -4,6 +4,7 @@ public static class JellyfinPlaybackEndpoints {
     public static IEndpointRouteBuilder MapJellyfinPlaybackEndpoints(this IEndpointRouteBuilder routes) {
         routes.MapJellyfinItemPlaybackInfoEndpoints();
         routes.MapJellyfinVideoStreamEndpoints();
+        routes.MapJellyfinAudioStreamEndpoints();
         routes.MapJellyfinVideoHlsEndpoints();
         routes.MapJellyfinVideoTranscodeEndpoints();
         routes.MapJellyfinVideoTrickplayEndpoints();

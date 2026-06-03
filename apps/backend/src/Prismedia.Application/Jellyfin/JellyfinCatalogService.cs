@@ -18,6 +18,7 @@ public sealed partial class JellyfinCatalogService {
     public static readonly Guid SeriesViewId = Guid.Parse("10000000-0000-0000-0000-000000000003");
     public static readonly Guid CollectionsViewId = Guid.Parse("10000000-0000-0000-0000-000000000004");
     public static readonly Guid MoviesViewId = Guid.Parse("10000000-0000-0000-0000-000000000005");
+    public static readonly Guid MusicViewId = Guid.Parse("10000000-0000-0000-0000-000000000006");
 
     /// <summary>The fixed top-level library views and the entity kind each one represents.</summary>
     private static readonly (Guid Id, string Name, string CollectionType, string Kind)[] LibraryViews =
@@ -25,7 +26,8 @@ public sealed partial class JellyfinCatalogService {
         (MoviesViewId, "Movies", JellyfinProtocol.CollectionTypes.Movies, "movie"),
         (VideosViewId, "Videos", JellyfinProtocol.CollectionTypes.HomeVideos, "video"),
         (SeriesViewId, "Series", JellyfinProtocol.CollectionTypes.Shows, "video-series"),
-        (CollectionsViewId, "Collections", JellyfinProtocol.CollectionTypes.BoxSets, "collection")
+        (CollectionsViewId, "Collections", JellyfinProtocol.CollectionTypes.BoxSets, "collection"),
+        (MusicViewId, "Music", JellyfinProtocol.CollectionTypes.Music, "music-artist")
     ];
 
     private const int MaxBrowseItems = 5000;
@@ -73,7 +75,16 @@ public sealed partial class JellyfinCatalogService {
         var views = new List<JellyfinBaseItemDto>(LibraryViews.Length);
         foreach (var view in LibraryViews) {
             var cover = await ResolveViewCoverPathAsync(view.Id, hideNsfw, cancellationToken);
-            views.Add(VirtualFolder(view.Id, view.Name, view.CollectionType, serverId, cover));
+            int? childCount = null;
+            int? recursiveItemCount = null;
+            // Advertise content counts for the Music library so music clients know it is browsable:
+            // child count is the artist count, recursive count is the total track count.
+            if (view.Id == MusicViewId) {
+                childCount = await CountOfKindAsync("music-artist", hideNsfw, cancellationToken);
+                recursiveItemCount = await CountOfKindAsync("audio-track", hideNsfw, cancellationToken);
+            }
+
+            views.Add(VirtualFolder(view.Id, view.Name, view.CollectionType, serverId, cover, childCount, recursiveItemCount));
         }
 
         return new JellyfinQueryResult<JellyfinBaseItemDto>(views, views.Count, 0);
@@ -147,6 +158,13 @@ public sealed partial class JellyfinCatalogService {
             items = await ItemsByIdAsync(query.Ids, serverId, hideNsfw, cancellationToken);
         } else if (query.PersonIds.Count > 0) {
             items = await FilmographyAsync(query.PersonIds[0], query, serverId, hideNsfw, cancellationToken);
+        } else if (query.Recursive && RequestsMusicTypes(query.IncludeItemTypes) &&
+            await RecursiveMusicItemsAsync(query, serverId, hideNsfw, cancellationToken) is { } musicItems) {
+            // Music clients fetch flat library lists with Recursive=true (e.g. all albums or all songs),
+            // either globally or scoped to the Music view/an artist. The structural-children browse
+            // below only yields a parent's immediate children, so these recursive queries are served
+            // by flattening the artist/album/track tree to the requested level.
+            items = musicItems;
         } else if (query.ParentId is null || query.ParentId == RootId) {
             items = (await GetUserViewsWithArtworkAsync(serverId, hideNsfw, cancellationToken)).Items;
         } else {
@@ -226,15 +244,19 @@ public sealed partial class JellyfinCatalogService {
     }
 
     /// <summary>
-    /// Builds parent (series/season) context for an item fetched on its own, by walking up to its
-    /// structural parent. Returns null for items that carry no parent artwork (movies, top-level).
+    /// Builds parent context for an item fetched on its own, by walking up to its structural parent:
+    /// series/season for episodes, and album (plus album artist) for tracks and albums. Returns null
+    /// for items that carry no parent context (movies, top-level artists).
     /// </summary>
     private async Task<ItemContext?> ResolveStandaloneContextAsync(
         IEntityCard entity,
         bool hideNsfw,
         CancellationToken cancellationToken) {
-        if (!entity.Kind.Equals("video", StringComparison.OrdinalIgnoreCase) ||
-            entity.ParentEntityId is not { } parentId) {
+        var resolvesParent =
+            entity.Kind.Equals("video", StringComparison.OrdinalIgnoreCase) ||
+            entity.Kind.Equals("audio-track", StringComparison.OrdinalIgnoreCase) ||
+            entity.Kind.Equals("audio-library", StringComparison.OrdinalIgnoreCase);
+        if (!resolvesParent || entity.ParentEntityId is not { } parentId) {
             return null;
         }
 
@@ -437,6 +459,13 @@ public sealed partial class JellyfinCatalogService {
             return thumbnails.Select(item => MapThumbnail(item, serverId)).ToArray();
         }
 
+        if (parentId == MusicViewId) {
+            // Top of the music tree: artists. Albums and tracks surface by drilling into an artist,
+            // handled by the generic structural-children path below with album/artist context.
+            var thumbnails = await FetchAllThumbnailsAsync("music-artist", query, hideNsfw, cancellationToken);
+            return thumbnails.Select(item => MapThumbnail(item, serverId)).ToArray();
+        }
+
         var parent = await _entities.GetAsync(parentId, hideNsfw, cancellationToken);
         if (parent is null) {
             return [];
@@ -518,6 +547,10 @@ public sealed partial class JellyfinCatalogService {
         return hydrated;
     }
 
+    // Music artists/albums are served straight from the thumbnail projection (which carries
+    // DateCreated, album-artist context, and the non-null fields strict clients require) — real
+    // Jellyfin does not include child counts on album list items, so hydration is unnecessary and
+    // would route them through the detail mapper, which lacks the added-date.
     private static bool ShouldHydrateCatalogItem(JellyfinBaseItemDto item) =>
         item.Type is JellyfinProtocol.ItemTypes.Series or JellyfinProtocol.ItemTypes.Season;
 
@@ -547,6 +580,140 @@ public sealed partial class JellyfinCatalogService {
         }
 
         return items;
+    }
+
+    private static bool RequestsMusicTypes(IReadOnlyList<string> types) =>
+        types.Any(type =>
+            type.Equals(JellyfinProtocol.ItemTypes.MusicArtist, StringComparison.OrdinalIgnoreCase) ||
+            type.Equals(JellyfinProtocol.ItemTypes.MusicAlbum, StringComparison.OrdinalIgnoreCase) ||
+            type.Equals(JellyfinProtocol.ItemTypes.Audio, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// Serves a recursive, flat music query (artists, albums, and/or songs) the way Jellyfin music
+    /// clients expect: a single list of the requested item types across the whole library, or scoped
+    /// to a music artist or album subtree. Albums and tracks are enriched with their album/artist
+    /// references so the flat rows are self-describing. Returns null when the requested parent is a
+    /// non-music subtree, so the caller falls back to the standard structural browse.
+    /// </summary>
+    private async Task<IReadOnlyList<JellyfinBaseItemDto>?> RecursiveMusicItemsAsync(
+        JellyfinItemQuery query,
+        string serverId,
+        bool hideNsfw,
+        CancellationToken cancellationToken) {
+        var types = new HashSet<string>(query.IncludeItemTypes, StringComparer.OrdinalIgnoreCase);
+        var wantArtists = types.Contains(JellyfinProtocol.ItemTypes.MusicArtist);
+        var wantAlbums = types.Contains(JellyfinProtocol.ItemTypes.MusicAlbum);
+        var wantSongs = types.Contains(JellyfinProtocol.ItemTypes.Audio);
+
+        // Resolve scope: global for null/root/library-view parents, else the music entity's subtree.
+        Guid? scopeArtist = null;
+        Guid? scopeAlbum = null;
+        if (query.ParentId is { } parentId && parentId != RootId && LibraryViews.All(view => view.Id != parentId)) {
+            var parent = await _entities.GetAsync(parentId, hideNsfw, cancellationToken);
+            if (parent is null) {
+                return [];
+            }
+
+            if (parent.Kind.Equals("music-artist", StringComparison.OrdinalIgnoreCase)) {
+                scopeArtist = parentId;
+            } else if (parent.Kind.Equals("audio-library", StringComparison.OrdinalIgnoreCase)) {
+                scopeAlbum = parentId;
+            } else {
+                return null; // non-music subtree — let the normal browse path handle it
+            }
+        }
+
+        // Lookups (unfiltered by search) so albums/tracks can resolve their album-artist for context.
+        var artistById = (await FetchAllOfKindAsync("music-artist", hideNsfw, cancellationToken))
+            .ToDictionary(artist => artist.Id);
+        var albumById = (await FetchAllOfKindAsync("audio-library", hideNsfw, cancellationToken))
+            .ToDictionary(album => album.Id);
+
+        var items = new List<JellyfinBaseItemDto>();
+
+        if (wantArtists && scopeArtist is null && scopeAlbum is null) {
+            foreach (var artist in await FetchAllThumbnailsAsync("music-artist", query, hideNsfw, cancellationToken)) {
+                items.Add(MapThumbnail(artist, serverId));
+            }
+        }
+
+        if (wantAlbums && scopeAlbum is null) {
+            foreach (var album in await FetchAllThumbnailsAsync("audio-library", query, hideNsfw, cancellationToken)) {
+                if (scopeArtist is { } artistScope && album.ParentEntityId != artistScope) {
+                    continue;
+                }
+
+                items.Add(MapThumbnail(album, serverId, album.ParentEntityId, AlbumArtistContext(album, artistById)));
+            }
+        }
+
+        if (wantSongs) {
+            foreach (var song in await FetchAllThumbnailsAsync("audio-track", query, hideNsfw, cancellationToken)) {
+                var album = song.ParentEntityId is { } albumId && albumById.TryGetValue(albumId, out var found) ? found : null;
+                if (scopeAlbum is { } albumScope && song.ParentEntityId != albumScope) {
+                    continue;
+                }
+
+                if (scopeArtist is { } artistScope && album?.ParentEntityId != artistScope) {
+                    continue;
+                }
+
+                items.Add(MapThumbnail(song, serverId, song.ParentEntityId, TrackContext(song, album, artistById)));
+            }
+        }
+
+        return items;
+    }
+
+    private static ItemContext AlbumArtistContext(
+        EntityThumbnail album,
+        IReadOnlyDictionary<Guid, EntityThumbnail> artistById) {
+        var artist = album.ParentEntityId is { } artistId && artistById.TryGetValue(artistId, out var found) ? found : null;
+        return new ItemContext(
+            null, null, null, null, null,
+            ParentId: album.ParentEntityId,
+            AlbumArtistId: artist?.Id,
+            AlbumArtistName: artist?.Title);
+    }
+
+    private static ItemContext TrackContext(
+        EntityThumbnail track,
+        EntityThumbnail? album,
+        IReadOnlyDictionary<Guid, EntityThumbnail> artistById) {
+        var artist = album?.ParentEntityId is { } artistId && artistById.TryGetValue(artistId, out var found) ? found : null;
+        // Tracks carry no embedded cover of their own, so point album art at the album's primary image
+        // (same id+tag the album advertises) — clients render album covers for songs from this.
+        var albumPrimaryTag = album?.CoverUrl is { } cover ? EtagFor(album.Id, cover) : null;
+        return new ItemContext(
+            null, null, null, null, null,
+            ParentId: track.ParentEntityId,
+            AlbumId: album?.Id,
+            AlbumName: album?.Title,
+            AlbumPrimaryImageTag: albumPrimaryTag,
+            AlbumArtistId: artist?.Id,
+            AlbumArtistName: artist?.Title);
+    }
+
+    /// <summary>Returns the total number of entities of a kind via a minimal list probe.</summary>
+    private async Task<int> CountOfKindAsync(string kind, bool hideNsfw, CancellationToken cancellationToken) {
+        var response = await _entities.ListAsync(kind, null, null, hideNsfw, 1, cancellationToken);
+        return response.TotalCount;
+    }
+
+    /// <summary>Lists every entity of a kind (paged internally), unfiltered by the request's search term.</summary>
+    private async Task<IReadOnlyList<EntityThumbnail>> FetchAllOfKindAsync(
+        string kind,
+        bool hideNsfw,
+        CancellationToken cancellationToken) {
+        var results = new List<EntityThumbnail>();
+        string? cursor = null;
+        do {
+            var response = await _entities.ListAsync(kind, null, cursor, hideNsfw, 1000, cancellationToken);
+            results.AddRange(response.Items);
+            cursor = response.NextCursor;
+        } while (cursor is not null && results.Count < MaxBrowseItems);
+
+        return results;
     }
 
     private async Task<IReadOnlyList<EntityThumbnail>> FetchAllThumbnailsAsync(

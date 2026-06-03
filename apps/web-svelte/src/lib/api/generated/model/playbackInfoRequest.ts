@@ -7,8 +7,7 @@
 import type { DeviceProfileRequest } from './deviceProfileRequest';
 
 export interface PlaybackInfoRequest {
-  /** @nullable */
-  UserId?: string | null;
+  UserId?: unknown;
   /**
      * @nullable
      * @pattern ^-?(?:0|[1-9]\d*)$

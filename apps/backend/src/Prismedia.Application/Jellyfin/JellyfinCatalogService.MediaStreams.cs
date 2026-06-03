@@ -23,7 +23,8 @@ public sealed partial class JellyfinCatalogService {
         string? filePath,
         long? runtimeTicks,
         IReadOnlyList<JellyfinCatalogMediaStreamDto> streams,
-        TechnicalCapability? technical = null) {
+        TechnicalCapability? technical = null,
+        string? videoType = "VideoFile") {
         long? size = null;
         if (!string.IsNullOrWhiteSpace(filePath)) {
             var file = new FileInfo(filePath);
@@ -44,10 +45,49 @@ public sealed partial class JellyfinCatalogService {
             ETag = EtagFor(id, filePath ?? path),
             RunTimeTicks = runtimeTicks,
             Bitrate = technical?.BitRate,
+            VideoType = videoType,
             DefaultAudioStreamIndex = audioIndex,
             MediaStreams = streams
         };
     }
+
+    /// <summary>Audio codec label carried on an audio-track thumbnail's "audio" meta chip, lowercased.</summary>
+    private static string? AudioCodecFrom(EntityThumbnail item) =>
+        item.Meta.FirstOrDefault(meta => meta.Icon.Equals("audio", StringComparison.OrdinalIgnoreCase))?.Label?.ToLowerInvariant();
+
+    /// <summary>
+    /// Builds the single audio <c>MediaStream</c> for a track from its thumbnail projection. Channels,
+    /// sample rate, and bitrate are not on the thumbnail, so only codec/display title are populated —
+    /// enough for a music client to recognise a playable audio source.
+    /// </summary>
+    private static IReadOnlyList<JellyfinCatalogMediaStreamDto> CatalogAudioStreams(EntityThumbnail item) {
+        var codec = AudioCodecFrom(item);
+        return [
+            new JellyfinCatalogMediaStreamDto {
+                Index = 0,
+                Type = JellyfinProtocol.MediaTypes.Audio,
+                Codec = codec,
+                DisplayTitle = codec?.ToUpperInvariant(),
+                IsDefault = true
+            }
+        ];
+    }
+
+    /// <summary>Builds the audio <c>MediaStream</c> for a track detail from its technical capability.</summary>
+    private static IReadOnlyList<JellyfinCatalogMediaStreamDto> CatalogAudioStreams(TechnicalCapability? technical) =>
+        [
+            new JellyfinCatalogMediaStreamDto {
+                Index = 0,
+                Type = JellyfinProtocol.MediaTypes.Audio,
+                Codec = technical?.Codec,
+                Channels = technical?.Channels,
+                ChannelLayout = ChannelLayout(technical?.Channels),
+                SampleRate = technical?.SampleRate,
+                BitRate = technical?.BitRate,
+                DisplayTitle = technical?.Codec?.ToUpperInvariant(),
+                IsDefault = true
+            }
+        ];
 
     private static IReadOnlyList<JellyfinCatalogMediaStreamDto> CatalogStreams(
         TechnicalCapability? technical,
@@ -187,14 +227,20 @@ public sealed partial class JellyfinCatalogService {
         Guid? ParentBackdropItemId = null,
         IReadOnlyList<string>? ParentBackdropImageTags = null,
         Guid? ParentThumbItemId = null,
-        string? ParentThumbImageTag = null) {
+        string? ParentThumbImageTag = null,
+        Guid? AlbumId = null,
+        string? AlbumName = null,
+        string? AlbumPrimaryImageTag = null,
+        Guid? AlbumArtistId = null,
+        string? AlbumArtistName = null) {
         public static ItemContext? From(JellyfinBaseItemDto item) =>
             item.SeriesId is null &&
             item.SeriesName is null &&
             item.SeasonId is null &&
             item.SeasonName is null &&
             item.ParentIndexNumber is null &&
-            item.ParentId is null
+            item.ParentId is null &&
+            item.AlbumId is null
                 ? null
                 : new ItemContext(
                     item.SeriesId,
@@ -209,7 +255,12 @@ public sealed partial class JellyfinCatalogService {
                     item.ParentBackdropItemId,
                     item.ParentBackdropImageTags,
                     item.ParentThumbItemId,
-                    item.ParentThumbImageTag);
+                    item.ParentThumbImageTag,
+                    item.AlbumId,
+                    item.Album,
+                    item.AlbumPrimaryImageTag,
+                    item.AlbumArtists is { Count: > 0 } ? item.AlbumArtists[0].Id : null,
+                    item.AlbumArtist);
     }
 
 }

@@ -281,6 +281,12 @@ public sealed record LibrarySettingsData(
 /// <param name="EpisodeNumber">Episode number parsed from the filename when available.</param>
 /// <param name="AbsoluteEpisodeNumber">Absolute episode number parsed from the filename when available.</param>
 /// <param name="Metadata">Optional sidecar metadata read during scan.</param>
+/// <param name="Movie">Optional movie folder context for single-film releases.</param>
+/// <param name="FolderSortOrder">
+/// Filename-based ordering index for a video grouped into a series purely because its folder holds
+/// multiple loose videos (no season folders or episode tokens). Used to order such episodes
+/// alphabetically when no real episode number exists.
+/// </param>
 public sealed record VideoUpsertItem(
     string FilePath,
     string Title,
@@ -291,7 +297,8 @@ public sealed record VideoUpsertItem(
     int? EpisodeNumber = null,
     int? AbsoluteEpisodeNumber = null,
     VideoSidecarMetadata? Metadata = null,
-    MovieScanInfo? Movie = null);
+    MovieScanInfo? Movie = null,
+    int? FolderSortOrder = null);
 
 /// <summary>
 /// Movie folder context inferred during a scan.

@@ -91,6 +91,8 @@ public sealed partial class EfEntityReadService {
                 ParentKind = row.ParentEntityId is { } parentId
                     ? parentKindByEntity.GetValueOrDefault(parentId)
                     : null,
+                CreatedAt = row.CreatedAt,
+                PlayCount = playbackByEntity.GetValueOrDefault(row.Id)?.PlayCount,
                 Progress = ResolveThumbnailProgress(
                     playbackByEntity.GetValueOrDefault(row.Id),
                     progressByEntity.GetValueOrDefault(row.Id),

@@ -64,7 +64,7 @@ export function entityThumbnailToTrackItem(
     studioId: null,
     performers: [],
     tags: [],
-    playCount: 0,
+    playCount: toNumber(thumb.playCount) ?? 0,
     lastPlayedAt: null,
     createdAt: "",
   };

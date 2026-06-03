@@ -71,6 +71,14 @@ public static partial class JellyfinCompatibilityEndpoints {
         routes.MapGet("/Branding/Css.css", () => Results.Text("", "text/css"))
             .WithTags("Jellyfin Branding")
             .WithName("GetJellyfinBrandingCssFile");
+
+        // Clients probe this during the connect phase to decide whether to offer QuickConnect login.
+        // It must answer with a JSON boolean — falling through to the SPA returns HTML and can wedge
+        // a client's init before it ever loads libraries.
+        routes.MapGet("/QuickConnect/Enabled", () => Results.Ok(false))
+            .WithTags("Jellyfin System")
+            .WithName("GetJellyfinQuickConnectEnabled")
+            .Produces<bool>();
     }
 
     private static void MapJellyfinUserEndpoints(this IEndpointRouteBuilder routes) {
@@ -247,6 +255,16 @@ public static partial class JellyfinCompatibilityEndpoints {
             .ExcludeFromDescription()
             .Produces<JellyfinQueryResult<JellyfinBaseItemDto>>();
 
+        routes.MapGet("/Artists", GetArtistsAsync)
+            .WithTags("Jellyfin Music")
+            .WithName("GetJellyfinArtists")
+            .Produces<JellyfinQueryResult<JellyfinBaseItemDto>>();
+
+        routes.MapGet("/Artists/AlbumArtists", GetArtistsAsync)
+            .WithTags("Jellyfin Music")
+            .WithName("GetJellyfinAlbumArtists")
+            .Produces<JellyfinQueryResult<JellyfinBaseItemDto>>();
+
         routes.MapGet("/Shows/{seriesId:guid}/Seasons", GetSeriesSeasonsAsync)
             .WithTags("Jellyfin Shows")
             .WithName("GetJellyfinSeriesSeasons")
@@ -358,6 +376,25 @@ public static partial class JellyfinCompatibilityEndpoints {
             .WithName("GetJellyfinVirtualFolders")
             .WithSummary("Gets Jellyfin-compatible virtual library folders.")
             .Produces<IReadOnlyList<JellyfinVirtualFolderInfoDto>>();
+
+        // Some clients enumerate libraries via /Library/MediaFolders instead of /UserViews; return the
+        // same top-level library views so either entry point discovers the Music (and video) libraries.
+        routes.MapGet("/Library/MediaFolders", async (
+            HttpContext httpContext,
+            PrismediaSecurityService security,
+            JellyfinCatalogService catalog,
+            CancellationToken cancellationToken) => {
+            var state = await security.EnsureSecurityAsync(cancellationToken);
+            var views = await catalog.GetUserViewsWithArtworkAsync(
+                state.ServerId.ToString("N"),
+                NsfwVisibility.ShouldHide(null, httpContext),
+                cancellationToken);
+            return Results.Ok(views);
+        })
+            .WithTags("Jellyfin Library")
+            .WithName("GetJellyfinMediaFolders")
+            .WithSummary("Gets Jellyfin-compatible media library folders.")
+            .Produces<JellyfinQueryResult<JellyfinBaseItemDto>>();
     }
 
     private static void MapJellyfinCompatibilityNoOps(this IEndpointRouteBuilder routes) {

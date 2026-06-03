@@ -11,15 +11,13 @@ export interface JellyfinUserDto {
   Name: string;
   ServerId: string;
   ServerName: string;
-  Id: string;
+  Id: unknown;
   HasPassword: boolean;
   HasConfiguredPassword: boolean;
   HasConfiguredEasyPassword: boolean;
   EnableAutoLogin: boolean;
-  /** @nullable */
-  LastLoginDate: string | null;
-  /** @nullable */
-  LastActivityDate: string | null;
+  LastLoginDate: unknown;
+  LastActivityDate: unknown;
   Policy: JellyfinUserPolicyDto;
   Configuration: JellyfinUserConfigurationDto;
 }

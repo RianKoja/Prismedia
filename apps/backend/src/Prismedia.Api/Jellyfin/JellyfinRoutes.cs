@@ -15,13 +15,16 @@ internal static class JellyfinRoutes {
         "/UserViews",
         "/Items",
         "/Shows",
+        "/Artists",
         "/Videos",
+        "/Audio",
         "/Sessions",
         "/UserPlayedItems",
         "/UserItems",
         "/MediaSegments",
         "/Library",
         "/Branding",
+        "/QuickConnect",
         "/DisplayPreferences"
     ];
 
@@ -42,6 +45,9 @@ internal static class JellyfinRoutes {
 
     /// <summary>Branding CSS endpoint with file extension.</summary>
     public const string BrandingCssFile = "/Branding/Css.css";
+
+    /// <summary>QuickConnect availability probe, called before authentication.</summary>
+    public const string QuickConnectEnabled = "/QuickConnect/Enabled";
 
     /// <summary>Public users listing endpoint.</summary>
     public const string UsersPublic = "/Users/Public";

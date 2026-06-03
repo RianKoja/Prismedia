@@ -98,7 +98,12 @@ const server = http.createServer((clientReq, clientRes) => {
         const contentType = upstreamRes.headers["content-type"] ?? "";
         const capture = isCapturableContentType(contentType);
 
-        clientRes.writeHead(upstreamRes.statusCode ?? 502, upstreamRes.headers);
+        // Forward the response, but drop hop-by-hop headers. Re-emitting the upstream's
+        // `transfer-encoding`/`connection`/`content-length` while Node re-frames the streamed body
+        // produces conflicting framing: lenient clients (curl) tolerate it, but stricter HTTP stacks
+        // (e.g. some Jellyfin music clients) discard the body and render an empty UI. Let Node set
+        // framing itself. See RFC 7230 §6.1 for the hop-by-hop header list.
+        clientRes.writeHead(upstreamRes.statusCode ?? 502, sanitizeResponseHeaders(upstreamRes.headers));
 
         const resChunks = [];
         let capturedLength = 0;
@@ -147,6 +152,28 @@ const server = http.createServer((clientReq, clientRes) => {
     upstreamReq.end();
   });
 });
+
+// Hop-by-hop headers must not be forwarded by a proxy (RFC 7230 §6.1). We also drop
+// content-length so Node recomputes framing for the (possibly decompressed) streamed body.
+const HOP_BY_HOP_HEADERS = new Set([
+  "connection",
+  "keep-alive",
+  "proxy-authenticate",
+  "proxy-authorization",
+  "te",
+  "trailer",
+  "transfer-encoding",
+  "upgrade",
+  "content-length",
+]);
+
+function sanitizeResponseHeaders(headers) {
+  const result = {};
+  for (const [key, value] of Object.entries(headers)) {
+    if (!HOP_BY_HOP_HEADERS.has(key.toLowerCase())) result[key] = value;
+  }
+  return result;
+}
 
 function decodeBody(buffer, contentType, max, contentEncoding) {
   if (!buffer || buffer.length === 0) return null;

@@ -192,6 +192,111 @@ public sealed class JellyfinCatalogServiceTests {
         Assert.True(item.IsFolder);
     }
 
+    [Fact]
+    public async Task MusicViewListsArtistsAsFolders() {
+        var artistId = Guid.NewGuid();
+        var entities = new FakeEntityReadService();
+        entities.ListByKind["music-artist"] = [Thumb(artistId, "music-artist", "A Band")];
+        var catalog = new JellyfinCatalogService(entities, new FakeCollections());
+
+        var result = await catalog.GetItemsAsync(
+            Query(parentId: JellyfinCatalogService.MusicViewId),
+            ServerId,
+            hideNsfw: false,
+            CancellationToken.None);
+
+        var item = Assert.Single(result.Items);
+        Assert.Equal(artistId, item.Id);
+        Assert.Equal(JellyfinProtocol.ItemTypes.MusicArtist, item.Type);
+        Assert.True(item.IsFolder);
+    }
+
+    [Fact]
+    public async Task BrowsingArtistReturnsAlbumsTaggedWithAlbumArtist() {
+        var artistId = Guid.NewGuid();
+        var albumId = Guid.NewGuid();
+        var entities = new FakeEntityReadService();
+        entities.Cards[artistId] = MusicCard(artistId, "music-artist", "A Band", parentId: null,
+            children: [new EntityGroup("audio-library", "Albums", [MusicThumb(albumId, "audio-library", "First Album", artistId, sortOrder: 0)])]);
+        entities.Cards[albumId] = MusicCard(albumId, "audio-library", "First Album", parentId: artistId, children: []);
+        var catalog = new JellyfinCatalogService(entities, new FakeCollections());
+
+        var result = await catalog.GetItemsAsync(
+            Query(parentId: artistId),
+            ServerId,
+            hideNsfw: false,
+            CancellationToken.None);
+
+        var album = Assert.Single(result.Items);
+        Assert.Equal(albumId, album.Id);
+        Assert.Equal(JellyfinProtocol.ItemTypes.MusicAlbum, album.Type);
+        Assert.Equal("A Band", album.AlbumArtist);
+        Assert.Equal(artistId, Assert.Single(album.ArtistItems!).Id);
+    }
+
+    [Fact]
+    public async Task BrowsingAlbumReturnsTracksWithAlbumArtistAndTrackNumber() {
+        var artistId = Guid.NewGuid();
+        var albumId = Guid.NewGuid();
+        var trackId = Guid.NewGuid();
+        var entities = new FakeEntityReadService();
+        entities.Cards[artistId] = MusicCard(artistId, "music-artist", "A Band", parentId: null, children: []);
+        entities.Cards[albumId] = MusicCard(albumId, "audio-library", "First Album", parentId: artistId,
+            children: [new EntityGroup("audio-track", "Tracks", [MusicThumb(trackId, "audio-track", "Opening Track", albumId, sortOrder: 0)])]);
+        var catalog = new JellyfinCatalogService(entities, new FakeCollections());
+
+        var result = await catalog.GetItemsAsync(
+            Query(parentId: albumId),
+            ServerId,
+            hideNsfw: false,
+            CancellationToken.None);
+
+        var track = Assert.Single(result.Items);
+        Assert.Equal(trackId, track.Id);
+        Assert.Equal(JellyfinProtocol.ItemTypes.Audio, track.Type);
+        Assert.Equal(JellyfinProtocol.MediaTypes.Audio, track.MediaType);
+        Assert.Equal("First Album", track.Album);
+        Assert.Equal(albumId, track.AlbumId);
+        Assert.Equal("A Band", track.AlbumArtist);
+        Assert.Equal(1, track.IndexNumber); // 0-based album sort order projects to a 1-based track number
+        Assert.Null(track.VideoType); // audio is not a video file
+    }
+
+    private static EntityCard MusicCard(
+        Guid id,
+        string kind,
+        string title,
+        Guid? parentId,
+        IReadOnlyList<EntityGroup> children) =>
+        new() {
+            Id = id,
+            Kind = kind,
+            Title = title,
+            ParentEntityId = parentId,
+            SortOrder = null,
+            Capabilities = [],
+            ChildrenByKind = children,
+            Relationships = []
+        };
+
+    private static EntityThumbnail MusicThumb(Guid id, string kind, string title, Guid parentId, int sortOrder) =>
+        new(
+            id,
+            kind,
+            title,
+            ParentEntityId: parentId,
+            SortOrder: sortOrder,
+            CoverUrl: "/assets/cover.jpg",
+            CoverThumbUrl: null,
+            HoverKind: "none",
+            HoverUrl: null,
+            HoverImages: [],
+            Meta: [new EntityThumbnailMeta("duration", "03:20")],
+            Rating: null,
+            IsFavorite: false,
+            IsNsfw: false,
+            IsOrganized: true);
+
     private static JellyfinItemQuery Query(
         Guid? parentId = null,
         IReadOnlyList<Guid>? personIds = null) =>

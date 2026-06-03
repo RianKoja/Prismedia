@@ -35,7 +35,7 @@ public sealed record JellyfinCatalogMediaSourceDto {
     public int? Bitrate { get; init; }
 
     [JsonPropertyName("VideoType")]
-    public string VideoType { get; init; } = "VideoFile";
+    public string? VideoType { get; init; }
 
     [JsonPropertyName("IsRemote")]
     public bool IsRemote { get; init; }

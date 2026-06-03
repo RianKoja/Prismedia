@@ -17,6 +17,7 @@ public sealed record JellyfinBaseItemDto {
     public required string ServerId { get; init; }
 
     [JsonPropertyName("Id")]
+    [JsonConverter(typeof(JellyfinGuidConverter))]
     public required Guid Id { get; init; }
 
     [JsonPropertyName("Etag")]
@@ -26,18 +27,22 @@ public sealed record JellyfinBaseItemDto {
     public string? OriginalTitle { get; init; }
 
     [JsonPropertyName("DateCreated")]
+    [JsonConverter(typeof(JellyfinDateConverter))]
     public DateTimeOffset? DateCreated { get; init; }
 
     [JsonPropertyName("StartDate")]
+    [JsonConverter(typeof(JellyfinDateConverter))]
     public DateTimeOffset? StartDate { get; init; }
 
     [JsonPropertyName("EndDate")]
+    [JsonConverter(typeof(JellyfinDateConverter))]
     public DateTimeOffset? EndDate { get; init; }
 
     [JsonPropertyName("SortName")]
     public string? SortName { get; init; }
 
     [JsonPropertyName("PremiereDate")]
+    [JsonConverter(typeof(JellyfinDateConverter))]
     public DateTimeOffset? PremiereDate { get; init; }
 
     [JsonPropertyName("ProductionYear")]
@@ -158,6 +163,7 @@ public sealed record JellyfinBaseItemDto {
     public string? CollectionType { get; init; }
 
     [JsonPropertyName("ParentId")]
+    [JsonConverter(typeof(JellyfinNullableGuidConverter))]
     public Guid? ParentId { get; init; }
 
     [JsonPropertyName("IsFolder")]
@@ -182,12 +188,14 @@ public sealed record JellyfinBaseItemDto {
     public int? ParentIndexNumber { get; init; }
 
     [JsonPropertyName("SeriesId")]
+    [JsonConverter(typeof(JellyfinNullableGuidConverter))]
     public Guid? SeriesId { get; init; }
 
     [JsonPropertyName("SeriesName")]
     public string? SeriesName { get; init; }
 
     [JsonPropertyName("SeasonId")]
+    [JsonConverter(typeof(JellyfinNullableGuidConverter))]
     public Guid? SeasonId { get; init; }
 
     [JsonPropertyName("SeasonName")]
@@ -196,19 +204,44 @@ public sealed record JellyfinBaseItemDto {
     [JsonPropertyName("SeriesPrimaryImageTag")]
     public string? SeriesPrimaryImageTag { get; init; }
 
+    [JsonPropertyName("Album")]
+    public string? Album { get; init; }
+
+    [JsonPropertyName("AlbumId")]
+    [JsonConverter(typeof(JellyfinNullableGuidConverter))]
+    public Guid? AlbumId { get; init; }
+
+    [JsonPropertyName("AlbumPrimaryImageTag")]
+    public string? AlbumPrimaryImageTag { get; init; }
+
+    [JsonPropertyName("AlbumArtist")]
+    public string? AlbumArtist { get; init; }
+
+    [JsonPropertyName("AlbumArtists")]
+    public IReadOnlyList<JellyfinNameGuidPairDto>? AlbumArtists { get; init; }
+
+    [JsonPropertyName("Artists")]
+    public IReadOnlyList<string>? Artists { get; init; }
+
+    [JsonPropertyName("ArtistItems")]
+    public IReadOnlyList<JellyfinNameGuidPairDto>? ArtistItems { get; init; }
+
     [JsonPropertyName("ParentLogoItemId")]
+    [JsonConverter(typeof(JellyfinNullableGuidConverter))]
     public Guid? ParentLogoItemId { get; init; }
 
     [JsonPropertyName("ParentLogoImageTag")]
     public string? ParentLogoImageTag { get; init; }
 
     [JsonPropertyName("ParentBackdropItemId")]
+    [JsonConverter(typeof(JellyfinNullableGuidConverter))]
     public Guid? ParentBackdropItemId { get; init; }
 
     [JsonPropertyName("ParentBackdropImageTags")]
     public IReadOnlyList<string>? ParentBackdropImageTags { get; init; }
 
     [JsonPropertyName("ParentThumbItemId")]
+    [JsonConverter(typeof(JellyfinNullableGuidConverter))]
     public Guid? ParentThumbItemId { get; init; }
 
     [JsonPropertyName("ParentThumbImageTag")]
@@ -246,7 +279,7 @@ public sealed record JellyfinBaseItemDto {
 /// <summary>Jellyfin-compatible name/id pair used by genre, studio, and related item arrays.</summary>
 public sealed record JellyfinNameGuidPairDto(
     [property: JsonPropertyName("Name")] string Name,
-    [property: JsonPropertyName("Id")] Guid Id);
+    [property: JsonPropertyName("Id")][property: JsonConverter(typeof(JellyfinGuidConverter))] Guid Id);
 
 /// <summary>Jellyfin-compatible external URL reference.</summary>
 public sealed record JellyfinExternalUrlDto(
@@ -261,7 +294,7 @@ public sealed record JellyfinMediaUrlDto(
 /// <summary>Jellyfin-compatible credited person entry.</summary>
 public sealed record JellyfinBaseItemPersonDto(
     [property: JsonPropertyName("Name")] string Name,
-    [property: JsonPropertyName("Id")] Guid Id,
+    [property: JsonPropertyName("Id")][property: JsonConverter(typeof(JellyfinGuidConverter))] Guid Id,
     [property: JsonPropertyName("Role")] string? Role,
     [property: JsonPropertyName("Type")] string Type,
     [property: JsonPropertyName("PrimaryImageTag")] string? PrimaryImageTag,
@@ -279,6 +312,7 @@ public sealed record JellyfinChapterInfoDto {
     public string? ImagePath { get; init; }
 
     [JsonPropertyName("ImageDateModified")]
+    [JsonConverter(typeof(JellyfinDateConverter))]
     public DateTimeOffset? ImageDateModified { get; init; }
 
     [JsonPropertyName("ImageTag")]
@@ -294,7 +328,7 @@ public sealed record JellyfinUserItemDataDto(
     [property: JsonPropertyName("Key")] string Key,
     [property: JsonPropertyName("ItemId")] string ItemId,
     [property: JsonPropertyName("PlayedPercentage")] double? PlayedPercentage = null,
-    [property: JsonPropertyName("LastPlayedDate")] DateTimeOffset? LastPlayedDate = null);
+    [property: JsonPropertyName("LastPlayedDate")][property: JsonConverter(typeof(JellyfinDateConverter))] DateTimeOffset? LastPlayedDate = null);
 
 /// <summary>
 /// Jellyfin-compatible media segment (intro/outro/recap/preview/commercial skip marker).

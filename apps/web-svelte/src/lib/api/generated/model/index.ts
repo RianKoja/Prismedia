@@ -135,6 +135,8 @@ export * from './getFileContentParams';
 export * from './getFileDetailParams';
 export * from './getGalleryParams';
 export * from './getImageParams';
+export * from './getJellyfinAudioStreamParams';
+export * from './getJellyfinAudioUniversalParams';
 export * from './getJellyfinDisplayPreferencesParams';
 export * from './getJellyfinItemImageParams';
 export * from './getJellyfinUserViewGroupingOptionsParams';

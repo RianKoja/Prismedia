@@ -7,7 +7,7 @@
 
 export interface JellyfinSessionInfoDto {
   Id: string;
-  UserId: string;
+  UserId: unknown;
   UserName: string;
   /** @nullable */
   Client: string | null;

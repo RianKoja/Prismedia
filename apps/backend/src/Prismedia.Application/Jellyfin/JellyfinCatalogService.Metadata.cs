@@ -441,10 +441,16 @@ public sealed partial class JellyfinCatalogService {
     /// </summary>
     private static bool IsPlayable(string kind) =>
         kind.Equals("video", StringComparison.OrdinalIgnoreCase) ||
-        kind.Equals("movie", StringComparison.OrdinalIgnoreCase);
+        kind.Equals("movie", StringComparison.OrdinalIgnoreCase) ||
+        IsAudio(kind);
+
+    /// <summary>Whether a kind is a playable audio leaf (music track) in the Jellyfin projection.</summary>
+    private static bool IsAudio(string kind) =>
+        kind.Equals("audio-track", StringComparison.OrdinalIgnoreCase);
 
     private static bool IsFolder(string kind) =>
-        kind is "video-series" or "video-season" or "collection" or "person";
+        kind is "video-series" or "video-season" or "collection" or "person"
+            or "music-artist" or "audio-library";
 
     private static string JellyfinType(string kind, Guid? parentId) =>
         kind.Trim().ToLowerInvariant() switch {
@@ -454,6 +460,9 @@ public sealed partial class JellyfinCatalogService {
             "video-season" => JellyfinProtocol.ItemTypes.Season,
             "collection" => JellyfinProtocol.ItemTypes.BoxSet,
             "person" => JellyfinProtocol.ItemTypes.Person,
+            "music-artist" => JellyfinProtocol.ItemTypes.MusicArtist,
+            "audio-library" => JellyfinProtocol.ItemTypes.MusicAlbum,
+            "audio-track" => JellyfinProtocol.ItemTypes.Audio,
             _ => JellyfinProtocol.ItemTypes.Folder
         };
 

@@ -171,12 +171,21 @@ internal static class PrismediaAuthentication {
 
     private static bool IsPublicJellyfinRoute(HttpRequest request) {
         var path = request.Path.Value ?? string.Empty;
+        // Image endpoints are anonymous in real Jellyfin — clients (e.g. Manet) request artwork
+        // without a token, so requiring auth here returns 401 and the client shows no covers.
+        if (HttpMethods.IsGet(request.Method) &&
+            path.StartsWith("/Items/", StringComparison.OrdinalIgnoreCase) &&
+            path.Contains("/Images", StringComparison.OrdinalIgnoreCase)) {
+            return true;
+        }
+
         return (HttpMethods.IsGet(request.Method) && path.Equals(JellyfinRoutes.SystemInfoPublic, StringComparison.OrdinalIgnoreCase)) ||
             ((HttpMethods.IsGet(request.Method) || HttpMethods.IsPost(request.Method)) &&
                 path.Equals(JellyfinRoutes.SystemPing, StringComparison.OrdinalIgnoreCase)) ||
             (HttpMethods.IsGet(request.Method) && path.Equals(JellyfinRoutes.BrandingConfiguration, StringComparison.OrdinalIgnoreCase)) ||
             (HttpMethods.IsGet(request.Method) && (path.Equals(JellyfinRoutes.BrandingCss, StringComparison.OrdinalIgnoreCase) ||
                 path.Equals(JellyfinRoutes.BrandingCssFile, StringComparison.OrdinalIgnoreCase))) ||
+            (HttpMethods.IsGet(request.Method) && path.Equals(JellyfinRoutes.QuickConnectEnabled, StringComparison.OrdinalIgnoreCase)) ||
             (HttpMethods.IsGet(request.Method) && path.Equals(JellyfinRoutes.UsersPublic, StringComparison.OrdinalIgnoreCase)) ||
             (HttpMethods.IsPost(request.Method) && path.Equals(JellyfinRoutes.UsersAuthenticateByName, StringComparison.OrdinalIgnoreCase)) ||
             (HttpMethods.IsPost(request.Method) &&

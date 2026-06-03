@@ -6,7 +6,7 @@
  */
 
 export interface PlaybackSessionRequest {
-  ItemId?: string;
+  ItemId?: unknown;
   /** @nullable */
   MediaSourceId?: string | null;
   /** @nullable */

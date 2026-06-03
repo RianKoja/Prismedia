@@ -37,9 +37,16 @@ export interface EntityThumbnail {
   isOrganized: boolean;
   /** @nullable */
   parentKind?: string | null;
+  /** @nullable */
+  createdAt?: string | null;
   /**
      * @nullable
      * @pattern ^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$
      */
   progress?: number | string | null;
+  /**
+     * @nullable
+     * @pattern ^-?(?:0|[1-9]\d*)$
+     */
+  playCount?: number | string | null;
 }

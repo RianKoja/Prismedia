@@ -19,21 +19,17 @@ import type { JellyfinUserItemDataDto } from './jellyfinUserItemDataDto';
 export interface JellyfinBaseItemDto {
   Name: string;
   ServerId: string;
-  Id: string;
+  Id: unknown;
   /** @nullable */
   Etag?: string | null;
   /** @nullable */
   OriginalTitle?: string | null;
-  /** @nullable */
-  DateCreated?: string | null;
-  /** @nullable */
-  StartDate?: string | null;
-  /** @nullable */
-  EndDate?: string | null;
+  DateCreated?: unknown;
+  StartDate?: unknown;
+  EndDate?: unknown;
   /** @nullable */
   SortName?: string | null;
-  /** @nullable */
-  PremiereDate?: string | null;
+  PremiereDate?: unknown;
   /**
      * @nullable
      * @pattern ^-?(?:0|[1-9]\d*)$
@@ -135,8 +131,7 @@ export interface JellyfinBaseItemDto {
   IsHD?: boolean | null;
   /** @nullable */
   CollectionType?: string | null;
-  /** @nullable */
-  ParentId?: string | null;
+  ParentId?: unknown;
   IsFolder?: boolean;
   /**
      * @nullable
@@ -168,26 +163,34 @@ export interface JellyfinBaseItemDto {
      * @pattern ^-?(?:0|[1-9]\d*)$
      */
   ParentIndexNumber?: number | string | null;
-  /** @nullable */
-  SeriesId?: string | null;
+  SeriesId?: unknown;
   /** @nullable */
   SeriesName?: string | null;
-  /** @nullable */
-  SeasonId?: string | null;
+  SeasonId?: unknown;
   /** @nullable */
   SeasonName?: string | null;
   /** @nullable */
   SeriesPrimaryImageTag?: string | null;
   /** @nullable */
-  ParentLogoItemId?: string | null;
+  Album?: string | null;
+  AlbumId?: unknown;
+  /** @nullable */
+  AlbumPrimaryImageTag?: string | null;
+  /** @nullable */
+  AlbumArtist?: string | null;
+  /** @nullable */
+  AlbumArtists?: JellyfinNameGuidPairDto[] | null;
+  /** @nullable */
+  Artists?: string[] | null;
+  /** @nullable */
+  ArtistItems?: JellyfinNameGuidPairDto[] | null;
+  ParentLogoItemId?: unknown;
   /** @nullable */
   ParentLogoImageTag?: string | null;
-  /** @nullable */
-  ParentBackdropItemId?: string | null;
+  ParentBackdropItemId?: unknown;
   /** @nullable */
   ParentBackdropImageTags?: string[] | null;
-  /** @nullable */
-  ParentThumbItemId?: string | null;
+  ParentThumbItemId?: unknown;
   /** @nullable */
   ParentThumbImageTag?: string | null;
   ImageTags?: JellyfinBaseItemDtoImageTags;

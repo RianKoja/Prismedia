@@ -15,4 +15,10 @@ export interface JellyfinUserPolicyDto {
   EnableContentDownloading: boolean;
   EnableSyncTranscoding: boolean;
   EnableMediaPlayback: boolean;
+  EnableAudioPlaybackTranscoding: boolean;
+  EnableAllFolders: boolean;
+  EnabledFolders: string[];
+  EnableAllChannels: boolean;
+  BlockedTags: string[];
+  EnabledChannels: string[];
 }

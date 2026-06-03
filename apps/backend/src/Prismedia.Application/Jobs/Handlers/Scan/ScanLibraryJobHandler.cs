@@ -241,9 +241,60 @@ public sealed class ScanLibraryJobHandler(
                     AbsoluteEpisodeNumber: null,
                     Metadata: metadata);
             }
+
+            // A non-root folder holding more than one video, with no season folders or episode tokens, is
+            // treated as a series: each loose video becomes an episode ordered by filename. This mirrors the
+            // single-video movie rule above — a lone video in a folder is a movie, so a folder with several
+            // videos is the series counterpart. Without this, such folders fall through to ungrouped loose
+            // videos.
+            if (!SamePath(parentFolder, root.Path) &&
+                TryGetFolderSeriesPosition(filePath, parentFolder, allFiles, out var folderSortOrder)) {
+                return new VideoUpsertItem(
+                    filePath,
+                    title,
+                    root.Id,
+                    root.IsNsfw,
+                    new VideoSeriesScanInfo(parentFolder, parentFolderName),
+                    Season: null,
+                    EpisodeNumber: null,
+                    AbsoluteEpisodeNumber: null,
+                    Metadata: metadata,
+                    FolderSortOrder: folderSortOrder);
+            }
         }
 
         return new VideoUpsertItem(filePath, title, root.Id, root.IsNsfw, Metadata: metadata);
+    }
+
+    /// <summary>
+    /// Determines whether a video belongs to a folder that should become a series because it holds more
+    /// than one video, and reports the video's alphabetical position among its sibling videos so episodes
+    /// without explicit numbering still order deterministically by filename.
+    /// </summary>
+    private static bool TryGetFolderSeriesPosition(
+        string filePath,
+        string parentFolder,
+        IReadOnlyList<string> allFiles,
+        out int sortOrder) {
+        sortOrder = 0;
+
+        var siblings = new List<string>();
+        foreach (var candidate in allFiles) {
+            var candidateParent = Path.GetDirectoryName(candidate);
+            if (!string.IsNullOrWhiteSpace(candidateParent) && SamePath(candidateParent, parentFolder)) {
+                siblings.Add(candidate);
+            }
+        }
+
+        if (siblings.Count < 2) {
+            return false;
+        }
+
+        siblings.Sort(static (left, right) => string.Compare(
+            Path.GetFileName(left), Path.GetFileName(right), StringComparison.OrdinalIgnoreCase));
+        var index = siblings.FindIndex(path => SamePath(path, filePath));
+        sortOrder = index < 0 ? 0 : index;
+        return true;
     }
 
     private static bool TryGetMovieFolderInfo(

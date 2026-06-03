@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Prismedia.Contracts.Jellyfin;
 
 namespace Prismedia.Contracts.Playback;
 
@@ -6,7 +7,10 @@ namespace Prismedia.Contracts.Playback;
 /// Jellyfin-compatible playback event payload for start, progress, ping, and stop calls.
 /// </summary>
 public sealed record PlaybackSessionRequest {
+    // Clients echo back the dashless ids we emit; the default Guid reader only accepts the dashed form
+    // and would reject the body with 400, so use the lenient converter that parses either format.
     [JsonPropertyName("ItemId")]
+    [JsonConverter(typeof(JellyfinGuidConverter))]
     public Guid ItemId { get; init; }
 
     [JsonPropertyName("MediaSourceId")]

@@ -151,6 +151,31 @@ public static partial class JellyfinCompatibilityEndpoints {
     private static IResult GetMediaSegmentsAsync(Guid itemId) =>
         Results.Ok(new JellyfinQueryResult<JellyfinMediaSegmentDto>([], 0, 0));
 
+    /// <summary>
+    /// Lists music artists for the <c>/Artists</c> and <c>/Artists/AlbumArtists</c> endpoints music
+    /// clients use as their artist index. Prismedia models a single artist concept, so both routes
+    /// resolve to the same <c>MusicArtist</c> listing under the Music view (search/sort/paging from
+    /// the request still apply via the shared item query).
+    /// </summary>
+    private static async Task<IResult> GetArtistsAsync(
+        HttpContext httpContext,
+        PrismediaSecurityService security,
+        JellyfinCatalogService catalog,
+        CancellationToken cancellationToken) {
+        var state = await security.EnsureSecurityAsync(cancellationToken);
+        var baseQuery = ItemQueryFrom(httpContext.Request);
+        var query = baseQuery with {
+            ParentId = baseQuery.ParentId ?? JellyfinCatalogService.MusicViewId,
+            IncludeItemTypes = [JellyfinProtocol.ItemTypes.MusicArtist]
+        };
+        var result = await catalog.GetItemsAsync(
+            query,
+            state.ServerId.ToString("N"),
+            NsfwVisibility.ShouldHide(null, httpContext),
+            cancellationToken);
+        return Results.Ok(result);
+    }
+
     private static async Task<IResult> GetSeriesSeasonsAsync(
         Guid seriesId,
         HttpContext httpContext,

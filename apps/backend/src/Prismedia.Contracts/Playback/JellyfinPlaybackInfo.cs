@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Prismedia.Contracts.Jellyfin;
 
 namespace Prismedia.Contracts.Playback;
 
@@ -7,6 +8,7 @@ namespace Prismedia.Contracts.Playback;
 /// </summary>
 public sealed record PlaybackInfoRequest {
     [JsonPropertyName("UserId")]
+    [JsonConverter(typeof(JellyfinNullableGuidConverter))]
     public Guid? UserId { get; init; }
 
     [JsonPropertyName("StartTimeTicks")]

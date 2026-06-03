@@ -223,9 +223,18 @@
     />
   </div>
 
-  <span class="time-cell font-mono text-[0.72rem] tabular-nums text-text-muted">
-    {formatDuration(track.duration) ?? "—"}
-  </span>
+  <div class="time-cell flex flex-col items-end gap-0.5 font-mono text-[0.72rem] tabular-nums text-text-muted">
+    {#if track.playCount > 0}
+      <span
+        class="inline-flex items-center gap-0.5 text-[0.66rem] text-text-disabled"
+        title={track.playCount === 1 ? "Played once" : `Played ${track.playCount} times`}
+      >
+        <Play size={10} class="fill-current opacity-70" aria-hidden="true" />
+        {track.playCount}
+      </span>
+    {/if}
+    <span>{formatDuration(track.duration) ?? "—"}</span>
+  </div>
 
   <div class="actions-cell relative">
     {#if onRename || onDelete}

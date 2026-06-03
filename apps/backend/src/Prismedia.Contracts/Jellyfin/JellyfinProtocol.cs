@@ -81,6 +81,15 @@ public static class JellyfinProtocol {
         /// <summary>Performer / cast or crew member.</summary>
         public const string Person = "Person";
 
+        /// <summary>Playable audio track (music library item).</summary>
+        public const string Audio = "Audio";
+
+        /// <summary>Music album grouping.</summary>
+        public const string MusicAlbum = "MusicAlbum";
+
+        /// <summary>Music artist grouping.</summary>
+        public const string MusicArtist = "MusicArtist";
+
         /// <summary>Generic folder.</summary>
         public const string Folder = "Folder";
 
@@ -98,6 +107,10 @@ public static class JellyfinProtocol {
 
         /// <summary>Subtitle stream.</summary>
         public const string Subtitle = "Subtitle";
+
+        /// <summary>Non-playable container (folders, library views). Real Jellyfin always emits this
+        /// rather than null; strict clients decode <c>MediaType</c> into an enum and drop items missing it.</summary>
+        public const string Unknown = "Unknown";
     }
 
     /// <summary>Jellyfin library collection type codes.</summary>
@@ -113,5 +126,8 @@ public static class JellyfinProtocol {
 
         /// <summary>Collections / box sets library.</summary>
         public const string BoxSets = "boxsets";
+
+        /// <summary>Music library.</summary>
+        public const string Music = "music";
     }
 }

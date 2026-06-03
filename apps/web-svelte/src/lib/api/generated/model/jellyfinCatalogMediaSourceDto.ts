@@ -33,7 +33,8 @@ export interface JellyfinCatalogMediaSourceDto {
      * @pattern ^-?(?:0|[1-9]\d*)$
      */
   Bitrate?: number | string | null;
-  VideoType?: string;
+  /** @nullable */
+  VideoType?: string | null;
   IsRemote?: boolean;
   ReadAtNativeFramerate?: boolean;
   IgnoreDts?: boolean;

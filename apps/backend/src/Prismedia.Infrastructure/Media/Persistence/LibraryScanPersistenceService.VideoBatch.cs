@@ -140,7 +140,7 @@ public sealed partial class LibraryScanPersistenceService {
             return;
         }
 
-        var sortOrder = item.EpisodeNumber ?? item.AbsoluteEpisodeNumber ?? 0;
+        var sortOrder = item.EpisodeNumber ?? item.AbsoluteEpisodeNumber ?? item.FolderSortOrder ?? 0;
         await UpsertStructuralChildLinkAsync(
             seriesId,
             videoId,

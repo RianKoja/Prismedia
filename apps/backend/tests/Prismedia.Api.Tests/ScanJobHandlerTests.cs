@@ -857,6 +857,79 @@ public sealed class ScanJobHandlerTests {
     }
 
     [Fact]
+    public async Task VideoScanGroupsMultiVideoFolderWithoutNumberingAsSeries() {
+        var root = new LibraryRootData(
+            Guid.Parse("11111111-1111-1111-1111-111111111111"),
+            "/media/videos",
+            "Videos",
+            Enabled: true,
+            Recursive: true,
+            ScanVideos: true,
+            ScanImages: false,
+            ScanAudio: false,
+            ScanBooks: false,
+            IsNsfw: false);
+        var ids = new[] {
+            Guid.Parse("22222222-2222-2222-2222-222222222222"),
+            Guid.Parse("33333333-3333-3333-3333-333333333333")
+        };
+        var persistence = new FakeScanPersistence([root]) {
+            Settings = DisabledGeneratedWorkSettings,
+            UpsertedVideoIds = ids,
+            DownstreamNeedsById = ids.ToDictionary(
+                id => id,
+                _ => new DownstreamNeeds(
+                    NeedsProbe: false,
+                    MissingOshash: false,
+                    MissingMd5: false,
+                    NeedsPreview: false,
+                    NeedsTrickplay: false,
+                    NeedsSubtitleExtraction: false,
+                    NeedsGridThumbnail: false))
+        };
+        // Discovery order is intentionally reversed from filename order to prove sort-by-filename.
+        var discovery = new RecordingFileDiscovery([
+            "/media/videos/Clips/Beta clip.mp4",
+            "/media/videos/Clips/Alpha clip.mp4"
+        ]);
+        var handler = new ScanLibraryJobHandler(
+            NullLogger<ScanLibraryJobHandler>.Instance,
+            discovery,
+            persistence,
+            persistence,
+            persistence);
+        var job = new JobRunSnapshot(
+            Guid.NewGuid(),
+            JobType.ScanLibrary,
+            JobRunStatus.Running,
+            Progress: 0,
+            Message: null,
+            PayloadJson: $$"""{"libraryRootId":"{{root.Id}}"}""",
+            TargetEntityKind: "library-root",
+            TargetEntityId: root.Id.ToString(),
+            TargetLabel: root.Label,
+            CreatedAt: DateTimeOffset.UtcNow,
+            StartedAt: DateTimeOffset.UtcNow,
+            FinishedAt: null);
+
+        await handler.HandleAsync(new JobContext(job, new RecordingJobQueue()), CancellationToken.None);
+
+        Assert.All(persistence.UpsertedVideoItems, item => {
+            Assert.Equal("Clips", item.Series?.Title);
+            Assert.Equal("/media/videos/Clips", item.Series?.FolderPath);
+            Assert.Null(item.Season);
+            Assert.Null(item.EpisodeNumber);
+            Assert.Null(item.Movie);
+        });
+        Assert.Empty(persistence.ValidMoviePaths);
+
+        var beta = Assert.Single(persistence.UpsertedVideoItems, item => item.FilePath.EndsWith("Beta clip.mp4"));
+        var alpha = Assert.Single(persistence.UpsertedVideoItems, item => item.FilePath.EndsWith("Alpha clip.mp4"));
+        Assert.Equal(0, alpha.FolderSortOrder);
+        Assert.Equal(1, beta.FolderSortOrder);
+    }
+
+    [Fact]
     public async Task VideoScanPassesRootExclusionsToDiscovery() {
         var root = new LibraryRootData(
             Guid.Parse("11111111-1111-1111-1111-111111111111"),

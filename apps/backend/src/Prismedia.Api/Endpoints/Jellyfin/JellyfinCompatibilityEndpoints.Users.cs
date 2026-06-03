@@ -108,7 +108,15 @@ public static partial class JellyfinCompatibilityEndpoints {
             EnableContentDeletion: false,
             EnableContentDownloading: true,
             EnableSyncTranscoding: true,
-            EnableMediaPlayback: true);
+            EnableMediaPlayback: true,
+            EnableAudioPlaybackTranscoding: true,
+            // The user can access every library. Without this, clients that honour the policy treat the
+            // user as having access to no folders and refuse to browse any library's contents.
+            EnableAllFolders: true,
+            EnabledFolders: [],
+            EnableAllChannels: false,
+            BlockedTags: [],
+            EnabledChannels: []);
 
     private static JellyfinUserConfigurationDto UserConfiguration() =>
         new(

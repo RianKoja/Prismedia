@@ -51,13 +51,13 @@ public sealed record JellyfinUserDto(
     [property: JsonPropertyName("Name")] string Name,
     [property: JsonPropertyName("ServerId")] string ServerId,
     [property: JsonPropertyName("ServerName")] string ServerName,
-    [property: JsonPropertyName("Id")] Guid Id,
+    [property: JsonPropertyName("Id")][property: JsonConverter(typeof(JellyfinGuidConverter))] Guid Id,
     [property: JsonPropertyName("HasPassword")] bool HasPassword,
     [property: JsonPropertyName("HasConfiguredPassword")] bool HasConfiguredPassword,
     [property: JsonPropertyName("HasConfiguredEasyPassword")] bool HasConfiguredEasyPassword,
     [property: JsonPropertyName("EnableAutoLogin")] bool EnableAutoLogin,
-    [property: JsonPropertyName("LastLoginDate")] DateTimeOffset? LastLoginDate,
-    [property: JsonPropertyName("LastActivityDate")] DateTimeOffset? LastActivityDate,
+    [property: JsonPropertyName("LastLoginDate")][property: JsonConverter(typeof(JellyfinDateConverter))] DateTimeOffset? LastLoginDate,
+    [property: JsonPropertyName("LastActivityDate")][property: JsonConverter(typeof(JellyfinDateConverter))] DateTimeOffset? LastActivityDate,
     [property: JsonPropertyName("Policy")] JellyfinUserPolicyDto Policy,
     [property: JsonPropertyName("Configuration")] JellyfinUserConfigurationDto Configuration);
 
@@ -71,7 +71,13 @@ public sealed record JellyfinUserPolicyDto(
     [property: JsonPropertyName("EnableContentDeletion")] bool EnableContentDeletion,
     [property: JsonPropertyName("EnableContentDownloading")] bool EnableContentDownloading,
     [property: JsonPropertyName("EnableSyncTranscoding")] bool EnableSyncTranscoding,
-    [property: JsonPropertyName("EnableMediaPlayback")] bool EnableMediaPlayback);
+    [property: JsonPropertyName("EnableMediaPlayback")] bool EnableMediaPlayback,
+    [property: JsonPropertyName("EnableAudioPlaybackTranscoding")] bool EnableAudioPlaybackTranscoding,
+    [property: JsonPropertyName("EnableAllFolders")] bool EnableAllFolders,
+    [property: JsonPropertyName("EnabledFolders")] IReadOnlyList<string> EnabledFolders,
+    [property: JsonPropertyName("EnableAllChannels")] bool EnableAllChannels,
+    [property: JsonPropertyName("BlockedTags")] IReadOnlyList<string> BlockedTags,
+    [property: JsonPropertyName("EnabledChannels")] IReadOnlyList<string> EnabledChannels);
 
 /// <summary>Minimal Jellyfin-compatible user configuration.</summary>
 public sealed record JellyfinUserConfigurationDto(
@@ -85,7 +91,7 @@ public sealed record JellyfinUserConfigurationDto(
 /// <summary>Minimal Jellyfin-compatible session info.</summary>
 public sealed record JellyfinSessionInfoDto(
     [property: JsonPropertyName("Id")] string Id,
-    [property: JsonPropertyName("UserId")] Guid UserId,
+    [property: JsonPropertyName("UserId")][property: JsonConverter(typeof(JellyfinGuidConverter))] Guid UserId,
     [property: JsonPropertyName("UserName")] string UserName,
     [property: JsonPropertyName("Client")] string? Client,
     [property: JsonPropertyName("DeviceName")] string? DeviceName,

@@ -35,11 +35,23 @@ public sealed record EntityThumbnail(
     public string? ParentKind { get; init; }
 
     /// <summary>
+    /// When the entity was added to the library. Surfaced so compatibility layers (e.g. the Jellyfin
+    /// surface) can populate the always-present <c>DateCreated</c> field that clients sort by.
+    /// </summary>
+    public DateTimeOffset? CreatedAt { get; init; }
+
+    /// <summary>
     /// Fraction watched (videos) or read (books) in the range 0..1 for a thumbnail progress
     /// meter, or <c>null</c> when the entity has no meaningful progress to show. A completed
     /// item reads 1.0.
     /// </summary>
     public double? Progress { get; init; }
+
+    /// <summary>
+    /// Number of completed plays recorded for the entity, when it tracks playback (e.g. audio tracks
+    /// and videos). Lets list rows show a play-count stat without fetching the full detail graph.
+    /// </summary>
+    public int? PlayCount { get; init; }
 }
 
 /// <summary>API-facing grouped entities for child and relationship collections.</summary>

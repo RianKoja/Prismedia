@@ -61,6 +61,8 @@ import type {
   GetFileDetailParams,
   GetGalleryParams,
   GetImageParams,
+  GetJellyfinAudioStreamParams,
+  GetJellyfinAudioUniversalParams,
   GetJellyfinDisplayPreferencesParams,
   GetJellyfinItemImageParams,
   GetJellyfinUserViewGroupingOptionsParams,
@@ -580,6 +582,39 @@ export const getJellyfinBrandingCssFile = async ( options?: RequestInit): Promis
 
 
 
+export type getJellyfinQuickConnectEnabledResponse200 = {
+  data: boolean
+  status: 200
+}
+
+export type getJellyfinQuickConnectEnabledResponseSuccess = (getJellyfinQuickConnectEnabledResponse200) & {
+  headers: Headers;
+};
+;
+
+export type getJellyfinQuickConnectEnabledResponse = (getJellyfinQuickConnectEnabledResponseSuccess)
+
+export const getGetJellyfinQuickConnectEnabledUrl = () => {
+
+
+
+
+  return `/QuickConnect/Enabled`
+}
+
+export const getJellyfinQuickConnectEnabled = async ( options?: RequestInit): Promise<getJellyfinQuickConnectEnabledResponse> => {
+
+  return orvalFetch<getJellyfinQuickConnectEnabledResponse>(getGetJellyfinQuickConnectEnabledUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
 export type getJellyfinPublicUsersResponse200 = {
   data: JellyfinUserDto[]
   status: 200
@@ -1064,6 +1099,72 @@ export const getJellyfinResumeItems = async ( options?: RequestInit): Promise<ge
 
 
 
+export type getJellyfinArtistsResponse200 = {
+  data: JellyfinQueryResultOfJellyfinBaseItemDto
+  status: 200
+}
+
+export type getJellyfinArtistsResponseSuccess = (getJellyfinArtistsResponse200) & {
+  headers: Headers;
+};
+;
+
+export type getJellyfinArtistsResponse = (getJellyfinArtistsResponseSuccess)
+
+export const getGetJellyfinArtistsUrl = () => {
+
+
+
+
+  return `/Artists`
+}
+
+export const getJellyfinArtists = async ( options?: RequestInit): Promise<getJellyfinArtistsResponse> => {
+
+  return orvalFetch<getJellyfinArtistsResponse>(getGetJellyfinArtistsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export type getJellyfinAlbumArtistsResponse200 = {
+  data: JellyfinQueryResultOfJellyfinBaseItemDto
+  status: 200
+}
+
+export type getJellyfinAlbumArtistsResponseSuccess = (getJellyfinAlbumArtistsResponse200) & {
+  headers: Headers;
+};
+;
+
+export type getJellyfinAlbumArtistsResponse = (getJellyfinAlbumArtistsResponseSuccess)
+
+export const getGetJellyfinAlbumArtistsUrl = () => {
+
+
+
+
+  return `/Artists/AlbumArtists`
+}
+
+export const getJellyfinAlbumArtists = async ( options?: RequestInit): Promise<getJellyfinAlbumArtistsResponse> => {
+
+  return orvalFetch<getJellyfinAlbumArtistsResponse>(getGetJellyfinAlbumArtistsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
 export type getJellyfinSeriesSeasonsResponse200 = {
   data: JellyfinQueryResultOfJellyfinBaseItemDto
   status: 200
@@ -1426,6 +1527,42 @@ export const getJellyfinVirtualFolders = async ( options?: RequestInit): Promise
 
 
 
+export type getJellyfinMediaFoldersResponse200 = {
+  data: JellyfinQueryResultOfJellyfinBaseItemDto
+  status: 200
+}
+
+export type getJellyfinMediaFoldersResponseSuccess = (getJellyfinMediaFoldersResponse200) & {
+  headers: Headers;
+};
+;
+
+export type getJellyfinMediaFoldersResponse = (getJellyfinMediaFoldersResponseSuccess)
+
+export const getGetJellyfinMediaFoldersUrl = () => {
+
+
+
+
+  return `/Library/MediaFolders`
+}
+
+/**
+ * @summary Gets Jellyfin-compatible media library folders.
+ */
+export const getJellyfinMediaFolders = async ( options?: RequestInit): Promise<getJellyfinMediaFoldersResponse> => {
+
+  return orvalFetch<getJellyfinMediaFoldersResponse>(getGetJellyfinMediaFoldersUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
 export type postJellyfinCapabilitiesResponse204 = {
   data: void
   status: 204
@@ -1693,6 +1830,266 @@ export const getGetJellyfinVideoStreamUrl = (itemId: string,) => {
 export const getJellyfinVideoStream = async (itemId: string, options?: RequestInit): Promise<getJellyfinVideoStreamResponse> => {
 
   return orvalFetch<getJellyfinVideoStreamResponse>(getGetJellyfinVideoStreamUrl(itemId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export type getJellyfinAudioUniversalResponse200 = {
+  data: void
+  status: 200
+}
+
+export type getJellyfinAudioUniversalResponse206 = {
+  data: void
+  status: 206
+}
+
+export type getJellyfinAudioUniversalResponse404 = {
+  data: ApiProblem
+  status: 404
+}
+
+export type getJellyfinAudioUniversalResponseSuccess = (getJellyfinAudioUniversalResponse200 | getJellyfinAudioUniversalResponse206) & {
+  headers: Headers;
+};
+export type getJellyfinAudioUniversalResponseError = (getJellyfinAudioUniversalResponse404) & {
+  headers: Headers;
+};
+
+export type getJellyfinAudioUniversalResponse = (getJellyfinAudioUniversalResponseSuccess | getJellyfinAudioUniversalResponseError)
+
+export const getGetJellyfinAudioUniversalUrl = (itemId: string,
+    params?: GetJellyfinAudioUniversalParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/Audio/${itemId}/universal?${stringifiedParams}` : `/Audio/${itemId}/universal`
+}
+
+/**
+ * @summary Get Jellyfin Audio Stream.
+ */
+export const getJellyfinAudioUniversal = async (itemId: string,
+    params?: GetJellyfinAudioUniversalParams, options?: RequestInit): Promise<getJellyfinAudioUniversalResponse> => {
+
+  return orvalFetch<getJellyfinAudioUniversalResponse>(getGetJellyfinAudioUniversalUrl(itemId,params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export type getJellyfinAudioStreamResponse200 = {
+  data: void
+  status: 200
+}
+
+export type getJellyfinAudioStreamResponse206 = {
+  data: void
+  status: 206
+}
+
+export type getJellyfinAudioStreamResponse404 = {
+  data: ApiProblem
+  status: 404
+}
+
+export type getJellyfinAudioStreamResponseSuccess = (getJellyfinAudioStreamResponse200 | getJellyfinAudioStreamResponse206) & {
+  headers: Headers;
+};
+export type getJellyfinAudioStreamResponseError = (getJellyfinAudioStreamResponse404) & {
+  headers: Headers;
+};
+
+export type getJellyfinAudioStreamResponse = (getJellyfinAudioStreamResponseSuccess | getJellyfinAudioStreamResponseError)
+
+export const getGetJellyfinAudioStreamUrl = (itemId: string,
+    params?: GetJellyfinAudioStreamParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/Audio/${itemId}/stream?${stringifiedParams}` : `/Audio/${itemId}/stream`
+}
+
+/**
+ * @summary Get Jellyfin Audio Stream.
+ */
+export const getJellyfinAudioStream = async (itemId: string,
+    params?: GetJellyfinAudioStreamParams, options?: RequestInit): Promise<getJellyfinAudioStreamResponse> => {
+
+  return orvalFetch<getJellyfinAudioStreamResponse>(getGetJellyfinAudioStreamUrl(itemId,params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export type getJellyfinAudioStreamContainerResponse200 = {
+  data: void
+  status: 200
+}
+
+export type getJellyfinAudioStreamContainerResponse206 = {
+  data: void
+  status: 206
+}
+
+export type getJellyfinAudioStreamContainerResponse404 = {
+  data: ApiProblem
+  status: 404
+}
+
+export type getJellyfinAudioStreamContainerResponseSuccess = (getJellyfinAudioStreamContainerResponse200 | getJellyfinAudioStreamContainerResponse206) & {
+  headers: Headers;
+};
+export type getJellyfinAudioStreamContainerResponseError = (getJellyfinAudioStreamContainerResponse404) & {
+  headers: Headers;
+};
+
+export type getJellyfinAudioStreamContainerResponse = (getJellyfinAudioStreamContainerResponseSuccess | getJellyfinAudioStreamContainerResponseError)
+
+export const getGetJellyfinAudioStreamContainerUrl = (itemId: string,
+    container: string,) => {
+
+
+
+
+  return `/Audio/${itemId}/stream.${container}`
+}
+
+/**
+ * @summary Get Jellyfin Audio Stream.
+ */
+export const getJellyfinAudioStreamContainer = async (itemId: string,
+    container: string, options?: RequestInit): Promise<getJellyfinAudioStreamContainerResponse> => {
+
+  return orvalFetch<getJellyfinAudioStreamContainerResponse>(getGetJellyfinAudioStreamContainerUrl(itemId,container),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export type getJellyfinItemFileResponse200 = {
+  data: void
+  status: 200
+}
+
+export type getJellyfinItemFileResponse206 = {
+  data: void
+  status: 206
+}
+
+export type getJellyfinItemFileResponse404 = {
+  data: ApiProblem
+  status: 404
+}
+
+export type getJellyfinItemFileResponseSuccess = (getJellyfinItemFileResponse200 | getJellyfinItemFileResponse206) & {
+  headers: Headers;
+};
+export type getJellyfinItemFileResponseError = (getJellyfinItemFileResponse404) & {
+  headers: Headers;
+};
+
+export type getJellyfinItemFileResponse = (getJellyfinItemFileResponseSuccess | getJellyfinItemFileResponseError)
+
+export const getGetJellyfinItemFileUrl = (itemId: string,) => {
+
+
+
+
+  return `/Items/${itemId}/File`
+}
+
+/**
+ * @summary Get Jellyfin Item File.
+ */
+export const getJellyfinItemFile = async (itemId: string, options?: RequestInit): Promise<getJellyfinItemFileResponse> => {
+
+  return orvalFetch<getJellyfinItemFileResponse>(getGetJellyfinItemFileUrl(itemId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export type downloadJellyfinItemFileResponse200 = {
+  data: void
+  status: 200
+}
+
+export type downloadJellyfinItemFileResponse206 = {
+  data: void
+  status: 206
+}
+
+export type downloadJellyfinItemFileResponse404 = {
+  data: ApiProblem
+  status: 404
+}
+
+export type downloadJellyfinItemFileResponseSuccess = (downloadJellyfinItemFileResponse200 | downloadJellyfinItemFileResponse206) & {
+  headers: Headers;
+};
+export type downloadJellyfinItemFileResponseError = (downloadJellyfinItemFileResponse404) & {
+  headers: Headers;
+};
+
+export type downloadJellyfinItemFileResponse = (downloadJellyfinItemFileResponseSuccess | downloadJellyfinItemFileResponseError)
+
+export const getDownloadJellyfinItemFileUrl = (itemId: string,) => {
+
+
+
+
+  return `/Items/${itemId}/Download`
+}
+
+/**
+ * @summary Get Jellyfin Item File.
+ */
+export const downloadJellyfinItemFile = async (itemId: string, options?: RequestInit): Promise<downloadJellyfinItemFileResponse> => {
+
+  return orvalFetch<downloadJellyfinItemFileResponse>(getDownloadJellyfinItemFileUrl(itemId),
   {
     ...options,
     method: 'GET'

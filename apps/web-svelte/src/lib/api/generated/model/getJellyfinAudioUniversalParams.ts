@@ -5,7 +5,6 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export interface JellyfinNameGuidPairDto {
-  Name: string;
-  Id: unknown;
-}
+export type GetJellyfinAudioUniversalParams = {
+container?: string;
+};

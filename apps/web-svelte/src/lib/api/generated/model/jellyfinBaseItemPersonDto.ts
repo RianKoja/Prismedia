@@ -8,7 +8,7 @@ import type { JellyfinBaseItemPersonDtoImageBlurHashes } from './jellyfinBaseIte
 
 export interface JellyfinBaseItemPersonDto {
   Name: string;
-  Id: string;
+  Id: unknown;
   /** @nullable */
   Role: string | null;
   Type: string;

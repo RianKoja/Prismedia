@@ -19,6 +19,5 @@ export interface JellyfinUserItemDataDto {
      * @pattern ^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$
      */
   PlayedPercentage?: number | string | null;
-  /** @nullable */
-  LastPlayedDate?: string | null;
+  LastPlayedDate?: unknown;
 }
