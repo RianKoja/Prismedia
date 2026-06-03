@@ -13,7 +13,7 @@
   } from "@lucide/svelte";
   import { cn } from "@prismedia/ui-svelte";
   import EntityDetailSkeleton from "$lib/components/entities/EntityDetailSkeleton.svelte";
-  import { fetchEntity } from "$lib/api/entities";
+  import { fetchEntity, fetchEntityThumbnails } from "$lib/api/entities";
   import { fetchVideo, type VideoDetail } from "$lib/api/media";
   import { fetchSettingsValues, type LibrarySettings } from "$lib/api/settings";
   import {
@@ -41,6 +41,7 @@
   import { entityCardToDetailCard, type EntityDetailCardFull } from "$lib/entities/entity-detail";
   import {
     hydrateStandardRelationshipCards,
+    thumbnailsToCards,
     type EntityThumbnailCard,
   } from "$lib/entities/entity-relationship-thumbnails";
   import { resolveEntityHref } from "$lib/entities/entity-routes";
@@ -84,6 +85,10 @@
   let studioCards = $state<EntityThumbnailCard[]>([]);
   let creditCards = $state<EntityThumbnailCard[]>([]);
   let relationshipTags = $state<EntityDetailTag[]>([]);
+  // When this video is an episode, the series it belongs to (resolved by walking the
+  // season → series parent chain) so it can be linked from the breadcrumb and the detail tab.
+  let seriesCard = $state<EntityThumbnailCard | null>(null);
+  let seriesRef = $state<{ id: string; title: string } | null>(null);
 
   let playerHandle: VideoPlayerHandle | undefined = $state();
   let currentTime = $state(0);
@@ -126,7 +131,9 @@
 
   const primaryStudio = $derived(studioCards[0]?.entity ?? null);
 
-  const hasCastAndCrew = $derived(studioCards.length > 0 || creditCards.length > 0);
+  const hasCastAndCrew = $derived(
+    studioCards.length > 0 || creditCards.length > 0 || seriesCard != null,
+  );
   const detailSections = $derived.by((): EntityDetailSection[] => [
     {
       id: "cast-and-crew",
@@ -353,6 +360,7 @@
     if (!video) return;
     return appChrome.setBreadcrumbs([
       { label: "Videos", href: "/videos" },
+      ...(seriesRef ? [{ label: seriesRef.title, href: `/series/${seriesRef.id}` }] : []),
       { label: video.title },
     ]);
   });
@@ -438,10 +446,32 @@
   }
 
   async function hydrateVideoRelationships(nextVideo: VideoDetail) {
-    const relationships = await hydrateStandardRelationshipCards(nextVideo);
+    const [relationships] = await Promise.all([
+      hydrateStandardRelationshipCards(nextVideo),
+      resolveSeries(nextVideo),
+    ]);
     studioCards = relationships.studioCards;
     creditCards = relationships.creditCards;
     relationshipTags = relationships.relationshipTags;
+  }
+
+  /**
+   * Resolves the series an episode belongs to by walking the parent chain
+   * (episode → season → series), so the video can link back to its series. A standalone
+   * video (or a movie child, which redirects earlier) leaves the series unset.
+   */
+  async function resolveSeries(nextVideo: VideoDetail) {
+    seriesCard = null;
+    seriesRef = null;
+    const seasonId = nextVideo.parentEntityId;
+    if (!seasonId) return;
+    const [season] = await fetchEntityThumbnails([seasonId]).catch(() => []);
+    if (season?.kind !== ENTITY_KIND.videoSeason || !season.parentEntityId) return;
+    const [series] = await fetchEntityThumbnails([season.parentEntityId]).catch(() => []);
+    if (series?.kind !== ENTITY_KIND.videoSeries) return;
+    const href = resolveEntityHref(series.kind, series.id);
+    seriesRef = { id: series.id, title: series.title };
+    [seriesCard] = thumbnailsToCards([series], { hrefFor: () => href });
   }
 
   async function redirectMovieChildVideo(nextVideo: VideoDetail) {
@@ -781,6 +811,7 @@
           {card}
           {studioCards}
           {creditCards}
+          seriesCards={seriesCard ? [seriesCard] : []}
           {videoId}
           {playbackState}
           {durationSeconds}

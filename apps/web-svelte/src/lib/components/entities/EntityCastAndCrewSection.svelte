@@ -1,25 +1,33 @@
 <script lang="ts">
-  import { Building2, Users } from "@lucide/svelte";
+  import { Building2, Users, type LucideIcon } from "@lucide/svelte";
   import type { EntityThumbnailCard } from "$lib/entities/entity-thumbnail";
   import EntityThumbnail from "$lib/components/thumbnails/EntityThumbnail.svelte";
 
   interface Props {
     studioCards?: EntityThumbnailCard[];
     creditCards?: EntityThumbnailCard[];
+    /** Optional leading row of related entities (e.g. the series an episode belongs to). */
+    relatedCards?: EntityThumbnailCard[];
     studioLabel?: string;
     castLabel?: string;
+    relatedLabel?: string;
+    relatedIcon?: LucideIcon;
   }
 
   let {
     studioCards = [],
     creditCards = [],
+    relatedCards = [],
     studioLabel = "Studios",
     castLabel = "Cast",
+    relatedLabel = "Related",
+    relatedIcon,
   }: Props = $props();
 
   const hasStudios = $derived(studioCards.length > 0);
   const hasCredits = $derived(creditCards.length > 0);
-  const hasContent = $derived(hasStudios || hasCredits);
+  const hasRelated = $derived(relatedCards.length > 0);
+  const hasContent = $derived(hasStudios || hasCredits || hasRelated);
 
   function thumbnailKey(card: EntityThumbnailCard): string {
     return `${card.entity.kind}:${card.entity.id}:${card.subtitle ?? ""}`;
@@ -28,6 +36,25 @@
 
 {#if hasContent}
   <div class="credit-rows">
+    {#if hasRelated}
+      <section class="credit-row" aria-label={relatedLabel}>
+        <h3 class="credit-row-label">
+          {#if relatedIcon}
+            {@const RelatedIcon = relatedIcon}
+            <RelatedIcon class="h-3.5 w-3.5" />
+          {/if}
+          {relatedLabel}
+        </h3>
+        <div class="credit-scroller">
+          {#each relatedCards as thumbnailCard (thumbnailKey(thumbnailCard))}
+            <div class="credit-thumbnail">
+              <EntityThumbnail card={thumbnailCard} selectable={false} titleAlign="center" titleSize="compact" />
+            </div>
+          {/each}
+        </div>
+      </section>
+    {/if}
+
     {#if hasStudios}
       <section class="credit-row" aria-label={studioLabel}>
         <h3 class="credit-row-label">

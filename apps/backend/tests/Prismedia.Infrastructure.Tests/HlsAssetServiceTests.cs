@@ -681,10 +681,16 @@ public sealed class HlsAssetServiceTests : IDisposable {
 
         Assert.NotNull(segment);
         var arguments = Assert.Single(process.ArgumentHistory);
+        // Profile 5 must tone-map via tonemapx (which applies the Dolby Vision RPU) on the full-res
+        // decoded frames BEFORE scaling — swscale would otherwise drop the RPU side data — and must
+        // not force input colour tags. See FfmpegToneMapping for the rationale.
         Assert.Contains(arguments, argument =>
             argument.Contains("tonemapx=tonemap=bt2390", StringComparison.Ordinal) &&
-            argument.Contains("peak=400", StringComparison.Ordinal) &&
-            argument.Contains("t=bt709:m=bt709:p=bt709:format=yuv420p", StringComparison.Ordinal));
+            argument.Contains("peak=100", StringComparison.Ordinal) &&
+            argument.Contains("r=tv:format=yuv420p", StringComparison.Ordinal) &&
+            !argument.Contains("setparams", StringComparison.Ordinal) &&
+            argument.IndexOf("tonemapx", StringComparison.Ordinal) <
+                argument.IndexOf("scale=", StringComparison.Ordinal));
     }
 
     [Fact]

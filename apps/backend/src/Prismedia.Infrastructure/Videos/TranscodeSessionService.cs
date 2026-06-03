@@ -48,5 +48,29 @@ public sealed class TranscodeSessionService : ITranscodeSessionService {
         return Task.FromResult(count + activeHlsGenerations);
     }
 
+    public IReadOnlySet<Guid> LiveItemIds(TimeSpan within) {
+        var cutoff = DateTimeOffset.UtcNow - within;
+        var live = new HashSet<Guid>();
+        foreach (var session in _sessions.Values) {
+            if (session.ItemId != Guid.Empty && session.LastPingedAt >= cutoff) {
+                live.Add(session.ItemId);
+            }
+        }
+
+        return live;
+    }
+
+    public int ReapStaleSessions(TimeSpan ttl) {
+        var cutoff = DateTimeOffset.UtcNow - ttl;
+        var removed = 0;
+        foreach (var (playSessionId, session) in _sessions) {
+            if (session.LastPingedAt < cutoff && _sessions.TryRemove(playSessionId, out _)) {
+                removed++;
+            }
+        }
+
+        return removed;
+    }
+
     private sealed record ActiveTranscodeSession(Guid ItemId, DateTimeOffset LastPingedAt);
 }

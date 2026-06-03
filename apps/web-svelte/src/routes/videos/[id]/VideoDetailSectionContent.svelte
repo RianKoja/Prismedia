@@ -10,13 +10,14 @@
   import VideoMarkerEditor from "$lib/components/VideoMarkerEditor.svelte";
   import VideoTranscriptPanel from "$lib/components/VideoTranscriptPanel.svelte";
   import VideoPlaybackStatus from "./VideoPlaybackStatus.svelte";
-  import { MonitorCog, Calendar, Database } from "@lucide/svelte";
+  import { MonitorCog, Calendar, Database, Tv } from "@lucide/svelte";
 
   interface Props {
     section: EntityDetailSection;
     card: EntityDetailCardFull;
     studioCards: EntityThumbnailCard[];
     creditCards: EntityThumbnailCard[];
+    seriesCards?: EntityThumbnailCard[];
     videoId: string;
     playbackState: PlaybackState | null;
     durationSeconds: number;
@@ -42,6 +43,7 @@
     card,
     studioCards,
     creditCards,
+    seriesCards = [],
     videoId,
     playbackState,
     durationSeconds,
@@ -64,7 +66,13 @@
 </script>
 
 {#if section.id === "cast-and-crew"}
-  <EntityCastAndCrewSection {studioCards} {creditCards} />
+  <EntityCastAndCrewSection
+    {studioCards}
+    {creditCards}
+    relatedCards={seriesCards}
+    relatedLabel="Series"
+    relatedIcon={Tv}
+  />
 {:else if section.id === "technical"}
   {#if card.technical.length > 0}
     <MetadataCard

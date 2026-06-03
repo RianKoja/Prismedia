@@ -65,10 +65,15 @@ public sealed class ThumbnailServiceTests : IDisposable {
             var filterIndex = arguments.ToList().IndexOf("-vf");
             Assert.True(filterIndex >= 0);
             var filter = arguments[filterIndex + 1];
-            Assert.Contains("setparams=color_primaries=bt2020", filter);
+            // Profile 5 tone-maps with tonemapx (applying the Dolby Vision RPU) on the full-res frame
+            // before scaling, and without forcing input colour tags.
+            Assert.DoesNotContain("setparams", filter);
             Assert.Contains("tonemapx=tonemap=bt2390", filter);
-            Assert.Contains("peak=400", filter);
-            Assert.Contains("t=bt709:m=bt709:p=bt709:format=yuv420p", filter);
+            Assert.Contains("peak=100", filter);
+            Assert.Contains("r=tv:format=yuv420p", filter);
+            Assert.True(
+                filter.IndexOf("tonemapx", StringComparison.Ordinal) <
+                filter.IndexOf("scale=", StringComparison.Ordinal));
         });
     }
 

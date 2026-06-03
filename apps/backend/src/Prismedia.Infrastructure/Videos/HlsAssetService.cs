@@ -417,7 +417,66 @@ public sealed partial class HlsAssetService : IHlsAssetService {
             }
         }
 
+        // Remux keys share the "{itemId}/..." shape, so the same prefix reaches stream-copy jobs;
+        // this is what lets an explicit Stop (or a global purge) actually halt a running remux.
+        foreach (var (key, remux) in RemuxGenerations) {
+            if (key.StartsWith(prefix, StringComparison.Ordinal) && RemuxGenerations.TryRemove(key, out var removed)) {
+                removed.Cancellation.Cancel();
+                cancelled++;
+            }
+        }
+
         return cancelled;
+    }
+
+    /// <summary>
+    /// Cancels transcode and remux jobs that no longer have a live viewer, or that have run past a
+    /// hard lifetime ceiling. A job is reaped when its owning item is absent from <paramref name="liveItemIds"/>
+    /// and it has been running longer than <paramref name="idleGrace"/> (a startup guard), or
+    /// unconditionally once it exceeds <paramref name="maxLifetime"/>. Already-produced segments stay in
+    /// the cache, so a reaped session resumes from cache and only re-encodes from the frontier.
+    /// </summary>
+    /// <param name="liveItemIds">Item ids whose playback session pinged within the liveness window.</param>
+    /// <param name="idleGrace">Minimum job age before an orphaned job becomes eligible for reaping.</param>
+    /// <param name="maxLifetime">Absolute age after which any job is cancelled, even a live one.</param>
+    /// <returns>The number of jobs cancelled.</returns>
+    internal static int ReapOrphanedJobs(IReadOnlySet<Guid> liveItemIds, TimeSpan idleGrace, TimeSpan maxLifetime) {
+        var now = DateTimeOffset.UtcNow;
+        var reaped = 0;
+
+        foreach (var (key, generation) in ActiveRenditions) {
+            if (ShouldReapJob(generation.EntityId, generation.StartedAtUtc, now, liveItemIds, idleGrace, maxLifetime) &&
+                ActiveRenditions.TryRemove(key, out var removed)) {
+                removed.Cancellation.Cancel();
+                reaped++;
+            }
+        }
+
+        foreach (var (key, remux) in RemuxGenerations) {
+            if (!remux.Task.IsCompleted &&
+                ShouldReapJob(remux.EntityId, remux.StartedAtUtc, now, liveItemIds, idleGrace, maxLifetime) &&
+                RemuxGenerations.TryRemove(key, out var removed)) {
+                removed.Cancellation.Cancel();
+                reaped++;
+            }
+        }
+
+        return reaped;
+    }
+
+    private static bool ShouldReapJob(
+        Guid entityId,
+        DateTimeOffset startedAtUtc,
+        DateTimeOffset now,
+        IReadOnlySet<Guid> liveItemIds,
+        TimeSpan idleGrace,
+        TimeSpan maxLifetime) {
+        var age = now - startedAtUtc;
+        if (age > maxLifetime) {
+            return true;
+        }
+
+        return age > idleGrace && !liveItemIds.Contains(entityId);
     }
 
     private static string? NormalizeAssetPath(string assetPath) {

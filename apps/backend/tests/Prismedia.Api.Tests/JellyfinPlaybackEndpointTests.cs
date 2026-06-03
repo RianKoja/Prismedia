@@ -326,5 +326,9 @@ public sealed class JellyfinPlaybackEndpointTests : IDisposable {
         public Task CancelAsync(string playSessionId, CancellationToken cancellationToken) => Task.CompletedTask;
 
         public Task<int> CancelAllAsync(CancellationToken cancellationToken) => Task.FromResult(0);
+
+        public IReadOnlySet<Guid> LiveItemIds(TimeSpan within) => new HashSet<Guid>();
+
+        public int ReapStaleSessions(TimeSpan ttl) => 0;
     }
 }

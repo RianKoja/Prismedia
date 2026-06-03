@@ -16,8 +16,16 @@ namespace Prismedia.Infrastructure.Videos;
 public sealed partial class HlsAssetService {
     // One whole-file remux generation per (item, audio track); the ffmpeg job runs to completion in
     // the background and the served files (init.mp4, seg_*.m4s, index.m3u8) appear as it progresses.
-    private static readonly ConcurrentDictionary<string, Task> RemuxGenerations = new();
+    private static readonly ConcurrentDictionary<string, RemuxGeneration> RemuxGenerations = new();
     private static readonly ConcurrentDictionary<string, SemaphoreSlim> RemuxStartLocks = new();
+
+    // A tracked stream-copy job: the running task, its kill switch, the owning entity, and when it
+    // started — enough for the reaper to cancel it when the viewer leaves or it overruns its lifetime.
+    private sealed record RemuxGeneration(
+        Task Task,
+        CancellationTokenSource Cancellation,
+        Guid EntityId,
+        DateTimeOffset StartedAtUtc);
 
     private async Task<HlsAsset?> TryGetRemuxAssetAsync(
         Guid id,
@@ -81,11 +89,16 @@ public sealed partial class HlsAssetService {
             if (File.Exists(indexPath) &&
                 (await File.ReadAllTextAsync(indexPath, cancellationToken)).Contains("#EXT-X-ENDLIST", StringComparison.Ordinal)) {
                 // A previous run completed this remux; reuse the cached fMP4 HLS as-is.
-                RemuxGenerations[key] = Task.CompletedTask;
+                RemuxGenerations[key] = new RemuxGeneration(Task.CompletedTask, new CancellationTokenSource(), id, DateTimeOffset.UtcNow);
                 return;
             }
 
-            RemuxGenerations[key] = GenerateRemuxAsync(id, source, audioStreamIndex, remuxDir);
+            var cancellation = new CancellationTokenSource();
+            RemuxGenerations[key] = new RemuxGeneration(
+                GenerateRemuxAsync(id, source, audioStreamIndex, remuxDir, key, cancellation.Token),
+                cancellation,
+                id,
+                DateTimeOffset.UtcNow);
         } finally {
             startLock.Release();
         }
@@ -95,22 +108,33 @@ public sealed partial class HlsAssetService {
         Guid id,
         VideoSourceFile source,
         int? audioStreamIndex,
-        string remuxDir) {
-        if (Directory.Exists(remuxDir)) {
-            Directory.Delete(remuxDir, recursive: true);
-        }
+        string remuxDir,
+        string key,
+        CancellationToken cancellationToken) {
+        try {
+            if (Directory.Exists(remuxDir)) {
+                Directory.Delete(remuxDir, recursive: true);
+            }
 
-        Directory.CreateDirectory(remuxDir);
-        var options = await ResolveTranscoderOptionsAsync(CancellationToken.None);
-        var arguments = RemuxArguments(source, audioStreamIndex, remuxDir);
-        var result = await _processes!.RunAsync(options.FfmpegPath, arguments, environment: null, CancellationToken.None);
-        if (result.ExitCode != 0) {
-            _logger?.LogWarning(
-                "Remux generation failed for {VideoId}: {Error}",
-                id,
-                result.StandardError);
-            // Let the next request retry from scratch rather than serving a half-written remux.
-            RemuxGenerations.TryRemove($"{id}/{AudioCacheKeyFromDir(remuxDir)}", out _);
+            Directory.CreateDirectory(remuxDir);
+            var options = await ResolveTranscoderOptionsAsync(cancellationToken);
+            var arguments = RemuxArguments(source, audioStreamIndex, remuxDir);
+            var result = await _processes!.RunAsync(options.FfmpegPath, arguments, environment: null, cancellationToken);
+            if (result.ExitCode != 0) {
+                _logger?.LogWarning(
+                    "Remux generation failed for {VideoId}: {Error}",
+                    id,
+                    result.StandardError);
+                // Let the next request retry from scratch rather than serving a half-written remux.
+                RemuxGenerations.TryRemove(key, out _);
+            }
+        } catch (OperationCanceledException) {
+            // The reaper or an explicit stop cancelled this copy; drop the entry so a later request
+            // regenerates from scratch rather than waiting on a partial, abandoned remux.
+            RemuxGenerations.TryRemove(key, out _);
+        } catch (Exception ex) {
+            _logger?.LogWarning(ex, "Remux generation errored for {VideoId}.", id);
+            RemuxGenerations.TryRemove(key, out _);
         }
     }
 
@@ -185,7 +209,7 @@ public sealed partial class HlsAssetService {
                 return true;
             }
 
-            if (RemuxGenerations.TryGetValue(key, out var generation) && generation.IsCompleted) {
+            if (RemuxGenerations.TryGetValue(key, out var generation) && generation.Task.IsCompleted) {
                 // Generation finished (or failed); the file will not appear if it is not there now.
                 return File.Exists(filePath) && new FileInfo(filePath).Length > 0;
             }
@@ -198,7 +222,4 @@ public sealed partial class HlsAssetService {
         codec is not null &&
         (codec.Equals("hevc", StringComparison.OrdinalIgnoreCase) ||
             codec.Equals("h265", StringComparison.OrdinalIgnoreCase));
-
-    private static string AudioCacheKeyFromDir(string remuxDir) =>
-        Path.GetFileName(remuxDir.TrimEnd(Path.DirectorySeparatorChar));
 }

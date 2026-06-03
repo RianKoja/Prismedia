@@ -483,7 +483,9 @@ public sealed partial class HlsAssetService {
         int EndSegment,
         string StagingDirectory,
         CancellationTokenSource Cancellation,
-        Task Task);
+        Task Task,
+        Guid EntityId = default,
+        DateTimeOffset StartedAtUtc = default);
 
     private sealed record VirtualTrickplayStream(int Width, int Height, int Bandwidth);
 }

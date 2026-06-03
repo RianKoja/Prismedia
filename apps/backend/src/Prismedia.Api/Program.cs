@@ -10,6 +10,7 @@ using Prismedia.Contracts.Media;
 using Prismedia.Contracts.System;
 using Prismedia.Infrastructure;
 using Prismedia.Infrastructure.Persistence;
+using Prismedia.Infrastructure.Videos;
 using Microsoft.Extensions.FileProviders;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -72,6 +73,9 @@ builder.Services.AddCors(options => {
 });
 builder.Services.AddPrismediaApplication();
 builder.Services.AddPrismediaInfrastructure(builder.Configuration, builder.Environment.ContentRootPath);
+// Reap abandoned transcode/remux ffmpeg jobs (closed tabs, crashed clients, runaway encodes) so they
+// cannot accumulate and saturate the host. Runs in the API process, where playback encodes are spawned.
+builder.Services.AddHostedService<TranscodeReaperService>();
 
 var app = builder.Build();
 

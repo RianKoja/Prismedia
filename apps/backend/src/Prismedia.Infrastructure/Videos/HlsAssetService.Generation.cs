@@ -33,7 +33,9 @@ public sealed partial class HlsAssetService {
                 endSegment,
                 stagingDirectory,
                 cancellation,
-                Task.CompletedTask);
+                Task.CompletedTask,
+                EntityId: id,
+                StartedAtUtc: DateTimeOffset.UtcNow);
             generation = generation with {
                 Task = GenerateVirtualRenditionAsync(
                     id,
