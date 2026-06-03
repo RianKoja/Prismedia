@@ -65,8 +65,7 @@ public sealed partial class EfEntityReadService : IEntityReadService {
         var normalizedRelationshipCode = string.IsNullOrWhiteSpace(relationshipCode)
             ? null
             : relationshipCode.Trim();
-        var entityQuery = _db.Entities.AsNoTracking()
-            .Where(entity => entity.DeletedAt == null);
+        var entityQuery = _db.Entities.AsNoTracking();
 
         if (!string.IsNullOrWhiteSpace(kind)) {
             var kindCode = kind.Trim();
@@ -412,7 +411,7 @@ public sealed partial class EfEntityReadService : IEntityReadService {
         bool hideNsfw,
         CancellationToken cancellationToken) {
         var query = _db.Entities.AsNoTracking()
-            .Where(entity => ids.Contains(entity.Id) && entity.DeletedAt == null);
+            .Where(entity => ids.Contains(entity.Id));
         query = ApplyNsfwVisibility(query, hideNsfw);
         var rows = await query
             .ToArrayAsync(cancellationToken);
@@ -468,8 +467,7 @@ public sealed partial class EfEntityReadService : IEntityReadService {
             entity.ParentEntityId == null ||
             !_db.Entities.Any(parent =>
                 parent.Id == entity.ParentEntityId &&
-                parent.KindCode == EntityKindRegistry.Movie.Code &&
-                parent.DeletedAt == null));
+                parent.KindCode == EntityKindRegistry.Movie.Code));
 
     private async Task<bool> IsEntityHiddenAsync(Guid id, CancellationToken cancellationToken) =>
         await _db.Entities.AsNoTracking()
@@ -522,7 +520,7 @@ public sealed partial class EfEntityReadService : IEntityReadService {
         bool hideNsfw,
         CancellationToken cancellationToken) {
         var query = _db.Entities.AsNoTracking()
-            .Where(row => row.ParentEntityId == entityId && row.DeletedAt == null);
+            .Where(row => row.ParentEntityId == entityId);
         query = ApplyNsfwVisibility(query, hideNsfw);
         var childRows = await query
             .OrderBy(row => row.KindCode)
@@ -565,7 +563,7 @@ public sealed partial class EfEntityReadService : IEntityReadService {
 
         var targetIds = links.Select(link => link.TargetEntityId).Distinct().ToArray();
         var targetQuery = _db.Entities.AsNoTracking()
-            .Where(entity => targetIds.Contains(entity.Id) && entity.DeletedAt == null);
+            .Where(entity => targetIds.Contains(entity.Id));
         targetQuery = ApplyNsfwVisibility(targetQuery, hideNsfw);
         var targetRows = await targetQuery
             .ToDictionaryAsync(entity => entity.Id, cancellationToken);

@@ -132,8 +132,8 @@ public sealed partial class EntityMetadataApplyService {
                 return null;
             }
 
-            var parent = _db.Entities.Local.FirstOrDefault(row => row.Id == parentId && row.DeletedAt == null)
-                ?? await _db.Entities.FirstOrDefaultAsync(row => row.Id == parentId && row.DeletedAt == null, cancellationToken);
+            var parent = _db.Entities.Local.FirstOrDefault(row => row.Id == parentId)
+                ?? await _db.Entities.FirstOrDefaultAsync(row => row.Id == parentId, cancellationToken);
             if (parent is null) {
                 return null;
             }

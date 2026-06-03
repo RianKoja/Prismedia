@@ -60,7 +60,7 @@ public sealed partial class IdentifyPluginService : IIdentifyProviderService {
 
         var entity = await _db.Entities
             .AsNoTracking()
-            .FirstOrDefaultAsync(row => row.Id == entityId && row.DeletedAt == null, cancellationToken);
+            .FirstOrDefaultAsync(row => row.Id == entityId, cancellationToken);
         if (entity is null) {
             return new IdentifyPluginResponse(false, null, $"Entity '{entityId}' was not found.");
         }
@@ -181,7 +181,7 @@ public sealed partial class IdentifyPluginService : IIdentifyProviderService {
         while (current.ParentEntityId is { } parentId) {
             var parent = await _db.Entities
                 .AsNoTracking()
-                .FirstOrDefaultAsync(row => row.Id == parentId && row.DeletedAt == null, cancellationToken);
+                .FirstOrDefaultAsync(row => row.Id == parentId, cancellationToken);
             if (parent is null) break;
 
             if (!SupportsKind(descriptor.Manifest, parent.KindCode)) {

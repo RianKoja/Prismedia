@@ -147,7 +147,7 @@ public sealed partial class IdentifyPluginService {
         CancellationToken cancellationToken) {
         var childKinds = await _db.Entities
             .AsNoTracking()
-            .Where(row => row.ParentEntityId == parentEntityId && row.DeletedAt == null)
+            .Where(row => row.ParentEntityId == parentEntityId)
             .Select(row => row.KindCode)
             .ToArrayAsync(cancellationToken);
         return childKinds.Any(kind => manifest.Supports.Any(support => IsCompatibleStructuralKind(kind, support.EntityKind)));
@@ -395,7 +395,7 @@ public sealed partial class IdentifyPluginService {
         while (parentId is { } id && visited.Add(id)) {
             var parent = await _db.Entities
                 .AsNoTracking()
-                .FirstOrDefaultAsync(row => row.Id == id && row.DeletedAt == null, cancellationToken);
+                .FirstOrDefaultAsync(row => row.Id == id, cancellationToken);
             if (parent is null) {
                 break;
             }
@@ -478,7 +478,7 @@ public sealed partial class IdentifyPluginService {
     private async Task<IReadOnlyList<StructuralChild>> LoadStructuralChildrenAsync(Guid parentEntityId, CancellationToken cancellationToken) {
         var children = await _db.Entities
             .AsNoTracking()
-            .Where(row => row.ParentEntityId == parentEntityId && row.DeletedAt == null)
+            .Where(row => row.ParentEntityId == parentEntityId)
             .OrderBy(row => row.SortOrder)
             .ThenBy(row => row.CreatedAt)
             .ThenBy(row => row.Id)

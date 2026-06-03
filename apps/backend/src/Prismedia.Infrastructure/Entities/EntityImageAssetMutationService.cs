@@ -47,7 +47,7 @@ public sealed class EntityImageAssetMutationService(
             return EntityImageAssetMutationResult.InvalidFile;
         }
 
-        var entity = await db.Entities.FirstOrDefaultAsync(row => row.Id == entityId && row.DeletedAt == null, cancellationToken);
+        var entity = await db.Entities.FirstOrDefaultAsync(row => row.Id == entityId, cancellationToken);
         if (entity is null) {
             return EntityImageAssetMutationResult.NotFound;
         }
@@ -105,7 +105,7 @@ public sealed class EntityImageAssetMutationService(
             return EntityImageAssetMutationResult.UnsupportedRole;
         }
 
-        var entity = await db.Entities.FirstOrDefaultAsync(row => row.Id == entityId && row.DeletedAt == null, cancellationToken);
+        var entity = await db.Entities.FirstOrDefaultAsync(row => row.Id == entityId, cancellationToken);
         if (entity is null) {
             return EntityImageAssetMutationResult.NotFound;
         }

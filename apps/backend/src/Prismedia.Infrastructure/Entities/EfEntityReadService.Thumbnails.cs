@@ -74,7 +74,7 @@ public sealed partial class EfEntityReadService {
         var tagTitleById = tagLinks.Length == 0
             ? new Dictionary<Guid, string>()
             : await _db.Entities.AsNoTracking()
-                .Where(entity => tagLinks.Select(link => link.TargetEntityId).Contains(entity.Id) && entity.DeletedAt == null)
+                .Where(entity => tagLinks.Select(link => link.TargetEntityId).Contains(entity.Id))
                 .ToDictionaryAsync(entity => entity.Id, entity => entity.Title, cancellationToken);
         var tagsByEntity = tagLinks
             .GroupBy(link => link.EntityId)
@@ -248,7 +248,7 @@ public sealed partial class EfEntityReadService {
 
         var rootIds = rows.Select(row => row.Id).ToArray();
         var directChildQuery = _db.Entities.AsNoTracking()
-            .Where(row => row.ParentEntityId != null && rootIds.Contains(row.ParentEntityId.Value) && row.DeletedAt == null);
+            .Where(row => row.ParentEntityId != null && rootIds.Contains(row.ParentEntityId.Value));
         directChildQuery = ApplyNsfwVisibility(directChildQuery, hideNsfw);
         var directChildren = await directChildQuery
             .OrderBy(row => row.ParentEntityId)
@@ -290,7 +290,7 @@ public sealed partial class EfEntityReadService {
         for (var depth = 0; depth < MaxHoverImageSearchDepth && frontier.Count > 0; depth++) {
             var parentIds = frontier.Values.Select(row => row.Id).ToArray();
             var childQuery = _db.Entities.AsNoTracking()
-                .Where(row => row.ParentEntityId != null && parentIds.Contains(row.ParentEntityId.Value) && row.DeletedAt == null);
+                .Where(row => row.ParentEntityId != null && parentIds.Contains(row.ParentEntityId.Value));
             childQuery = ApplyNsfwVisibility(childQuery, hideNsfw);
             var children = await childQuery
                 .OrderBy(row => row.ParentEntityId)

@@ -13,7 +13,7 @@ public sealed partial class LibraryScanPersistenceService {
         bool markNsfw,
         CancellationToken cancellationToken) {
         var now = DateTimeOffset.UtcNow;
-        var entity = await _db.Entities.FirstOrDefaultAsync(row => row.Id == entityId && row.DeletedAt == null, cancellationToken);
+        var entity = await _db.Entities.FirstOrDefaultAsync(row => row.Id == entityId, cancellationToken);
         if (entity is null) {
             return;
         }
@@ -36,7 +36,7 @@ public sealed partial class LibraryScanPersistenceService {
         bool markNsfw,
         CancellationToken cancellationToken) {
         var now = DateTimeOffset.UtcNow;
-        var entity = await _db.Entities.FirstOrDefaultAsync(row => row.Id == bookEntityId && row.DeletedAt == null, cancellationToken);
+        var entity = await _db.Entities.FirstOrDefaultAsync(row => row.Id == bookEntityId, cancellationToken);
         if (entity is null) {
             return;
         }
@@ -227,12 +227,10 @@ public sealed partial class LibraryScanPersistenceService {
         CancellationToken cancellationToken) {
         var entity = _db.Entities.Local.FirstOrDefault(row =>
                 row.KindCode == kindCode &&
-                row.Title.Equals(title, StringComparison.OrdinalIgnoreCase) &&
-                row.DeletedAt == null)
+                row.Title.Equals(title, StringComparison.OrdinalIgnoreCase))
             ?? await _db.Entities.FirstOrDefaultAsync(row =>
                 row.KindCode == kindCode &&
-                row.Title.ToLower() == title.ToLower() &&
-                row.DeletedAt == null, cancellationToken);
+                row.Title.ToLower() == title.ToLower(), cancellationToken);
 
         if (entity is null) {
             entity = new EntityRow {

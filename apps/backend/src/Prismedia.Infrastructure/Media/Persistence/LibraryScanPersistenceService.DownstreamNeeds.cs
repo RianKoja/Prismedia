@@ -145,7 +145,7 @@ public sealed partial class LibraryScanPersistenceService {
             var batch = toLoad.ToList();
             toLoad.Clear();
             var rows = await _db.Entities.AsNoTracking()
-                .Where(entity => batch.Contains(entity.Id) && entity.DeletedAt == null)
+                .Where(entity => batch.Contains(entity.Id))
                 .Select(entity => new { entity.Id, entity.KindCode, entity.Title, entity.ParentEntityId })
                 .ToListAsync(cancellationToken);
             foreach (var row in rows) {

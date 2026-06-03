@@ -16,7 +16,7 @@ public sealed partial class LibraryScanPersistenceService {
     public async Task<IReadOnlyList<EntityRefreshTarget>> GetEntityTreeAsync(
         Guid entityId, CancellationToken cancellationToken) {
         var root = await _db.Entities.AsNoTracking()
-            .Where(e => e.Id == entityId && e.DeletedAt == null)
+            .Where(e => e.Id == entityId)
             .Select(e => new EntityRefreshTarget(e.Id, e.KindCode, e.Title))
             .FirstOrDefaultAsync(cancellationToken);
         if (root is null) return [];
@@ -27,7 +27,7 @@ public sealed partial class LibraryScanPersistenceService {
         // Walk up to 3 levels of children (series → seasons → episodes).
         for (var depth = 0; depth < 3 && parentIds.Count > 0; depth++) {
             var children = await _db.Entities.AsNoTracking()
-                .Where(e => e.DeletedAt == null && e.ParentEntityId != null && parentIds.Contains(e.ParentEntityId.Value))
+                .Where(e => e.ParentEntityId != null && parentIds.Contains(e.ParentEntityId.Value))
                 .Select(e => new EntityRefreshTarget(e.Id, e.KindCode, e.Title))
                 .ToArrayAsync(cancellationToken);
             if (children.Length == 0) break;

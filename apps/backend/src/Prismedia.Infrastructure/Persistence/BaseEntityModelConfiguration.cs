@@ -37,7 +37,6 @@ internal static class BaseEntityModelConfiguration {
             entity.Property(row => row.IsOrganized).HasColumnName("is_organized").HasDefaultValue(false);
             entity.Property(row => row.CreatedAt).HasColumnName("created_at");
             entity.Property(row => row.UpdatedAt).HasColumnName("updated_at");
-            entity.Property(row => row.DeletedAt).HasColumnName("deleted_at");
             entity.HasIndex(row => new { row.KindCode, row.Title });
             entity.HasIndex(row => row.ParentEntityId);
             entity.HasOne<EntityKindRow>()

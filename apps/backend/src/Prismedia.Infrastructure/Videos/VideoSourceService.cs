@@ -62,7 +62,6 @@ public sealed class VideoSourceService : IVideoSourceService {
             from technical in technicalRows.DefaultIfEmpty()
             where entity.Id == videoId.Value &&
                 entity.KindCode == EntityKindRegistry.Video.Code &&
-                entity.DeletedAt == null &&
                 file.Role == EntityFileRole.Source
             select new {
                 File = file,
@@ -176,7 +175,7 @@ public sealed class VideoSourceService : IVideoSourceService {
     /// </summary>
     private async Task<Guid?> ResolvePlayableVideoIdAsync(Guid id, CancellationToken cancellationToken) {
         var kind = await _db.Entities.AsNoTracking()
-            .Where(entity => entity.Id == id && entity.DeletedAt == null)
+            .Where(entity => entity.Id == id)
             .Select(entity => entity.KindCode)
             .FirstOrDefaultAsync(cancellationToken);
 
@@ -187,8 +186,7 @@ public sealed class VideoSourceService : IVideoSourceService {
         if (string.Equals(kind, EntityKindRegistry.Movie.Code, StringComparison.Ordinal)) {
             return await _db.Entities.AsNoTracking()
                 .Where(child => child.ParentEntityId == id &&
-                    child.KindCode == EntityKindRegistry.Video.Code &&
-                    child.DeletedAt == null)
+                    child.KindCode == EntityKindRegistry.Video.Code)
                 .OrderBy(child => child.SortOrder ?? int.MaxValue)
                 .ThenBy(child => child.Id)
                 .Select(child => (Guid?)child.Id)

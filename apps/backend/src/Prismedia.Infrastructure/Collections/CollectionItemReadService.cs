@@ -20,8 +20,7 @@ public sealed class CollectionItemReadService(
         var collectionExists = await db.Entities.AsNoTracking()
             .AnyAsync(entity =>
                 entity.Id == collectionId &&
-                entity.KindCode == EntityKindRegistry.Collection.Code &&
-                entity.DeletedAt == null,
+                entity.KindCode == EntityKindRegistry.Collection.Code,
                 cancellationToken);
 
         if (!collectionExists) {
@@ -32,7 +31,6 @@ public sealed class CollectionItemReadService(
             from item in db.CollectionItemDetails.AsNoTracking()
             join entity in db.Entities.AsNoTracking() on item.ItemEntityId equals entity.Id
             where item.CollectionEntityId == collectionId &&
-                  entity.DeletedAt == null &&
                   (!hideNsfw || !entity.IsNsfw)
             orderby item.SortOrder, entity.Title, item.Id
             select new {
@@ -95,7 +93,6 @@ public sealed class CollectionItemReadService(
             from item in db.CollectionItemDetails.AsNoTracking()
             join entity in db.Entities.AsNoTracking() on item.ItemEntityId equals entity.Id
             where ids.Contains(item.CollectionEntityId) &&
-                  entity.DeletedAt == null &&
                   (!hideNsfw || !entity.IsNsfw)
             orderby item.SortOrder, entity.Title, item.Id
             select new { item.CollectionEntityId, item.ItemEntityId }).ToArrayAsync(cancellationToken);

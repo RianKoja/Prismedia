@@ -67,7 +67,7 @@ public sealed partial class EntityMetadataApplyService : IEntityMetadataPatchSer
         EntityMetadataPatchValidator.Validate(fields, request.Patch);
 
         var entity = await _db.Entities
-            .FirstOrDefaultAsync(row => row.Id == entityId && row.DeletedAt == null, cancellationToken);
+            .FirstOrDefaultAsync(row => row.Id == entityId, cancellationToken);
         if (entity is null) {
             return EntityMetadataPatchResult.NotFound;
         }
@@ -185,7 +185,7 @@ public sealed partial class EntityMetadataApplyService : IEntityMetadataPatchSer
         ArgumentNullException.ThrowIfNull(selectedFields);
 
         var entity = await _db.Entities
-            .FirstOrDefaultAsync(row => row.Id == entityId && row.DeletedAt == null, cancellationToken);
+            .FirstOrDefaultAsync(row => row.Id == entityId, cancellationToken);
         if (entity is null) {
             return false;
         }

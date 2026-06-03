@@ -26,7 +26,6 @@ public sealed class EfOrganizePersistence : IOrganizePersistence {
 
     public async Task<IReadOnlyList<OrganizeEntityRow>> ListActiveEntitiesAsync(Guid? entityId, CancellationToken cancellationToken) {
         return await _db.Entities.AsNoTracking()
-            .Where(entity => entity.DeletedAt == null)
             .Where(entity => entityId == null || entity.Id == entityId)
             .Select(entity => new OrganizeEntityRow(entity.Id, entity.KindCode, entity.Title, entity.ParentEntityId))
             .ToArrayAsync(cancellationToken);

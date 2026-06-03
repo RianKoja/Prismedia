@@ -31,7 +31,7 @@ public sealed class AutoIdentifyRunner(
         }
 
         var entity = await db.Entities
-            .FirstOrDefaultAsync(row => row.Id == entityId && row.DeletedAt == null, cancellationToken);
+            .FirstOrDefaultAsync(row => row.Id == entityId, cancellationToken);
         if (entity is null) {
             return new AutoIdentifyResult(false, SkipReason: "entity not found");
         }

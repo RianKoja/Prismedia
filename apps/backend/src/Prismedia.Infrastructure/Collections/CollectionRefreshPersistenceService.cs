@@ -22,7 +22,7 @@ public sealed class CollectionRefreshPersistenceService(PrismediaDbContext db) :
         if (row?.RuleTreeJson is null) return null;
 
         var entity = await db.Entities
-            .Where(e => e.Id == collectionEntityId && e.DeletedAt == null)
+            .Where(e => e.Id == collectionEntityId)
             .Select(e => e.Title)
             .FirstOrDefaultAsync(cancellationToken);
 

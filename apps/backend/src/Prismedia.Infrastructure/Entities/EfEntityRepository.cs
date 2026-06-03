@@ -39,7 +39,7 @@ public sealed class EfEntityRepository : IEntityWriteRepository {
     /// </summary>
     public async Task<Entity?> FindAsync(Guid id, CancellationToken cancellationToken) {
         var row = await _db.Entities.AsNoTracking()
-            .FirstOrDefaultAsync(entity => entity.Id == id && entity.DeletedAt == null, cancellationToken);
+            .FirstOrDefaultAsync(entity => entity.Id == id, cancellationToken);
         if (row is null) {
             return null;
         }
@@ -53,7 +53,7 @@ public sealed class EfEntityRepository : IEntityWriteRepository {
     /// </summary>
     public async Task<Guid?> FindParentIdAsync(Guid id, CancellationToken cancellationToken) =>
         await _db.Entities.AsNoTracking()
-            .Where(entity => entity.Id == id && entity.DeletedAt == null)
+            .Where(entity => entity.Id == id)
             .Select(entity => entity.ParentEntityId)
             .FirstOrDefaultAsync(cancellationToken);
 
@@ -64,7 +64,7 @@ public sealed class EfEntityRepository : IEntityWriteRepository {
     /// </summary>
     public async Task<Entity?> FindShallowAsync(Guid id, CancellationToken cancellationToken) {
         var row = await _db.Entities.AsNoTracking()
-            .FirstOrDefaultAsync(entity => entity.Id == id && entity.DeletedAt == null, cancellationToken);
+            .FirstOrDefaultAsync(entity => entity.Id == id, cancellationToken);
         if (row is null) {
             return null;
         }
@@ -100,8 +100,7 @@ public sealed class EfEntityRepository : IEntityWriteRepository {
         var pageCounts = await _db.Entities.AsNoTracking()
             .Where(row => row.ParentEntityId != null &&
                           chapterIds.Contains(row.ParentEntityId.Value) &&
-                          row.KindCode == EntityKindRegistry.BookPage.Code &&
-                          row.DeletedAt == null)
+                          row.KindCode == EntityKindRegistry.BookPage.Code)
             .GroupBy(row => row.ParentEntityId!.Value)
             .Select(group => new { ChapterId = group.Key, Count = group.Count() })
             .ToDictionaryAsync(group => group.ChapterId, group => group.Count, cancellationToken);
@@ -212,7 +211,7 @@ public sealed class EfEntityRepository : IEntityWriteRepository {
 
     private async Task<Guid?> ResolveProgressChapterIdAsync(Guid currentEntityId, CancellationToken cancellationToken) {
         var row = await _db.Entities.AsNoTracking()
-            .Where(entity => entity.Id == currentEntityId && entity.DeletedAt == null)
+            .Where(entity => entity.Id == currentEntityId)
             .Select(entity => new { entity.Id, entity.KindCode, entity.ParentEntityId })
             .FirstOrDefaultAsync(cancellationToken);
         if (row is null) {
@@ -234,7 +233,7 @@ public sealed class EfEntityRepository : IEntityWriteRepository {
         Guid bookId,
         CancellationToken cancellationToken) {
         var directChildren = await _db.Entities.AsNoTracking()
-            .Where(row => row.ParentEntityId == bookId && row.DeletedAt == null)
+            .Where(row => row.ParentEntityId == bookId)
             .OrderBy(row => row.SortOrder)
             .ThenBy(row => row.Title)
             .ThenBy(row => row.Id)
@@ -248,8 +247,7 @@ public sealed class EfEntityRepository : IEntityWriteRepository {
             : await _db.Entities.AsNoTracking()
                 .Where(row => row.ParentEntityId != null &&
                               volumeIds.Contains(row.ParentEntityId.Value) &&
-                              row.KindCode == EntityKindRegistry.BookChapter.Code &&
-                              row.DeletedAt == null)
+                              row.KindCode == EntityKindRegistry.BookChapter.Code)
                 .OrderBy(row => row.ParentEntityId)
                 .ThenBy(row => row.SortOrder)
                 .ThenBy(row => row.Title)
@@ -280,7 +278,7 @@ public sealed class EfEntityRepository : IEntityWriteRepository {
         EntityHydrationContext context,
         CancellationToken cancellationToken) {
         var childRows = await _db.Entities.AsNoTracking()
-            .Where(row => row.ParentEntityId == entity.Id && row.DeletedAt == null)
+            .Where(row => row.ParentEntityId == entity.Id)
             .OrderBy(row => row.SortOrder)
             .ThenBy(row => row.CreatedAt)
             .ThenBy(row => row.Id)
@@ -304,7 +302,7 @@ public sealed class EfEntityRepository : IEntityWriteRepository {
             .ToArrayAsync(cancellationToken);
         var targetIds = links.Select(link => link.TargetEntityId).ToArray();
         var targetRows = await _db.Entities.AsNoTracking()
-            .Where(row => targetIds.Contains(row.Id) && row.DeletedAt == null)
+            .Where(row => targetIds.Contains(row.Id))
             .ToDictionaryAsync(row => row.Id, cancellationToken);
         foreach (var link in links) {
             if (!targetRows.TryGetValue(link.TargetEntityId, out var targetRow)) {

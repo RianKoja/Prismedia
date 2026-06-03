@@ -22,7 +22,6 @@ public sealed class EntityManagementServiceTests {
         var row = await db.Entities.SingleAsync(e => e.Id == result.Id);
         Assert.Equal(EntityKindRegistry.Tag.Code, row.KindCode);
         Assert.Equal("Sci-Fi", row.Title);
-        Assert.Null(row.DeletedAt);
     }
 
     [Fact]
@@ -50,7 +49,7 @@ public sealed class EntityManagementServiceTests {
     }
 
     [Fact]
-    public async Task DeleteAsyncSoftDeletesEntityAndDetachesReferencingMedia() {
+    public async Task DeleteAsyncHardDeletesEntityAndLeavesReferencingMedia() {
         await using var db = CreateContext();
         var now = DateTimeOffset.UtcNow;
         var tagId = Guid.NewGuid();
@@ -58,23 +57,17 @@ public sealed class EntityManagementServiceTests {
         db.Entities.AddRange(
             new EntityRow { Id = tagId, KindCode = EntityKindRegistry.Tag.Code, Title = "Noir", CreatedAt = now, UpdatedAt = now },
             new EntityRow { Id = videoId, KindCode = EntityKindRegistry.Video.Code, Title = "Film", CreatedAt = now, UpdatedAt = now });
-        db.EntityRelationshipLinks.Add(new EntityRelationshipLinkRow {
-            EntityId = videoId,
-            RelationshipCode = "tags",
-            Label = "Tags",
-            TargetEntityId = tagId,
-            TargetKindCode = EntityKindRegistry.Tag.Code,
-            CreatedAt = now,
-        });
         await db.SaveChangesAsync();
 
         var service = new EntityManagementService(db);
         var result = await service.DeleteAsync(tagId, EntityKindRegistry.Tag.Code, CancellationToken.None);
 
         Assert.Equal(EntityCommandStatus.Deleted, result.Status);
-        var tag = await db.Entities.SingleAsync(e => e.Id == tagId);
-        Assert.NotNull(tag.DeletedAt);
-        Assert.False(await db.EntityRelationshipLinks.AnyAsync(link => link.TargetEntityId == tagId));
+        // The tag row is gone; the previously referencing media survives. The relationship-link
+        // rows are removed by the FK cascade on entity_id/target_entity_id (exercised against the
+        // real database, not the in-memory provider used here).
+        Assert.False(await db.Entities.AnyAsync(e => e.Id == tagId));
+        Assert.True(await db.Entities.AnyAsync(e => e.Id == videoId));
     }
 
     [Fact]

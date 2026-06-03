@@ -111,7 +111,7 @@ public sealed class CollectionItemReadServiceTests {
             bool hideNsfw,
             CancellationToken cancellationToken) {
             var rows = await db.Entities.AsNoTracking()
-                .Where(row => ids.Contains(row.Id) && row.DeletedAt == null && (!hideNsfw || !row.IsNsfw))
+                .Where(row => ids.Contains(row.Id) && (!hideNsfw || !row.IsNsfw))
                 .ToArrayAsync(cancellationToken);
             var byId = rows.ToDictionary(row => row.Id);
             var thumbnails = ids

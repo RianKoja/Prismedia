@@ -35,7 +35,7 @@ public sealed partial class IdentifyMatchHintResolver {
         CancellationToken cancellationToken) {
         var title = await _db.Entities
             .AsNoTracking()
-            .Where(entity => entity.Id == entityId && entity.DeletedAt == null)
+            .Where(entity => entity.Id == entityId)
             .Select(entity => entity.Title)
             .SingleOrDefaultAsync(cancellationToken);
 

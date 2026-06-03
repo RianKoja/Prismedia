@@ -25,7 +25,7 @@ public sealed partial class EntityMetadataApplyService {
             }
 
             var childEntity = child.TargetEntityId is { } existingId
-                ? await _db.Entities.FirstOrDefaultAsync(row => row.Id == existingId && row.DeletedAt == null, cancellationToken)
+                ? await _db.Entities.FirstOrDefaultAsync(row => row.Id == existingId, cancellationToken)
                 : await FindStructuralChildAsync(parentEntityId, child, cancellationToken);
 
             if (childEntity is null) {
@@ -94,8 +94,7 @@ public sealed partial class EntityMetadataApplyService {
                     (_, entity) => entity)
                 .FirstOrDefaultAsync(
                     entity => entity.ParentEntityId == parentEntityId &&
-                        entity.KindCode == child.TargetKind &&
-                        entity.DeletedAt == null,
+                        entity.KindCode == child.TargetKind,
                     cancellationToken);
             if (entity is not null) {
                 return entity;
@@ -114,13 +113,11 @@ public sealed partial class EntityMetadataApplyService {
         return _db.Entities.Local.FirstOrDefault(row =>
                 row.ParentEntityId == parentEntityId &&
                 row.KindCode == kind &&
-                row.Title.Equals(normalizedTitle, StringComparison.OrdinalIgnoreCase) &&
-                row.DeletedAt == null)
+                row.Title.Equals(normalizedTitle, StringComparison.OrdinalIgnoreCase))
             ?? await _db.Entities.FirstOrDefaultAsync(
                 row => row.ParentEntityId == parentEntityId &&
                     row.KindCode == kind &&
-                    row.Title.ToLower() == normalizedTitle.ToLower() &&
-                    row.DeletedAt == null,
+                    row.Title.ToLower() == normalizedTitle.ToLower(),
                 cancellationToken);
     }
 

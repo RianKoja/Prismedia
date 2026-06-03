@@ -56,7 +56,7 @@ public sealed class EfFilesPersistence(PrismediaDbContext db) : IFilesPersistenc
             .Where(file => file.Role == EntityFileRole.Source &&
                            (file.Path == normalized || EF.Functions.Like(file.Path, normalized + Path.DirectorySeparatorChar + "%")))
             .Join(
-                db.Entities.AsNoTracking().Where(entity => entity.DeletedAt == null),
+                db.Entities.AsNoTracking(),
                 file => file.EntityId,
                 entity => entity.Id,
                 (_, entity) => new { entity.Id, entity.KindCode, entity.Title, entity.IsNsfw })
@@ -111,7 +111,7 @@ public sealed class EfFilesPersistence(PrismediaDbContext db) : IFilesPersistenc
             .Where(file => file.Role == EntityFileRole.Source &&
                            (file.Path == scope || EF.Functions.Like(file.Path, scopePrefix + "%")))
             .Join(
-                db.Entities.AsNoTracking().Where(entity => entity.DeletedAt == null),
+                db.Entities.AsNoTracking(),
                 file => file.EntityId,
                 entity => entity.Id,
                 (file, entity) => new {

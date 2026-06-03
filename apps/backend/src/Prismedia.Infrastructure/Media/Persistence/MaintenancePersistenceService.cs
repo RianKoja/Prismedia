@@ -24,7 +24,7 @@ public sealed class MaintenancePersistenceService(PrismediaDbContext db, string 
 
     public async Task<IReadOnlyList<Guid>> GetActiveEntityIdsByKindAsync(EntityKind kind, CancellationToken cancellationToken) =>
         await db.Entities
-            .Where(e => e.KindCode == EntityKindRegistry.ToCode(kind) && e.DeletedAt == null)
+            .Where(e => e.KindCode == EntityKindRegistry.ToCode(kind))
             .Select(e => e.Id)
             .ToListAsync(cancellationToken);
 

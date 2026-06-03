@@ -193,7 +193,7 @@ public sealed class IdentifyQueueService : IIdentifyQueueService {
 
         var hasChildren = await _db.Entities
             .AsNoTracking()
-            .AnyAsync(child => child.ParentEntityId == entity.Id && child.DeletedAt == null, cancellationToken);
+            .AnyAsync(child => child.ParentEntityId == entity.Id, cancellationToken);
         if (!hasChildren) {
             return;
         }
@@ -451,7 +451,7 @@ public sealed class IdentifyQueueService : IIdentifyQueueService {
 
     private async Task<EntityRow?> LoadEntityAsync(Guid entityId, CancellationToken cancellationToken) =>
         await _db.Entities
-            .FirstOrDefaultAsync(entity => entity.Id == entityId && entity.DeletedAt == null, cancellationToken);
+            .FirstOrDefaultAsync(entity => entity.Id == entityId, cancellationToken);
 
     private static void ResetForSearch(IdentifyQueueItemRow row, DateTimeOffset now) {
         row.State = IdentifyQueueState.Search;

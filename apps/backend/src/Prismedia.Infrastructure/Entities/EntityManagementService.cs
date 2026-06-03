@@ -9,7 +9,7 @@ namespace Prismedia.Infrastructure.Entities;
 
 /// <summary>
 /// EF-backed implementation of <see cref="IEntityManagementService"/>. Owns row-level create and
-/// soft-delete for the user-managed taxonomy kinds, keeping endpoints thin.
+/// delete for the user-managed taxonomy kinds, keeping endpoints thin.
 /// </summary>
 public sealed class EntityManagementService(PrismediaDbContext db) : IEntityManagementService {
     /// <summary>Kind codes a user may create and delete by hand from the taxonomy grids.</summary>
@@ -61,24 +61,16 @@ public sealed class EntityManagementService(PrismediaDbContext db) : IEntityMana
         }
 
         var entity = await db.Entities.FirstOrDefaultAsync(
-            row => row.Id == id && row.KindCode == kind && row.DeletedAt == null,
+            row => row.Id == id && row.KindCode == kind,
             cancellationToken);
         if (entity is null) {
             return new EntityDeleteResult(EntityCommandStatus.NotFound);
         }
 
-        // Detach the entity from every relationship in either direction so no media keeps a link
-        // to a deleted tag/person/studio, then soft-delete the row itself (matching collections).
-        var links = await db.EntityRelationshipLinks
-            .Where(link => link.EntityId == id || link.TargetEntityId == id)
-            .ToListAsync(cancellationToken);
-        if (links.Count > 0) {
-            db.EntityRelationshipLinks.RemoveRange(links);
-        }
-
-        var now = DateTimeOffset.UtcNow;
-        entity.DeletedAt = now;
-        entity.UpdatedAt = now;
+        // Hard-delete the row. The relationship-link foreign keys cascade on both entity_id and
+        // target_entity_id, so every link to or from this tag/person/studio is removed with it,
+        // leaving the previously referenced media in place but unlinked.
+        db.Entities.Remove(entity);
         await db.SaveChangesAsync(cancellationToken);
         return new EntityDeleteResult(EntityCommandStatus.Deleted);
     }

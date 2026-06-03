@@ -317,7 +317,7 @@ public sealed class CollectionCommandServiceTests {
             bool hideNsfw,
             CancellationToken cancellationToken) {
             var rows = await db.Entities.AsNoTracking()
-                .Where(row => ids.Contains(row.Id) && row.DeletedAt == null && (!hideNsfw || !row.IsNsfw))
+                .Where(row => ids.Contains(row.Id) && (!hideNsfw || !row.IsNsfw))
                 .ToArrayAsync(cancellationToken);
             var byId = rows.ToDictionary(row => row.Id);
             return new EntityThumbnailBatchResponse(ids
@@ -344,7 +344,7 @@ public sealed class CollectionCommandServiceTests {
 
         public async Task<IEntityCard?> GetDetailAsync(Guid id, string kind, bool hideNsfw, CancellationToken cancellationToken) {
             var entity = await db.Entities.AsNoTracking()
-                .FirstOrDefaultAsync(row => row.Id == id && row.KindCode == kind && row.DeletedAt == null, cancellationToken);
+                .FirstOrDefaultAsync(row => row.Id == id && row.KindCode == kind, cancellationToken);
             if (entity is null) return null;
 
             var detail = await db.CollectionDetails.AsNoTracking()

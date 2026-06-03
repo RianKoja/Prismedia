@@ -35,7 +35,7 @@ internal sealed class CreditsCapabilityMapper(PrismediaDbContext db) : IEntityCa
 
         var targetIds = links.Select(link => link.TargetEntityId).Distinct().ToArray();
         var personRows = await db.Entities.AsNoTracking()
-            .Where(row => targetIds.Contains(row.Id) && row.DeletedAt == null)
+            .Where(row => targetIds.Contains(row.Id))
             .ToDictionaryAsync(row => row.Id, cancellationToken);
         var personDetails = await db.PersonDetails.AsNoTracking()
             .Where(detail => targetIds.Contains(detail.EntityId))

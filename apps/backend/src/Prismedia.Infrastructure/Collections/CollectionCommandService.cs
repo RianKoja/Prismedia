@@ -48,8 +48,7 @@ public sealed class CollectionCommandPersistence(PrismediaDbContext db) : IColle
         var entity = await db.Entities
             .FirstOrDefaultAsync(row =>
                 row.Id == collection.Id &&
-                row.KindCode == EntityKindRegistry.Collection.Code &&
-                row.DeletedAt == null,
+                row.KindCode == EntityKindRegistry.Collection.Code,
                 cancellationToken);
         if (entity is null) {
             return false;
@@ -77,16 +76,15 @@ public sealed class CollectionCommandPersistence(PrismediaDbContext db) : IColle
         var entity = await db.Entities
             .FirstOrDefaultAsync(row =>
                 row.Id == collectionId &&
-                row.KindCode == EntityKindRegistry.Collection.Code &&
-                row.DeletedAt == null,
+                row.KindCode == EntityKindRegistry.Collection.Code,
                 cancellationToken);
         if (entity is null) {
             return false;
         }
 
-        var now = DateTimeOffset.UtcNow;
-        entity.DeletedAt = now;
-        entity.UpdatedAt = now;
+        // Hard-delete the collection row. Its detail and item-detail rows cascade with it; the
+        // member media the collection pointed at is left untouched.
+        db.Entities.Remove(entity);
         await db.SaveChangesAsync(cancellationToken);
         return true;
     }
@@ -98,8 +96,7 @@ public sealed class CollectionCommandPersistence(PrismediaDbContext db) : IColle
         var row = await db.Entities
             .Where(entity =>
                 entity.Id == collectionId &&
-                entity.KindCode == EntityKindRegistry.Collection.Code &&
-                entity.DeletedAt == null)
+                entity.KindCode == EntityKindRegistry.Collection.Code)
             .Join(
                 db.CollectionDetails,
                 entity => entity.Id,
@@ -114,7 +111,7 @@ public sealed class CollectionCommandPersistence(PrismediaDbContext db) : IColle
         IReadOnlyList<Guid> entityIds,
         CancellationToken cancellationToken) {
         var rows = await db.Entities.AsNoTracking()
-            .Where(row => entityIds.Contains(row.Id) && row.DeletedAt == null)
+            .Where(row => entityIds.Contains(row.Id))
             .Select(row => new { row.Id, row.KindCode })
             .ToArrayAsync(cancellationToken);
 
@@ -207,8 +204,7 @@ public sealed class CollectionCommandPersistence(PrismediaDbContext db) : IColle
     public async Task<bool> ExistsAsync(Guid collectionId, CancellationToken cancellationToken) =>
         await db.Entities.AnyAsync(row =>
             row.Id == collectionId &&
-            row.KindCode == EntityKindRegistry.Collection.Code &&
-            row.DeletedAt == null,
+            row.KindCode == EntityKindRegistry.Collection.Code,
             cancellationToken);
 
     /// <inheritdoc />
@@ -226,7 +222,7 @@ public sealed class CollectionCommandPersistence(PrismediaDbContext db) : IColle
         }
 
         var query = db.Entities.AsNoTracking()
-            .Where(row => ids.Contains(row.Id) && row.DeletedAt == null);
+            .Where(row => ids.Contains(row.Id));
         if (hideNsfw) {
             query = query.Where(row => !row.IsNsfw);
         }

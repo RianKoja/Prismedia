@@ -302,7 +302,7 @@ public sealed partial class LibraryScanPersistenceService {
             var entity = await _db.Entities.FindAsync([entityId], cancellationToken);
             if (entity?.ParentEntityId is { } albumId) {
                 var sectionCount = await _db.AudioTrackDetails.AsNoTracking()
-                    .Where(d => _db.Entities.Any(e => e.Id == d.EntityId && e.ParentEntityId == albumId && e.DeletedAt == null))
+                    .Where(d => _db.Entities.Any(e => e.Id == d.EntityId && e.ParentEntityId == albumId))
                     .Select(d => d.SectionOrder)
                     .Distinct()
                     .CountAsync(cancellationToken);

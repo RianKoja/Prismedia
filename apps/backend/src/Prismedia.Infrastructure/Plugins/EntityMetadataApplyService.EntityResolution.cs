@@ -15,9 +15,9 @@ public sealed partial class EntityMetadataApplyService {
 
     private async Task<EntityRow?> FindEntityByKindAndTitleAsync(string kind, string title, CancellationToken cancellationToken) =>
         _db.Entities.Local.FirstOrDefault(
-            row => row.KindCode == kind && row.Title.Equals(title, StringComparison.OrdinalIgnoreCase) && row.DeletedAt == null)
+            row => row.KindCode == kind && row.Title.Equals(title, StringComparison.OrdinalIgnoreCase))
         ?? await _db.Entities.FirstOrDefaultAsync(
-            row => row.KindCode == kind && row.Title.ToLower() == title.ToLower() && row.DeletedAt == null,
+            row => row.KindCode == kind && row.Title.ToLower() == title.ToLower(),
             cancellationToken);
 
     private EntityRow CreateEntity(string kind, string title, DateTimeOffset now) {
