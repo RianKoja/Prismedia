@@ -72,6 +72,14 @@
   // Books grid; the server resolves them across the whole library.
   const showBookFilters = $derived(entityKind === "book");
 
+  // Taxonomy kinds (tags/people/studios) can be filtered by whether anything references them,
+  // resolved server-side across the whole library. The two chips are mutually exclusive — neither
+  // selected means "all".
+  const showReferenceFilters = $derived(
+    entityKind === "tag" || entityKind === "person" || entityKind === "studio",
+  );
+  const REFERENCE_FILTER_IDS = ["taxonomy:referenced", "taxonomy:orphaned"];
+
   const resolutions = ["4K", "1080p", "720p", "480p"];
   const durationChoices = [
     { id: "lt300", label: "< 5 min" },
@@ -107,6 +115,13 @@
     const next = activeFilterIds.filter((id) => !id.startsWith(prefix));
     if (value) next.push(`${prefix}${value}`);
     onActiveFilterIdsChange(next);
+  }
+
+  // Toggles one id within a mutually exclusive group: selecting it clears the others, and
+  // re-selecting the active one clears the group back to "all".
+  function toggleExclusive(id: string, group: string[]) {
+    const without = activeFilterIds.filter((filterId) => !group.includes(filterId));
+    onActiveFilterIdsChange(isActive(id) ? without : [...without, id]);
   }
 
   function chipClass(id: string, variant: "accent" | "info" = "accent"): string {
@@ -264,6 +279,28 @@
               {item.label}
             </button>
           {/each}
+        </div>
+      </section>
+    {/if}
+
+    {#if showReferenceFilters}
+      <section>
+        <div class="mb-2 text-kicker">References</div>
+        <div class="flex flex-wrap gap-1">
+          <button
+            type="button"
+            class={chipClass("taxonomy:referenced")}
+            onclick={() => toggleExclusive("taxonomy:referenced", REFERENCE_FILTER_IDS)}
+          >
+            Has references
+          </button>
+          <button
+            type="button"
+            class={chipClass("taxonomy:orphaned")}
+            onclick={() => toggleExclusive("taxonomy:orphaned", REFERENCE_FILTER_IDS)}
+          >
+            No references
+          </button>
         </div>
       </section>
     {/if}

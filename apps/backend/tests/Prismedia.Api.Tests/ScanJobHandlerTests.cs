@@ -77,6 +77,76 @@ public sealed class ScanJobHandlerTests {
     }
 
     [Fact]
+    public async Task VideoScanRemovesOrphanTagsWhenSettingEnabled() {
+        var persistence = new FakeScanPersistence([OrphanCleanupRoot]) {
+            Settings = OrphanCleanupSettings(removeOrphanTags: true),
+        };
+        var handler = OrphanCleanupHandler(persistence);
+
+        await handler.HandleAsync(
+            new JobContext(OrphanCleanupJob, new RecordingJobQueue()), CancellationToken.None);
+
+        // Cleanup runs once per scan job via AfterScanAsync, so it fires even though this root has
+        // no files and the detailed pass does nothing.
+        Assert.Equal(1, persistence.RemoveOrphanTagsCalls);
+    }
+
+    [Fact]
+    public async Task VideoScanSkipsOrphanTagRemovalWhenSettingDisabled() {
+        var persistence = new FakeScanPersistence([OrphanCleanupRoot]) {
+            Settings = OrphanCleanupSettings(removeOrphanTags: false),
+        };
+        var handler = OrphanCleanupHandler(persistence);
+
+        await handler.HandleAsync(
+            new JobContext(OrphanCleanupJob, new RecordingJobQueue()), CancellationToken.None);
+
+        Assert.Equal(0, persistence.RemoveOrphanTagsCalls);
+    }
+
+    private static readonly LibraryRootData OrphanCleanupRoot = new(
+        Guid.Parse("11111111-1111-1111-1111-111111111111"),
+        "/media/videos",
+        "Videos",
+        Enabled: true,
+        Recursive: true,
+        ScanVideos: true,
+        ScanImages: false,
+        ScanAudio: false,
+        ScanBooks: false,
+        IsNsfw: false);
+
+    private static LibrarySettingsData OrphanCleanupSettings(bool removeOrphanTags) => new(
+        AutoGenerateMetadata: false,
+        AutoGenerateOshash: false,
+        AutoGenerateMd5: false,
+        GeneratePhash: false,
+        AutoGeneratePreview: false,
+        GenerateTrickplay: false,
+        TrickplayIntervalSeconds: 10,
+        PreviewClipDurationSeconds: 8,
+        ThumbnailQuality: 2,
+        TrickplayQuality: 2,
+        RemoveOrphanTags: removeOrphanTags);
+
+    private static ScanLibraryJobHandler OrphanCleanupHandler(FakeScanPersistence persistence) =>
+        new(NullLogger<ScanLibraryJobHandler>.Instance, new RecordingFileDiscovery([]), persistence, persistence, persistence);
+
+    private static JobRunSnapshot OrphanCleanupJob => new(
+        Guid.NewGuid(),
+        JobType.ScanLibrary,
+        JobRunStatus.Running,
+        Progress: 0,
+        Message: null,
+        PayloadJson: $$"""{"libraryRootId":"{{OrphanCleanupRoot.Id}}"}""",
+        TargetEntityKind: "library-root",
+        TargetEntityId: OrphanCleanupRoot.Id.ToString(),
+        TargetLabel: OrphanCleanupRoot.Label,
+        CreatedAt: DateTimeOffset.UtcNow,
+        StartedAt: DateTimeOffset.UtcNow,
+        FinishedAt: null);
+
+    [Fact]
     public async Task VideoScanEnqueuesAutoIdentifyWhenEnabledForVideoKind() {
         var root = new LibraryRootData(
             Guid.Parse("11111111-1111-1111-1111-111111111111"),
@@ -2120,6 +2190,13 @@ public sealed class ScanJobHandlerTests {
 
         public Task<int> RemoveOrphanSeriesAndSeasonsAsync(CancellationToken cancellationToken) =>
             Task.FromResult(0);
+
+        public int RemoveOrphanTagsCalls { get; private set; }
+
+        public Task<int> RemoveOrphanTagsAsync(CancellationToken cancellationToken) {
+            RemoveOrphanTagsCalls++;
+            return Task.FromResult(0);
+        }
 
         public Task<IReadOnlyList<Guid>> UpsertVideosBatchAsync(IReadOnlyList<VideoUpsertItem> items, CancellationToken cancellationToken) {
             UpsertedVideoItems.AddRange(items);

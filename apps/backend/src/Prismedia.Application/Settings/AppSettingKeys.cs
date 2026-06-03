@@ -16,6 +16,8 @@ public static class AppSettingKeys {
     public const string AutoIdentifyConfidenceThreshold = "autoIdentify.confidenceThreshold";
     public const string AutoIdentifyUnorganizedOnly = "autoIdentify.unorganizedOnly";
 
+    public const string TaxonomyRemoveOrphanTags = "taxonomy.removeOrphanTags";
+
     public const string GenerationAutoGenerateMetadata = "generation.autoGenerateMetadata";
     public const string GenerationAutoGenerateOshash = "generation.autoGenerateOshash";
     public const string GenerationAutoGenerateMd5 = "generation.autoGenerateMd5";

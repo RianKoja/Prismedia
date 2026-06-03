@@ -19,6 +19,9 @@ public interface IVideoScanPersistence {
     Task<int> RemoveStaleMoviesByRootAsync(Guid rootId, IReadOnlySet<string> validFolderPaths, CancellationToken cancellationToken);
     Task<int> RemoveOrphanSeriesAndSeasonsAsync(CancellationToken cancellationToken);
 
+    /// <summary>Deletes tags that nothing references (no inbound relationship links). Returns the count removed.</summary>
+    Task<int> RemoveOrphanTagsAsync(CancellationToken cancellationToken);
+
     /// <summary>
     /// Upserts a batch of video entities in a single database round-trip,
     /// returning the entity ID for each input file path in the same order.
@@ -255,6 +258,7 @@ public sealed record TrickplayInfoData(
 
 /// <param name="AutoIdentifyEnabled">Whether scanned media should be auto-identified via enabled plugins.</param>
 /// <param name="AutoIdentifyKinds">Selector kind codes (video, gallery, image, audio, book) auto identify applies to.</param>
+/// <param name="RemoveOrphanTags">Whether scan cleanup should delete tags that nothing references.</param>
 public sealed record LibrarySettingsData(
     bool AutoGenerateMetadata,
     bool AutoGenerateOshash,
@@ -267,7 +271,8 @@ public sealed record LibrarySettingsData(
     int ThumbnailQuality,
     int TrickplayQuality,
     bool AutoIdentifyEnabled = false,
-    IReadOnlyList<string>? AutoIdentifyKinds = null);
+    IReadOnlyList<string>? AutoIdentifyKinds = null,
+    bool RemoveOrphanTags = false);
 
 /// <summary>
 /// Describes a video file discovered by a scan and the structural series context inferred from its path.

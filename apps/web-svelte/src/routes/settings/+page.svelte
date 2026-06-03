@@ -147,6 +147,7 @@
   function generationControls(): SettingDescriptor[] {
     return [
       ...settingsInGroup(catalog, "scan"),
+      ...settingsInGroup(catalog, "taxonomy"),
       ...settingsInGroup(catalog, "generation"),
       ...settingsInGroup(catalog, "jobs"),
     ];

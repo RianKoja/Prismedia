@@ -195,6 +195,14 @@ public sealed partial class SettingsService {
     }
 
     /// <summary>
+    /// Returns whether library scans should delete tags that nothing references.
+    /// </summary>
+    public async Task<bool> GetRemoveOrphanTagsAsync(CancellationToken cancellationToken) {
+        var values = await GetValueMapAsync([AppSettingKeys.TaxonomyRemoveOrphanTags], cancellationToken);
+        return GetBoolean(values, AppSettingKeys.TaxonomyRemoveOrphanTags);
+    }
+
+    /// <summary>
     /// Returns generation-pipeline settings used by scan and maintenance jobs.
     /// </summary>
     public async Task<GenerationSettings> GetGenerationSettingsAsync(CancellationToken cancellationToken) {

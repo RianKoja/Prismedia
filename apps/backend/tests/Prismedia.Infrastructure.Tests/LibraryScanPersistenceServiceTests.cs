@@ -459,6 +459,36 @@ public sealed class LibraryScanPersistenceServiceTests {
     }
 
     [Fact]
+    public async Task RemoveOrphanTagsRemovesOnlyUnreferencedTags() {
+        await using var db = CreateContext();
+        var now = DateTimeOffset.UtcNow;
+        var referencedTag = Guid.Parse("11111111-1111-1111-1111-111111111111");
+        var orphanTag = Guid.Parse("22222222-2222-2222-2222-222222222222");
+        var videoId = Guid.Parse("33333333-3333-3333-3333-333333333333");
+        db.Entities.AddRange(
+            new EntityRow { Id = referencedTag, KindCode = EntityKindRegistry.Tag.Code, Title = "Used", CreatedAt = now, UpdatedAt = now },
+            new EntityRow { Id = orphanTag, KindCode = EntityKindRegistry.Tag.Code, Title = "Unused", CreatedAt = now, UpdatedAt = now },
+            new EntityRow { Id = videoId, KindCode = EntityKindRegistry.Video.Code, Title = "Film", CreatedAt = now, UpdatedAt = now });
+        db.EntityRelationshipLinks.Add(new EntityRelationshipLinkRow {
+            EntityId = videoId,
+            RelationshipCode = "tags",
+            Label = "Tags",
+            TargetEntityId = referencedTag,
+            TargetKindCode = EntityKindRegistry.Tag.Code,
+            CreatedAt = now,
+        });
+        await db.SaveChangesAsync();
+
+        var service = new LibraryScanPersistenceService(db);
+        var removed = await service.RemoveOrphanTagsAsync(CancellationToken.None);
+
+        Assert.Equal(1, removed);
+        Assert.False(await db.Entities.AnyAsync(entity => entity.Id == orphanTag));
+        Assert.True(await db.Entities.AnyAsync(entity => entity.Id == referencedTag));
+        Assert.True(await db.Entities.AnyAsync(entity => entity.Id == videoId));
+    }
+
+    [Fact]
     public async Task RemoveStaleVideosByRootRemovesRootPathVideosWithoutLinkedRoot() {
         await using var db = CreateContext();
         var rootId = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");

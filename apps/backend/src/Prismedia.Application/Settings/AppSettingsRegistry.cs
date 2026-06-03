@@ -9,6 +9,7 @@ namespace Prismedia.Application.Settings;
 public static class AppSettingsRegistry {
     private const string Visibility = "visibility";
     private const string Scan = "scan";
+    private const string Taxonomy = "taxonomy";
     private const string AutoIdentify = "autoIdentify";
     private const string Generation = "generation";
     private const string Jobs = "jobs";
@@ -85,6 +86,17 @@ public static class AppSettingsRegistry {
                 min: 5,
                 max: 1440,
                 step: 5),
+
+            Boolean(
+                AppSettingKeys.TaxonomyRemoveOrphanTags,
+                Taxonomy,
+                "Library Cleanup",
+                "Automatically prune unused taxonomy entries during scans.",
+                22,
+                "Remove orphan tags",
+                "When on, tags that nothing references are deleted during each library scan, keeping the tag list free of stale leftovers. A tag you create but have not applied to anything yet counts as orphaned and will be removed on the next scan.",
+                false,
+                10),
 
             Boolean(
                 AppSettingKeys.AutoIdentifyEnabled,

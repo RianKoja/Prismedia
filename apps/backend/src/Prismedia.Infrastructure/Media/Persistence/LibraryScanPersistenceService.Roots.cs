@@ -32,6 +32,7 @@ public sealed partial class LibraryScanPersistenceService {
         var settingsService = new SettingsService(new EfSettingsPersistence(_db));
         var settings = await settingsService.GetGenerationSettingsAsync(cancellationToken);
         var autoIdentify = await settingsService.GetAutoIdentifySettingsAsync(cancellationToken);
+        var removeOrphanTags = await settingsService.GetRemoveOrphanTagsAsync(cancellationToken);
         return new LibrarySettingsData(
             settings.AutoGenerateMetadata,
             settings.AutoGenerateOshash,
@@ -44,7 +45,8 @@ public sealed partial class LibraryScanPersistenceService {
             settings.ThumbnailQuality,
             settings.TrickplayQuality,
             autoIdentify.Enabled,
-            autoIdentify.EntityKinds);
+            autoIdentify.EntityKinds,
+            removeOrphanTags);
     }
 
     public async Task UpdateRootLastScannedAsync(Guid rootId, CancellationToken cancellationToken) {

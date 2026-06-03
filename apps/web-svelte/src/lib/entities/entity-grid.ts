@@ -520,6 +520,7 @@ export function isServerResolvedFilterId(id: string): boolean {
     id === "progress:played:true" ||
     id === "progress:played:false" ||
     id === "taxonomy:orphaned" ||
+    id === "taxonomy:referenced" ||
     id === "rating:unrated" ||
     id.startsWith("rating:min:") ||
     id.startsWith("rating:max:") ||
@@ -559,6 +560,8 @@ export function buildServerQueryFromFilters(filterIds: string[]): EntityGridServ
       server.played = false;
     } else if (id === "taxonomy:orphaned") {
       server.orphaned = true;
+    } else if (id === "taxonomy:referenced") {
+      server.orphaned = false;
     } else if (id === "rating:unrated") {
       server.unrated = true;
     } else if (id.startsWith("rating:min:")) {

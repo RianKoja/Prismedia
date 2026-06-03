@@ -205,4 +205,22 @@ public sealed partial class LibraryScanPersistenceService {
         return orphanMovies.Count + orphanSeasons.Count + orphanSeries.Count;
     }
 
+    public async Task<int> RemoveOrphanTagsAsync(CancellationToken cancellationToken) {
+        var tagCode = EntityKindRegistry.Tag.Code;
+        var links = _db.EntityRelationshipLinks;
+
+        // Orphan tags are those nothing references (no inbound relationship link) — the same
+        // predicate the "No references" grid filter uses. Hard delete; their own outbound links,
+        // if any, cascade away.
+        var orphanTags = await _db.Entities
+            .Where(e => e.KindCode == tagCode && !links.Any(link => link.TargetEntityId == e.Id))
+            .ToListAsync(cancellationToken);
+        if (orphanTags.Count > 0) {
+            _db.Entities.RemoveRange(orphanTags);
+            await _db.SaveChangesAsync(cancellationToken);
+        }
+
+        return orphanTags.Count;
+    }
+
 }

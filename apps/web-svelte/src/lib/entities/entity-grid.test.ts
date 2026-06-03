@@ -375,6 +375,11 @@ describe("server-resolved filters and sorting", () => {
     expect(buildServerQueryFromFilters(["flags:organized:false"])).toEqual({ organized: false });
   });
 
+  it("maps the taxonomy reference filters to the orphaned server flag in both directions", () => {
+    expect(buildServerQueryFromFilters(["taxonomy:orphaned"])).toEqual({ orphaned: true });
+    expect(buildServerQueryFromFilters(["taxonomy:referenced"])).toEqual({ orphaned: false });
+  });
+
   it("folds book type and format filters into comma-separated server params", () => {
     const server = buildServerQueryFromFilters([
       "book-type:comic",

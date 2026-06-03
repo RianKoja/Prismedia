@@ -59,6 +59,11 @@ public abstract class ScanJobHandler(
             await roots.UpdateRootLastScannedAsync(root.Id, cancellationToken);
             await context.ReportProgressAsync(100, $"Scanned {root.Label}", cancellationToken);
         }
+
+        // Runs once per scan job after every root is processed — including when every root's detailed
+        // pass was skipped by the incremental fast path — so global cleanup that does not depend on
+        // file changes (e.g. orphaned taxonomy) still happens on an otherwise no-op rescan.
+        await AfterScanAsync(context, cancellationToken);
     }
 
     /// <summary>
@@ -137,6 +142,15 @@ public abstract class ScanJobHandler(
 
     /// <summary>Discovers files, creates/updates entities, and enqueues downstream jobs for one root.</summary>
     protected abstract Task ScanRootCoreAsync(JobContext context, LibraryRootData root, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Runs once after all eligible roots for this scan job have been processed, even when every
+    /// root's detailed pass was skipped by the incremental fast path. Base implementation is a no-op;
+    /// handlers override it for global, non-per-root cleanup that must happen regardless of file
+    /// changes (for example deleting orphaned taxonomy).
+    /// </summary>
+    protected virtual Task AfterScanAsync(JobContext context, CancellationToken cancellationToken) =>
+        Task.CompletedTask;
 
     /// <summary>File discovery port for subclass use.</summary>
     protected IFileDiscovery FileDiscovery => fileDiscovery;
