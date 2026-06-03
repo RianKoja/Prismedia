@@ -144,11 +144,19 @@
     else setScale(fitWidthScale());
   }
 
-  // Paged-mode tap zones via a plain click (so it never blocks native scroll-snap swipe or wheel).
-  // The text layer is non-interactive in paged mode, so taps land here: sides turn, centre toggles.
+  // Tap handling via a plain click (so it never blocks native scroll, scroll-snap swipe, or wheel).
+  // A real tap only fires `click` when the finger doesn't move, so this never triggers mid-scroll.
   function handleStageClick(event: MouseEvent) {
-    if (flow !== "paged") return;
-    if ((event.target as HTMLElement)?.closest?.("[data-reader-control]")) return;
+    const target = event.target as HTMLElement;
+    if (target?.closest?.("[data-reader-control]")) return;
+    // Let link taps navigate without toggling the chrome.
+    if (target?.closest?.("a")) return;
+    // Scrolled mode has no page turns, so any clean tap just toggles the toolbar.
+    if (flow !== "paged") {
+      shell?.toggleControls();
+      return;
+    }
+    // Paged mode: the text layer is non-interactive, so taps land here — sides turn, centre toggles.
     const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
     const zone = comicTapZone(event.clientX - rect.left, rect.width);
     if (zone === "previous") goPrev();
@@ -353,7 +361,6 @@
 
   let scrollRaf = 0;
   function handleScroll() {
-    shell?.showControls();
     if (scrollRaf) return;
     scrollRaf = requestAnimationFrame(() => {
       scrollRaf = 0;
@@ -370,12 +377,10 @@
 
   function goPrev() {
     scrollToPage(currentPage - 1);
-    shell?.showControls();
   }
 
   function goNext() {
     scrollToPage(currentPage + 1);
-    shell?.showControls();
   }
 
   async function resolveDestPage(dest: unknown): Promise<number | null> {

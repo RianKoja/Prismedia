@@ -117,12 +117,10 @@
 
   function goPrev() {
     view?.goLeft?.();
-    shell?.showControls();
   }
 
   function goNext() {
     view?.goRight?.();
-    shell?.showControls();
   }
 
   function normalizeToc(items: unknown): TocEntry[] {
