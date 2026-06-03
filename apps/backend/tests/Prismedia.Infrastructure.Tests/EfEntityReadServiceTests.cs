@@ -1247,6 +1247,52 @@ public sealed class EfEntityReadServiceTests {
         Assert.Equal(4, unknown.TotalCount);
     }
 
+    [Fact]
+    public async Task ListAsyncFiltersByNsfwHasFileAndPlayedAcrossTheWholeSet() {
+        await using var db = CreateContext();
+        var now = DateTimeOffset.UtcNow;
+
+        var sfwUnplayedNoFile = Guid.Parse("aaaaaaaa-0000-0000-0000-000000000001");
+        var nsfwPlayedWithFile = Guid.Parse("aaaaaaaa-0000-0000-0000-000000000002");
+        var sfwReadingNoFile = Guid.Parse("aaaaaaaa-0000-0000-0000-000000000003");
+
+        db.Entities.AddRange(
+            new EntityRow { Id = sfwUnplayedNoFile, KindCode = EntityKindRegistry.Image.Code, Title = "Alpha", IsNsfw = false, CreatedAt = now, UpdatedAt = now },
+            new EntityRow { Id = nsfwPlayedWithFile, KindCode = EntityKindRegistry.Image.Code, Title = "Bravo", IsNsfw = true, CreatedAt = now, UpdatedAt = now },
+            new EntityRow { Id = sfwReadingNoFile, KindCode = EntityKindRegistry.Image.Code, Title = "Charlie", IsNsfw = false, CreatedAt = now, UpdatedAt = now });
+        db.EntityFiles.Add(new EntityFileRow {
+            Id = Guid.NewGuid(), EntityId = nsfwPlayedWithFile, Role = EntityFileRole.Source, Path = "/m/b.jpg", CreatedAt = now, UpdatedAt = now,
+        });
+        db.EntityPlayback.Add(new EntityPlaybackRow { EntityId = nsfwPlayedWithFile, PlayCount = 3, LastPlayedAt = now, UpdatedAt = now });
+        db.EntityProgress.Add(new EntityProgressRow { EntityId = sfwReadingNoFile, Index = 4, Total = 10, UpdatedAt = now });
+        await db.SaveChangesAsync();
+
+        var service = CreateService(db);
+        var kind = EntityKindRegistry.Image.Code;
+
+        var onlyNsfw = await service.ListAsync(kind, null, null, null, null, CancellationToken.None, nsfw: true);
+        Assert.Equal(1, onlyNsfw.TotalCount);
+        Assert.Equal(nsfwPlayedWithFile, Assert.Single(onlyNsfw.Items).Id);
+
+        var notNsfw = await service.ListAsync(kind, null, null, null, null, CancellationToken.None, nsfw: false);
+        Assert.Equal(2, notNsfw.TotalCount);
+        Assert.DoesNotContain(notNsfw.Items, item => item.Id == nsfwPlayedWithFile);
+
+        var withFile = await service.ListAsync(kind, null, null, null, null, CancellationToken.None, hasFile: true);
+        Assert.Equal(nsfwPlayedWithFile, Assert.Single(withFile.Items).Id);
+
+        var noFile = await service.ListAsync(kind, null, null, null, null, CancellationToken.None, hasFile: false);
+        Assert.Equal(2, noFile.TotalCount);
+
+        // Played includes both playback engagement (Bravo) and started reading progress (Charlie).
+        var played = await service.ListAsync(kind, null, null, null, null, CancellationToken.None, played: true);
+        Assert.Equal(2, played.TotalCount);
+        Assert.DoesNotContain(played.Items, item => item.Id == sfwUnplayedNoFile);
+
+        var unplayed = await service.ListAsync(kind, null, null, null, null, CancellationToken.None, played: false);
+        Assert.Equal(sfwUnplayedNoFile, Assert.Single(unplayed.Items).Id);
+    }
+
     private static EfEntityReadService CreateService(PrismediaDbContext db) {
         var repository = new EfEntityRepository(db, EntityMappers.Kinds(db), EntityMappers.Capabilities(db));
         return new EfEntityReadService(db, repository, EntityMappers.Kinds(db));

@@ -56,6 +56,12 @@ export interface EntityGridServerQuery {
   bookType?: string;
   /** Comma-separated book format codes (image-archive/epub/pdf). */
   bookFormat?: string;
+  /** When set, keep only NSFW (true) or only non-NSFW (false) entities. */
+  nsfw?: boolean;
+  /** When set, keep only entities that have (true) or lack (false) a source file. */
+  hasFile?: boolean;
+  /** When set, keep only entities that have been played/read (true) or never engaged (false). */
+  played?: boolean;
 }
 
 export interface EntityGridKindTab {
@@ -505,6 +511,12 @@ export function isServerResolvedFilterId(id: string): boolean {
     id === "flags:favorite" ||
     id === "flags:organized:true" ||
     id === "flags:organized:false" ||
+    id === "flags:nsfw:true" ||
+    id === "flags:nsfw:false" ||
+    id === "files:has:true" ||
+    id === "files:has:false" ||
+    id === "progress:played:true" ||
+    id === "progress:played:false" ||
     id === "rating:unrated" ||
     id.startsWith("rating:min:") ||
     id.startsWith("rating:max:") ||
@@ -530,6 +542,18 @@ export function buildServerQueryFromFilters(filterIds: string[]): EntityGridServ
       server.organized = true;
     } else if (id === "flags:organized:false") {
       server.organized = false;
+    } else if (id === "flags:nsfw:true") {
+      server.nsfw = true;
+    } else if (id === "flags:nsfw:false") {
+      server.nsfw = false;
+    } else if (id === "files:has:true") {
+      server.hasFile = true;
+    } else if (id === "files:has:false") {
+      server.hasFile = false;
+    } else if (id === "progress:played:true") {
+      server.played = true;
+    } else if (id === "progress:played:false") {
+      server.played = false;
     } else if (id === "rating:unrated") {
       server.unrated = true;
     } else if (id.startsWith("rating:min:")) {

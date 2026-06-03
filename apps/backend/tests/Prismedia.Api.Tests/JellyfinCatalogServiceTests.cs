@@ -358,7 +358,10 @@ public sealed class JellyfinCatalogServiceTests {
             bool? unrated = null,
             string? status = null,
             string? bookType = null,
-            string? bookFormat = null) {
+            string? bookFormat = null,
+            bool? nsfw = null,
+            bool? hasFile = null,
+            bool? played = null) {
             IReadOnlyList<EntityThumbnail> items;
             if (referencedBy is { } personId) {
                 ReferencedByCalls.Add(personId);

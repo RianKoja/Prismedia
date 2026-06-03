@@ -56,7 +56,10 @@ public sealed partial class EfEntityReadService : IEntityReadService {
         bool? unrated = null,
         string? status = null,
         string? bookType = null,
-        string? bookFormat = null) {
+        string? bookFormat = null,
+        bool? nsfw = null,
+        bool? hasFile = null,
+        bool? played = null) {
         var pageSize = Math.Clamp(limit ?? DefaultPageSize, 1, MaxPageSize);
         var normalizedRelationshipCode = string.IsNullOrWhiteSpace(relationshipCode)
             ? null
@@ -90,7 +93,7 @@ public sealed partial class EfEntityReadService : IEntityReadService {
         }
 
         entityQuery = ApplyNsfwVisibility(entityQuery, hideNsfw == true);
-        entityQuery = ApplyListFilters(entityQuery, favorite, organized, ratingMin, ratingMax, unrated, status, bookType, bookFormat);
+        entityQuery = ApplyListFilters(entityQuery, favorite, organized, ratingMin, ratingMax, unrated, status, bookType, bookFormat, nsfw, hasFile, played);
 
         // Snapshot the unbounded filtered total before applying the cursor; this is what
         // drives the client's page-of-pages and seek-to-end behaviour and must stay
@@ -254,9 +257,43 @@ public sealed partial class EfEntityReadService : IEntityReadService {
         bool? unrated,
         string? status,
         string? bookType = null,
-        string? bookFormat = null) {
+        string? bookFormat = null,
+        bool? nsfw = null,
+        bool? hasFile = null,
+        bool? played = null) {
         if (favorite == true) {
             query = query.Where(entity => entity.IsFavorite);
+        }
+
+        if (nsfw is { } wantsNsfw) {
+            query = wantsNsfw
+                ? query.Where(entity => entity.IsNsfw)
+                : query.Where(entity => !entity.IsNsfw);
+        }
+
+        if (hasFile is { } wantsFile) {
+            var files = _db.EntityFiles;
+            query = wantsFile
+                ? query.Where(entity => files.Any(file => file.EntityId == entity.Id))
+                : query.Where(entity => !files.Any(file => file.EntityId == entity.Id));
+        }
+
+        if (played is { } wantsPlayed) {
+            var playbackRows = _db.Set<EntityPlaybackRow>();
+            var progressRows = _db.Set<EntityProgressRow>();
+            // "Played" means any recorded engagement: a play/resume/completion (videos/audio) or
+            // started/completed reading progress (books/comics). Mirrors the unwatched status logic.
+            query = wantsPlayed
+                ? query.Where(entity =>
+                    playbackRows.Any(row => row.EntityId == entity.Id &&
+                        (row.CompletedAt != null || row.PlayCount > 0 || row.ResumeSeconds > 0)) ||
+                    progressRows.Any(row => row.EntityId == entity.Id &&
+                        (row.CompletedAt != null || row.Index > 0)))
+                : query.Where(entity =>
+                    !playbackRows.Any(row => row.EntityId == entity.Id &&
+                        (row.CompletedAt != null || row.PlayCount > 0 || row.ResumeSeconds > 0)) &&
+                    !progressRows.Any(row => row.EntityId == entity.Id &&
+                        (row.CompletedAt != null || row.Index > 0)));
         }
 
         var bookTypes = ParseCodeList<BookType>(bookType);

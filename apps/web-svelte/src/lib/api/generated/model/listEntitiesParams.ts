@@ -36,4 +36,7 @@ unrated?: boolean;
 status?: string;
 bookType?: string;
 bookFormat?: string;
+nsfw?: boolean;
+hasFile?: boolean;
+played?: boolean;
 };
