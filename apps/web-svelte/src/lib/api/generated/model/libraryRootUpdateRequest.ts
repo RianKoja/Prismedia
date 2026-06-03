@@ -24,4 +24,6 @@ export interface LibraryRootUpdateRequest {
   scanBooks: boolean | null;
   /** @nullable */
   isNsfw: boolean | null;
+  /** @nullable */
+  autoIdentify?: boolean | null;
 }

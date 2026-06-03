@@ -20,4 +20,5 @@ export interface LibraryRoot {
   lastScannedAt: string | null;
   createdAt: string;
   updatedAt: string;
+  autoIdentify?: boolean;
 }

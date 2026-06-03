@@ -11,6 +11,7 @@
     Loader2,
     Music,
     Plus,
+    Sparkles,
     ToggleLeft,
     ToggleRight,
     Trash2,
@@ -52,6 +53,7 @@
   let newRootScanAudio = $state(true);
   let newRootScanBooks = $state(false);
   let newRootIsNsfw = $state(false);
+  let newRootAutoIdentify = $state(true);
 
   const rootsVisible = $derived.by(() => {
     if (nsfw.mode === "off") return roots.filter((r) => !r.isNsfw);
@@ -90,11 +92,13 @@
         scanAudio: newRootScanAudio,
         scanBooks: newRootScanBooks,
         isNsfw: newRootIsNsfw,
+        autoIdentify: newRootAutoIdentify,
       });
       onMessage("Library root added.");
       newRootPath = "";
       newRootLabel = "";
       newRootIsNsfw = false;
+      newRootAutoIdentify = true;
       browserVisible = false;
       await onRootsChanged();
       await invalidateAll();
@@ -120,7 +124,7 @@
 
   async function handleToggleMediaType(
     root: LibraryRoot,
-    field: "scanVideos" | "scanImages" | "scanAudio" | "scanBooks",
+    field: "scanVideos" | "scanImages" | "scanAudio" | "scanBooks" | "autoIdentify",
   ) {
     const next = !root[field];
     roots = roots.map((r) => (r.id === root.id ? { ...r, [field]: next } : r));
@@ -283,6 +287,12 @@
               description="Mark content as adult"
               checked={newRootIsNsfw}
               onChange={(v) => (newRootIsNsfw = v)}
+            />
+            <ToggleCard
+              label="Auto Identify"
+              description="Include in automatic identification"
+              checked={newRootAutoIdentify}
+              onChange={(v) => (newRootAutoIdentify = v)}
             />
           </div>
         </div>
@@ -486,6 +496,21 @@
               >
                 <Eye class="h-3.5 w-3.5" />
                 NSFW
+              </button>
+
+              <button
+                type="button"
+                onclick={() => void handleToggleMediaType(root, "autoIdentify")}
+                title={root.autoIdentify ? "Auto Identify: on" : "Auto Identify: off"}
+                class={cn(
+                  "flex items-center gap-1.5 rounded-xs px-2 py-1 text-[0.68rem] font-medium border transition-all duration-fast",
+                  root.autoIdentify
+                    ? "bg-accent-950/30 border-border-accent text-text-accent shadow-[var(--shadow-glow-accent)]"
+                    : "bg-surface-1 border-border-subtle text-text-disabled hover:text-text-muted hover:border-border-default",
+                )}
+              >
+                <Sparkles class="h-3.5 w-3.5" />
+                Auto ID
               </button>
             </div>
 

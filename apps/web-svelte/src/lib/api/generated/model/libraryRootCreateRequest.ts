@@ -23,4 +23,6 @@ export interface LibraryRootCreateRequest {
   scanBooks: boolean | null;
   /** @nullable */
   isNsfw: boolean | null;
+  /** @nullable */
+  autoIdentify?: boolean | null;
 }
