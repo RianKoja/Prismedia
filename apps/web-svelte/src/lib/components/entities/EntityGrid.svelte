@@ -821,6 +821,7 @@
     )}
     {enableFeedView}
     {drawerOpen}
+    {entityKind}
     {filterOptions}
     {maxScale}
     {mediaWall}
