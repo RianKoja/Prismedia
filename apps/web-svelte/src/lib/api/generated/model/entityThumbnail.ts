@@ -49,4 +49,6 @@ export interface EntityThumbnail {
      * @pattern ^-?(?:0|[1-9]\d*)$
      */
   playCount?: number | string | null;
+  /** @nullable */
+  genres?: string[] | null;
 }

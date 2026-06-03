@@ -55,8 +55,8 @@ public sealed partial class JellyfinCatalogService {
             // Real Jellyfin always emits these non-null (RunTimeTicks 0, empty Genres/blurhashes);
             // Manet's typed models treat them as required and drop any item where they are null.
             RunTimeTicks = runtimeTicks ?? 0,
-            Genres = [],
-            GenreItems = [],
+            Genres = item.Genres is { Count: > 0 } genreNames ? genreNames.ToArray() : [],
+            GenreItems = GenreItemsFrom(item.Genres),
             ImageBlurHashes = EmptyBlurHashes,
             ImageTags = imageTags.Primary is null ? new Dictionary<string, string>() : new Dictionary<string, string> { ["Primary"] = imageTags.Primary },
             BackdropImageTags = imageTags.Backdrop is null ? [] : [imageTags.Backdrop],
@@ -355,6 +355,20 @@ public sealed partial class JellyfinCatalogService {
     /// <summary>Empty blurhash map matching real Jellyfin's always-present <c>ImageBlurHashes</c> object.</summary>
     private static readonly IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>> EmptyBlurHashes =
         new Dictionary<string, IReadOnlyDictionary<string, string>>();
+
+    /// <summary>
+    /// Maps tag names to Jellyfin <c>GenreItems</c>. The thumbnail projection only carries names, so
+    /// each genre id is derived deterministically from its name — stable across responses for client
+    /// caching, matching real Jellyfin's name+id shape for display.
+    /// </summary>
+    private static IReadOnlyList<JellyfinNameGuidPairDto> GenreItemsFrom(IReadOnlyList<string>? genres) =>
+        genres is { Count: > 0 }
+            ? genres.Select(name => new JellyfinNameGuidPairDto(name, DeterministicId("genre:" + name.ToLowerInvariant()))).ToArray()
+            : [];
+
+    /// <summary>Derives a stable GUID from a string via MD5, for synthesized ids (e.g. genres).</summary>
+    private static Guid DeterministicId(string value) =>
+        new(MD5.HashData(Encoding.UTF8.GetBytes(value)));
 
     /// <summary>
     /// Converts a stored album-global sort order (0-based, set from the embedded track tag on

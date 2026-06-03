@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { page } from "$app/state";
-  import { Disc3, Play, Shuffle } from "@lucide/svelte";
+  import { Disc3, Info, Play, Shuffle, SlidersHorizontal, Users } from "@lucide/svelte";
   import EntityDetailSkeleton from "$lib/components/entities/EntityDetailSkeleton.svelte";
   import { fetchMusicArtist, fetchAudioLibrary, type MusicArtistDetail } from "$lib/api/media";
   import {
@@ -29,6 +29,8 @@
   import EntityCastAndCrewSection from "$lib/components/entities/EntityCastAndCrewSection.svelte";
   import EntityDetail, {
     type EntityDetailActionButton,
+    type EntityDetailSection,
+    type EntityDetailTab,
     type EntityMetadataUpdateRequest,
   } from "$lib/components/entities/EntityDetail.svelte";
   import EntityGrid from "$lib/components/entities/EntityGrid.svelte";
@@ -93,6 +95,20 @@
     if (identifyAction.action) actions.push(identifyAction.action);
     return actions;
   });
+
+  // Keep description + band members on the main "Details" tab; tuck the metadata cards into a
+  // separate "Metadata" tab. Empty sections and tabs auto-hide.
+  const detailSections = $derived.by((): EntityDetailSection[] => [
+    { id: "members", label: "Members", icon: Users, hidden: creditCards.length === 0 },
+    { id: "stats", label: "Stats" },
+    { id: "dates", label: "Dates" },
+    { id: "classification", label: "Classification" },
+    { id: "links", label: "Links" },
+  ]);
+  const detailTabs = $derived.by((): EntityDetailTab[] => [
+    { id: "details", label: "Details", icon: Info, sections: ["description", "tags", "members"] },
+    { id: "metadata", label: "Metadata", icon: SlidersHorizontal, sections: ["stats", "dates", "classification", "links"], layout: "grid" },
+  ]);
 
   function artistContext(): PlaybackContext {
     return {
@@ -228,6 +244,8 @@
       peopleLabel="Members"
       posterSize="large"
       actionButtons={heroActions}
+      tabs={detailTabs}
+      sections={detailSections}
     >
       {#snippet heroMeta()}
         {#if albumCards.length > 0}
@@ -235,11 +253,9 @@
         {/if}
       {/snippet}
 
-      {#snippet afterBody()}
-        {#if creditCards.length > 0}
-          <div class="credits-section">
-            <EntityCastAndCrewSection studioCards={[]} {creditCards} castLabel="Members" />
-          </div>
+      {#snippet sectionContent(section)}
+        {#if section.id === "members" && creditCards.length > 0}
+          <EntityCastAndCrewSection studioCards={[]} {creditCards} castLabel="Members" />
         {/if}
       {/snippet}
     </EntityDetail>
@@ -274,13 +290,10 @@
 
   :global(.meta-item) { white-space: nowrap; font-size: 0.82rem; }
 
-  .credits-section { padding: 1rem 1.5rem; border-top: 1px solid var(--color-border, #1c2235); }
-
   .content-section { display: grid; gap: 0.75rem; }
   .content-heading { display: flex; align-items: center; gap: 0.5rem; margin: 0; font-family: var(--font-heading, Geist, sans-serif); font-size: 1.1rem; font-weight: 600; color: var(--color-text-primary, #f2eed8); }
   .content-count { font-family: var(--font-mono, "JetBrains Mono", monospace); font-size: 0.68rem; font-weight: 600; color: var(--color-text-muted, #8a93a6); padding: 0.1rem 0.4rem; border: 1px solid var(--color-border, #1c2235); background: var(--color-surface-3, #151a28); }
 
   .empty-children { padding: 2rem; border: 1px solid var(--color-border-subtle, #1c2235); background: var(--color-surface-1, #0c0f15); color: var(--color-text-muted, #8a93a6); text-align: center; font-size: 0.85rem; }
 
-  @media (min-width: 640px) { .credits-section { padding: 1rem 2rem; } }
 </style>

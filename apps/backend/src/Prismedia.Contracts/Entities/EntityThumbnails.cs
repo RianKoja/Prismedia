@@ -52,6 +52,12 @@ public sealed record EntityThumbnail(
     /// and videos). Lets list rows show a play-count stat without fetching the full detail graph.
     /// </summary>
     public int? PlayCount { get; init; }
+
+    /// <summary>
+    /// Tag names applied to the entity, surfaced so list-level compatibility layers (the Jellyfin
+    /// surface) can expose them as genres without fetching each entity's full detail graph.
+    /// </summary>
+    public IReadOnlyList<string>? Genres { get; init; }
 }
 
 /// <summary>API-facing grouped entities for child and relationship collections.</summary>

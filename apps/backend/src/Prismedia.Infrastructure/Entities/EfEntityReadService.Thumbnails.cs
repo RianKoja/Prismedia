@@ -64,6 +64,28 @@ public sealed partial class EfEntityReadService {
             .Where(row => ids.Contains(row.EntityId))
             .ToDictionaryAsync(row => row.EntityId, cancellationToken);
 
+        // Tag names per entity, resolved through the tag relationship links and their target titles,
+        // so list rows can surface tags (used as genres on the Jellyfin surface) without a detail load.
+        var tagLinks = await _db.EntityRelationshipLinks.AsNoTracking()
+            .Where(link => ids.Contains(link.EntityId) && link.RelationshipCode == "tags")
+            .OrderBy(link => link.SortOrder)
+            .Select(link => new { link.EntityId, link.TargetEntityId })
+            .ToArrayAsync(cancellationToken);
+        var tagTitleById = tagLinks.Length == 0
+            ? new Dictionary<Guid, string>()
+            : await _db.Entities.AsNoTracking()
+                .Where(entity => tagLinks.Select(link => link.TargetEntityId).Contains(entity.Id) && entity.DeletedAt == null)
+                .ToDictionaryAsync(entity => entity.Id, entity => entity.Title, cancellationToken);
+        var tagsByEntity = tagLinks
+            .GroupBy(link => link.EntityId)
+            .ToDictionary(
+                group => group.Key,
+                group => (IReadOnlyList<string>)group
+                    .Select(link => tagTitleById.GetValueOrDefault(link.TargetEntityId))
+                    .Where(title => !string.IsNullOrWhiteSpace(title))
+                    .Select(title => title!)
+                    .ToArray());
+
         return rows.Select(row => {
             var hoverUrl = hoverByEntity.GetValueOrDefault(row.Id);
             var hoverImages = hoverImagesByEntity.GetValueOrDefault(row.Id) ?? [];
@@ -93,6 +115,7 @@ public sealed partial class EfEntityReadService {
                     : null,
                 CreatedAt = row.CreatedAt,
                 PlayCount = playbackByEntity.GetValueOrDefault(row.Id)?.PlayCount,
+                Genres = tagsByEntity.GetValueOrDefault(row.Id),
                 Progress = ResolveThumbnailProgress(
                     playbackByEntity.GetValueOrDefault(row.Id),
                     progressByEntity.GetValueOrDefault(row.Id),
