@@ -41,6 +41,10 @@ public sealed class ScanBookJobHandler(
         logger.LogInformation("ScanBook: found {Count} archive files in {Label}", archiveFiles.Count, root.Label);
 
         var settings = await Roots.GetSettingsAsync(cancellationToken);
+        if (!root.AutoIdentify) {
+            // Honor this root's Auto Identify opt-out without touching other generation settings.
+            settings = settings with { AutoIdentifyEnabled = false };
+        }
         var archiveItems = new List<BookArchiveItem>();
 
         foreach (var archivePath in archiveFiles.OrderBy(path => path, NaturalPathComparer.Instance)) {

@@ -33,6 +33,10 @@ public sealed class ScanAudioJobHandler(
             root.Path, MediaCategory.Audio, root.Recursive, excludedPaths, cancellationToken);
 
         var settings = await Roots.GetSettingsAsync(cancellationToken);
+        if (!root.AutoIdentify) {
+            // Honor this root's Auto Identify opt-out without touching other generation settings.
+            settings = settings with { AutoIdentifyEnabled = false };
+        }
 
         // Normalize discovery keys so they line up with the classifier's normalized paths.
         var filesByDirectory = dirGroups.ToDictionary(

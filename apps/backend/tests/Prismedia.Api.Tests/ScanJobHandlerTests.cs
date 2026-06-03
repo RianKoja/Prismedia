@@ -145,6 +145,73 @@ public sealed class ScanJobHandlerTests {
     }
 
     [Fact]
+    public async Task VideoScanSkipsAutoIdentifyWhenRootOptsOut() {
+        var root = new LibraryRootData(
+            Guid.Parse("11111111-1111-1111-1111-111111111111"),
+            "/media/videos",
+            "Videos",
+            Enabled: true,
+            Recursive: true,
+            ScanVideos: true,
+            ScanImages: false,
+            ScanAudio: false,
+            ScanBooks: false,
+            IsNsfw: false,
+            AutoIdentify: false);
+        var videoId = Guid.Parse("22222222-2222-2222-2222-222222222222");
+        var persistence = new FakeScanPersistence([root]) {
+            // Global Auto Identify is on for video, but this root opts out, so nothing is enqueued.
+            Settings = new LibrarySettingsData(
+                AutoGenerateMetadata: false,
+                AutoGenerateOshash: false,
+                AutoGenerateMd5: false,
+                GeneratePhash: false,
+                AutoGeneratePreview: false,
+                GenerateTrickplay: false,
+                TrickplayIntervalSeconds: 10,
+                PreviewClipDurationSeconds: 8,
+                ThumbnailQuality: 2,
+                TrickplayQuality: 2,
+                AutoIdentifyEnabled: true,
+                AutoIdentifyKinds: ["video"]),
+            UpsertedVideoIds = [videoId],
+            DownstreamNeedsById = new Dictionary<Guid, DownstreamNeeds> {
+                [videoId] = new(
+                    NeedsProbe: false,
+                    MissingOshash: false,
+                    MissingMd5: false,
+                    NeedsPreview: false,
+                    NeedsTrickplay: false,
+                    NeedsSubtitleExtraction: false, NeedsGridThumbnail: false)
+            }
+        };
+        var queue = new RecordingJobQueue();
+        var handler = new ScanLibraryJobHandler(
+            NullLogger<ScanLibraryJobHandler>.Instance,
+            new RecordingFileDiscovery(["/media/videos/movie.mkv"]),
+            persistence,
+            persistence,
+            persistence);
+        var job = new JobRunSnapshot(
+            Guid.NewGuid(),
+            JobType.ScanLibrary,
+            JobRunStatus.Running,
+            Progress: 0,
+            Message: null,
+            PayloadJson: $$"""{"libraryRootId":"{{root.Id}}"}""",
+            TargetEntityKind: "library-root",
+            TargetEntityId: root.Id.ToString(),
+            TargetLabel: root.Label,
+            CreatedAt: DateTimeOffset.UtcNow,
+            StartedAt: DateTimeOffset.UtcNow,
+            FinishedAt: null);
+
+        await handler.HandleAsync(new JobContext(job, queue), CancellationToken.None);
+
+        Assert.DoesNotContain(queue.Enqueued, request => request.Type == JobType.AutoIdentify);
+    }
+
+    [Fact]
     public async Task VideoScanSkipsAutoIdentifyWhenKindNotSelected() {
         var root = new LibraryRootData(
             Guid.Parse("11111111-1111-1111-1111-111111111111"),

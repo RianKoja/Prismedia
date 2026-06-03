@@ -33,6 +33,10 @@ public sealed class ScanGalleryJobHandler(
             dirGroups.Count, root.Label);
 
         var settings = await Roots.GetSettingsAsync(cancellationToken);
+        if (!root.AutoIdentify) {
+            // Honor this root's Auto Identify opt-out without touching other generation settings.
+            settings = settings with { AutoIdentifyEnabled = false };
+        }
         var allContainerPaths = ContainerPathsFor(root.Path, dirGroups.Keys);
         // A folder that directly holds exactly one image and has no nested gallery is "collapsed":
         // its single image is reparented to the nearest surviving ancestor gallery (or becomes a

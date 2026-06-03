@@ -107,6 +107,7 @@ public sealed class EfSettingsPersistence : ISettingsPersistence {
             ScanAudio = state.ScanAudio,
             ScanBooks = state.ScanBooks,
             IsNsfw = state.IsNsfw,
+            AutoIdentify = state.AutoIdentify,
             LastScannedAt = state.LastScannedAt,
             CreatedAt = state.CreatedAt,
             UpdatedAt = state.UpdatedAt,
@@ -130,6 +131,7 @@ public sealed class EfSettingsPersistence : ISettingsPersistence {
         row.ScanAudio = state.ScanAudio;
         row.ScanBooks = state.ScanBooks;
         row.IsNsfw = state.IsNsfw;
+        row.AutoIdentify = state.AutoIdentify;
         row.LastScannedAt = state.LastScannedAt;
         row.UpdatedAt = state.UpdatedAt;
 
@@ -162,5 +164,6 @@ public sealed class EfSettingsPersistence : ISettingsPersistence {
             row.IsNsfw,
             row.LastScannedAt,
             row.CreatedAt,
-            row.UpdatedAt);
+            row.UpdatedAt,
+            row.AutoIdentify);
 }

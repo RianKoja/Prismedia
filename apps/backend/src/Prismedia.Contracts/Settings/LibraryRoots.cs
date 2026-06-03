@@ -16,7 +16,8 @@ public sealed record LibraryRoot(
     bool IsNsfw,
     DateTimeOffset? LastScannedAt,
     DateTimeOffset CreatedAt,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt,
+    bool AutoIdentify = true);
 
 /// <summary>
 /// Request body for creating a watched media root.
@@ -30,7 +31,8 @@ public sealed record LibraryRootCreateRequest(
     bool? ScanImages,
     bool? ScanAudio,
     bool? ScanBooks,
-    bool? IsNsfw);
+    bool? IsNsfw,
+    bool? AutoIdentify = null);
 
 /// <summary>
 /// Request body for updating a watched media root.
@@ -44,7 +46,8 @@ public sealed record LibraryRootUpdateRequest(
     bool? ScanImages,
     bool? ScanAudio,
     bool? ScanBooks,
-    bool? IsNsfw);
+    bool? IsNsfw,
+    bool? AutoIdentify = null);
 
 /// <summary>
 /// Directory entry used by the local folder browser.

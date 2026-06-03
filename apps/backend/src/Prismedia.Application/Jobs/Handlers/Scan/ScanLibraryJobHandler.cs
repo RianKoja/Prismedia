@@ -51,6 +51,10 @@ public sealed class ScanLibraryJobHandler(
         }
 
         var settings = await Roots.GetSettingsAsync(cancellationToken);
+        if (!root.AutoIdentify) {
+            // Honor this root's Auto Identify opt-out without touching other generation settings.
+            settings = settings with { AutoIdentifyEnabled = false };
+        }
         var allEntityIds = new List<Guid>(files.Count);
         var validPaths = new HashSet<string>(files.Count, StringComparer.OrdinalIgnoreCase);
         var validMovieFolders = new HashSet<string>(StringComparer.OrdinalIgnoreCase);

@@ -191,7 +191,8 @@ public sealed record LibraryRootData(
     bool ScanImages,
     bool ScanAudio,
     bool ScanBooks,
-    bool IsNsfw);
+    bool IsNsfw,
+    bool AutoIdentify = true);
 
 public sealed record EntityTechnicalData(
     double? DurationSeconds,

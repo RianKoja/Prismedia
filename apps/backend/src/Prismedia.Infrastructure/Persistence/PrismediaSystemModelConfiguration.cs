@@ -19,6 +19,7 @@ internal static partial class PrismediaModelConfiguration {
             entity.Property(row => row.ScanAudio).HasColumnName("scan_audio");
             entity.Property(row => row.ScanBooks).HasColumnName("scan_books");
             entity.Property(row => row.IsNsfw).HasColumnName("is_nsfw");
+            entity.Property(row => row.AutoIdentify).HasColumnName("auto_identify").HasDefaultValue(true);
             entity.Property(row => row.LastScannedAt).HasColumnName("last_scanned_at");
             entity.Property(row => row.CreatedAt).HasColumnName("created_at");
             entity.Property(row => row.UpdatedAt).HasColumnName("updated_at");

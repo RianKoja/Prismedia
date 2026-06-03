@@ -105,5 +105,5 @@ public sealed partial class LibraryScanPersistenceService {
 
     private static LibraryRootData ToData(LibraryRootRow row) =>
         new(row.Id, row.Path, row.Label, row.Enabled, row.Recursive,
-            row.ScanVideos, row.ScanImages, row.ScanAudio, row.ScanBooks, row.IsNsfw);
+            row.ScanVideos, row.ScanImages, row.ScanAudio, row.ScanBooks, row.IsNsfw, row.AutoIdentify);
 }

@@ -21,6 +21,12 @@ public sealed class LibraryRootRow {
 
     public bool IsNsfw { get; set; }
 
+    /// <summary>
+    /// Whether media scanned from this root participates in Auto Identify. When false, scans of this
+    /// root never enqueue auto-identify jobs even while the global Auto Identify setting is on.
+    /// </summary>
+    public bool AutoIdentify { get; set; } = true;
+
     public DateTimeOffset? LastScannedAt { get; set; }
 
     public DateTimeOffset CreatedAt { get; set; }

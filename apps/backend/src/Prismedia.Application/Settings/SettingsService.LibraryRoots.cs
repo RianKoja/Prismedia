@@ -84,7 +84,8 @@ public sealed partial class SettingsService {
             IsNsfw: request.IsNsfw ?? false,
             LastScannedAt: null,
             CreatedAt: now,
-            UpdatedAt: now);
+            UpdatedAt: now,
+            AutoIdentify: request.AutoIdentify ?? true);
 
         var created = await _persistence.AddLibraryRootAsync(state, cancellationToken);
 
@@ -126,6 +127,7 @@ public sealed partial class SettingsService {
             ScanAudio = request.ScanAudio ?? current.ScanAudio,
             ScanBooks = request.ScanBooks ?? current.ScanBooks,
             IsNsfw = request.IsNsfw ?? current.IsNsfw,
+            AutoIdentify = request.AutoIdentify ?? current.AutoIdentify,
             UpdatedAt = DateTimeOffset.UtcNow,
         };
 
