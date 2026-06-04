@@ -8,7 +8,7 @@ description: Serve your Prismedia library to Jellyfin client apps like Infuse an
 
 Prismedia speaks a **Jellyfin-compatible API** so third-party Jellyfin client apps can discover your server, sign in, browse, and play your library — without Prismedia being a Jellyfin server or storing a Jellyfin schema.
 
-:::caution Experimental
+:::caution[Experimental]
 This is an experimental compatibility layer, not a full Jellyfin implementation. It is built and tested against specific clients (below). Other Jellyfin apps may work partially or not at all, and behavior can change between releases.
 :::
 

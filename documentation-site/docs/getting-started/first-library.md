@@ -18,7 +18,7 @@ Go to **Settings → Watched Libraries** and add a root such as `/media`, `/medi
 
 ![Settings](/img/screenshots/settings.png)
 
-:::tip Use the path inside the container
+:::tip[Use the path inside the container]
 The root path is the path **inside the container**, not on the host. If you mounted `/srv/movies:/media/movies`, the root path is `/media/movies`.
 :::
 
