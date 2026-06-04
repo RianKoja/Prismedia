@@ -194,12 +194,15 @@
     onBarsCollapsedChange?.(barsCollapsed);
   }
 
-  // Auto-collapse the secondary rows while scrolling down and bring them back a
-  // beat after scrolling up, unless the user has taken manual control.
+  // Collapse the secondary rows once the user scrolls down into the content, and
+  // then leave them alone. Scrolling up deliberately does NOT bring them back —
+  // the earlier auto re-expand fought the user and stuttered the bars in and out
+  // as scroll direction wavered. The rows stay hidden until the user taps the
+  // (accented) toggle, and any manual toggle pins the state so scrolling stops
+  // touching it entirely.
   onMount(() => {
     if (!browser) return;
     let lastY = window.scrollY;
-    let expandTimer: ReturnType<typeof setTimeout> | undefined;
 
     function scrollTopOf(target: EventTarget | null): number {
       if (target instanceof HTMLElement) return target.scrollTop;
@@ -207,28 +210,15 @@
     }
 
     function onScroll(event: Event) {
-      if (collapsePinned) return;
+      if (collapsePinned || barsCollapsed) return;
       const y = scrollTopOf(event.target);
       const delta = y - lastY;
       lastY = y;
-      if (Math.abs(delta) < 8) return;
-
-      if (delta > 0 && y > 48) {
-        clearTimeout(expandTimer);
-        barsCollapsed = true;
-      } else if (delta < 0) {
-        clearTimeout(expandTimer);
-        expandTimer = setTimeout(() => {
-          if (!collapsePinned) barsCollapsed = false;
-        }, 200);
-      }
+      if (delta > 8 && y > 48) barsCollapsed = true;
     }
 
     window.addEventListener("scroll", onScroll, { capture: true, passive: true });
-    return () => {
-      window.removeEventListener("scroll", onScroll, { capture: true });
-      clearTimeout(expandTimer);
-    };
+    return () => window.removeEventListener("scroll", onScroll, { capture: true });
   });
 
   function removeFilter(id: string) {
