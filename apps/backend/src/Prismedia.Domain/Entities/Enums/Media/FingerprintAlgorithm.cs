@@ -10,9 +10,5 @@ public enum FingerprintAlgorithm {
 
     /// <summary>OpenSubtitles hash — fast size+sample-based fingerprint.</summary>
     [Code("oshash")]
-    Oshash,
-
-    /// <summary>Perceptual hash for visual similarity matching.</summary>
-    [Code("phash")]
-    Phash
+    Oshash
 }

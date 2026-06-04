@@ -183,16 +183,6 @@ public static class AppSettingsRegistry {
                 false,
                 25),
             Boolean(
-                AppSettingKeys.GenerationGeneratePhash,
-                Generation,
-                "Generation Pipeline",
-                "Control what the worker creates for newly discovered media.",
-                30,
-                "Perceptual hash (pHash)",
-                "Compute Stash-compatible perceptual hashes. CPU-heavy, but useful for matching and contribution workflows.",
-                false,
-                30),
-            Boolean(
                 AppSettingKeys.GenerationAutoGeneratePreview,
                 Generation,
                 "Generation Pipeline",

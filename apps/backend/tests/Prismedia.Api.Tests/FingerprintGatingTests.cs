@@ -9,7 +9,6 @@ public sealed class FingerprintGatingTests {
         AutoGenerateMetadata: false,
         AutoGenerateOshash: oshash,
         AutoGenerateMd5: md5,
-        GeneratePhash: false,
         AutoGeneratePreview: false,
         GenerateTrickplay: false,
         TrickplayIntervalSeconds: 10,

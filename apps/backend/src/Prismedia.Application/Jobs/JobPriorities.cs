@@ -14,7 +14,7 @@ public static class JobPriorities {
     /// <summary>Technical metadata probe (ffprobe). A fast query other work depends on.</summary>
     public const int Probe = 50;
 
-    /// <summary>Fingerprinting (oshash / MD5 / perceptual hash). A fast query.</summary>
+    /// <summary>Fingerprinting (oshash / MD5). A fast query.</summary>
     public const int Fingerprint = 45;
 
     /// <summary>Quick static thumbnails (grid, image, book page and cover) — generated with Skia.</summary>

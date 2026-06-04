@@ -172,7 +172,6 @@ public sealed class StashScriptExecutor {
         if (!string.IsNullOrWhiteSpace(input.FilePath)) fragment["file_path"] = input.FilePath;
         if (!string.IsNullOrWhiteSpace(input.Checksum)) fragment["checksum"] = input.Checksum;
         if (!string.IsNullOrWhiteSpace(input.Oshash)) fragment["oshash"] = input.Oshash;
-        if (!string.IsNullOrWhiteSpace(input.Phash)) fragment["phash"] = input.Phash;
         return JsonSerializer.Serialize(fragment, JsonOptions);
     }
 

@@ -3,7 +3,7 @@ using Prismedia.Domain.Entities;
 namespace Prismedia.Domain.Capabilities;
 
 /// <summary>
-/// Mutable fingerprint capability for stable hashes or perceptual fingerprints.
+/// Mutable fingerprint capability for stable content and structural hashes.
 /// </summary>
 public sealed class CapabilityFingerprints(IEnumerable<CapabilityFingerprints.Item>? items = null)
     : CollectionCapability<CapabilityFingerprints.Item>(items) {

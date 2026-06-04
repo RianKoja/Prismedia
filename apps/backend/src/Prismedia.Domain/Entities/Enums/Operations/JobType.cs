@@ -36,7 +36,7 @@ public enum JobType {
     ProbeAudio,
 
     // ── Fingerprinting ──────────────────────────────────────────
-    /// <summary>Computes MD5, oshash, and optional perceptual hash for a video.</summary>
+    /// <summary>Computes MD5 and oshash for a video.</summary>
     [Code("fingerprint-video")]
     FingerprintVideo,
 

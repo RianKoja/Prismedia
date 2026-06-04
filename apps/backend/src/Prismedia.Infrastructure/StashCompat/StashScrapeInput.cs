@@ -9,11 +9,9 @@ namespace Prismedia.Infrastructure.StashCompat;
 /// <param name="FilePath">Primary source file path, used to derive <c>{filename}</c>.</param>
 /// <param name="Checksum">MD5 checksum, when known.</param>
 /// <param name="Oshash">OpenSubtitles hash, when known.</param>
-/// <param name="Phash">Perceptual hash, when known.</param>
 public sealed record StashScrapeInput(
     string? Url = null,
     string? Title = null,
     string? FilePath = null,
     string? Checksum = null,
-    string? Oshash = null,
-    string? Phash = null);
+    string? Oshash = null);

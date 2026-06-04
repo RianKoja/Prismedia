@@ -1,7 +1,7 @@
 namespace Prismedia.Contracts.Entities;
 
 /// <summary>API-facing hash or fingerprint value.</summary>
-/// <param name="Algorithm">Stable algorithm code, such as md5, oshash, or phash.</param>
+/// <param name="Algorithm">Stable algorithm code, such as md5 or oshash.</param>
 /// <param name="Value">Hash or fingerprint value.</param>
 public sealed record EntityFingerprint(string Algorithm, string Value);
 

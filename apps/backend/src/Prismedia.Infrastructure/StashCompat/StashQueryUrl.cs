@@ -5,8 +5,8 @@ namespace Prismedia.Infrastructure.StashCompat;
 
 /// <summary>
 /// Builds a fetch URL from a Stash <c>queryURL</c> template and its <c>queryURLReplace</c> rules.
-/// Placeholders (<c>{filename}</c>, <c>{title}</c>, <c>{url}</c>, <c>{checksum}</c>, <c>{oshash}</c>,
-/// <c>{phash}</c>) are sourced from the lookup input; each placeholder's ordered regex rules apply
+/// Placeholders (<c>{filename}</c>, <c>{title}</c>, <c>{url}</c>, <c>{checksum}</c>, <c>{oshash}</c>)
+/// are sourced from the lookup input; each placeholder's ordered regex rules apply
 /// the first match before substitution, matching the reference engine.
 /// </summary>
 public static class StashQueryUrl {
@@ -54,7 +54,6 @@ public static class StashQueryUrl {
             "url" => input.Url,
             "checksum" => input.Checksum,
             "oshash" => input.Oshash,
-            "phash" => input.Phash,
             _ => null
         };
 

@@ -37,7 +37,6 @@ public sealed partial class LibraryScanPersistenceService {
             settings.AutoGenerateMetadata,
             settings.AutoGenerateOshash,
             settings.AutoGenerateMd5,
-            settings.GeneratePhash,
             settings.AutoGeneratePreview,
             settings.GenerateTrickplay,
             settings.TrickplayIntervalSeconds,

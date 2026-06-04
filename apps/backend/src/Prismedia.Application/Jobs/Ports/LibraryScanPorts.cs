@@ -267,7 +267,6 @@ public sealed record LibrarySettingsData(
     bool AutoGenerateMetadata,
     bool AutoGenerateOshash,
     bool AutoGenerateMd5,
-    bool GeneratePhash,
     bool AutoGeneratePreview,
     bool GenerateTrickplay,
     int TrickplayIntervalSeconds,
