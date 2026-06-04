@@ -119,6 +119,17 @@
       menu.append(button);
     }
 
+    // @pierre/trees slots the menu into its shadow host, whose virtualized
+    // wrapper establishes a stacking/containing context — so even our maxed-out
+    // z-index can't lift the menu above a sibling pane's sticky EntityGrid
+    // toolbar, and the fixed coordinates resolve against the wrapper instead of
+    // the viewport. Reparent to <body> once the library has mounted it: the slot
+    // host tracks content by reference and tears it down with element.remove(),
+    // so relocating the node leaves its open/close lifecycle intact.
+    queueMicrotask(() => {
+      if (menu.isConnected) document.body.appendChild(menu);
+    });
+
     return menu;
   }
 
