@@ -44,6 +44,9 @@ Prismedia owns its own library model. Stash community scrapers can be wrapped as
 
 ## Quick Start
 
+> [!IMPORTANT]
+> **Prismedia is in early development.** Not every image tag is guaranteed to be published yet. The **`dev`** tag is always built (every push to `main`), and **`alpha`** is generally available. **`beta`**, **`release`**, and **`latest`** are promoted manually and **may not be available yet** — if `latest` can't be pulled, use `dev` (or `alpha`) for now. Expect rough edges and breaking changes while things stabilize.
+
 ### Docker Run
 
 ```bash
