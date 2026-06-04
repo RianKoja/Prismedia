@@ -30,7 +30,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Compute image tags
+      - name: Compute image metadata
         id: tags
         shell: bash
         run: |
@@ -41,8 +41,6 @@ jobs:
           {
             echo "tags<<EOF"
             echo "${IMAGE_NAME}:dev"
-            echo "${IMAGE_NAME}:sha-${short_sha}"
-            echo "${IMAGE_NAME}:${version}-${short_sha}"
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
