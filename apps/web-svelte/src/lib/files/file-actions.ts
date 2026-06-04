@@ -1,4 +1,4 @@
-export type FileActionId = "open" | "new-folder" | "rename" | "move" | "rescan" | "exclude" | "remove-exclusion" | "delete";
+export type FileActionId = "open" | "new-folder" | "upload" | "rename" | "move" | "rescan" | "exclude" | "remove-exclusion" | "delete";
 
 export interface FileAction {
   id: FileActionId;
@@ -9,12 +9,14 @@ export interface FileAction {
 const rootActions: FileAction[] = [
   { id: "open", label: "Open" },
   { id: "new-folder", label: "New folder" },
+  { id: "upload", label: "Upload files" },
   { id: "rescan", label: "Rescan" },
 ];
 
 const directoryActions: FileAction[] = [
   { id: "open", label: "Open" },
   { id: "new-folder", label: "New folder" },
+  { id: "upload", label: "Upload files" },
   { id: "rename", label: "Rename" },
   { id: "move", label: "Move" },
   { id: "rescan", label: "Rescan" },

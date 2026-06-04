@@ -254,6 +254,7 @@
     try {
       if (action === "open") await selectTreePath(meta.treePath);
       if (action === "new-folder") await createFolder(meta.kind === "directory" ? meta : directoryTarget(meta)!);
+      if (action === "upload") requestFolderUpload(meta);
       if (action === "rename") await renameFile(meta);
       if (action === "move") await moveFile(meta);
       if (action === "delete") await deleteFile(meta);
@@ -268,8 +269,10 @@
     }
   }
 
-  async function uploadItems(items: FileUploadItem[]): Promise<void> {
-    const target = directoryTarget(selectedMeta);
+  async function uploadItems(
+    items: FileUploadItem[],
+    target = directoryTarget(selectedMeta),
+  ): Promise<void> {
     if (!target || items.length === 0) return;
     try {
       await apiUploadFiles(target.rootId, target.path, items);
@@ -277,7 +280,8 @@
       nextLoaded.delete(loadedKey(target));
       loadedKeys = nextLoaded;
       await loadChildren(target);
-      if (selectedMeta?.kind === "file") await loadDetail(target);
+      if (selectedMeta?.treePath === target.treePath) await loadDetail(target);
+      else if (selectedMeta?.kind === "file") await loadDetail(target);
     } catch (uploadError) {
       const message = uploadError instanceof Error ? uploadError.message : "Upload failed";
       error = message.includes("already exists")
@@ -286,12 +290,37 @@
     }
   }
 
-  function uploadFileList(files: FileList | null): void {
+  function uploadFileList(files: FileList | null, target = directoryTarget(selectedMeta)): void {
     if (!files?.length) return;
-    void uploadItems(Array.from(files).map((file) => ({
-      file,
-      relativePath: (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name,
-    })));
+    void uploadItems(
+      Array.from(files).map((file) => ({
+        file,
+        relativePath: (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name,
+      })),
+      target ?? undefined,
+    );
+  }
+
+  // Hidden picker that backs the tree's "Upload files" action, letting a folder
+  // be the upload target without first selecting it — handy on touch where
+  // drag-and-drop isn't practical. The chosen folder is held until the picker
+  // resolves because the native dialog is asynchronous.
+  let folderUploadInput = $state<HTMLInputElement | null>(null);
+  let folderUploadTarget: FileTreeNodeMeta | null = null;
+
+  function requestFolderUpload(meta: FileTreeNodeMeta): void {
+    const target = directoryTarget(meta);
+    if (!target) return;
+    folderUploadTarget = target;
+    folderUploadInput?.click();
+  }
+
+  function onFolderUploadPicked(input: HTMLInputElement): void {
+    const target = folderUploadTarget;
+    folderUploadTarget = null;
+    const files = input.files;
+    input.value = "";
+    if (target) uploadFileList(files, target);
   }
 
   async function collectDroppedFiles(dataTransfer: DataTransfer | null): Promise<FileUploadItem[]> {
@@ -447,9 +476,23 @@
     onUploadFolder={uploadFileList}
     onExternalDrop={(dataTransfer) => void handleExternalDrop(dataTransfer)}
   />
+
+  <input
+    bind:this={folderUploadInput}
+    type="file"
+    multiple
+    class="hidden-input"
+    tabindex="-1"
+    aria-hidden="true"
+    onchange={(event) => onFolderUploadPicked(event.currentTarget)}
+  />
 </main>
 
 <style>
+  .hidden-input {
+    display: none;
+  }
+
   .files-page {
     display: grid;
     width: calc(100% + 2.5rem);

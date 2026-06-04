@@ -6,6 +6,7 @@ describe("file actions", () => {
     expect(fileContextActions("directory").map((action) => action.id)).toEqual([
       "open",
       "new-folder",
+      "upload",
       "rename",
       "move",
       "rescan",
