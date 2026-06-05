@@ -25,6 +25,10 @@ export interface UniversalLightboxVideoSource {
   quality: "original" | "fallback";
 }
 
+export interface BuildLightboxVideoSourceOptions {
+  preferOriginal?: boolean;
+}
+
 const videoExtensions = new Set([
   "mp4",
   "m4v",
@@ -104,7 +108,10 @@ export function buildLightboxImageSource(entity: UniversalLightboxEntity): Unive
   return fallback ? { src: fallback, role: "cover" } : null;
 }
 
-export function buildLightboxVideoSources(entity: UniversalLightboxEntity): UniversalLightboxVideoSource[] {
+export function buildLightboxVideoSources(
+  entity: UniversalLightboxEntity,
+  options: BuildLightboxVideoSourceOptions = {},
+): UniversalLightboxVideoSource[] {
   const files = getCapability(entity.capabilities, CAPABILITY_KIND.files)?.items ?? [];
   const sources: UniversalLightboxVideoSource[] = [];
   const seen = new Set<string>();
@@ -120,9 +127,14 @@ export function buildLightboxVideoSources(entity: UniversalLightboxEntity): Univ
   const sourceFile = files.find((file) => file.role === ENTITY_FILE_ROLE.source);
   const previewFile = files.find((file) => file.role === ENTITY_FILE_ROLE.preview);
 
-  add(ENTITY_FILE_ROLE.preview, "fallback", previewFile?.mimeType ?? "video/mp4");
-  if (entity.kind === ENTITY_KIND.video) {
+  if (options.preferOriginal) {
     add(ENTITY_FILE_ROLE.source, "original", sourceFile?.mimeType ?? mimeTypeForEntity(entity));
+    add(ENTITY_FILE_ROLE.preview, "fallback", previewFile?.mimeType ?? "video/mp4");
+  } else {
+    add(ENTITY_FILE_ROLE.preview, "fallback", previewFile?.mimeType ?? "video/mp4");
+    if (entity.kind === ENTITY_KIND.video) {
+      add(ENTITY_FILE_ROLE.source, "original", sourceFile?.mimeType ?? mimeTypeForEntity(entity));
+    }
   }
 
   return sources;

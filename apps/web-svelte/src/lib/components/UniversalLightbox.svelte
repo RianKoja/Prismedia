@@ -89,7 +89,7 @@
   });
   const currentImageSource = $derived(current ? buildLightboxImageSource(current) : null);
   const isCurrentVideo = $derived(current ? isLightboxVideoCapable(current) : false);
-  const currentVideoSources = $derived(current ? buildLightboxVideoSources(current) : []);
+  const currentVideoSources = $derived(current ? buildLightboxVideoSources(current, { preferOriginal: true }) : []);
   const primaryVideoSource = $derived(currentVideoSources[0] ?? null);
   const hasCurrentVideoPlayback = $derived(Boolean(isCurrentVideo && primaryVideoSource));
   const primaryVideoCodec = $derived(primaryVideoSource?.quality === "original" ? currentTechnical?.codec : null);

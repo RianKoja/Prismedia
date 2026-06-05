@@ -191,16 +191,20 @@ describe("UniversalLightbox", () => {
     expect(source).toContain("autoRepeat");
   });
 
-  it("keeps image-video originals as a poster fallback until a generated preview exists", async () => {
+  it("uses image-video originals in the full-quality lightbox even without generated previews", async () => {
     render(UniversalLightboxHarness, {
       props: { entities: [animated], initialIndex: 0, onClose: vi.fn() },
     });
 
-    expect(screen.queryByTestId("vidstack-video-player")).not.toBeInTheDocument();
-    expect(screen.getByRole("img", { name: "Animated.webm" })).toHaveAttribute(
-      "src",
-      "/assets/images/image-video-1/thumb.jpg",
-    );
+    await waitFor(() => {
+      expect(screen.getByTestId("vidstack-video-player")).toBeInTheDocument();
+    });
+  });
+
+  it("requests original-first video sources for full-quality lightbox playback", async () => {
+    const source = await readFile("src/lib/components/UniversalLightbox.svelte", "utf8");
+
+    expect(source).toContain("buildLightboxVideoSources(current, { preferOriginal: true })");
   });
 
   it("sizes embedded minimal videos with a real responsive lightbox frame", async () => {

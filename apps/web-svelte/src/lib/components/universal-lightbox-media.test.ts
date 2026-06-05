@@ -91,6 +91,24 @@ describe("universal-lightbox-media", () => {
     ]);
   });
 
+  it("can prefer original sources for full-quality lightbox playback", () => {
+    expect(buildLightboxVideoSources(entity({
+      title: "clip.webm",
+      capabilities: [
+        {
+          kind: "files",
+          items: [
+            { role: "source", path: "/media/clip.webm", mimeType: "video/webm" },
+            { role: "preview", path: "/assets/images/image-1/preview.mp4", mimeType: "video/mp4" },
+          ],
+        },
+      ],
+    }), { preferOriginal: true })).toEqual([
+      { src: "/api/entities/image-1/files/source", type: "video/webm", quality: "original" },
+      { src: "/api/entities/image-1/files/preview", type: "video/mp4", quality: "fallback" },
+    ]);
+  });
+
   it("keeps original direct sources available for true video entities", () => {
     expect(buildLightboxVideoSources(entity({
       kind: "video",
