@@ -37,6 +37,7 @@
     type EntityMetadataUpdateRequest,
   } from "$lib/components/entities/EntityDetail.svelte";
   import EntityGrid from "$lib/components/entities/EntityGrid.svelte";
+  import EntityGridSection from "$lib/components/entities/EntityGridSection.svelte";
   import ImageLightboxDetails from "$lib/components/ImageLightboxDetails.svelte";
   import UniversalLightbox from "$lib/components/UniversalLightbox.svelte";
   import {
@@ -310,12 +311,12 @@
     </EntityDetail>
 
     {#if galleryChildren.length > 0}
-      <section class="content-section">
-        <h2 class="content-heading">
-          <Layers class="h-4 w-4" />
-          Sub-Galleries
-          <span class="content-count">{galleryChildren.length}</span>
-        </h2>
+      <EntityGridSection
+        title="Sub Galleries"
+        count={galleryChildren.length}
+        icon={Layers}
+        prefsKey={`gallery-${gallery?.id}-children-section`}
+      >
         <EntityGrid
           cards={galleryChildren}
           prefsKey={`gallery-${gallery?.id}-children`}
@@ -323,15 +324,15 @@
           emptyTitle="No sub-galleries"
           emptyMessage="This gallery has no sub-galleries."
         />
-      </section>
+      </EntityGridSection>
     {/if}
 
     {#if imageChildren.length > 0}
-      <section class="content-section">
-        <h2 class="content-heading">
-          Images
-          <span class="content-count">{imageChildren.length}</span>
-        </h2>
+      <EntityGridSection
+        title="Images"
+        count={imageChildren.length}
+        prefsKey={`gallery-${gallery?.id}-images-section`}
+      >
         <EntityGrid
           cards={imageChildren}
           prefsKey={`gallery-${gallery?.id}-images`}
@@ -342,7 +343,7 @@
           emptyTitle="No images"
           emptyMessage="This gallery has no images."
         />
-      </section>
+      </EntityGridSection>
     {/if}
 
     {#if childCards.length === 0}
@@ -405,10 +406,6 @@
   :global(.meta-sep) { display: inline-block; width: 3px; height: 3px; margin: 0 0.5rem; background: var(--color-text-muted, #8a93a6); opacity: 0.5; }
 
   .credits-section { padding: 1rem 1.5rem; border-top: 1px solid var(--color-border, #1c2235); }
-
-  .content-section { display: grid; gap: 0.75rem; }
-  .content-heading { display: flex; align-items: center; gap: 0.5rem; margin: 0; font-family: var(--font-heading, Geist, sans-serif); font-size: 1.1rem; font-weight: 600; color: var(--color-text-primary, #f2eed8); }
-  .content-count { font-family: var(--font-mono, "JetBrains Mono", monospace); font-size: 0.68rem; font-weight: 600; color: var(--color-text-muted, #8a93a6); padding: 0.1rem 0.4rem; border: 1px solid var(--color-border, #1c2235); background: var(--color-surface-3, #151a28); }
 
   .empty-children { padding: 2rem; border: 1px solid var(--color-border-subtle, #1c2235); background: var(--color-surface-1, #0c0f15); color: var(--color-text-muted, #8a93a6); text-align: center; font-size: 0.85rem; }
 

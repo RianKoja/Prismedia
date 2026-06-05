@@ -34,6 +34,7 @@
     type EntityDetailTab,
   } from "$lib/components/entities/EntityDetail.svelte";
   import EntityGrid from "$lib/components/entities/EntityGrid.svelte";
+  import EntityGridSection from "$lib/components/entities/EntityGridSection.svelte";
   import { redirectHiddenEntityNotFound } from "$lib/nsfw/hidden-entity";
   import { useNsfw } from "$lib/nsfw/store.svelte";
   import { useAppChrome } from "$lib/stores/app-chrome.svelte";
@@ -278,12 +279,12 @@
     </EntityDetail>
 
     {#if hasSeasons}
-      <section class="content-section">
-        <h2 class="content-heading">
-          <Calendar class="h-4 w-4" />
-          Seasons
-          <span class="content-count">{seasonCards.length}</span>
-        </h2>
+      <EntityGridSection
+        title="Seasons"
+        count={seasonCards.length}
+        icon={Calendar}
+        prefsKey={`series-${series?.id}-seasons-section`}
+      >
         <EntityGrid
           cards={seasonCards}
           prefsKey={`series-${series?.id}-seasons`}
@@ -292,16 +293,16 @@
           emptyTitle="No seasons"
           emptyMessage="This series has no seasons."
         />
-      </section>
+      </EntityGridSection>
     {/if}
 
     {#if hasChildSeries}
-      <section class="content-section">
-        <h2 class="content-heading">
-          <Building2 class="h-4 w-4" />
-          Sub-Series
-          <span class="content-count">{childSeriesCards.length}</span>
-        </h2>
+      <EntityGridSection
+        title="Sub Series"
+        count={childSeriesCards.length}
+        icon={Building2}
+        prefsKey={`series-${series?.id}-children-section`}
+      >
         <EntityGrid
           cards={childSeriesCards}
           prefsKey={`series-${series?.id}-children`}
@@ -309,15 +310,15 @@
           emptyTitle="No sub-series"
           emptyMessage="This series has no sub-series."
         />
-      </section>
+      </EntityGridSection>
     {/if}
 
     {#if hasVideos}
-      <section class="content-section">
-        <h2 class="content-heading">
-          {hasSeasons ? "Specials" : "Episodes"}
-          <span class="content-count">{videoCards.length}</span>
-        </h2>
+      <EntityGridSection
+        title={hasSeasons ? "Specials" : "Episodes"}
+        count={videoCards.length}
+        prefsKey={`series-${series?.id}-videos-section`}
+      >
         <EntityGrid
           cards={videoCards}
           prefsKey={`series-${series?.id}-videos`}
@@ -326,7 +327,7 @@
           emptyTitle={hasSeasons ? "No specials" : "No episodes"}
           emptyMessage="No loose videos in this series."
         />
-      </section>
+      </EntityGridSection>
     {/if}
 
     {#if !hasSeasons && !hasChildSeries && !hasVideos}
@@ -382,34 +383,6 @@
     margin: 0 0.5rem;
     background: var(--color-text-muted, #8a93a6);
     opacity: 0.5;
-  }
-
-  /* ── Content sections (seasons, episodes, sub-series) ── */
-
-  .content-section {
-    display: grid;
-    gap: 0.75rem;
-  }
-
-  .content-heading {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    margin: 0;
-    font-family: var(--font-heading, Geist, sans-serif);
-    font-size: 1.1rem;
-    font-weight: 600;
-    color: var(--color-text-primary, #f2eed8);
-  }
-
-  .content-count {
-    font-family: var(--font-mono, "JetBrains Mono", monospace);
-    font-size: 0.68rem;
-    font-weight: 600;
-    color: var(--color-text-muted, #8a93a6);
-    padding: 0.1rem 0.4rem;
-    border: 1px solid var(--color-border, #1c2235);
-    background: var(--color-surface-3, #151a28);
   }
 
   .empty-children {

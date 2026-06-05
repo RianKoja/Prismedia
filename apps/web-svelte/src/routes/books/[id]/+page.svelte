@@ -41,6 +41,7 @@
     type EntityMetadataUpdateRequest,
   } from "$lib/components/entities/EntityDetail.svelte";
   import EntityGrid from "$lib/components/entities/EntityGrid.svelte";
+  import EntityGridSection from "$lib/components/entities/EntityGridSection.svelte";
   import { useIdentifyDetailAction } from "$lib/components/identify/use-identify-detail-action.svelte";
   import {
     isHiddenEntityNotFoundError,
@@ -588,12 +589,12 @@
     {/if}
 
     {#if childBookCards.length > 0}
-      <section class="content-section">
-        <h2 class="content-heading">
-          <BookOpen class="h-4 w-4" />
-          Books
-          <span class="content-count">{childBookCards.length}</span>
-        </h2>
+      <EntityGridSection
+        title="Books"
+        count={childBookCards.length}
+        icon={BookOpen}
+        prefsKey={`book-${book.id}-books-section`}
+      >
         <EntityGrid
           cards={childBookCards}
           prefsKey={`book-${book.id}-books`}
@@ -601,16 +602,16 @@
           emptyTitle="No books"
           emptyMessage="No books found for this series."
         />
-      </section>
+      </EntityGridSection>
     {/if}
 
     {#if volumeCards.length > 0}
-      <section class="content-section">
-        <h2 class="content-heading">
-          <BookOpen class="h-4 w-4" />
-          Volumes
-          <span class="content-count">{volumeCards.length}</span>
-        </h2>
+      <EntityGridSection
+        title="Volumes"
+        count={volumeCards.length}
+        icon={BookOpen}
+        prefsKey={`book-${book.id}-volumes-section`}
+      >
         <EntityGrid
           cards={volumeCards}
           prefsKey={`book-${book.id}-volumes`}
@@ -618,16 +619,16 @@
           emptyTitle="No volumes"
           emptyMessage="No volumes found for this book."
         />
-      </section>
+      </EntityGridSection>
     {/if}
 
     {#if chapterDetails.length > 0}
-      <section class="content-section">
-        <h2 class="content-heading">
-          <BookOpen class="h-4 w-4" />
-          Chapters
-          <span class="content-count">{chapterDetails.length}</span>
-        </h2>
+      <EntityGridSection
+        title="Chapters"
+        count={chapterDetails.length}
+        icon={BookOpen}
+        prefsKey={`book-${book.id}-chapters-section`}
+      >
         <EntityGrid
           cards={chapterCards}
           prefsKey={`book-${book.id}-chapters`}
@@ -635,7 +636,7 @@
           emptyTitle="No chapters"
           emptyMessage="No chapters found for this book."
         />
-      </section>
+      </EntityGridSection>
     {/if}
   {/if}
 </div>
@@ -709,33 +710,5 @@
     display: block;
     min-width: 0;
   }
-
-  .content-section {
-    display: grid;
-    gap: 0.75rem;
-  }
-
-  .content-heading {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    margin: 0;
-    font-family: var(--font-heading, Geist, sans-serif);
-    font-size: 1.1rem;
-    font-weight: 600;
-    color: var(--color-text-primary, #f2eed8);
-  }
-
-  .content-count {
-    font-family: var(--font-mono, "JetBrains Mono", monospace);
-    font-size: 0.68rem;
-    font-weight: 600;
-    color: var(--color-text-muted, #8a93a6);
-    padding: 0.1rem 0.4rem;
-    border: 1px solid var(--color-border, #1c2235);
-    background: var(--color-surface-3, #151a28);
-  }
-
-
 
 </style>

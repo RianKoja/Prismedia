@@ -6,6 +6,8 @@ describe("gallery detail lightbox wiring", () => {
     const source = await readFile("src/routes/galleries/[id]/+page.svelte", "utf8");
 
     expect(source).toContain("ImageLightboxDetails");
+    expect(source).toContain("EntityGridSection");
+    expect(source).toContain('title="Sub Galleries"');
     expect(source).toContain("fetchImage");
     expect(source).toContain("hydrateLightboxEntity");
     expect(source).toContain("visibleCards: EntityThumbnailCard[]");
