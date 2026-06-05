@@ -225,6 +225,10 @@ public sealed partial class HlsAssetService {
             "-loglevel",
             "error",
             "-nostats",
+            // A stream copy is I/O- and audio-encode-bound (~1 core); cap threads so it never competes
+            // for the whole box with a concurrent transcode or the API/worker.
+            "-threads",
+            "2",
             // Pace the stream copy instead of writing the whole file to disk as fast as the drive allows.
             // An unthrottled copy of a long 4K source pins every core for the burst it takes to copy the
             // entire timeline up front; Jellyfin avoids this by reading copy-remux input at a bounded rate

@@ -169,14 +169,14 @@ public sealed class HlsAssetServiceTests : IDisposable {
 
         Assert.NotNull(master);
         var masterPlaylist = await File.ReadAllTextAsync(master.Path);
+        // Single-variant default (adaptive bitrate off): only the top, source-capped rung is advertised,
+        // matching the reference media server's single-stream default so a client quality switch cannot
+        // spawn a second concurrent transcode.
         Assert.Contains("hls/40mbps/stream.m3u8", masterPlaylist);
-        Assert.Contains("hls/20mbps/stream.m3u8", masterPlaylist);
-        Assert.Contains("hls/15mbps/stream.m3u8", masterPlaylist);
-        Assert.Contains("hls/8mbps/stream.m3u8", masterPlaylist);
-        Assert.Contains("hls/720kbps/stream.m3u8", masterPlaylist);
         Assert.Contains("RESOLUTION=3840x1920", masterPlaylist);
-        Assert.Contains("RESOLUTION=2880x1440", masterPlaylist);
-        Assert.Contains("RESOLUTION=960x480", masterPlaylist);
+        Assert.DoesNotContain("hls/20mbps/stream.m3u8", masterPlaylist);
+        Assert.DoesNotContain("hls/8mbps/stream.m3u8", masterPlaylist);
+        Assert.DoesNotContain("hls/720kbps/stream.m3u8", masterPlaylist);
         Assert.NotNull(variant);
         var playlist = await File.ReadAllTextAsync(variant.Path);
         Assert.Contains("#EXT-X-PLAYLIST-TYPE:VOD", playlist);
@@ -184,6 +184,39 @@ public sealed class HlsAssetServiceTests : IDisposable {
         Assert.Contains("#EXTINF:1.000000,", playlist);
         Assert.Contains("#EXT-X-ENDLIST", playlist);
         Assert.False(process.WasCalled);
+    }
+
+    [Fact]
+    public async Task VirtualMasterAdvertisesFullLadderWhenAdaptiveBitrateEnabled() {
+        var videoId = Guid.Parse("33333333-3333-3333-3333-333333333334");
+        var sourcePath = Path.Combine(_cacheRoot, "source.mkv");
+        await File.WriteAllTextAsync(sourcePath, "source");
+        var service = new HlsAssetService(
+            new HlsAssetServiceOptions(_cacheRoot, EnableAdaptiveBitrate: true),
+            new FakeVideoSourceService(new VideoSourceFile(
+                videoId,
+                sourcePath,
+                "video/x-matroska",
+                false,
+                DurationSeconds: 13,
+                Width: 3840,
+                Height: 1920,
+                BitRate: 22_000_000,
+                VideoCodec: "hevc")),
+            new ManifestWritingProcessExecutor(),
+            NullLogger<HlsAssetService>.Instance);
+
+        var master = await service.GetAssetAsync(videoId, "master.m3u8", null, CancellationToken.None);
+
+        Assert.NotNull(master);
+        var masterPlaylist = await File.ReadAllTextAsync(master.Path);
+        // With adaptive bitrate enabled the full ladder is advertised so the player can switch quality.
+        Assert.Contains("hls/40mbps/stream.m3u8", masterPlaylist);
+        Assert.Contains("hls/20mbps/stream.m3u8", masterPlaylist);
+        Assert.Contains("hls/8mbps/stream.m3u8", masterPlaylist);
+        Assert.Contains("hls/720kbps/stream.m3u8", masterPlaylist);
+        Assert.Contains("RESOLUTION=2880x1440", masterPlaylist);
+        Assert.Contains("RESOLUTION=960x480", masterPlaylist);
     }
 
     [Fact]
