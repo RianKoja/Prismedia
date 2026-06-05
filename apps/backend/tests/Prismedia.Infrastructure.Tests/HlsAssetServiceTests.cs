@@ -90,6 +90,21 @@ public sealed class HlsAssetServiceTests : IDisposable {
     }
 
     [Fact]
+    public void RemuxSegmentDurationsCutShortWhenLongGopOvershootsThreshold() {
+        // A long GOP that overshoots a grid line, followed by a keyframe just past it, is where the
+        // threshold-advance rule matters. ffmpeg advances its cut threshold by exactly one segment length
+        // (6 -> 12 -> 18 -> 24) and cuts at the first keyframe at/after the current threshold; it does NOT
+        // jump the threshold past the keyframe that triggered the cut. Verified empirically against
+        // jellyfin-ffmpeg: keyframes [0,19,20,25] over a 30s source produce FOUR segments [19,1,5,5].
+        // (Jumping the threshold past the cut would skip the keyframe at 20 and wrongly produce [19,6,5].)
+        var keyframes = new List<double> { 0.0, 19.0, 20.0, 25.0 };
+
+        var durations = HlsAssetService.BuildRemuxSegmentDurations(keyframes, 30.0);
+
+        Assert.Equal([19.0, 1.0, 5.0, 5.0], durations);
+    }
+
+    [Fact]
     public void RemuxVodPlaylistIsCompleteAndSeekable() {
         var durations = new List<double> { 6.006, 6.006, 4.2 };
 

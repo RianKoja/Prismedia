@@ -393,19 +393,21 @@ public sealed partial class HlsAssetService {
     }
 
     /// <summary>
-    /// Replicates ffmpeg's stream-copy HLS boundary rule: it cuts at the first keyframe at or after
-    /// each point on a <em>fixed grid</em> of <see cref="SegmentDurationSeconds" /> multiples
-    /// (<c>6s, 12s, 18s, …</c> from the first keyframe), advancing the target to the next grid line
-    /// strictly past each cut. The final segment runs from the last boundary to the end of the source.
+    /// Replicates ffmpeg's stream-copy HLS boundary rule: it advances a cut threshold by exactly one
+    /// <see cref="SegmentDurationSeconds" /> at a time (<c>6s, 12s, 18s, …</c> from the first keyframe)
+    /// and cuts at the first keyframe at or after the current threshold, then steps the threshold on by
+    /// one. The final segment runs from the last boundary to the end of the source.
     /// </summary>
     /// <remarks>
-    /// The grid is essential: ffmpeg does NOT measure "<see cref="SegmentDurationSeconds" /> past the
-    /// previous cut" (which would drift on irregular, scene-cut keyframes and skip keyframes that land
-    /// just shy of the drifted threshold). A drifted prediction yields fewer, longer segments than
-    /// ffmpeg actually writes, so the VOD playlist we hand the player references the same
-    /// <c>seg_NNNNN</c> filenames as ffmpeg's real output but with mismatched durations — corrupting
-    /// seeking and cutting the buffer short of the true end. Cutting on the absolute grid reproduces
-    /// ffmpeg's segmentation exactly so playlist entries line up with the segments on disk.
+    /// The threshold advances by a single step per cut — it is NOT jumped forward past the keyframe that
+    /// triggered the cut. That distinction only matters when a long GOP carries a keyframe well past the
+    /// threshold: ffmpeg then leaves the threshold one step on, so the very next keyframe (which may be
+    /// only a moment later) is cut immediately, producing a short segment. Verified against
+    /// jellyfin-ffmpeg: keyframes <c>[0,19,20,25]</c> over a 30s source produce <c>[19,1,5,5]</c> (four
+    /// segments). Jumping the threshold past the cut instead skips the keyframe at 20 and yields
+    /// <c>[19,6,5]</c> (three segments) — so the VOD playlist we hand the player would reference the same
+    /// <c>seg_NNNNN</c> filenames as ffmpeg's real output but with mismatched durations, corrupting
+    /// seeking and cutting the buffer short of the true end.
     /// </remarks>
     internal static IReadOnlyList<double> BuildRemuxSegmentDurations(
         IReadOnlyList<double> keyframeTimes,
@@ -421,10 +423,9 @@ public sealed partial class HlsAssetService {
 
             durations.Add(keyframe - segmentStart);
             segmentStart = keyframe;
-            // Advance to the first grid line strictly greater than this cut, skipping any grid lines a
-            // long GOP jumped over so one segment can legitimately span several multiples.
-            var steps = Math.Floor((keyframe - first) / SegmentDurationSeconds) + 1;
-            target = first + steps * SegmentDurationSeconds;
+            // Step the threshold on by one segment from its PREVIOUS value, never past the cut keyframe,
+            // so a keyframe landing just beyond a late cut still triggers the next cut (see remarks).
+            target += SegmentDurationSeconds;
         }
 
         var lastDuration = totalDuration - segmentStart;
