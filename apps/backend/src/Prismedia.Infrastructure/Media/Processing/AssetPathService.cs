@@ -55,6 +55,9 @@ public sealed class AssetPathService {
     public string ImageThumbnailPath(Guid entityId) =>
         Path.Combine(_cacheRoot, "images", entityId.ToString(), "thumb.jpg");
 
+    public string ImagePreviewPath(Guid entityId) =>
+        Path.Combine(_cacheRoot, "images", entityId.ToString(), "preview.mp4");
+
     public string BookPageThumbnailPath(Guid entityId) =>
         Path.Combine(_cacheRoot, "book-pages", entityId.ToString(), "thumb.jpg");
 
@@ -84,6 +87,9 @@ public sealed class AssetPathService {
 
     public static string ImageThumbnailUrl(Guid entityId) =>
         $"/assets/images/{entityId}/thumb.jpg";
+
+    public static string ImagePreviewUrl(Guid entityId) =>
+        $"/assets/images/{entityId}/preview.mp4";
 
     public static string BookPageThumbnailUrl(Guid entityId) =>
         $"/assets/book-pages/{entityId}/thumb.jpg";

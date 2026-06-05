@@ -344,7 +344,7 @@ public sealed record VideoSeasonScanInfo(string FolderPath, string Title, int Se
 /// <param name="NeedsProbe">Technical metadata has not been probed yet.</param>
 /// <param name="MissingOshash">No stored oshash fingerprint exists for the entity.</param>
 /// <param name="MissingMd5">No stored MD5 fingerprint exists for the entity.</param>
-/// <param name="NeedsPreview">No preview asset (thumbnail or waveform) exists yet.</param>
+/// <param name="NeedsPreview">No preview asset (thumbnail, waveform, or animated image clip) exists yet.</param>
 /// <param name="NeedsTrickplay">No trickplay tiles exist yet.</param>
 /// <param name="NeedsSubtitleExtraction">Embedded subtitles have not been extracted yet.</param>
 /// <param name="NeedsGridThumbnail">A cover exists but its small grid-card variant has not been generated yet.</param>

@@ -121,7 +121,9 @@ export function buildLightboxVideoSources(entity: UniversalLightboxEntity): Univ
   const previewFile = files.find((file) => file.role === ENTITY_FILE_ROLE.preview);
 
   add(ENTITY_FILE_ROLE.preview, "fallback", previewFile?.mimeType ?? "video/mp4");
-  add(ENTITY_FILE_ROLE.source, "original", sourceFile?.mimeType ?? mimeTypeForEntity(entity));
+  if (entity.kind === ENTITY_KIND.video) {
+    add(ENTITY_FILE_ROLE.source, "original", sourceFile?.mimeType ?? mimeTypeForEntity(entity));
+  }
 
   return sources;
 }

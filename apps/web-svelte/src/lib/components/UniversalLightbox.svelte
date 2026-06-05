@@ -68,6 +68,7 @@
   let imageEl: HTMLImageElement | undefined = $state();
   let videoPlayerHandle: VideoPlayerHandle | undefined = $state();
   let videoMuted = $state(true);
+  let videoReady = $state(false);
   let stripThumbEls: Array<HTMLButtonElement | undefined> = $state([]);
   let pointerStart: { x: number; y: number; t: number } | null = null;
   let panning = $state(false);
@@ -90,6 +91,7 @@
   const isCurrentVideo = $derived(current ? isLightboxVideoCapable(current) : false);
   const currentVideoSources = $derived(current ? buildLightboxVideoSources(current) : []);
   const primaryVideoSource = $derived(currentVideoSources[0] ?? null);
+  const hasCurrentVideoPlayback = $derived(Boolean(isCurrentVideo && primaryVideoSource));
   const primaryVideoCodec = $derived(primaryVideoSource?.quality === "original" ? currentTechnical?.codec : null);
   const fallbackPoster = $derived(current?.coverUrl ?? undefined);
   const counterText = $derived(`${index + 1} / ${entities.length}`);
@@ -122,6 +124,7 @@
     scale = 1;
     fitScale = 1;
     videoMuted = true;
+    videoReady = false;
     videoPlayerHandle = undefined;
   });
 
@@ -170,6 +173,10 @@
     naturalW = el.naturalWidth || naturalW || 1;
     naturalH = el.naturalHeight || naturalH || 1;
     applyFit();
+  }
+
+  function handleVideoCanPlay() {
+    videoReady = true;
   }
 
   function zoomBy(delta: number, centerX?: number, centerY?: number) {
@@ -404,7 +411,7 @@
         <Info class="h-4 w-4" />
       </Button>
     {/if}
-    {#if isCurrentVideo}
+    {#if hasCurrentVideoPlayback}
       <Button
         variant="ghost"
         size="icon"
@@ -455,20 +462,38 @@
           >
             <NsfwBlur isNsfw={current.isNsfw === true}>
               {#if isCurrentVideo && primaryVideoSource}
-                <VideoPlayer
-                  bind:handle={videoPlayerHandle}
-                  directSrc={primaryVideoSource.src}
-                  codec={primaryVideoCodec}
-                  sourceWidth={positiveNumberValue(currentTechnical?.width)}
-                  sourceHeight={positiveNumberValue(currentTechnical?.height)}
-                  poster={fallbackPoster}
-                  defaultPlaybackMode="direct"
-                  showCastControls={false}
-                  chrome="minimal"
-                  enableKeyboardShortcuts={false}
-                  initialMuted={videoMuted}
-                  autoPlay
-                  autoRepeat
+                <div class="lightbox-video-shell" class:is-ready={videoReady}>
+                  {#if fallbackPoster}
+                    <img class="lightbox-video-poster" src={fallbackPoster} alt="" aria-hidden="true" />
+                  {/if}
+                  <VideoPlayer
+                    bind:handle={videoPlayerHandle}
+                    directSrc={primaryVideoSource.src}
+                    codec={primaryVideoCodec}
+                    sourceWidth={positiveNumberValue(currentTechnical?.width)}
+                    sourceHeight={positiveNumberValue(currentTechnical?.height)}
+                    poster={fallbackPoster}
+                    defaultPlaybackMode="direct"
+                    showCastControls={false}
+                    chrome="minimal"
+                    enableKeyboardShortcuts={false}
+                    initialMuted={videoMuted}
+                    onCanPlay={handleVideoCanPlay}
+                    autoPlay
+                    autoRepeat
+                  />
+                </div>
+              {:else if isCurrentVideo && fallbackPoster}
+                <img
+                  bind:this={imageEl}
+                  src={fallbackPoster}
+                  alt={current.title}
+                  class="lightbox-image"
+                  referrerpolicy="no-referrer"
+                  style:width="{naturalW || "auto"}px"
+                  style:height="{naturalH || "auto"}px"
+                  onload={handleImageLoad}
+                  draggable="false"
                 />
               {:else if currentImageSource}
                 <img
@@ -704,6 +729,44 @@
     width: 100%;
     max-width: 100%;
     max-height: 100%;
+  }
+
+  .lightbox-video-shell {
+    position: relative;
+    display: flex;
+    width: min(98dvw, calc((100dvh - 10rem) * 16 / 9));
+    max-width: min(98dvw, 100%);
+    max-height: calc(100dvh - 10rem);
+    aspect-ratio: 16 / 9;
+    align-items: center;
+    justify-content: center;
+    background: #000;
+  }
+
+  .lightbox-video-poster {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    opacity: 1;
+    transition: opacity 160ms ease;
+  }
+
+  .lightbox-video-shell :global([data-testid="vidstack-video-player"]) {
+    width: 100%;
+    max-width: 100%;
+    height: 100%;
+    opacity: 0;
+    transition: opacity 160ms ease;
+  }
+
+  .lightbox-video-shell.is-ready :global([data-testid="vidstack-video-player"]) {
+    opacity: 1;
+  }
+
+  .lightbox-video-shell.is-ready .lightbox-video-poster {
+    opacity: 0;
   }
 
   .lightbox-image {

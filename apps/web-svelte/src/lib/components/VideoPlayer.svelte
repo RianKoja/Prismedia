@@ -131,6 +131,7 @@
     markers?: VideoPlayerMarker[];
     duration?: number;
     onMarkerClick?: (marker: VideoPlayerMarker) => void;
+    onCanPlay?: () => void;
     onPlayStarted?: () => void;
     onTimeUpdate?: (time: number) => void;
     trickplayPlaylist?: string;
@@ -187,6 +188,7 @@
     markers = [],
     duration: propDuration,
     onMarkerClick,
+    onCanPlay,
     onPlayStarted,
     onTimeUpdate,
     trickplayPlaylist,
@@ -1476,6 +1478,7 @@
     refreshAudioTracks();
     syncMarkerChapterTrack();
     updateBuffered();
+    onCanPlay?.();
     if (pendingSeekTime !== null) {
       player!.currentTime = Math.min(duration || pendingSeekTime, pendingSeekTime);
       pendingSeekTime = null;

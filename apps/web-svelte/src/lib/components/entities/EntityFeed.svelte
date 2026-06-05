@@ -137,7 +137,7 @@
   function videoSourceFor(card: EntityThumbnailCard): string | null {
     const entity = hydrated[card.entity.id];
     if (!entity) return null;
-    return buildLightboxVideoSources(entity)[0]?.src ?? entityFileUrl(card.entity.id, ENTITY_FILE_ROLE.source);
+    return buildLightboxVideoSources(entity)[0]?.src ?? null;
   }
 
   // Animated still formats that play as a plain <img> (no <video> element): the
@@ -268,6 +268,7 @@
   // Playback fraction (0..1) per inline video, driving the thin bottom progress
   // bar that mirrors the lightbox player's minimal timeline.
   let progressById = $state(new Map<string, number>());
+  let readyVideoSourceById = $state(new Map<string, string>());
 
   function trackVideoProgress(id: string, video: HTMLVideoElement) {
     const duration = video.duration;
@@ -276,6 +277,17 @@
     const next = new Map(progressById);
     next.set(id, fraction);
     progressById = next;
+  }
+
+  function videoReadyFor(id: string, source: string | null): boolean {
+    return Boolean(source && readyVideoSourceById.get(id) === source);
+  }
+
+  function markVideoReady(id: string, source: string | null) {
+    if (!source || videoReadyFor(id, source)) return;
+    const next = new Map(readyVideoSourceById);
+    next.set(id, source);
+    readyVideoSourceById = next;
   }
 </script>
 
@@ -324,6 +336,7 @@
             -->
             <video
               class="feed-video"
+              class:is-ready={videoReadyFor(card.entity.id, source)}
               src={source}
               poster={cover?.src ?? undefined}
               muted
@@ -331,6 +344,8 @@
               loop
               playsinline
               preload="metadata"
+              onloadeddata={() => markVideoReady(card.entity.id, source)}
+              oncanplay={() => markVideoReady(card.entity.id, source)}
               ontimeupdate={(event) => trackVideoProgress(card.entity.id, event.currentTarget)}
             ></video>
           {:else if animatedSrc}
@@ -462,7 +477,15 @@
     width: 100%;
     height: 100%;
     object-fit: cover;
-    background: #000;
+  }
+
+  .feed-video {
+    opacity: 0;
+    transition: opacity 160ms ease;
+  }
+
+  .feed-video.is-ready {
+    opacity: 1;
   }
 
   .feed-placeholder {

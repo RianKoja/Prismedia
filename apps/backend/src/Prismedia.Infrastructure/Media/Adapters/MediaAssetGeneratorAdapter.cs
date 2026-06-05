@@ -99,6 +99,7 @@ public sealed class MediaAssetGeneratorAdapter(
     public string TrickplayFrameDir(Guid entityId) => paths.TrickplayFrameDir(entityId);
     public string TrickplayTileDir(Guid entityId, int width) => paths.TrickplayTileDir(entityId, width);
     public string ImageThumbnailPath(Guid entityId) => paths.ImageThumbnailPath(entityId);
+    public string ImagePreviewPath(Guid entityId) => paths.ImagePreviewPath(entityId);
     public string BookPageThumbnailPath(Guid entityId) => paths.BookPageThumbnailPath(entityId);
     public string BookCoverThumbnailPath(Guid entityId) => paths.BookCoverThumbnailPath(entityId);
     public string AudioWaveformPath(Guid entityId) => paths.AudioWaveformPath(entityId);
@@ -109,6 +110,7 @@ public sealed class MediaAssetGeneratorAdapter(
     public string VideoTrickplayVttUrl(Guid entityId) => AssetPathService.VideoTrickplayVttUrl(entityId);
     public string TrickplayPlaylistUrl(Guid entityId, int width) => AssetPathService.TrickplayPlaylistUrl(entityId, width);
     public string ImageThumbnailUrl(Guid entityId) => AssetPathService.ImageThumbnailUrl(entityId);
+    public string ImagePreviewUrl(Guid entityId) => AssetPathService.ImagePreviewUrl(entityId);
     public string BookPageThumbnailUrl(Guid entityId) => AssetPathService.BookPageThumbnailUrl(entityId);
     public string BookCoverThumbnailUrl(Guid entityId) => AssetPathService.BookCoverThumbnailUrl(entityId);
     public string AudioWaveformUrl(Guid entityId) => AssetPathService.AudioWaveformUrl(entityId);

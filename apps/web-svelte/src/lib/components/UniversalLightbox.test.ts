@@ -41,6 +41,19 @@ const animated: UniversalLightboxEntity = {
   coverUrl: "/assets/images/image-video-1/thumb.jpg",
 };
 
+const animatedWithPreview: UniversalLightboxEntity = {
+  ...animated,
+  capabilities: [
+    {
+      kind: "files",
+      items: [
+        { role: "source", path: "/media/animated.webm", mimeType: "video/webm" },
+        { role: "preview", path: "/assets/images/image-video-1/preview.mp4", mimeType: "video/mp4" },
+      ],
+    },
+  ],
+};
+
 describe("UniversalLightbox", () => {
   beforeEach(() => {
     globalThis.ResizeObserver = class {
@@ -155,7 +168,7 @@ describe("UniversalLightbox", () => {
 
   it("renders video-capable image entities through Vidstack minimal mode", async () => {
     render(UniversalLightboxHarness, {
-      props: { entities: [animated], initialIndex: 0, onClose: vi.fn() },
+      props: { entities: [animatedWithPreview], initialIndex: 0, onClose: vi.fn() },
     });
 
     await waitFor(() => {
@@ -166,7 +179,7 @@ describe("UniversalLightbox", () => {
 
   it("autoplays video-capable items muted and repeats in the lightbox", async () => {
     render(UniversalLightboxHarness, {
-      props: { entities: [animated], initialIndex: 0, onClose: vi.fn() },
+      props: { entities: [animatedWithPreview], initialIndex: 0, onClose: vi.fn() },
     });
 
     await waitFor(() => {
@@ -176,6 +189,18 @@ describe("UniversalLightbox", () => {
 
     const source = await readFile("src/lib/components/UniversalLightbox.svelte", "utf8");
     expect(source).toContain("autoRepeat");
+  });
+
+  it("keeps image-video originals as a poster fallback until a generated preview exists", async () => {
+    render(UniversalLightboxHarness, {
+      props: { entities: [animated], initialIndex: 0, onClose: vi.fn() },
+    });
+
+    expect(screen.queryByTestId("vidstack-video-player")).not.toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "Animated.webm" })).toHaveAttribute(
+      "src",
+      "/assets/images/image-video-1/thumb.jpg",
+    );
   });
 
   it("sizes embedded minimal videos with a real responsive lightbox frame", async () => {

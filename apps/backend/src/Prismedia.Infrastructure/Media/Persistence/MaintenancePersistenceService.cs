@@ -19,7 +19,7 @@ public sealed class MaintenancePersistenceService(PrismediaDbContext db, string 
         EntityFileRole.Hls
     ];
 
-    private static readonly EntityFileRole[] GeneratedImagePreviewRoles = [EntityFileRole.Thumbnail];
+    private static readonly EntityFileRole[] GeneratedImagePreviewRoles = [EntityFileRole.Thumbnail, EntityFileRole.Preview];
     private static readonly EntityFileRole[] GeneratedAudioPreviewRoles = [EntityFileRole.Waveform];
 
     public async Task<IReadOnlyList<Guid>> GetActiveEntityIdsByKindAsync(EntityKind kind, CancellationToken cancellationToken) =>
@@ -79,6 +79,7 @@ public sealed class MaintenancePersistenceService(PrismediaDbContext db, string 
                 break;
             case EntityKind.Image:
                 DeleteFileIfExists(Path.Combine(cacheBase, "images", id, "thumb.jpg"));
+                DeleteFileIfExists(Path.Combine(cacheBase, "images", id, "preview.mp4"));
                 break;
             case EntityKind.BookPage:
                 DeleteFileIfExists(Path.Combine(cacheBase, "book-pages", id, "thumb.jpg"));

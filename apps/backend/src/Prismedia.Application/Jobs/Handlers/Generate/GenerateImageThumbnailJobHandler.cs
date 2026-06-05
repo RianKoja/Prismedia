@@ -14,7 +14,8 @@ public sealed class GenerateImageThumbnailJobHandler(
     ILogger<GenerateImageThumbnailJobHandler> logger,
     IMediaAssetGenerator assets,
     IImageThumbnailGenerator imageThumbnails,
-    IMediaProcessingStatePersistence persistence) : EntityFileJobHandler(logger, persistence) {
+    IMediaProcessingStatePersistence persistence,
+    ILibraryScanRootPersistence roots) : EntityFileJobHandler(logger, persistence) {
     public override JobType Type => JobType.GenerateImageThumbnail;
 
     protected override async Task ExecuteAsync(
@@ -32,6 +33,23 @@ public sealed class GenerateImageThumbnailJobHandler(
             logger.LogWarning("GenerateImageThumbnail: failed for {Label}", context.Job.TargetLabel);
         }
 
+        if (AnimatedImagePreviewPolicy.RequiresPreviewClip(filePath)) {
+            await context.ReportProgressAsync(65, "Generating animated preview", cancellationToken);
+            var settings = await roots.GetSettingsAsync(cancellationToken);
+            var previewPath = assets.ImagePreviewPath(entityId);
+            var duration = Math.Max(4, settings.PreviewClipDurationSeconds);
+            var previewOk = await assets.GeneratePreviewClipAsync(filePath, previewPath, 0, duration, cancellationToken);
+
+            if (previewOk) {
+                var previewSize = new FileInfo(previewPath).Length;
+                await Persistence.UpsertEntityFileAsync(entityId, EntityFileRole.Preview, assets.ImagePreviewUrl(entityId), MediaContentTypes.VideoMp4, previewSize, cancellationToken);
+                logger.LogInformation("GenerateImageThumbnail: created animated preview for {Label}", context.Job.TargetLabel);
+            } else {
+                logger.LogWarning("GenerateImageThumbnail: failed animated preview for {Label}", context.Job.TargetLabel);
+            }
+        }
+
         await context.ReportProgressAsync(100, "Thumbnail complete", cancellationToken);
     }
+
 }

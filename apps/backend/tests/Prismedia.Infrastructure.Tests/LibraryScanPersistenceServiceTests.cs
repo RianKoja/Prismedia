@@ -87,6 +87,41 @@ public sealed class LibraryScanPersistenceServiceTests {
     }
 
     [Fact]
+    public async Task DownstreamNeedsImagePreviewClipWhenVideoLikeImageHasOnlyThumbnail() {
+        await using var db = CreateContext();
+        var animatedImageId = Guid.Parse("bbbbbbbb-1111-1111-1111-111111111111");
+        var stillImageId = Guid.Parse("bbbbbbbb-2222-2222-2222-222222222222");
+        SeedSourceEntity(db, animatedImageId, EntityKindRegistry.Image.Code, "/media/images/animated.webm");
+        SeedSourceEntity(db, stillImageId, EntityKindRegistry.Image.Code, "/media/images/photo.jpg");
+        db.EntityFiles.AddRange(
+            new EntityFileRow {
+                Id = Guid.NewGuid(),
+                EntityId = animatedImageId,
+                Role = EntityFileRole.Thumbnail,
+                Path = $"/assets/images/{animatedImageId}/thumb.jpg",
+                CreatedAt = DateTimeOffset.UtcNow,
+                UpdatedAt = DateTimeOffset.UtcNow
+            },
+            new EntityFileRow {
+                Id = Guid.NewGuid(),
+                EntityId = stillImageId,
+                Role = EntityFileRole.Thumbnail,
+                Path = $"/assets/images/{stillImageId}/thumb.jpg",
+                CreatedAt = DateTimeOffset.UtcNow,
+                UpdatedAt = DateTimeOffset.UtcNow
+            });
+        await db.SaveChangesAsync();
+
+        var service = new LibraryScanPersistenceService(db);
+        var needs = await service.CheckDownstreamNeedsBatchAsync(
+            [animatedImageId, stillImageId],
+            CancellationToken.None);
+
+        Assert.True(needs[animatedImageId].NeedsPreview);
+        Assert.False(needs[stillImageId].NeedsPreview);
+    }
+
+    [Fact]
     public async Task DownstreamNeedsSubtitleExtractionWhenStoredSubtitleFileIsMissing() {
         await using var db = CreateContext();
         var videoId = Guid.Parse("33333333-3333-3333-3333-333333333333");

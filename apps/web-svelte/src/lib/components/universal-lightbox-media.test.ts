@@ -74,7 +74,7 @@ describe("universal-lightbox-media", () => {
     expect(isLightboxVideoCapable(entity({ title: "photo.jpg", capabilities: [] }))).toBe(false);
   });
 
-  it("builds preview video sources before originals for animated playback", () => {
+  it("uses generated previews, not original sources, for image-entity animated playback", () => {
     expect(buildLightboxVideoSources(entity({
       title: "clip.webm",
       capabilities: [
@@ -83,6 +83,24 @@ describe("universal-lightbox-media", () => {
           items: [
             { role: "source", path: "/media/clip.webm", mimeType: "video/webm" },
             { role: "preview", path: "/assets/images/image-1/preview.mp4", mimeType: "video/mp4" },
+          ],
+        },
+      ],
+    }))).toEqual([
+      { src: "/api/entities/image-1/files/preview", type: "video/mp4", quality: "fallback" },
+    ]);
+  });
+
+  it("keeps original direct sources available for true video entities", () => {
+    expect(buildLightboxVideoSources(entity({
+      kind: "video",
+      title: "clip.webm",
+      capabilities: [
+        {
+          kind: "files",
+          items: [
+            { role: "source", path: "/media/clip.webm", mimeType: "video/webm" },
+            { role: "preview", path: "/assets/videos/video-1/preview.mp4", mimeType: "video/mp4" },
           ],
         },
       ],

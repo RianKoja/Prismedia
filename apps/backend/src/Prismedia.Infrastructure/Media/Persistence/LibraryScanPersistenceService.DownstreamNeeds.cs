@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Prismedia.Application.Jobs;
 using Prismedia.Application.Jobs.Ports;
 using Prismedia.Application.Settings;
 using Prismedia.Domain.Entities;
@@ -53,6 +54,16 @@ public sealed partial class LibraryScanPersistenceService {
             .Select(f => f.EntityId)
             .ToListAsync(cancellationToken)).ToHashSet();
 
+        var hasPreview = (await _db.EntityFiles.AsNoTracking()
+            .Where(f => ids.Contains(f.EntityId) && f.Role == EntityFileRole.Preview)
+            .Select(f => f.EntityId)
+            .ToListAsync(cancellationToken)).ToHashSet();
+
+        var sourcePaths = await _db.EntityFiles.AsNoTracking()
+            .Where(f => ids.Contains(f.EntityId) && f.Role == EntityFileRole.Source)
+            .Select(f => new { f.EntityId, f.Path })
+            .ToDictionaryAsync(f => f.EntityId, f => f.Path, cancellationToken);
+
         var hasCover = (await _db.EntityFiles.AsNoTracking()
             .Where(f => ids.Contains(f.EntityId) && (
                 f.Role == EntityFileRole.Thumbnail ||
@@ -96,10 +107,11 @@ public sealed partial class LibraryScanPersistenceService {
 
         var result = new Dictionary<Guid, DownstreamNeeds>(ids.Count);
         foreach (var id in ids) {
-            var needsPreview = entityKinds.TryGetValue(id, out var kindCode) &&
-                string.Equals(kindCode, EntityKindRegistry.AudioTrack.Code, StringComparison.OrdinalIgnoreCase)
-                    ? !hasWaveform.Contains(id)
-                    : !hasThumbnail.Contains(id);
+            entityKinds.TryGetValue(id, out var kindCode);
+            var needsPreview = string.Equals(kindCode, EntityKindRegistry.AudioTrack.Code, StringComparison.OrdinalIgnoreCase)
+                ? !hasWaveform.Contains(id)
+                : !hasThumbnail.Contains(id) ||
+                  (kindCode is not null && NeedsAnimatedImagePreviewClip(kindCode, id, sourcePaths, hasPreview));
 
             result[id] = new DownstreamNeeds(
                 NeedsProbe: !hasTechnical.Contains(id) || !hasMediaSource.Contains(id),
@@ -126,6 +138,16 @@ public sealed partial class LibraryScanPersistenceService {
 
     public Task<bool> HasEntityFileAsync(Guid entityId, EntityFileRole role, CancellationToken cancellationToken) =>
         _db.EntityFiles.AnyAsync(f => f.EntityId == entityId && f.Role == role, cancellationToken);
+
+    private static bool NeedsAnimatedImagePreviewClip(
+        string kindCode,
+        Guid entityId,
+        IReadOnlyDictionary<Guid, string> sourcePaths,
+        IReadOnlySet<Guid> hasPreview) =>
+        string.Equals(kindCode, EntityKindRegistry.Image.Code, StringComparison.OrdinalIgnoreCase) &&
+        sourcePaths.TryGetValue(entityId, out var sourcePath) &&
+        AnimatedImagePreviewPolicy.RequiresPreviewClip(sourcePath) &&
+        !hasPreview.Contains(entityId);
 
     public async Task<bool> HasSubtitlesExtractedAsync(Guid entityId, CancellationToken cancellationToken) {
         var detail = await _db.VideoDetails.AsNoTracking()

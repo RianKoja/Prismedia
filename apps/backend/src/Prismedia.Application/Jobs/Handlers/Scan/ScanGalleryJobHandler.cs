@@ -1,5 +1,6 @@
-using Prismedia.Application.Jobs.Handlers;
 using Microsoft.Extensions.Logging;
+using Prismedia.Application.Jobs;
+using Prismedia.Application.Jobs.Handlers;
 using Prismedia.Application.Jobs.Ports;
 using Prismedia.Domain.Entities;
 
@@ -112,7 +113,7 @@ public sealed class ScanGalleryJobHandler(
                 var sortOrder = targetGalleryPath is null ? i : NextSortOrder(nextSortOrderByGalleryPath, targetGalleryPath);
                 var imageId = await images.UpsertImageAsync(filePath, title, galleryId, size, sortOrder, root.IsNsfw, cancellationToken);
 
-                if (settings.AutoGeneratePreview && !await downstreamNeeds.HasEntityFileAsync(imageId, EntityFileRole.Thumbnail, cancellationToken)) {
+                if (settings.AutoGeneratePreview && await NeedsPreviewAsync(imageId, filePath, cancellationToken)) {
                     await context.EnqueueIfNeededAsync(new EnqueueJobRequest(
                         JobType.GenerateImageThumbnail, TargetEntityKind: "image",
                         TargetEntityId: imageId.ToString(), TargetLabel: title, Priority: JobPriorities.Thumbnail), cancellationToken);
@@ -159,6 +160,15 @@ public sealed class ScanGalleryJobHandler(
 
     private static string NormalizePath(string path) =>
         Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+
+    private async Task<bool> NeedsPreviewAsync(Guid imageId, string filePath, CancellationToken cancellationToken) {
+        if (!await downstreamNeeds.HasEntityFileAsync(imageId, EntityFileRole.Thumbnail, cancellationToken)) {
+            return true;
+        }
+
+        return AnimatedImagePreviewPolicy.RequiresPreviewClip(filePath) &&
+               !await downstreamNeeds.HasEntityFileAsync(imageId, EntityFileRole.Preview, cancellationToken);
+    }
 
     /// <summary>
     /// Identifies folders that should be collapsed instead of becoming galleries: a folder that
