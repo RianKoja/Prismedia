@@ -38,9 +38,9 @@
     selectedQueueIds = allSelected ? new Set() : new Set(store.queue.map((q) => q.entityId));
   }
 
-  function cancelSelected() {
+  function rejectSelected() {
     for (const id of selectedQueueIds) {
-      void store.deleteQueueItem(id);
+      void store.rejectQueueItem(id);
     }
     selectedQueueIds = new Set();
   }
@@ -158,10 +158,10 @@
               type="button"
               class="inline-flex h-8 w-full items-center justify-center gap-1.5 rounded-xs border border-border-default bg-surface-2 px-2.5 text-[0.72rem] font-medium text-text-muted transition-colors hover:border-error/50 hover:text-error-text disabled:cursor-not-allowed disabled:opacity-40 sm:h-7 sm:w-auto"
               disabled={store.bulkAccepting}
-              onclick={cancelSelected}
+              onclick={rejectSelected}
             >
               <X class="h-3 w-3" />
-              Cancel {selectedQueueIds.size}
+              Reject {selectedQueueIds.size}
             </button>
           {/if}
           <button

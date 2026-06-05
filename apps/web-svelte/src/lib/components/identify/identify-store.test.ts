@@ -11,6 +11,7 @@ const fetchIdentifyQueueItem = vi.fn();
 const addIdentifyQueueItem = vi.fn();
 const searchIdentifyQueueItem = vi.fn();
 const applyIdentifyQueueItem = vi.fn();
+const deleteIdentifyQueueItem = vi.fn();
 const fetchIdentifyApplyProgress = vi.fn();
 const identifyEntityTransient = vi.fn();
 const saveIdentifyQueueProposal = vi.fn();
@@ -33,6 +34,7 @@ vi.mock("$lib/api/identify-client", async (importOriginal) => {
     addIdentifyQueueItem: (...args: unknown[]) => addIdentifyQueueItem(...args),
     searchIdentifyQueueItem: (...args: unknown[]) => searchIdentifyQueueItem(...args),
     applyIdentifyQueueItem: (...args: unknown[]) => applyIdentifyQueueItem(...args),
+    deleteIdentifyQueueItem: (...args: unknown[]) => deleteIdentifyQueueItem(...args),
     fetchIdentifyApplyProgress: (...args: unknown[]) => fetchIdentifyApplyProgress(...args),
     identifyEntityTransient: (...args: unknown[]) => identifyEntityTransient(...args),
     saveIdentifyQueueProposal: (...args: unknown[]) => saveIdentifyQueueProposal(...args),
@@ -48,6 +50,7 @@ describe("IdentifyStore", () => {
     addIdentifyQueueItem.mockReset();
     searchIdentifyQueueItem.mockReset();
     applyIdentifyQueueItem.mockReset();
+    deleteIdentifyQueueItem.mockReset();
     fetchIdentifyApplyProgress.mockReset();
     fetchPluginProviders.mockResolvedValue([]);
     fetchIdentifyQueue.mockResolvedValue([]);
@@ -56,6 +59,7 @@ describe("IdentifyStore", () => {
     addIdentifyQueueItem.mockResolvedValue(queueItem("video-1"));
     searchIdentifyQueueItem.mockResolvedValue(queueItem("video-1", { state: "search" }));
     applyIdentifyQueueItem.mockResolvedValue(queueItem("video-1", { state: "done" }));
+    deleteIdentifyQueueItem.mockResolvedValue(queueItem("video-1", { state: "deleted" }));
     identifyEntityTransient.mockReset();
     saveIdentifyQueueProposal.mockReset();
     // Keep child lookups pending so children stay in their initial loading/queued state for the
@@ -553,6 +557,33 @@ describe("IdentifyStore", () => {
     expect(applyIdentifyQueueItem.mock.calls[0][0]).toBe("video-1");
     expect(store.queue.map((item) => item.entityId)).toEqual(["video-2"]);
     expect(store.bulkAccepting).toBe(false);
+  });
+
+  it("rejects a queued item and advances to the next reviewable queue item", async () => {
+    const store = new IdentifyStore();
+    const first = {
+      ...queueItem("video-1", {
+        state: "proposal",
+        provider: "tmdb",
+        proposal: proposal("tmdb:movie:123", { targetKind: "video", title: "Friendship" }),
+      }),
+      entity: entity("video-1", { kind: "video", title: "Friendship" }),
+      detail: detail("video-1", { kind: "video", title: "Friendship" }),
+    };
+    const second = {
+      ...queueItem("video-2", { state: "search", provider: "tmdb" }),
+      entity: entity("video-2", { kind: "video", title: "Pending" }),
+      detail: null,
+    };
+    store.queue = [first, second];
+    const reviewQueueItem = vi.spyOn(store, "reviewQueueItem");
+    deleteIdentifyQueueItem.mockResolvedValue(queueItem("video-1", { state: "deleted" }));
+
+    await store.rejectQueueItem("video-1", { navigateNext: true });
+
+    expect(deleteIdentifyQueueItem).toHaveBeenCalledWith("video-1");
+    expect(store.queue.map((item) => item.entityId)).toEqual(["video-2"]);
+    expect(reviewQueueItem).toHaveBeenCalledWith(expect.objectContaining({ entityId: "video-2" }));
   });
 });
 

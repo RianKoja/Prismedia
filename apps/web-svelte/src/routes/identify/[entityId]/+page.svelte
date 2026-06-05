@@ -10,9 +10,9 @@
     Loader2,
     Search,
     ScanSearch,
-    X,
   } from "@lucide/svelte";
   import IdentifyProviderSelect from "$lib/components/identify/IdentifyProviderSelect.svelte";
+  import IdentifyRejectQueueActions from "$lib/components/identify/IdentifyRejectQueueActions.svelte";
   import IdentifyReviewChoice from "$lib/components/identify/IdentifyReviewChoice.svelte";
   import IdentifyReviewParent from "$lib/components/identify/IdentifyReviewParent.svelte";
   import IdentifyReviewChild from "$lib/components/identify/IdentifyReviewChild.svelte";
@@ -28,6 +28,7 @@
   const queueIndex = $derived(store.queue.findIndex((item) => item.entityId === entityId));
   const prevQueueItem = $derived(queueIndex > 0 ? store.queue[queueIndex - 1] : null);
   const nextQueueItem = $derived(queueIndex >= 0 && queueIndex < store.queue.length - 1 ? store.queue[queueIndex + 1] : null);
+  const nextReviewQueueItem = $derived(current ? store.nextQueueItem(current.entityId) : null);
 
   let selectedProviderId = $state("");
   let manualTitle = $state("");
@@ -42,6 +43,13 @@
   );
   const activeReviewChild = $derived(
     store.view.kind === "review-child" && store.view.entity.id === entityId ? store.view : null,
+  );
+  const reviewSurfaceHasRejectFooter = $derived(
+    !activeReviewChild &&
+      Boolean(
+        (current?.state === "proposal" && current.proposal) ||
+          (current?.state === "search" && current.candidates.length > 0),
+      ),
   );
 
   onMount(async () => {
@@ -85,10 +93,6 @@
     } finally {
       searching = false;
     }
-  }
-
-  function cancelItem() {
-    if (current) void store.deleteQueueItem(current.entityId);
   }
 
   function goToQueueItem(item: typeof prevQueueItem) {
@@ -141,18 +145,16 @@
         >
           <ChevronDown class="h-3.5 w-3.5" />
         </button>
-        <div class="flex-1 md:hidden"></div>
-        {#if current}
-          <button
-            type="button"
-            class="inline-flex h-8 items-center gap-1.5 rounded-xs border border-border-default bg-surface-2 px-2.5 text-[0.76rem] text-text-muted transition-colors hover:border-error/50 hover:text-error-text md:hidden"
-            onclick={cancelItem}
-          >
-            <X class="h-3.5 w-3.5" />
-            Cancel
-          </button>
-        {/if}
       </div>
+    {/if}
+
+    {#if current && !reviewSurfaceHasRejectFooter}
+      <IdentifyRejectQueueActions
+        entityId={current.entityId}
+        showNext={Boolean(nextReviewQueueItem)}
+        compact
+        class="md:hidden"
+      />
     {/if}
 
     <div class="hidden flex-1 md:block"></div>
@@ -173,14 +175,14 @@
           Back to Search
         </button>
       {/if}
-      <button
-        type="button"
-        class="hidden h-8 items-center gap-1.5 rounded-xs border border-border-default bg-surface-2 px-2.5 text-[0.76rem] text-text-muted transition-colors hover:border-error/50 hover:text-error-text md:inline-flex"
-        onclick={cancelItem}
-      >
-        <X class="h-3.5 w-3.5" />
-        Cancel
-      </button>
+      {#if !reviewSurfaceHasRejectFooter}
+        <IdentifyRejectQueueActions
+          entityId={current.entityId}
+          showNext={Boolean(nextReviewQueueItem)}
+          compact
+          class="hidden md:flex"
+        />
+      {/if}
     {/if}
   </div>
 

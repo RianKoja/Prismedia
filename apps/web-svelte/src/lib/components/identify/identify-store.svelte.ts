@@ -45,6 +45,11 @@ interface IdentifyResolveOptions {
   navigate?: boolean;
 }
 
+interface IdentifyRejectOptions {
+  /** When true, move directly to the next reviewable queue item after rejecting this one. */
+  navigateNext?: boolean;
+}
+
 export type IdentifyView =
   | { kind: "dashboard" }
   | { kind: "kind-tab"; entityKind: string }
@@ -412,22 +417,47 @@ export class IdentifyStore {
     }
   }
 
-  async deleteQueueItem(entityId: string) {
+  async rejectQueueItem(entityId: string, options: IdentifyRejectOptions = {}) {
+    let afterReject: (() => void | Promise<void>) | null = null;
     this.error = null;
     try {
       const item = await deleteIdentifyQueueItem(entityId);
       this.#removeActiveQueueItem(item.entityId);
-      if (this.returnEntityId) {
-        const href = await resolveEntityHrefById(this.returnEntityId);
-        if (href) {
-          void goto(href);
-          return;
+      if (this.#cascadePollEntityId === item.entityId) {
+        this.stopCascadePoll();
+      }
+
+      if (options.navigateNext) {
+        const next = this.nextQueueItem(item.entityId);
+        if (next) {
+          afterReject = () => this.reviewQueueItem(next);
         }
       }
-      this.navigateToDashboard();
+
+      if (!afterReject && this.returnEntityId) {
+        const href = await resolveEntityHrefById(this.returnEntityId);
+        if (href) {
+          afterReject = () => goto(href);
+        }
+      }
+
+      afterReject ??= () => this.navigateToDashboard();
     } catch (err) {
       this.error = readError(err);
     }
+
+    if (!this.error && afterReject) {
+      try {
+        await afterReject();
+      } catch (err) {
+        this.error = readError(err);
+        this.navigateToDashboard();
+      }
+    }
+  }
+
+  async deleteQueueItem(entityId: string) {
+    await this.rejectQueueItem(entityId);
   }
 
   /**

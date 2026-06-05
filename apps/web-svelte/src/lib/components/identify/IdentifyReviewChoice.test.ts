@@ -17,6 +17,8 @@ const store = vi.hoisted(() => ({
   providers: [] as PluginProvider[],
   providersForKind: vi.fn(),
   identifyWithCandidate: vi.fn(),
+  nextQueueItem: vi.fn(),
+  rejectQueueItem: vi.fn(),
   navigateToDashboard: vi.fn(),
 }));
 
@@ -41,6 +43,9 @@ describe("IdentifyReviewChoice", () => {
     store.providersForKind.mockReset();
     store.providersForKind.mockReturnValue([provider()]);
     store.identifyWithCandidate.mockReset();
+    store.nextQueueItem.mockReset();
+    store.nextQueueItem.mockReturnValue(null);
+    store.rejectQueueItem.mockReset();
     store.navigateToDashboard.mockReset();
   });
 
@@ -88,6 +93,23 @@ describe("IdentifyReviewChoice", () => {
     expect(screen.getByRole("dialog")).toBeInTheDocument();
     expect(screen.getByRole("img", { name: "The Chair Company" })).toHaveAttribute("src", candidate.posterUrl);
     expect(screen.queryByRole("button", { name: "Rate 1" })).not.toBeInTheDocument();
+  });
+
+  it("rejects an ambiguous candidate search or rejects and advances to the next queue item", async () => {
+    store.nextQueueItem.mockReturnValue({ entityId: "series-2" });
+
+    render(IdentifyReviewChoice, {
+      props: {
+        entity: entity(),
+        candidates: [searchCandidate()],
+      },
+    });
+
+    await fireEvent.click(screen.getByRole("button", { name: "Reject" }));
+    expect(store.rejectQueueItem).toHaveBeenCalledWith("series-1");
+
+    await fireEvent.click(screen.getByRole("button", { name: "Reject and Next" }));
+    expect(store.rejectQueueItem).toHaveBeenCalledWith("series-1", { navigateNext: true });
   });
 
   it("shows loading only on the selected candidate while a tree is being checked", async () => {

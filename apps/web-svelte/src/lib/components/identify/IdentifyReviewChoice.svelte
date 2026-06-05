@@ -12,6 +12,7 @@
   import { cn } from "@prismedia/ui-svelte";
   import IdentifyProviderSelect from "./IdentifyProviderSelect.svelte";
   import IdentifyTargetPreview from "./IdentifyTargetPreview.svelte";
+  import IdentifyRejectQueueActions from "./IdentifyRejectQueueActions.svelte";
   import UniversalLightbox from "$lib/components/UniversalLightbox.svelte";
   import type { EntitySearchCandidate } from "$lib/api/identify-types";
   import type { EntityCard } from "$lib/api/entities";
@@ -57,6 +58,7 @@
       activeProvider,
   );
   const localCandidates = $derived(searchedCandidates ?? candidates);
+  const nextQueueItem = $derived(store.nextQueueItem(entity.id));
   const previewEntities = $derived(previewCandidate ? [previewCandidate] : []);
 
   // Navigating between items reuses this component instance, so local search state must be cleared
@@ -358,6 +360,14 @@
       {/each}
     </div>
   </section>
+
+  <div class="flex flex-col gap-2 py-2 md:flex-row md:justify-end">
+    <IdentifyRejectQueueActions
+      entityId={entity.id}
+      showNext={Boolean(nextQueueItem)}
+      disabled={store.identifyingId !== null}
+    />
+  </div>
 
   {#if previewEntities.length > 0}
     <UniversalLightbox

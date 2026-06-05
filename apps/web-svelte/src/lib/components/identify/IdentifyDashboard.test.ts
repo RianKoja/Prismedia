@@ -27,6 +27,7 @@ const store = vi.hoisted(() => ({
   navigateToKind: vi.fn(),
   resumeNext: vi.fn(),
   reviewQueueItem: vi.fn(),
+  rejectQueueItem: vi.fn(),
 }));
 
 vi.mock("./identify-store.svelte", () => ({
@@ -51,6 +52,7 @@ describe("IdentifyDashboard", () => {
     store.navigateToKind.mockReset();
     store.resumeNext.mockReset();
     store.reviewQueueItem.mockReset();
+    store.rejectQueueItem.mockReset();
   });
 
   it("renders dashboard content without summary stats or plugin inventory", () => {

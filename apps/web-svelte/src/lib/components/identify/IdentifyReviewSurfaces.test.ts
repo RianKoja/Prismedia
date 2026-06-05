@@ -41,6 +41,7 @@ const store = vi.hoisted(() => ({
   setReviewTagSelected: vi.fn(),
   ensureReviewDetailForProposal: vi.fn(),
   deleteQueueItem: vi.fn(),
+  rejectQueueItem: vi.fn(),
   applyProposal: vi.fn(),
   cascadeRunning: vi.fn(() => false),
   ensureCascadePoll: vi.fn(),
@@ -76,6 +77,7 @@ describe("Identify review surfaces", () => {
     store.setReviewTagSelected.mockReset();
     store.ensureReviewDetailForProposal.mockReset();
     store.deleteQueueItem.mockReset();
+    store.rejectQueueItem.mockReset();
     store.applyProposal.mockReset();
   });
 
@@ -318,6 +320,26 @@ describe("Identify review surfaces", () => {
     expect(screen.getByText("Season 1")).toBeInTheDocument();
     expect(screen.getByText("Episode 3")).toBeInTheDocument();
     expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "25");
+  });
+
+  it("places reject actions before accept actions and advances on reject-and-next", async () => {
+    store.nextQueueItem.mockReturnValue({ entityId: "entity-2" });
+
+    render(IdentifyReviewParent, {
+      props: {
+        entity: entity(),
+        proposal: proposal("root"),
+      },
+    });
+
+    const actions = screen.getByTestId("identify-proposal-actions");
+    expect(actions).toHaveTextContent(/Reject.*Reject and Next.*Accept.*Accept and Next/);
+
+    await fireEvent.click(screen.getByRole("button", { name: "Reject" }));
+    expect(store.rejectQueueItem).toHaveBeenCalledWith("entity-1");
+
+    await fireEvent.click(screen.getByRole("button", { name: "Reject and Next" }));
+    expect(store.rejectQueueItem).toHaveBeenCalledWith("entity-1", { navigateNext: true });
   });
 });
 
