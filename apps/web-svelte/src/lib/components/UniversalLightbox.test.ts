@@ -77,6 +77,13 @@ const verticalVideo: UniversalLightboxEntity = {
   ],
 };
 
+const verticalVideoFromThumbnail: UniversalLightboxEntity = {
+  ...animatedWithPreview,
+  id: "vertical-video-thumb-1",
+  title: "Vertical clip from thumbnail",
+  initialAspectRatio: { width: 1080, height: 1920 },
+};
+
 describe("UniversalLightbox", () => {
   beforeEach(() => {
     globalThis.ResizeObserver = class {
@@ -270,8 +277,30 @@ describe("UniversalLightbox", () => {
     const source = await readFile("src/lib/components/UniversalLightbox.svelte", "utf8");
     expect(source).toContain("--lightbox-video-width-ratio");
     expect(source).toContain("class:has-natural-ratio={Boolean(currentVideoFit)}");
-    expect(source).toContain("calc((100dvh - 10rem) * var(--lightbox-video-width-ratio))");
+    expect(source).toContain("--lightbox-video-max-height: calc((100dvh - 10rem) * 0.98)");
+    expect(source).toContain("max-height: min(98%, var(--lightbox-video-max-height))");
+    expect(source).toContain("calc(var(--lightbox-video-max-height) * var(--lightbox-video-width-ratio))");
     expect(source).not.toContain("\n    aspect-ratio: 16 / 9;");
+  });
+
+  it("can size video from a thumbnail-provided ratio before full metadata hydrates", async () => {
+    render(UniversalLightboxHarness, {
+      props: { entities: [verticalVideoFromThumbnail], initialIndex: 0, onClose: vi.fn() },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("vidstack-video-player")).toBeInTheDocument();
+    });
+
+    const shell = screen.getByTestId("vidstack-video-player").closest(".lightbox-video-shell") as HTMLElement | null;
+    expect(shell).toBeInTheDocument();
+    expect(shell).toHaveClass("has-natural-ratio");
+    expect(shell?.getAttribute("style")).toContain("--lightbox-video-aspect-ratio: 1080 / 1920");
+    expect(shell?.getAttribute("style")).toContain("--lightbox-video-width-ratio: 0.5625");
+
+    const source = await readFile("src/lib/components/UniversalLightbox.svelte", "utf8");
+    expect(source).toContain("positiveNumberValue(current?.initialAspectRatio?.width)");
+    expect(source).toContain("positiveNumberValue(current?.initialAspectRatio?.height)");
   });
 
   it("keeps the lightbox video player in a real aspect-ratio box while it initializes", async () => {
@@ -300,7 +329,8 @@ describe("UniversalLightbox", () => {
     const source = await readFile("src/lib/components/UniversalLightbox.svelte", "utf8");
 
     expect(source).toContain("videoIntrinsicW");
-    expect(source).toContain("positiveNumberValue(currentTechnical?.width) ?? positiveNumberValue(videoIntrinsicW)");
+    expect(source).toContain("positiveNumberValue(currentTechnical?.width) ??");
+    expect(source).toContain("positiveNumberValue(videoIntrinsicW) ??");
     expect(source).toContain('stageEl?.querySelector("video")');
     expect(source).toContain("videoIntrinsicW = video?.videoWidth || videoIntrinsicW;");
     expect(source).toContain("videoIntrinsicH = video?.videoHeight || videoIntrinsicH;");

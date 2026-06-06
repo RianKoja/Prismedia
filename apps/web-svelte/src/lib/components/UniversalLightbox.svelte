@@ -107,8 +107,14 @@
   const hasCurrentVideoPlayback = $derived(Boolean(isCurrentVideo && primaryVideoSource));
   const primaryVideoCodec = $derived(primaryVideoSource?.quality === "original" ? currentTechnical?.codec : null);
   const currentVideoFit = $derived.by(() => {
-    const width = positiveNumberValue(currentTechnical?.width) ?? positiveNumberValue(videoIntrinsicW);
-    const height = positiveNumberValue(currentTechnical?.height) ?? positiveNumberValue(videoIntrinsicH);
+    const width =
+      positiveNumberValue(currentTechnical?.width) ??
+      positiveNumberValue(videoIntrinsicW) ??
+      positiveNumberValue(current?.initialAspectRatio?.width);
+    const height =
+      positiveNumberValue(currentTechnical?.height) ??
+      positiveNumberValue(videoIntrinsicH) ??
+      positiveNumberValue(current?.initialAspectRatio?.height);
     if (!width || !height) return null;
 
     return {
@@ -855,13 +861,14 @@
 
   .lightbox-video-shell {
     --lightbox-video-aspect-ratio: 16 / 9;
+    --lightbox-video-max-height: calc((100dvh - 10rem) * 0.98);
     --lightbox-video-width-ratio: 1.7777777778;
     position: relative;
     display: flex;
-    width: min(98dvw, 100%, calc((100dvh - 10rem) * var(--lightbox-video-width-ratio)));
+    width: min(98dvw, 100%, calc(var(--lightbox-video-max-height) * var(--lightbox-video-width-ratio)));
     max-width: min(98dvw, 100%);
     height: auto;
-    max-height: calc(100dvh - 10rem);
+    max-height: min(98%, var(--lightbox-video-max-height));
     aspect-ratio: var(--lightbox-video-aspect-ratio);
     align-items: center;
     justify-content: center;
@@ -869,7 +876,7 @@
   }
 
   .lightbox-video-shell.has-natural-ratio {
-    width: min(98dvw, 100%, calc((100dvh - 10rem) * var(--lightbox-video-width-ratio)));
+    width: min(98dvw, 100%, calc(var(--lightbox-video-max-height) * var(--lightbox-video-width-ratio)));
   }
 
   .lightbox-video-poster {
