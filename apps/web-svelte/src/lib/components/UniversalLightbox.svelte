@@ -76,6 +76,8 @@
   let videoPlayerHandle: VideoPlayerHandle | undefined = $state();
   let videoMuted = $state(true);
   let videoReady = $state(false);
+  let videoIntrinsicW = $state(0);
+  let videoIntrinsicH = $state(0);
   let warmedImages = $state<Record<string, WarmedImageDimensions>>({});
   let stripThumbEls: Array<HTMLButtonElement | undefined> = $state([]);
   let pointerStart: { x: number; y: number; t: number } | null = null;
@@ -105,8 +107,8 @@
   const hasCurrentVideoPlayback = $derived(Boolean(isCurrentVideo && primaryVideoSource));
   const primaryVideoCodec = $derived(primaryVideoSource?.quality === "original" ? currentTechnical?.codec : null);
   const currentVideoFit = $derived.by(() => {
-    const width = positiveNumberValue(currentTechnical?.width);
-    const height = positiveNumberValue(currentTechnical?.height);
+    const width = positiveNumberValue(currentTechnical?.width) ?? positiveNumberValue(videoIntrinsicW);
+    const height = positiveNumberValue(currentTechnical?.height) ?? positiveNumberValue(videoIntrinsicH);
     if (!width || !height) return null;
 
     return {
@@ -156,6 +158,8 @@
     fitScale = 1;
     videoMuted = true;
     videoReady = false;
+    videoIntrinsicW = 0;
+    videoIntrinsicH = 0;
     videoPlayerHandle = undefined;
     if (warmed) {
       scheduleFitForCurrentMedia(currentMediaKey);
@@ -266,6 +270,9 @@
   }
 
   function handleVideoCanPlay() {
+    const video = stageEl?.querySelector("video");
+    videoIntrinsicW = video?.videoWidth || videoIntrinsicW;
+    videoIntrinsicH = video?.videoHeight || videoIntrinsicH;
     videoReady = true;
   }
 

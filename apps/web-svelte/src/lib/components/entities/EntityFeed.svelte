@@ -145,9 +145,11 @@
       return buildLightboxVideoSources(entity, { preferOriginal: true })[0]?.src ?? null;
     }
 
-    const preview = buildLightboxVideoSources(entity)[0]?.src ?? null;
-    if (preview || !allowOriginalFallback) return preview;
-    return buildLightboxVideoSources(entity, { preferOriginal: true })[0]?.src ?? null;
+    if (allowOriginalFallback) {
+      return buildLightboxVideoSources(entity, { preferOriginal: true })[0]?.src ?? null;
+    }
+
+    return buildLightboxVideoSources(entity)[0]?.src ?? null;
   }
 
   // Source URL for an in-window animated image, or null when the item isn't an

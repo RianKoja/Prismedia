@@ -46,10 +46,13 @@ describe("EntityFeed animated playback", () => {
     expect(container.querySelector("video.feed-video")).toBeNull();
   });
 
-  it("falls back to the original source for the active clip when no preview exists", async () => {
+  it("uses the original source for the active image clip even when a preview is advertised", async () => {
     mockImages({
       "clip-1": imageDetail("clip-1", "Clip.webm", [
-        filesCapability([{ role: "source", path: "/media/clip.webm", mimeType: "video/webm" }]),
+        filesCapability([
+          { role: "source", path: "/media/clip.webm", mimeType: "video/webm" },
+          { role: "preview", path: "/assets/images/clip-1/preview.mp4", mimeType: "video/mp4" },
+        ]),
       ]),
     });
 

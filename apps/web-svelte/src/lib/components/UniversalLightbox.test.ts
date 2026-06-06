@@ -296,6 +296,16 @@ describe("UniversalLightbox", () => {
     expect(source).not.toContain(".lightbox-video-shell :global([data-testid=\"vidstack-video-player\"]) {\n    width: 100%;\n    max-width: 100%;\n    height: 100%;");
   });
 
+  it("learns missing video dimensions from the playing media element", async () => {
+    const source = await readFile("src/lib/components/UniversalLightbox.svelte", "utf8");
+
+    expect(source).toContain("videoIntrinsicW");
+    expect(source).toContain("positiveNumberValue(currentTechnical?.width) ?? positiveNumberValue(videoIntrinsicW)");
+    expect(source).toContain('stageEl?.querySelector("video")');
+    expect(source).toContain("videoIntrinsicW = video?.videoWidth || videoIntrinsicW;");
+    expect(source).toContain("videoIntrinsicH = video?.videoHeight || videoIntrinsicH;");
+  });
+
   it("keeps lightbox navigation in the bars instead of overlaying media", async () => {
     const source = await readFile("src/lib/components/UniversalLightbox.svelte", "utf8");
 
