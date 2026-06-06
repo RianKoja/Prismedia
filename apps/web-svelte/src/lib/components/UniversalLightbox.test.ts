@@ -271,7 +271,27 @@ describe("UniversalLightbox", () => {
     expect(source).toContain("--lightbox-video-width-ratio");
     expect(source).toContain("class:has-natural-ratio={Boolean(currentVideoFit)}");
     expect(source).toContain("calc((100dvh - 10rem) * var(--lightbox-video-width-ratio))");
-    expect(source).not.toContain("aspect-ratio: 16 / 9;");
+    expect(source).not.toContain("\n    aspect-ratio: 16 / 9;");
+  });
+
+  it("keeps the lightbox video player in a real aspect-ratio box while it initializes", async () => {
+    render(UniversalLightboxHarness, {
+      props: { entities: [animated], initialIndex: 0, onClose: vi.fn() },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("vidstack-video-player")).toBeInTheDocument();
+    });
+
+    const shell = screen.getByTestId("vidstack-video-player").closest(".lightbox-video-shell") as HTMLElement | null;
+    expect(shell).toBeInTheDocument();
+    expect(shell).not.toHaveClass("has-natural-ratio");
+
+    const source = await readFile("src/lib/components/UniversalLightbox.svelte", "utf8");
+    expect(source).toContain("--lightbox-video-aspect-ratio: 16 / 9;");
+    expect(source).toContain("aspect-ratio: var(--lightbox-video-aspect-ratio);");
+    expect(source).toContain("height: auto;");
+    expect(source).not.toContain(".lightbox-video-shell :global([data-testid=\"vidstack-video-player\"]) {\n    width: 100%;\n    max-width: 100%;\n    height: 100%;");
   });
 
   it("keeps lightbox navigation in the bars instead of overlaying media", async () => {

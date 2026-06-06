@@ -813,37 +813,41 @@
   }
 
   .media-frame :global([data-testid="vidstack-video-player"]) {
+    aspect-ratio: inherit;
     display: flex;
     align-items: center;
     justify-content: center;
     width: 100%;
-    height: 100%;
+    height: auto;
     max-width: 100%;
     max-height: 100%;
   }
 
   .media-frame :global([data-testid="vidstack-video-player"] .prismedia-player-surface) {
     width: 100%;
-    height: 100%;
+    height: auto;
     max-height: 100%;
     aspect-ratio: inherit;
   }
 
   .media-frame :global(.prismedia-media-engine) {
     width: 100%;
-    height: 100%;
+    height: auto;
     max-width: 100%;
     max-height: 100%;
     aspect-ratio: inherit;
   }
 
   .lightbox-video-shell {
+    --lightbox-video-aspect-ratio: 16 / 9;
+    --lightbox-video-width-ratio: 1.7777777778;
     position: relative;
     display: flex;
-    width: min(98dvw, 100%);
+    width: min(98dvw, 100%, calc((100dvh - 10rem) * var(--lightbox-video-width-ratio)));
     max-width: min(98dvw, 100%);
     height: auto;
     max-height: calc(100dvh - 10rem);
+    aspect-ratio: var(--lightbox-video-aspect-ratio);
     align-items: center;
     justify-content: center;
     background: #000;
@@ -851,14 +855,6 @@
 
   .lightbox-video-shell.has-natural-ratio {
     width: min(98dvw, 100%, calc((100dvh - 10rem) * var(--lightbox-video-width-ratio)));
-    height: auto;
-    aspect-ratio: var(--lightbox-video-aspect-ratio);
-  }
-
-  .lightbox-video-shell.has-natural-ratio :global([data-testid="vidstack-video-player"]),
-  .lightbox-video-shell.has-natural-ratio :global([data-testid="vidstack-video-player"] .prismedia-player-surface),
-  .lightbox-video-shell.has-natural-ratio :global(.prismedia-media-engine) {
-    aspect-ratio: var(--lightbox-video-aspect-ratio);
   }
 
   .lightbox-video-poster {
@@ -874,7 +870,7 @@
   .lightbox-video-shell :global([data-testid="vidstack-video-player"]) {
     width: 100%;
     max-width: 100%;
-    height: 100%;
+    height: auto;
     opacity: 0;
     transition: opacity 160ms ease;
   }
