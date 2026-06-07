@@ -19,15 +19,19 @@ public sealed partial class JellyfinCatalogService {
     public static readonly Guid CollectionsViewId = Guid.Parse("10000000-0000-0000-0000-000000000004");
     public static readonly Guid MoviesViewId = Guid.Parse("10000000-0000-0000-0000-000000000005");
     public static readonly Guid MusicViewId = Guid.Parse("10000000-0000-0000-0000-000000000006");
+    public static readonly Guid UnwatchedMoviesViewId = Guid.Parse("10000000-0000-0000-0000-000000000007");
+    public static readonly Guid UnwatchedSeriesViewId = Guid.Parse("10000000-0000-0000-0000-000000000008");
 
-    /// <summary>The fixed top-level library views and the entity kind each one represents.</summary>
-    private static readonly (Guid Id, string Name, string CollectionType, string Kind)[] LibraryViews =
+    /// <summary>The fixed top-level library views, entity kind, and optional forced browse filters.</summary>
+    private static readonly LibraryViewDefinition[] LibraryViews =
     [
-        (MoviesViewId, "Movies", JellyfinProtocol.CollectionTypes.Movies, "movie"),
-        (VideosViewId, "Videos", JellyfinProtocol.CollectionTypes.HomeVideos, "video"),
-        (SeriesViewId, "Series", JellyfinProtocol.CollectionTypes.Shows, "video-series"),
-        (CollectionsViewId, "Collections", JellyfinProtocol.CollectionTypes.BoxSets, "collection"),
-        (MusicViewId, "Music", JellyfinProtocol.CollectionTypes.Music, "music-artist")
+        new(MoviesViewId, "Movies", JellyfinProtocol.CollectionTypes.Movies, "movie", null),
+        new(UnwatchedMoviesViewId, "Unwatched Movies", JellyfinProtocol.CollectionTypes.Movies, "movie", false),
+        new(VideosViewId, "Videos", JellyfinProtocol.CollectionTypes.HomeVideos, "video", null),
+        new(SeriesViewId, "Series", JellyfinProtocol.CollectionTypes.Shows, "video-series", null),
+        new(UnwatchedSeriesViewId, "Unwatched Series", JellyfinProtocol.CollectionTypes.Shows, "video-series", false),
+        new(CollectionsViewId, "Collections", JellyfinProtocol.CollectionTypes.BoxSets, "collection", null),
+        new(MusicViewId, "Music", JellyfinProtocol.CollectionTypes.Music, "music-artist", null)
     ];
 
     private const int MaxBrowseItems = 5000;
@@ -53,7 +57,7 @@ public sealed partial class JellyfinCatalogService {
     }
 
     /// <summary>
-    /// Returns the Jellyfin user views (Movies, Videos, Series, Collections) without artwork.
+    /// Returns the Jellyfin user views without artwork.
     /// Used where only the view names/ids are needed (e.g. grouping options).
     /// </summary>
     public JellyfinQueryResult<JellyfinBaseItemDto> GetUserViews(string serverId) {
@@ -74,7 +78,7 @@ public sealed partial class JellyfinCatalogService {
         CancellationToken cancellationToken) {
         var views = new List<JellyfinBaseItemDto>(LibraryViews.Length);
         foreach (var view in LibraryViews) {
-            var cover = await ResolveViewCoverPathAsync(view.Id, hideNsfw, cancellationToken);
+            var cover = await ResolveViewCoverPathAsync(view, hideNsfw, cancellationToken);
             int? childCount = null;
             int? recursiveItemCount = null;
             // Advertise content counts for the Music library so music clients know it is browsable:
@@ -96,26 +100,22 @@ public sealed partial class JellyfinCatalogService {
     /// cover (the box set rarely has its own). Returns null when nothing in the view has a cover.
     /// </summary>
     private async Task<string?> ResolveViewCoverPathAsync(
-        Guid viewId,
+        LibraryViewDefinition view,
         bool hideNsfw,
         CancellationToken cancellationToken) {
-        var kind = LibraryViews.FirstOrDefault(view => view.Id == viewId).Kind;
-        if (kind is null) {
-            return null;
-        }
-
         var response = await _entities.ListAsync(
-            kind,
+            view.Kind,
             null,
             null,
             hideNsfw,
             16,
             cancellationToken,
             sort: "added",
-            sortDir: "desc");
+            sortDir: "desc",
+            played: view.ForcedPlayed);
         foreach (var thumbnail in response.Items) {
             // The Videos view shows standalone videos only, so prefer a top-level poster for its tile.
-            if (kind == "video" && thumbnail.ParentEntityId is not null) {
+            if (view.Kind == "video" && thumbnail.ParentEntityId is not null) {
                 continue;
             }
 
@@ -123,7 +123,7 @@ public sealed partial class JellyfinCatalogService {
                 return thumbnail.CoverUrl;
             }
 
-            if (kind == "collection" &&
+            if (view.Kind == "collection" &&
                 await ResolveCollectionCoverPathAsync(thumbnail.Id, hideNsfw, cancellationToken) is { } memberCover) {
                 return memberCover;
             }
@@ -141,8 +141,8 @@ public sealed partial class JellyfinCatalogService {
             Type = "AggregateFolder",
             CollectionType = "root",
             IsFolder = true,
-            ChildCount = 4,
-            RecursiveItemCount = 4,
+            ChildCount = LibraryViews.Length,
+            RecursiveItemCount = LibraryViews.Length,
             Etag = EtagFor(RootId, "root"),
             UserData = UserDataFor(RootId, isFavorite: false, playback: null)
         };
@@ -202,7 +202,7 @@ public sealed partial class JellyfinCatalogService {
 
         foreach (var view in LibraryViews) {
             if (view.Id == id) {
-                var cover = await ResolveViewCoverPathAsync(id, hideNsfw, cancellationToken);
+                var cover = await ResolveViewCoverPathAsync(view, hideNsfw, cancellationToken);
                 return VirtualFolder(view.Id, view.Name, view.CollectionType, serverId, cover);
             }
         }
@@ -266,10 +266,33 @@ public sealed partial class JellyfinCatalogService {
 
     /// <summary>Returns recently added playable videos.</summary>
     public async Task<JellyfinQueryResult<JellyfinBaseItemDto>> GetLatestAsync(
+        Guid? parentId,
         int limit,
         string serverId,
         bool hideNsfw,
         CancellationToken cancellationToken) {
+        if (parentId is { } id && ViewById(id) is { } view) {
+            var viewResponse = await _entities.ListAsync(
+                view.Kind,
+                null,
+                null,
+                hideNsfw,
+                Math.Clamp(limit, 1, 100),
+                cancellationToken,
+                sort: "added",
+                sortDir: "desc",
+                played: view.ForcedPlayed);
+            var viewItems = viewResponse.Items;
+            if (view.Id == VideosViewId) {
+                viewItems = viewItems.Where(item => item.ParentEntityId is null).ToArray();
+            } else if (view.Id == CollectionsViewId) {
+                viewItems = await FillCollectionCoversAsync(viewItems, hideNsfw, cancellationToken);
+            }
+
+            var mapped = viewItems.Select(item => MapThumbnail(item, serverId)).ToArray();
+            return new JellyfinQueryResult<JellyfinBaseItemDto>(mapped, viewResponse.TotalCount, 0);
+        }
+
         var response = await _entities.ListAsync(
             "video",
             null,
@@ -343,7 +366,8 @@ public sealed partial class JellyfinCatalogService {
         CancellationToken cancellationToken) {
         // Library views are synthetic ids with no entity row; advertise their representative poster.
         if (LibraryViews.Any(view => view.Id == id)) {
-            return await ResolveViewCoverPathAsync(id, hideNsfw, cancellationToken) is { } viewCover
+            return ViewById(id) is { } view &&
+                   await ResolveViewCoverPathAsync(view, hideNsfw, cancellationToken) is { } viewCover
                 ? [new JellyfinImageInfo("Primary", 0, EtagFor(id, viewCover))]
                 : [];
         }
@@ -384,7 +408,8 @@ public sealed partial class JellyfinCatalogService {
         // Library views are synthetic ids with no entity row; serve their representative poster.
         if (LibraryViews.Any(view => view.Id == id)) {
             return imageType.Equals("Primary", StringComparison.OrdinalIgnoreCase) &&
-                   await ResolveViewCoverPathAsync(id, hideNsfw, cancellationToken) is { } viewCover
+                   ViewById(id) is { } view &&
+                   await ResolveViewCoverPathAsync(view, hideNsfw, cancellationToken) is { } viewCover
                 ? new JellyfinImageAsset(viewCover, MimeTypeForPath(viewCover), "Primary", EtagFor(id, viewCover))
                 : null;
         }
@@ -435,34 +460,19 @@ public sealed partial class JellyfinCatalogService {
         string serverId,
         bool hideNsfw,
         CancellationToken cancellationToken) {
-        if (parentId == MoviesViewId) {
-            var thumbnails = await FetchAllThumbnailsAsync("movie", query, hideNsfw, cancellationToken);
-            return thumbnails.Select(item => MapThumbnail(item, serverId)).ToArray();
-        }
+        if (ViewById(parentId) is { } view) {
+            var thumbnails = await FetchAllThumbnailsAsync(
+                view.Kind,
+                query,
+                hideNsfw,
+                cancellationToken,
+                view.ForcedPlayed);
+            if (view.Id == VideosViewId) {
+                thumbnails = thumbnails.Where(item => item.ParentEntityId is null).ToArray();
+            } else if (view.Id == CollectionsViewId) {
+                thumbnails = await FillCollectionCoversAsync(thumbnails, hideNsfw, cancellationToken);
+            }
 
-        if (parentId == VideosViewId) {
-            var thumbnails = await FetchAllThumbnailsAsync("video", query, hideNsfw, cancellationToken);
-            return thumbnails
-                .Where(item => item.ParentEntityId is null)
-                .Select(item => MapThumbnail(item, serverId))
-                .ToArray();
-        }
-
-        if (parentId == SeriesViewId) {
-            var thumbnails = await FetchAllThumbnailsAsync("video-series", query, hideNsfw, cancellationToken);
-            return thumbnails.Select(item => MapThumbnail(item, serverId)).ToArray();
-        }
-
-        if (parentId == CollectionsViewId) {
-            var thumbnails = await FetchAllThumbnailsAsync("collection", query, hideNsfw, cancellationToken);
-            thumbnails = await FillCollectionCoversAsync(thumbnails, hideNsfw, cancellationToken);
-            return thumbnails.Select(item => MapThumbnail(item, serverId)).ToArray();
-        }
-
-        if (parentId == MusicViewId) {
-            // Top of the music tree: artists. Albums and tracks surface by drilling into an artist,
-            // handled by the generic structural-children path below with album/artist context.
-            var thumbnails = await FetchAllThumbnailsAsync("music-artist", query, hideNsfw, cancellationToken);
             return thumbnails.Select(item => MapThumbnail(item, serverId)).ToArray();
         }
 
@@ -720,7 +730,8 @@ public sealed partial class JellyfinCatalogService {
         string kind,
         JellyfinItemQuery query,
         bool hideNsfw,
-        CancellationToken cancellationToken) {
+        CancellationToken cancellationToken,
+        bool? forcedPlayed = null) {
         var results = new List<EntityThumbnail>();
         string? cursor = null;
         do {
@@ -733,7 +744,8 @@ public sealed partial class JellyfinCatalogService {
                 cancellationToken,
                 sort: ToPrismediaSort(query.SortBy),
                 sortDir: ToPrismediaSortDir(query.SortOrder),
-                favorite: query.IsFavorite);
+                favorite: query.IsFavorite,
+                played: forcedPlayed);
             results.AddRange(response.Items);
             cursor = response.NextCursor;
         } while (cursor is not null && results.Count < MaxBrowseItems);
@@ -802,5 +814,15 @@ public sealed partial class JellyfinCatalogService {
         item.Entity.Kind is "video" or "movie" or "video-series" or "video-season"
             ? MapThumbnail(item.Entity, serverId, collectionId)
             : null;
+
+    private static LibraryViewDefinition? ViewById(Guid id) =>
+        LibraryViews.FirstOrDefault(view => view.Id == id);
+
+    private sealed record LibraryViewDefinition(
+        Guid Id,
+        string Name,
+        string CollectionType,
+        string Kind,
+        bool? ForcedPlayed);
 
 }

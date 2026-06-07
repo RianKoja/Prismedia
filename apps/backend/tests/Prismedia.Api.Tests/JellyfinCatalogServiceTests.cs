@@ -16,6 +16,130 @@ public sealed class JellyfinCatalogServiceTests {
     private const string ServerId = "0123456789abcdef0123456789abcdef";
 
     [Fact]
+    public async Task UserViewsIncludeUnwatchedMovieAndSeriesLibraries() {
+        var catalog = new JellyfinCatalogService(new FakeEntityReadService(), new FakeCollections());
+
+        var views = await catalog.GetUserViewsWithArtworkAsync(ServerId, hideNsfw: false, CancellationToken.None);
+
+        Assert.Contains(views.Items, view =>
+            view.Id == JellyfinCatalogService.UnwatchedMoviesViewId &&
+            view.Name == "Unwatched Movies" &&
+            view.CollectionType == JellyfinProtocol.CollectionTypes.Movies);
+        Assert.Contains(views.Items, view =>
+            view.Id == JellyfinCatalogService.UnwatchedSeriesViewId &&
+            view.Name == "Unwatched Series" &&
+            view.CollectionType == JellyfinProtocol.CollectionTypes.Shows);
+    }
+
+    [Fact]
+    public async Task BrowsingUnwatchedMoviesUsesPlayedFilter() {
+        var unwatchedMovieId = Guid.NewGuid();
+        var watchedMovieId = Guid.NewGuid();
+        var entities = new FakeEntityReadService();
+        entities.ListByKind["movie"] = [
+            Thumb(unwatchedMovieId, "movie", "Unwatched Movie"),
+            Thumb(watchedMovieId, "movie", "Watched Movie")
+        ];
+        entities.PlayedById[unwatchedMovieId] = false;
+        entities.PlayedById[watchedMovieId] = true;
+        var catalog = new JellyfinCatalogService(entities, new FakeCollections());
+
+        var result = await catalog.GetItemsAsync(
+            Query(parentId: JellyfinCatalogService.UnwatchedMoviesViewId),
+            ServerId,
+            hideNsfw: false,
+            CancellationToken.None);
+
+        var item = Assert.Single(result.Items);
+        Assert.Equal(unwatchedMovieId, item.Id);
+        Assert.Contains(entities.ListCalls, call => call.Kind == "movie" && call.Played == false);
+    }
+
+    [Fact]
+    public async Task LatestUnderUnwatchedMoviesUsesPlayedFilter() {
+        var unwatchedMovieId = Guid.NewGuid();
+        var watchedMovieId = Guid.NewGuid();
+        var entities = new FakeEntityReadService();
+        entities.ListByKind["movie"] = [
+            Thumb(unwatchedMovieId, "movie", "Unwatched Movie"),
+            Thumb(watchedMovieId, "movie", "Watched Movie")
+        ];
+        entities.PlayedById[unwatchedMovieId] = false;
+        entities.PlayedById[watchedMovieId] = true;
+        var catalog = new JellyfinCatalogService(entities, new FakeCollections());
+
+        var result = await catalog.GetLatestAsync(
+            JellyfinCatalogService.UnwatchedMoviesViewId,
+            20,
+            ServerId,
+            hideNsfw: false,
+            CancellationToken.None);
+
+        var item = Assert.Single(result.Items);
+        Assert.Equal(unwatchedMovieId, item.Id);
+        Assert.Contains(entities.ListCalls, call => call.Kind == "movie" && call.Played == false);
+    }
+
+    [Fact]
+    public async Task BrowsingUnwatchedSeriesFiltersSeriesRowsNotEpisodes() {
+        var unwatchedSeriesId = Guid.NewGuid();
+        var watchedSeriesId = Guid.NewGuid();
+        var entities = new FakeEntityReadService();
+        entities.ListByKind["video-series"] = [
+            Thumb(unwatchedSeriesId, "video-series", "Unwatched Show"),
+            Thumb(watchedSeriesId, "video-series", "Watched Show")
+        ];
+        entities.PlayedById[unwatchedSeriesId] = false;
+        entities.PlayedById[watchedSeriesId] = true;
+        entities.Cards[unwatchedSeriesId] = new EntityCard {
+            Id = unwatchedSeriesId,
+            Kind = "video-series",
+            Title = "Unwatched Show",
+            ParentEntityId = null,
+            SortOrder = null,
+            Capabilities = [],
+            ChildrenByKind = [],
+            Relationships = []
+        };
+        var catalog = new JellyfinCatalogService(entities, new FakeCollections());
+
+        var result = await catalog.GetItemsAsync(
+            Query(parentId: JellyfinCatalogService.UnwatchedSeriesViewId),
+            ServerId,
+            hideNsfw: false,
+            CancellationToken.None);
+
+        var item = Assert.Single(result.Items);
+        Assert.Equal(unwatchedSeriesId, item.Id);
+        Assert.Equal(JellyfinProtocol.ItemTypes.Series, item.Type);
+        Assert.Contains(entities.ListCalls, call => call.Kind == "video-series" && call.Played == false);
+        Assert.DoesNotContain(entities.ListCalls, call => call.Kind == "video");
+    }
+
+    [Fact]
+    public async Task UnwatchedLibraryViewIdsResolveAsCollectionFolders() {
+        var catalog = new JellyfinCatalogService(new FakeEntityReadService(), new FakeCollections());
+
+        var movies = await catalog.GetItemAsync(
+            JellyfinCatalogService.UnwatchedMoviesViewId,
+            ServerId,
+            hideNsfw: false,
+            CancellationToken.None);
+        var series = await catalog.GetItemAsync(
+            JellyfinCatalogService.UnwatchedSeriesViewId,
+            ServerId,
+            hideNsfw: false,
+            CancellationToken.None);
+
+        Assert.NotNull(movies);
+        Assert.Equal("Unwatched Movies", movies!.Name);
+        Assert.Equal(JellyfinProtocol.ItemTypes.CollectionFolder, movies.Type);
+        Assert.NotNull(series);
+        Assert.Equal("Unwatched Series", series!.Name);
+        Assert.Equal(JellyfinProtocol.ItemTypes.CollectionFolder, series.Type);
+    }
+
+    [Fact]
     public async Task BrowsingPlayableListDoesNotHydratePerRowDetail() {
         var movieId = Guid.NewGuid();
         var entities = new FakeEntityReadService();
@@ -336,6 +460,8 @@ public sealed class JellyfinCatalogServiceTests {
         public Dictionary<string, IReadOnlyList<EntityThumbnail>> ListByKind { get; } = new();
         public Dictionary<Guid, IReadOnlyList<EntityThumbnail>> ReferencedBy { get; } = new();
         public Dictionary<Guid, EntityCard> Cards { get; } = new();
+        public Dictionary<Guid, bool> PlayedById { get; } = new();
+        public List<ListCall> ListCalls { get; } = [];
         public List<Guid> DetailCalls { get; } = [];
         public List<Guid> ReferencedByCalls { get; } = [];
 
@@ -363,12 +489,20 @@ public sealed class JellyfinCatalogServiceTests {
             bool? hasFile = null,
             bool? played = null,
             bool? orphaned = null) {
+            ListCalls.Add(new ListCall(kind, referencedBy, played));
             IReadOnlyList<EntityThumbnail> items;
             if (referencedBy is { } personId) {
                 ReferencedByCalls.Add(personId);
                 items = ReferencedBy.GetValueOrDefault(personId) ?? [];
             } else {
                 items = ListByKind.GetValueOrDefault(kind ?? string.Empty) ?? [];
+            }
+
+            if (played is { } playedFilter) {
+                items = items.Where(item =>
+                    PlayedById.TryGetValue(item.Id, out var isPlayed)
+                        ? isPlayed == playedFilter
+                        : !playedFilter).ToArray();
             }
 
             return Task.FromResult(new EntityListResponse(items, null, items.Count));
@@ -387,6 +521,8 @@ public sealed class JellyfinCatalogServiceTests {
             DetailCalls.Add(id);
             return Task.FromResult<IEntityCard?>(Cards.GetValueOrDefault(id));
         }
+
+        public sealed record ListCall(string? Kind, Guid? ReferencedBy, bool? Played);
     }
 
     private sealed class FakeCollections : ICollectionItemReadService {

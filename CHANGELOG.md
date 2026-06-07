@@ -26,6 +26,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - Images and Galleries now have a Feed view alongside Grid and List: a single, full-width column where each item shows at its real shape (tall, wide, or square) with the full title wrapped beneath it. Animated images play inline and keep playing as you scroll — the one on screen plus the next couple above and below — and a tap opens the lightbox, so the feed itself stays purely for browsing. Your filters, sort, and paging all carry over, and the choice is remembered per device.
 
 ### Added
+- Jellyfin-compatible clients now see separate Unwatched Movies and Unwatched Series libraries, so apps like Infuse can browse only titles that have not been watched yet.
 - Multi-grid detail pages now let you collapse child sections such as Sub Galleries, Images, Seasons, Volumes, and Chapters from the section heading. Each section remembers whether you left it open or folded on that device.
 - Settings now has a Transcode Cache card so prepared video never quietly fills your disk. It shows how much space the on-disk transcode/remux cache is using, lets you set a maximum size (10 GB by default; 0 for no limit), and has a one-tap "Clear cache now" button. When the cache passes the limit, the least-recently-played videos are removed automatically — always safe, since they are just re-prepared the next time you play them, and a video you are currently watching is never removed.
 - The Files tab can now upload straight into a folder. The folder's "…" menu (and a watched root's) has a new "Upload files" action that opens a file picker and drops the chosen files into that folder — no need to drag and drop, which is awkward on phones.
@@ -69,6 +70,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - Added a worker status badge to Job Control so stalled queues show when the background worker is offline.
 
 ### Fixed
+- Jellyfin unwatched movie libraries now use the same watched state Prismedia records for movie playback, including the playable child video behind a movie, and Infuse's user-scoped watched toggles now sync back into Prismedia instead of falling through to the web app.
 - Audio tracks in shared thumbnail rows, including the dashboard's Recently Watched section, now use their album artwork when the track itself has no cover art.
 - The Identify page no longer shows the Reject action while plugin search is still loading, so you only see rejection controls once there is a queued item or review result to act on.
 - Adding a new watched library now starts scans only for the media kinds enabled on that library, so audio-only, image-only, and books-only libraries no longer kick off an unnecessary video scan.
