@@ -71,6 +71,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - Added a worker status badge to Job Control so stalled queues show when the background worker is offline.
 
 ### Fixed
+- Identify proposal pages now show a full-width Back to Search button near the top on phones, so mobile reviews can be sent back to provider search without switching devices.
 - Jellyfin unwatched movie libraries now use the same watched state Prismedia records for movie playback, including the playable child video behind a movie, and Infuse's user-scoped watched toggles now sync back into Prismedia instead of falling through to the web app.
 - Audio tracks in shared thumbnail rows, including the dashboard's Recently Watched section, now use their album artwork when the track itself has no cover art.
 - The Identify page no longer shows the Reject action while plugin search is still loading, so you only see rejection controls once there is a queued item or review result to act on.
