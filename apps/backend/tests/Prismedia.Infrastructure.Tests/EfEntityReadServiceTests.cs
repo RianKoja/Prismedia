@@ -1442,6 +1442,151 @@ public sealed class EfEntityReadServiceTests {
             };
     }
 
+    [Fact]
+    public async Task GetThumbnailsAsyncUsesAlbumCoverForAudioTrackWithoutOwnCover() {
+        await using var db = CreateContext();
+        var now = DateTimeOffset.UtcNow;
+        var albumId = Guid.Parse("aaaaaaaa-0000-0000-0000-000000000001");
+        var trackId = Guid.Parse("aaaaaaaa-0000-0000-0000-000000000002");
+
+        db.Entities.AddRange(
+            new EntityRow {
+                Id = albumId,
+                KindCode = EntityKindRegistry.AudioLibrary.Code,
+                Title = "Album",
+                CreatedAt = now,
+                UpdatedAt = now
+            },
+            new EntityRow {
+                Id = trackId,
+                KindCode = EntityKindRegistry.AudioTrack.Code,
+                Title = "Track",
+                ParentEntityId = albumId,
+                CreatedAt = now,
+                UpdatedAt = now
+            });
+        db.AudioLibraryDetails.Add(new AudioLibraryDetailRow { EntityId = albumId });
+        db.AudioTrackDetails.Add(new AudioTrackDetailRow { EntityId = trackId });
+        db.EntityFiles.Add(File(albumId, EntityFileRole.Cover, "/assets/audio-libraries/album/cover.jpg", now));
+        await db.SaveChangesAsync();
+
+        var response = await CreateService(db).GetThumbnailsAsync([trackId], hideNsfw: false, CancellationToken.None);
+
+        var track = Assert.Single(response.Items);
+        Assert.Equal("/assets/audio-libraries/album/cover.jpg", track.CoverUrl);
+    }
+
+    [Fact]
+    public async Task GetThumbnailsAsyncKeepsAudioTrackOwnCoverBeforeAlbumCover() {
+        await using var db = CreateContext();
+        var now = DateTimeOffset.UtcNow;
+        var albumId = Guid.Parse("aaaaaaaa-0000-0000-0000-000000000011");
+        var trackId = Guid.Parse("aaaaaaaa-0000-0000-0000-000000000012");
+
+        db.Entities.AddRange(
+            new EntityRow {
+                Id = albumId,
+                KindCode = EntityKindRegistry.AudioLibrary.Code,
+                Title = "Album",
+                CreatedAt = now,
+                UpdatedAt = now
+            },
+            new EntityRow {
+                Id = trackId,
+                KindCode = EntityKindRegistry.AudioTrack.Code,
+                Title = "Track",
+                ParentEntityId = albumId,
+                CreatedAt = now,
+                UpdatedAt = now
+            });
+        db.AudioLibraryDetails.Add(new AudioLibraryDetailRow { EntityId = albumId });
+        db.AudioTrackDetails.Add(new AudioTrackDetailRow { EntityId = trackId });
+        db.EntityFiles.AddRange(
+            File(albumId, EntityFileRole.Cover, "/assets/audio-libraries/album/cover.jpg", now),
+            File(trackId, EntityFileRole.Cover, "/assets/audio-tracks/track/cover.jpg", now));
+        await db.SaveChangesAsync();
+
+        var response = await CreateService(db).GetThumbnailsAsync([trackId], hideNsfw: false, CancellationToken.None);
+
+        var track = Assert.Single(response.Items);
+        Assert.Equal("/assets/audio-tracks/track/cover.jpg", track.CoverUrl);
+    }
+
+    [Fact]
+    public async Task GetThumbnailsAsyncLeavesAudioTrackWithoutAlbumCoverUncovered() {
+        await using var db = CreateContext();
+        var now = DateTimeOffset.UtcNow;
+        var albumId = Guid.Parse("aaaaaaaa-0000-0000-0000-000000000021");
+        var trackId = Guid.Parse("aaaaaaaa-0000-0000-0000-000000000022");
+
+        db.Entities.AddRange(
+            new EntityRow {
+                Id = albumId,
+                KindCode = EntityKindRegistry.AudioLibrary.Code,
+                Title = "Album",
+                CreatedAt = now,
+                UpdatedAt = now
+            },
+            new EntityRow {
+                Id = trackId,
+                KindCode = EntityKindRegistry.AudioTrack.Code,
+                Title = "Track",
+                ParentEntityId = albumId,
+                CreatedAt = now,
+                UpdatedAt = now
+            });
+        db.AudioLibraryDetails.Add(new AudioLibraryDetailRow { EntityId = albumId });
+        db.AudioTrackDetails.Add(new AudioTrackDetailRow { EntityId = trackId });
+        await db.SaveChangesAsync();
+
+        var response = await CreateService(db).GetThumbnailsAsync([trackId], hideNsfw: false, CancellationToken.None);
+
+        var track = Assert.Single(response.Items);
+        Assert.Null(track.CoverUrl);
+    }
+
+    [Fact]
+    public async Task GetThumbnailsAsyncDoesNotInheritParentCoverForNonTrackChildEntities() {
+        await using var db = CreateContext();
+        var now = DateTimeOffset.UtcNow;
+        var movieId = Guid.Parse("aaaaaaaa-0000-0000-0000-000000000031");
+        var videoId = Guid.Parse("aaaaaaaa-0000-0000-0000-000000000032");
+
+        db.Entities.AddRange(
+            new EntityRow {
+                Id = movieId,
+                KindCode = EntityKindRegistry.Movie.Code,
+                Title = "Movie",
+                CreatedAt = now,
+                UpdatedAt = now
+            },
+            new EntityRow {
+                Id = videoId,
+                KindCode = EntityKindRegistry.Video.Code,
+                Title = "Feature",
+                ParentEntityId = movieId,
+                CreatedAt = now,
+                UpdatedAt = now
+            });
+        db.EntityFiles.Add(File(movieId, EntityFileRole.Cover, "/assets/movies/movie/cover.jpg", now));
+        await db.SaveChangesAsync();
+
+        var response = await CreateService(db).GetThumbnailsAsync([videoId], hideNsfw: false, CancellationToken.None);
+
+        var video = Assert.Single(response.Items);
+        Assert.Null(video.CoverUrl);
+    }
+
+    private static EntityFileRow File(Guid entityId, EntityFileRole role, string path, DateTimeOffset at) =>
+        new() {
+            Id = Guid.NewGuid(),
+            EntityId = entityId,
+            Role = role,
+            Path = path,
+            CreatedAt = at,
+            UpdatedAt = at
+        };
+
     private static EfEntityReadService CreateService(PrismediaDbContext db) {
         var repository = new EfEntityRepository(db, EntityMappers.Kinds(db), EntityMappers.Capabilities(db));
         return new EfEntityReadService(db, repository, EntityMappers.Kinds(db), ThumbnailContributors.For(db));

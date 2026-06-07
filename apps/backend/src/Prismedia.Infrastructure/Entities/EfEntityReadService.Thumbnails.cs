@@ -29,12 +29,28 @@ public sealed partial class EfEntityReadService {
             .Select(parentId => parentId!.Value)
             .Distinct()
             .ToArray();
-        var parentKindByEntity = parentIds.Length == 0
-            ? new Dictionary<Guid, string>()
+        var parentRowsByEntity = parentIds.Length == 0
+            ? new Dictionary<Guid, EntityRow>()
             : await _db.Entities.AsNoTracking()
                 .Where(parent => parentIds.Contains(parent.Id))
-                .ToDictionaryAsync(parent => parent.Id, parent => parent.KindCode, cancellationToken);
+                .ToDictionaryAsync(parent => parent.Id, cancellationToken);
+        var parentKindByEntity = parentRowsByEntity.ToDictionary(
+            pair => pair.Key,
+            pair => pair.Value.KindCode);
+        var albumParentIds = rows
+            .Where(row =>
+                row.KindCode == EntityKindRegistry.AudioTrack.Code &&
+                row.ParentEntityId is { } parentId &&
+                parentRowsByEntity.TryGetValue(parentId, out var parent) &&
+                parent.KindCode == EntityKindRegistry.AudioLibrary.Code &&
+                (!hideNsfw || !parent.IsNsfw))
+            .Select(row => row.ParentEntityId!.Value)
+            .Distinct()
+            .ToArray();
         var coverByEntity = await LoadCoverPathsAsync(ids, cancellationToken);
+        var coverByAlbumParent = albumParentIds.Length == 0
+            ? new Dictionary<Guid, string>()
+            : await LoadCoverPathsAsync(albumParentIds, cancellationToken);
         var hoverFiles = await _db.EntityFiles.AsNoTracking()
             .Where(file => ids.Contains(file.EntityId) && file.Role == EntityFileRole.Trickplay)
             .Where(file => file.Path.EndsWith(".m3u8") || file.Path.EndsWith(".vtt"))
@@ -97,6 +113,12 @@ public sealed partial class EfEntityReadService {
             var hoverImages = hoverImagesByEntity.GetValueOrDefault(row.Id) ?? [];
             var coverUrl = coverByEntity.GetValueOrDefault(row.Id);
             var bookType = bookTypeByEntity.TryGetValue(row.Id, out var value) ? value : (BookType?)null;
+            if (coverUrl is null &&
+                row.KindCode == EntityKindRegistry.AudioTrack.Code &&
+                row.ParentEntityId is { } albumId) {
+                coverUrl = coverByAlbumParent.GetValueOrDefault(albumId);
+            }
+
             if (coverUrl is null && UsesRepresentativeCover(row.KindCode) && hoverImages.Count > 0) {
                 coverUrl = hoverImages[0].Path;
             }
