@@ -21,6 +21,7 @@ public sealed partial class JellyfinCatalogService {
     public static readonly Guid MusicViewId = Guid.Parse("10000000-0000-0000-0000-000000000006");
     public static readonly Guid UnwatchedMoviesViewId = Guid.Parse("10000000-0000-0000-0000-000000000007");
     public static readonly Guid UnwatchedSeriesViewId = Guid.Parse("10000000-0000-0000-0000-000000000008");
+    private static readonly Guid FallbackSeasonIdMask = Guid.Parse("9f37a1c4-7211-4c37-9c20-93258a57f001");
 
     /// <summary>The fixed top-level library views, entity kind, and optional forced browse filters.</summary>
     private static readonly LibraryViewDefinition[] LibraryViews =
@@ -576,6 +577,10 @@ public sealed partial class JellyfinCatalogService {
         }
 
         var parent = await GetVisibleCardAsync(parentId, visibility, cancellationToken);
+        if (parent is null && TrySeriesIdFromFallbackSeasonId(parentId, out var fallbackSeriesId)) {
+            return await FallbackSeasonChildrenAsync(fallbackSeriesId, query, serverId, visibility, cancellationToken);
+        }
+
         if (parent is null) {
             return [];
         }
@@ -602,6 +607,20 @@ public sealed partial class JellyfinCatalogService {
             .Where(child => query.Recursive || child.ParentEntityId == parentId)
             .ToArray();
 
+        if (!query.Recursive &&
+            parent.Kind.Equals("video-series", StringComparison.OrdinalIgnoreCase) &&
+            RequestsItemType(query.IncludeItemTypes, JellyfinProtocol.ItemTypes.Season)) {
+            var realSeasons = childThumbnails
+                .Where(child => child.Kind.Equals("video-season", StringComparison.OrdinalIgnoreCase))
+                .ToArray();
+            if (realSeasons.Length == 0) {
+                var directEpisodes = DirectSeriesEpisodeThumbnails(parent, childThumbnails);
+                if (directEpisodes.Count > 0) {
+                    return [FallbackSeasonFolder(parent, serverId, directEpisodes.Count)];
+                }
+            }
+        }
+
         if (query.Recursive && parent.Kind.Equals("video-series", StringComparison.OrdinalIgnoreCase)) {
             var descendants = new List<JellyfinBaseItemDto>();
             foreach (var child in childThumbnails) {
@@ -626,6 +645,46 @@ public sealed partial class JellyfinCatalogService {
 
         return childThumbnails.Select(child => MapThumbnail(child, serverId, parentId, context)).ToArray();
     }
+
+    private async Task<IReadOnlyList<JellyfinBaseItemDto>> FallbackSeasonChildrenAsync(
+        Guid seriesId,
+        JellyfinItemQuery query,
+        string serverId,
+        JellyfinContentVisibility visibility,
+        CancellationToken cancellationToken) {
+        var series = await GetVisibleCardAsync(seriesId, visibility, cancellationToken);
+        if (series is null || !series.Kind.Equals("video-series", StringComparison.OrdinalIgnoreCase)) {
+            return [];
+        }
+
+        var children = series.ChildrenByKind
+            .SelectMany(group => VisibleEntities(group.Entities, visibility))
+            .Where(child => child.ParentEntityId == seriesId)
+            .ToArray();
+        if (children.Any(child => child.Kind.Equals("video-season", StringComparison.OrdinalIgnoreCase))) {
+            return [];
+        }
+
+        var episodes = DirectSeriesEpisodeThumbnails(series, children);
+        if (episodes.Count == 0) {
+            return [];
+        }
+
+        var context = FallbackSeasonContextFor(series);
+        var seasonId = FallbackSeasonIdFor(seriesId);
+        return episodes
+            .Select(episode => MapThumbnail(episode, serverId, seasonId, context))
+            .ToArray();
+    }
+
+    private static IReadOnlyList<EntityThumbnail> DirectSeriesEpisodeThumbnails(
+        IEntityCard series,
+        IReadOnlyList<EntityThumbnail> children) =>
+        children
+            .Where(child =>
+                child.ParentEntityId == series.Id &&
+                child.Kind.Equals("video", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
 
     /// <summary>
     /// Hydrates only folder-container rows (series and seasons) so their structural child counts
@@ -698,6 +757,9 @@ public sealed partial class JellyfinCatalogService {
             type.Equals(JellyfinProtocol.ItemTypes.MusicArtist, StringComparison.OrdinalIgnoreCase) ||
             type.Equals(JellyfinProtocol.ItemTypes.MusicAlbum, StringComparison.OrdinalIgnoreCase) ||
             type.Equals(JellyfinProtocol.ItemTypes.Audio, StringComparison.OrdinalIgnoreCase));
+
+    private static bool RequestsItemType(IReadOnlyList<string> types, string itemType) =>
+        types.Any(type => type.Equals(itemType, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
     /// Serves a recursive, flat music query (artists, albums, and/or songs) the way Jellyfin music
@@ -940,6 +1002,24 @@ public sealed partial class JellyfinCatalogService {
 
     private static LibraryViewDefinition? ViewById(Guid id) =>
         LibraryViews.FirstOrDefault(view => view.Id == id);
+
+    private static Guid FallbackSeasonIdFor(Guid seriesId) =>
+        XorGuids(seriesId, FallbackSeasonIdMask);
+
+    private static bool TrySeriesIdFromFallbackSeasonId(Guid seasonId, out Guid seriesId) {
+        seriesId = XorGuids(seasonId, FallbackSeasonIdMask);
+        return true;
+    }
+
+    private static Guid XorGuids(Guid left, Guid right) {
+        var leftBytes = left.ToByteArray();
+        var rightBytes = right.ToByteArray();
+        for (var index = 0; index < leftBytes.Length; index++) {
+            leftBytes[index] ^= rightBytes[index];
+        }
+
+        return new Guid(leftBytes);
+    }
 
     private async Task<EntityCard?> GetVisibleCardAsync(
         Guid id,
