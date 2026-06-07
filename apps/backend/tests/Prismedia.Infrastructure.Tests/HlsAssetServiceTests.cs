@@ -781,6 +781,46 @@ public sealed class HlsAssetServiceTests : IDisposable {
     }
 
     [Fact]
+    public async Task VirtualHlsPlaylistChainCarriesRequestedAudioStreamToSegments() {
+        var videoId = Guid.Parse("b1b1b1b1-b1b1-b1b1-b1b1-b1b1b1b1b1b1");
+        var sourcePath = Path.Combine(_cacheRoot, "source.mkv");
+        await File.WriteAllTextAsync(sourcePath, "source");
+        var process = new ManifestWritingProcessExecutor();
+        var service = new HlsAssetService(
+            new HlsAssetServiceOptions(_cacheRoot),
+            new FakeVideoSourceService(new VideoSourceFile(
+                videoId,
+                sourcePath,
+                "video/x-matroska",
+                false,
+                DurationSeconds: 13,
+                Width: 1920,
+                Height: 960,
+                Streams:
+                [
+                    new(0, "Video", "h264", null, "Video", 1920, 960, 24, null, null, null, true, false),
+                    new(1, "Audio", "aac", "jpn", "Japanese", null, null, null, null, 48000, 2, true, false),
+                    new(2, "Audio", "aac", "eng", "English", null, null, null, null, 48000, 2, false, false)
+                ])),
+            process,
+            NullLogger<HlsAssetService>.Instance);
+
+        var master = await service.GetAssetAsync(videoId, "master.m3u8", 2, CancellationToken.None);
+        var variant = await service.GetAssetAsync(videoId, "v/720p/stream.m3u8", 2, CancellationToken.None);
+        var segment = await service.GetAssetAsync(videoId, "v/720p/seg_00000.ts", 2, CancellationToken.None);
+
+        Assert.NotNull(master);
+        Assert.NotNull(variant);
+        Assert.NotNull(segment);
+        var masterPlaylist = await File.ReadAllTextAsync(master.Path);
+        var variantPlaylist = await File.ReadAllTextAsync(variant.Path);
+        Assert.Contains("/stream.m3u8?AudioStreamIndex=2", masterPlaylist);
+        Assert.Contains("seg_00000.ts?AudioStreamIndex=2", variantPlaylist);
+        var arguments = Assert.Single(process.ArgumentHistory);
+        Assert.Contains("0:2?", arguments);
+    }
+
+    [Fact]
     public async Task VirtualSegmentsToneMapHdrSourcesToBt709SoftwareOutput() {
         var videoId = Guid.Parse("abababab-abab-abab-abab-abababababab");
         var sourcePath = Path.Combine(_cacheRoot, "hdr-source.mkv");
@@ -1006,6 +1046,7 @@ public sealed class HlsAssetServiceTests : IDisposable {
     }
 
     public void Dispose() {
+        HlsAssetService.CancelAllActiveGenerations();
         if (Directory.Exists(_cacheRoot)) {
             DeleteDirectoryWithRetry(_cacheRoot);
         }

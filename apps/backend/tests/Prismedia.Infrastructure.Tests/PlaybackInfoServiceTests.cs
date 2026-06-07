@@ -80,6 +80,49 @@ public sealed class PlaybackInfoServiceTests {
     }
 
     [Fact]
+    public async Task PlaybackInfoForDirectPlayableMultiAudioSourceStillUsesHlsSelection() {
+        var videoId = Guid.Parse("3a3a3a3a-3a3a-3a3a-3a3a-3a3a3a3a3a3a");
+        var service = new PlaybackInfoService(
+            new FakeVideoSourceService(new VideoSourceFile(
+                videoId,
+                "/media/movie.mp4",
+                "video/mp4",
+                true,
+                DurationSeconds: 60,
+                Width: 1920,
+                Height: 1080,
+                Container: "mp4",
+                VideoCodec: "h264",
+                AudioCodec: "aac",
+                Streams:
+                [
+                    new(0, "Video", "h264", null, "Video", 1920, 1080, 24, null, null, null, true, false),
+                    new(1, "Audio", "aac", "jpn", "Japanese", null, null, null, null, 48000, 2, true, false),
+                    new(2, "Audio", "aac", "eng", "English", null, null, null, null, 48000, 2, false, false)
+                ])),
+            new TranscodeSessionService());
+
+        var info = await service.GetPlaybackInfoAsync(videoId, new PlaybackInfoQuery {
+            AudioStreamIndex = 2,
+            EnableDirectPlay = true,
+            EnableDirectStream = true,
+            EnableTranscoding = true,
+            Profile = new ClientPlaybackProfile(
+                80_000_000,
+                [new ClientDirectPlayProfile("Video", "mp4", "h264", "aac")])
+        }, CancellationToken.None);
+
+        Assert.NotNull(info);
+        var source = Assert.Single(info.MediaSources);
+        Assert.False(source.SupportsDirectPlay);
+        Assert.False(source.SupportsDirectStream);
+        Assert.StartsWith($"/Videos/{videoId:D}/hls/remux/stream.m3u8", source.TranscodingUrl);
+        Assert.Contains("AudioStreamIndex=2", source.TranscodingUrl);
+        Assert.True(source.MediaStreams.Single(stream => stream.Index == 2).IsDefault);
+        Assert.False(source.MediaStreams.Single(stream => stream.Index == 1).IsDefault);
+    }
+
+    [Fact]
     public async Task PlaybackInfoDisablesDirectPlayForHdrUnlessClientAdvertisesRangeSupport() {
         var videoId = Guid.Parse("45454545-4545-4545-4545-454545454545");
         var service = new PlaybackInfoService(
