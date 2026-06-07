@@ -658,13 +658,13 @@
                   !profile.enabled && "opacity-55",
                 )}
               >
-                <div class="flex min-w-0 items-start gap-2.5">
+                <div class="grid gap-2 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-start">
                   <StatusLed status={profile.enabled ? "active" : "idle"} size="sm" />
-                  <div class="min-w-0 flex-1">
+                  <div class="min-w-0 space-y-1.5">
                     <span class="block truncate text-[0.82rem] font-medium leading-snug text-text-primary">
                       {profile.displayName}
                     </span>
-                    <div class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <div class="flex min-w-0 flex-col gap-1 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-2">
                       <span class="truncate font-mono text-[0.68rem] text-text-muted">
                         {profile.username}
                       </span>
@@ -681,9 +681,9 @@
                   </div>
                 </div>
 
-                <div class="grid gap-2 sm:grid-cols-2 xl:grid-cols-[repeat(3,minmax(7.5rem,1fr))_2.25rem]">
-                  <div class="flex min-h-9 items-center justify-between gap-3 sm:justify-start">
-                    <span class="text-label text-text-muted">SFW</span>
+                <div class="grid gap-2 md:grid-cols-3">
+                  <div class="flex min-h-11 items-center justify-between gap-4 rounded-xs border border-border-subtle bg-surface-1/60 px-3 py-2">
+                    <span class="text-label whitespace-nowrap text-text-muted">SFW</span>
                     <Toggle
                       size="sm"
                       checked={profile.allowSfw}
@@ -692,8 +692,8 @@
                       onchange={(checked) => void patchProfile(profile.id, { allowSfw: checked })}
                     />
                   </div>
-                  <div class="flex min-h-9 items-center justify-between gap-3 sm:justify-start">
-                    <span class="text-label text-text-muted">NSFW</span>
+                  <div class="flex min-h-11 items-center justify-between gap-4 rounded-xs border border-border-subtle bg-surface-1/60 px-3 py-2">
+                    <span class="text-label whitespace-nowrap text-text-muted">NSFW</span>
                     <Toggle
                       size="sm"
                       checked={profile.allowNsfw}
@@ -702,8 +702,8 @@
                       onchange={(checked) => void patchProfile(profile.id, { allowNsfw: checked })}
                     />
                   </div>
-                  <div class="flex min-h-9 items-center justify-between gap-3 sm:justify-start">
-                    <span class="text-label text-text-muted">Enabled</span>
+                  <div class="flex min-h-11 items-center justify-between gap-4 rounded-xs border border-border-subtle bg-surface-1/60 px-3 py-2">
+                    <span class="text-label whitespace-nowrap text-text-muted">Enabled</span>
                     <Toggle
                       size="sm"
                       checked={profile.enabled}
@@ -712,6 +712,9 @@
                       onchange={(checked) => void patchProfile(profile.id, { enabled: checked })}
                     />
                   </div>
+                </div>
+
+                <div class="flex justify-end">
                   <Button
                     type="button"
                     variant="ghost"
@@ -719,7 +722,7 @@
                     disabled={profileBusy}
                     onclick={() => void removeProfile(profile)}
                     aria-label={`Delete ${profile.username}`}
-                    class="justify-self-end text-status-error-text hover:bg-error-muted/20 sm:col-span-2 xl:col-span-1"
+                    class="text-status-error-text hover:bg-error-muted/20"
                   >
                     <Trash2 class="h-4 w-4" />
                   </Button>
