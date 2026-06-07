@@ -76,17 +76,12 @@ public sealed class PlaybackInfoService : IPlaybackInfoService {
             directStreamAllowed: request?.EnableDirectStream != false,
             transcodingAllowed: transcodingAllowed);
 
-        // A DirectPlay verdict serves the raw file, where the browser/container chooses audio on
-        // its own. Multi-audio playback must stay on the HLS path so the selected AudioStreamIndex
-        // reaches ffmpeg instead of only changing UI state.
-        var requiresServerAudioSelection = AudioStreamCount(source) > 1;
-        var supportsDirectPlayback = decision.Method == VideoPlaybackMethod.DirectPlay && !requiresServerAudioSelection;
+        // A DirectPlay verdict serves the raw file; a Remux verdict serves a stream-copy fMP4 HLS
+        // (video copied, audio to AAC) so a client that can decode the codec but not the container
+        // avoids an expensive re-encode; anything else is a full transcode.
+        var supportsDirectPlayback = decision.Method == VideoPlaybackMethod.DirectPlay;
         var serveTranscode = transcodingAllowed && !supportsDirectPlayback;
-        var isRemux = serveTranscode &&
-            (decision.Method == VideoPlaybackMethod.Remux ||
-                (decision.Method == VideoPlaybackMethod.DirectPlay &&
-                    requiresServerAudioSelection &&
-                    request?.EnableDirectStream != false));
+        var isRemux = serveTranscode && decision.Method == VideoPlaybackMethod.Remux;
 
         string? transcodingUrl = null;
         string? transcodingSubProtocol = null;
@@ -183,10 +178,6 @@ public sealed class PlaybackInfoService : IPlaybackInfoService {
             audioStreams.FirstOrDefault(stream => stream.IsDefault) ??
             audioStreams[0];
     }
-
-    private static int AudioStreamCount(VideoSourceFile source) =>
-        source.Streams?
-            .Count(stream => stream.Type.Equals("Audio", StringComparison.OrdinalIgnoreCase)) ?? 0;
 
     private static VideoSourceStream? SelectPreferredAudioStream(
         IReadOnlyList<VideoSourceStream> audioStreams,
