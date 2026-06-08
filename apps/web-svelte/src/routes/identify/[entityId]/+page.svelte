@@ -43,7 +43,7 @@
     store.identifyingId === current?.entityId ? store.identifyingStatus : null,
   );
   const isIdentifyingCurrent = $derived(store.identifyingId === current?.entityId);
-  const backToSearchBusy = $derived(searching || store.identifyingId === current?.entityId);
+  const backToSearchDisabled = $derived(isIdentifyingCurrent);
   const activeReviewChild = $derived(
     store.view.kind === "review-child" && store.view.entity.id === entityId ? store.view : null,
   );
@@ -97,12 +97,7 @@
 
   async function backToSearch() {
     if (!current || !activeProvider) return;
-    searching = true;
-    try {
-      await store.backToSearch(current.entity, activeProvider.id);
-    } finally {
-      searching = false;
-    }
+    await store.backToSearch(current.entity, activeProvider.id);
   }
 
   function goToQueueItem(item: typeof prevQueueItem) {
@@ -162,14 +157,10 @@
       <button
         type="button"
         class="inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-xs border border-border-accent bg-accent-950/30 px-3 text-[0.8rem] font-medium text-text-accent shadow-[0_0_18px_rgba(242,194,106,0.10)] transition-colors hover:bg-accent-950/45 disabled:cursor-not-allowed disabled:opacity-40 md:hidden"
-        disabled={backToSearchBusy}
+        disabled={backToSearchDisabled}
         onclick={backToSearch}
       >
-        {#if backToSearchBusy}
-          <Loader2 class="h-3.5 w-3.5 animate-spin" />
-        {:else}
-          <Search class="h-3.5 w-3.5" />
-        {/if}
+        <Search class="h-3.5 w-3.5" />
         Back to Search
       </button>
     {/if}
@@ -190,14 +181,10 @@
         <button
           type="button"
           class="hidden h-8 items-center gap-1.5 rounded-xs border border-border-default bg-surface-2 px-2.5 text-[0.76rem] text-text-muted transition-colors hover:border-border-accent hover:text-text-accent disabled:cursor-not-allowed disabled:opacity-40 md:inline-flex"
-          disabled={backToSearchBusy}
+          disabled={backToSearchDisabled}
           onclick={backToSearch}
         >
-          {#if backToSearchBusy}
-            <Loader2 class="h-3.5 w-3.5 animate-spin" />
-          {:else}
-            <Search class="h-3.5 w-3.5" />
-          {/if}
+          <Search class="h-3.5 w-3.5" />
           Back to Search
         </button>
       {/if}
