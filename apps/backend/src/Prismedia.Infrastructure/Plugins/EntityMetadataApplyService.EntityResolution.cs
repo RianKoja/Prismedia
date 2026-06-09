@@ -5,13 +5,26 @@ using Prismedia.Infrastructure.Persistence.Entities;
 namespace Prismedia.Infrastructure.Plugins;
 
 public sealed partial class EntityMetadataApplyService {
+    /// <summary>
+    /// Legacy patch-boundary alias accepted for Movie entities in addition to canonical
+    /// <see cref="EntityKind"/> codes. Nothing in the app produces it today; it is tolerated
+    /// for older clients/plugins that addressed movies by this token. prism-vocab: external
+    /// </summary>
+    private const string LegacyMovieExpectedKind = "video-movie";
+
+    /// <summary>
+    /// Whether an entity of <paramref name="entityKind"/> may be patched through a route or
+    /// proposal addressed at <paramref name="expectedKind"/>. Beyond exact kind matches, a
+    /// Movie accepts the generic video code (and the legacy movie alias), and a Video accepts
+    /// the identify flow's provider-only leaf-episode token (<see cref="ProposalKind.VideoEpisode"/>).
+    /// </summary>
     private static bool IsKindCompatible(string entityKind, string expectedKind) =>
         entityKind.Equals(expectedKind, StringComparison.OrdinalIgnoreCase) ||
         (entityKind.Equals(EntityKindRegistry.Movie.Code, StringComparison.OrdinalIgnoreCase) &&
             (expectedKind.Equals(EntityKindRegistry.Video.Code, StringComparison.OrdinalIgnoreCase) ||
-             expectedKind.Equals("video-movie", StringComparison.OrdinalIgnoreCase))) ||
+             expectedKind.Equals(LegacyMovieExpectedKind, StringComparison.OrdinalIgnoreCase))) ||
         (entityKind.Equals(EntityKindRegistry.Video.Code, StringComparison.OrdinalIgnoreCase) &&
-            expectedKind.Equals("video-episode", StringComparison.OrdinalIgnoreCase));
+            expectedKind.Equals(ProposalKind.VideoEpisode.ToCode(), StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
     /// Resolves an existing entity for a proposal using one consistent rule across the whole apply
