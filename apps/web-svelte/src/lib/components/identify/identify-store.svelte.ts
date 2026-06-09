@@ -1,3 +1,4 @@
+import { THUMBNAIL_HOVER_KIND } from "$lib/api/generated/codes";
 import { goto } from "$app/navigation";
 import { createContext } from "$lib/utils/context";
 import {
@@ -1105,7 +1106,7 @@ function entityThumbnailFromDetail(detail: EntityDetailCard, fallback?: EntityCa
     sortOrder: detail.sortOrder,
     coverUrl: card.cover?.src ?? fallback?.coverUrl ?? null,
     coverThumbUrl: null,
-    hoverKind: fallback?.hoverKind ?? "none",
+    hoverKind: fallback?.hoverKind ?? THUMBNAIL_HOVER_KIND.none,
     hoverUrl: fallback?.hoverUrl ?? null,
     hoverImages: fallback?.hoverImages ?? [],
     meta: card.meta ?? fallback?.meta ?? [],
@@ -1125,7 +1126,7 @@ function entityCardFromQueueItem(item: ApiIdentifyQueueItem): EntityCard {
     sortOrder: null,
     coverUrl: null,
     coverThumbUrl: null,
-    hoverKind: "none",
+    hoverKind: THUMBNAIL_HOVER_KIND.none,
     hoverUrl: null,
     hoverImages: [],
     meta: [],

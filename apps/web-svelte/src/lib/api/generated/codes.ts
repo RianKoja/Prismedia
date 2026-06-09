@@ -203,6 +203,15 @@ export const FILE_ENTRY_KIND = {
 
 export type FileEntryKindCode = (typeof FILE_ENTRY_KIND)[keyof typeof FILE_ENTRY_KIND];
 
+export const THUMBNAIL_HOVER_KIND = {
+  none: "none",
+  sprite: "sprite",
+  imageSequence: "image-sequence",
+  trickplay: "trickplay",
+} as const;
+
+export type ThumbnailHoverKindCode = (typeof THUMBNAIL_HOVER_KIND)[keyof typeof THUMBNAIL_HOVER_KIND];
+
 export const CAPABILITY_KIND = {
   classification: "classification",
   dates: "dates",

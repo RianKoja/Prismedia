@@ -294,6 +294,7 @@ export * from './startBulkIdentifyParams';
 export * from './stashScraperListing';
 export * from './studioDetail';
 export * from './tagDetail';
+export * from './thumbnailHoverKind';
 export * from './transcodeCacheStatusResponse';
 export * from './transcodingInfo';
 export * from './updateCheckResponse';
