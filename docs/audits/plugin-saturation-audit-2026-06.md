@@ -12,9 +12,31 @@ Tested live: **TMDB 1.1.5** (movie, series cascade, person, studio), **YouTube
 1.2.1** (video by bracketed id / url / search, music artist with 203-album cascade,
 album, track), **MusicBrainz 1.1.1** (artist, album with track children, track),
 **MangaDex 1.1.3** (book cascade over 20 volumes / 185 chapters, NSFW oneshot,
-volume- and chapter-level identify). **AniList 1.0.1** was installed but the AniList
-GraphQL API was globally disabled (403, upstream outage) during the audit — live
-testing is pending; re-run the JUJUTSU KAISEN series cascade when it returns.
+volume- and chapter-level identify), **AniList 1.0.1** (JJK series cascade with
+relation-BFS season mapping, season identify — tested 2026-06-10 after the upstream
+outage lifted).
+
+## Fix status (2026-06-10)
+
+Fixed and verified live:
+- **P0-1/P0-2/P0-3** (below): replace-path deletion, transient-apply pipeline
+  unification, and partial-precision dates — fixed in `fix(api): stop identify
+  applies from deleting re-sent dates, stats, and positions`. Verified: double-apply
+  preserves dates/stats with `plugin` provenance, ISO timestamps and year-only dates
+  apply with `precision`, cross-provider external ids survive applies (confirmed
+  independently by the AniList test). The single-source structural-children dedup
+  also landed.
+- **MangaDex 1.1.4**: volume-scoped chapter matching (explicit Ch.N title numbers
+  preferred, global sort+1 heuristic removed), external-reader stub filtering,
+  fallback-language feeds keep structure but emit neutral `Chapter N` titles instead
+  of another language's, scoped-fallback no longer leaks book dates/urls (confidence
+  0.3), and MusicBrainz-style 250 ms cross-process rate limiting (the unthrottled
+  plugin got the dev IP temporarily blocked by MangaDex's edge during this audit).
+  Verified on TPN: all 185 chapters bind to their correct local files across 20
+  volumes; the previously corrupted chapters were repaired from archive filenames.
+
+Still open: everything in §3 per-plugin drops, §4 model gaps, §5 new sources, and
+the AniList plugin issues below.
 
 ---
 
@@ -227,13 +249,40 @@ tag groups (genre/theme/format) flattened; cover urls always the 512px thumbnail
 `contentRating` safe/suggestive distinction dropped; related manga (sequel/
 spin-off) unfetchable into the model (see gaps).
 
-### AniList — pending upstream recovery
-Installed and enabled during the audit; AniList's GraphQL API was globally disabled
-(403) the entire window. Re-test when it returns: JUJUTSU KAISEN series cascade
-(AniList models each season as a separate Media entry — verify the season mapping
-and that applied seasons carry anilist ids for round-trip lookup-id), `idMal`
-passthrough, `isAdult` → NSFW flag, banner/cover kinds, relations (sequel/prequel)
-handling, staff/character credits.
+### AniList (tested 2026-06-10)
+Live results: the per-season Media model maps correctly — the plugin BFS-walks
+PREQUEL/SEQUEL relations, date-orders the parts, and binds local season N to the
+Nth part (local Season 3 → "Culling Game Part 1", anilist 172463, correct dates and
+episode count). Series carries `anilist`+`mal` ids; season/episode get anilist ids
+for round-trip lookup-id; banner + poster artwork verified on disk; zero duplicate
+entities; the backend P0 fixes were independently confirmed during the apply.
+
+Bugs:
+- **Placeholder episode titles clobber real ones**: the plugin emits `"Episode N"`
+  for episodes, and cascade children apply every patch field — a real episode title
+  was renamed to "Episode 11" (restored manually). Fix: don't emit placeholder
+  titles, or fetch `streamingEpisodes` for real ones.
+- Series node is just AniList's season-1 media — series-level dates/stats describe
+  only season 1 (episodeCount degraded 59→24). Should aggregate the parts.
+- Characters are mis-modeled as person *relationship* proposals with empty root
+  credits → zero cast links persist. Voice actors/staff should ride the root
+  `Credits` (and "character" isn't in the `CreditRole` code set).
+- Producer studios ride as relationship nodes but only `patch.Studio` makes a link
+  — effectively dropped.
+- No rate-limit handling at all (no 429/Retry-After, no pacing); a 10-season series
+  cascade ≈ 100 uncached GraphQL calls vs AniList's 90/min. Same fix as MangaDex
+  1.1.4 applies. One failed child identify silently drops that child.
+
+Drops (queried but discarded at deserialization): `averageScore` (→ Rating),
+`isAdult` (→ NSFW flag), `status` (no free Classification slot), `season`/
+`seasonYear`, `coverImage.color`. Never queried: synonyms (no alias home), staff,
+voice actors, `streamingEpisodes` (episode titles + thumbnails), `airingSchedule`
+(per-episode air dates), `externalLinks`, trailer, tag `isAdult`/`isSpoiler` flags
+(spoiler tags can leak into the library), `source`, `countryOfOrigin`. The plugin
+also pads fuzzy dates to full days (fabricated precision) — the backend now accepts
+`"2026"`/`"2026-01"` raw. Date-code vocabulary split: AniList writes
+`started`/`ended` next to TMDB's `firstAir`/`lastAir` with no normalization.
+Neither `anilist` nor `mal` are in the known-provider constants/codegen.
 
 ---
 
