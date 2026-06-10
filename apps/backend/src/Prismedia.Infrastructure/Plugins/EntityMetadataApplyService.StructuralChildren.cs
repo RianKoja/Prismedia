@@ -54,13 +54,73 @@ public sealed partial class EntityMetadataApplyService {
 
             var childEntity = child.TargetEntityId is { } existingId
                 ? await _db.Entities.FirstOrDefaultAsync(row => row.Id == existingId, cancellationToken)
-                : await FindStructuralChildAsync(parentEntityId, child, cancellationToken);
+                : await FindStructuralChildAsync(parentEntityId, child, cancellationToken)
+                    ?? MaterializeStructuralContainer(parentEntityId, child, now);
             if (childEntity is null || !visited.Add(childEntity.Id)) {
                 continue;
             }
 
+            await AdoptUnderParentAsync(childEntity, parentEntityId, now, cancellationToken);
             await ApplyNodeAsync(childEntity, child, isRelationship: false, now, visited, parentPath, progress, cancellationToken);
             visited.Remove(childEntity.Id);
+        }
+    }
+
+    /// <summary>
+    /// Creates the entity for provider-advertised structure the library has not scanned — a
+    /// volume for a book whose chapters sit flat in its folder, an unscanned season. Only an
+    /// identify-container kind that adopts at least one bound local descendant is created:
+    /// playable leaves and empty containers are never invented, so media files on disk remain
+    /// the sole source of playable items.
+    /// </summary>
+    private EntityRow? MaterializeStructuralContainer(Guid parentEntityId, EntityMetadataProposal child, DateTimeOffset now) {
+        var kindCode = child.TargetKind.ToEntityKind().ToCode();
+        if (!EntityKindRegistry.EnumeratesIdentifyChildren(kindCode) ||
+            string.IsNullOrWhiteSpace(child.Patch.Title) ||
+            !HasBoundStructuralDescendant(child)) {
+            return null;
+        }
+
+        var entity = CreateEntity(kindCode, child.Patch.Title.Trim(), now);
+        entity.ParentEntityId = parentEntityId;
+        return entity;
+    }
+
+    private static bool HasBoundStructuralDescendant(EntityMetadataProposal node) =>
+        (node.Children ?? []).Any(child =>
+            !EntityMetadataProposalTraversal.IsRelationshipKind(child.TargetKind) &&
+            (child.TargetEntityId is not null || HasBoundStructuralDescendant(child)));
+
+    /// <summary>
+    /// Moves an applied child under the parent the proposal nests it beneath. Applying structure
+    /// asserts the provider's hierarchy — a flat-scanned chapter adopted by its newly created
+    /// volume moves into it — but only when the child's current parent is an ancestor of the new
+    /// one, so structure only ever refines downward inside its own tree and a title collision can
+    /// never steal an entity across trees.
+    /// </summary>
+    private async Task AdoptUnderParentAsync(EntityRow child, Guid parentEntityId, DateTimeOffset now, CancellationToken cancellationToken) {
+        if (child.Id == parentEntityId || child.ParentEntityId == parentEntityId || child.ParentEntityId is not { } currentParent) {
+            return;
+        }
+
+        var cursor = parentEntityId;
+        for (var hops = 0; hops < 32; hops++) {
+            if (cursor == child.Id) {
+                return;
+            }
+
+            if (cursor == currentParent) {
+                child.ParentEntityId = parentEntityId;
+                child.UpdatedAt = now;
+                return;
+            }
+
+            var node = await _db.Entities.FindAsync([cursor], cancellationToken);
+            if (node?.ParentEntityId is not { } next) {
+                return;
+            }
+
+            cursor = next;
         }
     }
 

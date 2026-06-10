@@ -281,6 +281,147 @@ public sealed class EntityMetadataApplyServiceTests {
     }
 
     [Fact]
+    public async Task ApplyMaterializesProviderContainerAndAdoptsFlatChildren() {
+        await using var db = CreateContext();
+        var bookId = Guid.Parse("23232323-2323-2323-2323-232323232321");
+        var chapterOneId = Guid.Parse("23232323-2323-2323-2323-232323232322");
+        var chapterTwoId = Guid.Parse("23232323-2323-2323-2323-232323232323");
+        SeedEntity(db, bookId, "book", "Flat Book");
+        SeedEntity(db, chapterOneId, "book-chapter", "Flat Book Ch.1", parentEntityId: bookId, sortOrder: 0);
+        SeedEntity(db, chapterTwoId, "book-chapter", "Flat Book Ch.2", parentEntityId: bookId, sortOrder: 1);
+        await db.SaveChangesAsync();
+
+        EntityMetadataProposal Chapter(Guid target, int number) => new(
+            ProposalId: $"mangadex:m1:chapter:{number}",
+            Provider: "mangadex",
+            TargetKind: ProposalKind.BookChapter,
+            Confidence: 0.8m,
+            MatchReason: "chapter-feed",
+            Patch: EmptyPatch() with {
+                Title = $"Chapter {number}",
+                ExternalIds = new Dictionary<string, string> { ["mangadexChapter"] = $"ch-{number}" },
+                Positions = new Dictionary<string, int> { ["sortOrder"] = number - 1 }
+            },
+            Images: [],
+            Children: [],
+            Candidates: [],
+            TargetEntityId: target);
+
+        var volume = new EntityMetadataProposal(
+            ProposalId: "mangadex:m1:volume:1",
+            Provider: "mangadex",
+            TargetKind: ProposalKind.BookVolume,
+            Confidence: 0.8m,
+            MatchReason: "volume-map",
+            Patch: EmptyPatch() with {
+                Title = "Volume 1",
+                ExternalIds = new Dictionary<string, string> { ["mangadex"] = "m1", ["volume"] = "1" },
+                Positions = new Dictionary<string, int> { ["volumeNumber"] = 1 }
+            },
+            Images: [],
+            Children: [Chapter(chapterOneId, 1), Chapter(chapterTwoId, 2)],
+            Candidates: []);
+
+        var proposal = new EntityMetadataProposal(
+            ProposalId: "mangadex:m1",
+            Provider: "mangadex",
+            TargetKind: ProposalKind.Book,
+            Confidence: 0.9m,
+            MatchReason: "external-id",
+            Patch: EmptyPatch() with { Title = "Flat Book" },
+            Images: [],
+            Children: [volume],
+            Candidates: [],
+            TargetEntityId: bookId);
+
+        var service = new EntityMetadataApplyService(db, new PluginArtworkServiceOptions(Path.GetTempPath()));
+        await service.ApplyAsync(bookId, proposal, ["title"], selectedImages: null, CancellationToken.None);
+
+        var volumeRow = await db.Entities.SingleAsync(row => row.KindCode == "book-volume");
+        Assert.Equal("Volume 1", volumeRow.Title);
+        Assert.Equal(bookId, volumeRow.ParentEntityId);
+        Assert.Equal("1", (await db.EntityExternalIds.SingleAsync(row => row.EntityId == volumeRow.Id && row.Provider == "volume")).Value);
+        Assert.Equal(volumeRow.Id, (await db.Entities.SingleAsync(row => row.Id == chapterOneId)).ParentEntityId);
+        Assert.Equal(volumeRow.Id, (await db.Entities.SingleAsync(row => row.Id == chapterTwoId)).ParentEntityId);
+        Assert.Equal("ch-1", (await db.EntityExternalIds.SingleAsync(row => row.EntityId == chapterOneId && row.Provider == "mangadexChapter")).Value);
+    }
+
+    [Fact]
+    public async Task ApplyDoesNotMaterializeContainersWithoutBoundDescendants() {
+        await using var db = CreateContext();
+        var bookId = Guid.Parse("24242424-2424-2424-2424-242424242421");
+        SeedEntity(db, bookId, "book", "Sparse Book");
+        await db.SaveChangesAsync();
+
+        var emptyVolume = new EntityMetadataProposal(
+            ProposalId: "mangadex:m2:volume:9",
+            Provider: "mangadex",
+            TargetKind: ProposalKind.BookVolume,
+            Confidence: 0.8m,
+            MatchReason: "volume-map",
+            Patch: EmptyPatch() with { Title = "Volume 9" },
+            Images: [],
+            Children: [new EntityMetadataProposal(
+                "mangadex:m2:chapter:90", "mangadex", ProposalKind.BookChapter, 0.7m, "chapter-feed",
+                EmptyPatch() with { Title = "Chapter 90" }, [], [], [])],
+            Candidates: []);
+
+        var proposal = new EntityMetadataProposal(
+            ProposalId: "mangadex:m2",
+            Provider: "mangadex",
+            TargetKind: ProposalKind.Book,
+            Confidence: 0.9m,
+            MatchReason: "external-id",
+            Patch: EmptyPatch() with { Title = "Sparse Book" },
+            Images: [],
+            Children: [emptyVolume],
+            Candidates: [],
+            TargetEntityId: bookId);
+
+        var service = new EntityMetadataApplyService(db, new PluginArtworkServiceOptions(Path.GetTempPath()));
+        await service.ApplyAsync(bookId, proposal, ["title"], selectedImages: null, CancellationToken.None);
+
+        Assert.False(await db.Entities.AnyAsync(row => row.KindCode == "book-volume"));
+        Assert.False(await db.Entities.AnyAsync(row => row.KindCode == "book-chapter"));
+    }
+
+    [Fact]
+    public async Task ApplyNeverReparentsAcrossTrees() {
+        await using var db = CreateContext();
+        var bookId = Guid.Parse("25252525-2525-2525-2525-252525252521");
+        var otherBookId = Guid.Parse("25252525-2525-2525-2525-252525252522");
+        var foreignChapterId = Guid.Parse("25252525-2525-2525-2525-252525252523");
+        var localChapterId = Guid.Parse("25252525-2525-2525-2525-252525252524");
+        SeedEntity(db, bookId, "book", "Main Book");
+        SeedEntity(db, otherBookId, "book", "Other Book");
+        SeedEntity(db, foreignChapterId, "book-chapter", "Foreign Chapter", parentEntityId: otherBookId);
+        SeedEntity(db, localChapterId, "book-chapter", "Local Chapter", parentEntityId: bookId);
+        await db.SaveChangesAsync();
+
+        EntityMetadataProposal Chapter(Guid target, string title) => new(
+            $"mangadex:m3:chapter:{target:N}", "mangadex", ProposalKind.BookChapter, 0.8m, "chapter-feed",
+            EmptyPatch() with { Title = title }, [], [], [], TargetEntityId: target);
+
+        var volume = new EntityMetadataProposal(
+            "mangadex:m3:volume:1", "mangadex", ProposalKind.BookVolume, 0.8m, "volume-map",
+            EmptyPatch() with { Title = "Volume 1" }, [],
+            [Chapter(foreignChapterId, "Foreign Chapter"), Chapter(localChapterId, "Local Chapter")],
+            []);
+
+        var proposal = new EntityMetadataProposal(
+            "mangadex:m3", "mangadex", ProposalKind.Book, 0.9m, "external-id",
+            EmptyPatch() with { Title = "Main Book" }, [], [volume], [], TargetEntityId: bookId);
+
+        var service = new EntityMetadataApplyService(db, new PluginArtworkServiceOptions(Path.GetTempPath()));
+        await service.ApplyAsync(bookId, proposal, ["title"], selectedImages: null, CancellationToken.None);
+
+        var volumeRow = await db.Entities.SingleAsync(row => row.KindCode == "book-volume");
+        // The in-tree chapter moves under the new volume; the foreign book's chapter stays put.
+        Assert.Equal(volumeRow.Id, (await db.Entities.SingleAsync(row => row.Id == localChapterId)).ParentEntityId);
+        Assert.Equal(otherBookId, (await db.Entities.SingleAsync(row => row.Id == foreignChapterId)).ParentEntityId);
+    }
+
+    [Fact]
     public async Task ApplySelectedFieldsPersistsProviderIdentityAndCapabilityRows() {
         await using var db = CreateContext();
         var entityId = Guid.Parse("11111111-1111-1111-1111-111111111111");
