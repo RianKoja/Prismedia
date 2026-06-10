@@ -29,6 +29,9 @@
     reviewImagePreviewUrl,
     structuralChildEntities,
     structuralChildProposals,
+    structuralDescendantProposals,
+    newStructuralContainerProposals,
+    entityKindLabel,
     relationshipProposals,
     relationshipTitlesForDetail,
     reviewDiffFieldKeys,
@@ -84,11 +87,26 @@
   );
   const localChildEntities = $derived(structuralChildEntities(entity.kind, detail?.childrenByKind));
   const cascadeRunning = $derived(store.cascadeRunning(entity.id));
-  const childrenMeta = $derived(
-    cascadeRunning
-      ? "identifying…"
-      : `${children.length} of ${localChildEntities.length} matched`,
-  );
+  // Matches live anywhere in the proposal subtree (the cascade nests chapters inside provider
+  // volume nodes), so the meta counts local children bound anywhere in the tree — and calls out
+  // the new containers applying will create.
+  const matchedLocalChildCount = $derived.by(() => {
+    const bound = new Set(
+      structuralDescendantProposals(proposal)
+        .map((node) => node.targetEntityId)
+        .filter((id): id is string => Boolean(id)),
+    );
+    return localChildEntities.filter((child) => bound.has(child.id)).length;
+  });
+  const newContainerCount = $derived(newStructuralContainerProposals(proposal).length);
+  const newContainerKind = $derived(newStructuralContainerProposals(proposal)[0]?.targetKind ?? "");
+  const childrenMeta = $derived.by(() => {
+    if (cascadeRunning) return "identifying…";
+    const matched = `${matchedLocalChildCount} of ${localChildEntities.length} matched`;
+    return newContainerCount > 0
+      ? `${matched} · ${newContainerCount} new ${entityKindLabel(newContainerKind).toLowerCase()}`
+      : matched;
+  });
   const nextQueueItem = $derived(store.nextQueueItem(entity.id));
   const queueIndex = $derived(store.queue.findIndex((item) => item.entityId === entity.id));
   const prevQueueNavItem = $derived(queueIndex > 0 ? store.queue[queueIndex - 1] : null);

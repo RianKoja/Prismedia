@@ -101,6 +101,40 @@ export function structuralChildProposals(result: EntityMetadataProposal): Entity
   });
 }
 
+/**
+ * Depth-first flatten of a proposal's structural (non-relationship) descendants. The cascade can
+ * nest resolved children inside provider containers — a flat-scanned book's chapters arrive inside
+ * the volume nodes the provider proposes — so any surface that matches local entities against the
+ * proposal must search the whole subtree, never just the top level.
+ */
+export function structuralDescendantProposals(result: EntityMetadataProposal): EntityMetadataProposal[] {
+  const out: EntityMetadataProposal[] = [];
+  const seen = new Set<string>();
+  const walk = (node: EntityMetadataProposal) => {
+    for (const child of node.children ?? []) {
+      if (isRelationshipKind(child.targetKind) || seen.has(child.proposalId)) continue;
+      seen.add(child.proposalId);
+      out.push(child);
+      walk(child);
+    }
+  };
+  walk(result);
+  return out;
+}
+
+/**
+ * Container nodes the provider proposes that have no local entity yet — the volumes (or seasons)
+ * applying will create. Mirrors the backend materialization rule: only a container kind that
+ * adopts at least one matched local descendant is ever created, so only those are surfaced.
+ */
+export function newStructuralContainerProposals(result: EntityMetadataProposal): EntityMetadataProposal[] {
+  return structuralChildProposals(result).filter((child) =>
+    !child.targetEntityId &&
+    kindEnumeratesIdentifyChildren(child.targetKind) &&
+    structuralDescendantProposals(child).some((node) => Boolean(node.targetEntityId)),
+  );
+}
+
 export function relationshipProposals(result: EntityMetadataProposal): EntityMetadataProposal[] {
   const proposals = [
     ...(result.relationships ?? []),
@@ -659,7 +693,7 @@ export function structuralChildEntities(
     }));
 }
 
-function entityKindLabel(kind: string): string {
+export function entityKindLabel(kind: string): string {
   const normalized = kind.toLowerCase();
   if (normalized === "person") return "People";
   if (normalized === "studio") return "Studios";
