@@ -18,12 +18,11 @@
   } from "@lucide/svelte";
   import { buttonVariants, cn } from "@prismedia/ui-svelte";
   import { fetchEntities, type EntityCard } from "$lib/api/entities";
-  import { isNsfw } from "$lib/api/capabilities";
   import { entityCardToThumbnailCard } from "$lib/entities/entity-grid";
   import { resolveEntityHref } from "$lib/entities/entity-routes";
-  import type { EntityThumbnailCard } from "$lib/entities/entity-thumbnail";
+  import { iconForKind, type EntityThumbnailCard } from "$lib/entities/entity-thumbnail";
   import { useNsfw } from "$lib/nsfw/store.svelte";
-  import EntityThumbnail from "$lib/components/thumbnails/EntityThumbnail.svelte";
+  import EntityShelf from "$lib/components/entities/EntityShelf.svelte";
   import LogoMark from "$lib/components/LogoMark.svelte";
 
   type SectionStatus = "pending" | "loading" | "ready";
@@ -69,20 +68,36 @@
   let continueCards: EntityThumbnailCard[] = $state([]);
   let recentCards: EntityThumbnailCard[] = $state([]);
 
-  // The billboard features the most recent in-progress item; NSFW-flagged cards
-  // stay inside the thumbnail surface (which knows how to blur) and never go
-  // full-bleed unless the user has NSFW set to show.
-  const heroCard = $derived.by(() => {
-    for (const card of continueCards) {
-      if (!card.cover?.src) continue;
-      if (nsfw.mode !== "show" && isNsfw(card.entity.capabilities)) continue;
-      return card;
+  // The billboard always features the single most recent in-progress item so it
+  // never disagrees with the Continue row beneath it (which carries on from the
+  // second item). Cards without artwork get a material fallback backdrop.
+  const heroCard = $derived(continueCards[0] ?? null);
+  const continueRowCards = $derived(continueCards.slice(1));
+
+  /** Lucide icon for the hero fallback backdrop, derived from the entity kind. */
+  const heroFallbackIcon = $derived.by(() => {
+    if (!heroCard) return PlayCircle;
+    switch (iconForKind(heroCard.entity.kind)) {
+      case "audio":
+        return Music;
+      case "book":
+        return BookOpen;
+      case "gallery":
+        return Layers;
+      case "image":
+        return ImageIcon;
+      case "person":
+        return Users;
+      case "studio":
+        return Building2;
+      case "tag":
+        return Tag;
+      case "collection":
+        return FolderOpen;
+      default:
+        return Film;
     }
-    return null;
   });
-  const continueRowCards = $derived(
-    heroCard ? continueCards.filter((card) => card.entity.id !== heroCard.entity.id) : continueCards,
-  );
 
   const allSectionsSettled = $derived(sections.every((s) => s.status === "ready"));
   const hasAnyContent = $derived(
@@ -205,34 +220,6 @@
   }
 </script>
 
-{#snippet shelf(label: string, Icon: typeof Film, cards: EntityThumbnailCard[], href: string | null)}
-  <section>
-    <div class="flex items-center justify-between mb-4 px-3">
-      <h2 class="text-lg font-semibold flex items-center gap-2">
-        <Icon class="w-4.5 h-4.5 text-accent-500" />
-        {label}
-      </h2>
-      {#if href}
-        <a
-          {href}
-          class="inline-flex items-center gap-1 text-xs text-text-muted hover:text-text-accent transition-colors"
-        >
-          View all
-          <ChevronRight class="h-3.5 w-3.5" />
-        </a>
-      {/if}
-    </div>
-
-    <div class="flex gap-3 overflow-x-auto pt-1 pb-5 snap-x snap-mandatory scrollbar-hidden px-3">
-      {#each cards as card (card.entity.id)}
-        <div class="flex-none snap-start" style:width="clamp(140px, 18vw, 220px)">
-          <EntityThumbnail {card} />
-        </div>
-      {/each}
-    </div>
-  </section>
-{/snippet}
-
 {#snippet shelfSkeleton(label: string, Icon: typeof Film)}
   <section aria-hidden="true">
     <div class="flex items-center justify-between mb-4 px-3">
@@ -329,25 +316,38 @@
           class="group relative block overflow-hidden rounded-xl border border-border-subtle"
           style:height="clamp(280px, 38vh, 420px)"
         >
-          <!-- Backdrop: the asset itself, blurred and dimmed (static asset treatment). -->
-          <img
-            src={heroCard.cover?.src}
-            alt=""
-            aria-hidden="true"
-            class="absolute inset-0 h-full w-full scale-110 object-cover opacity-50 blur-2xl"
-          />
-          <!-- Sharp media frame on wider screens. -->
-          <div class="absolute inset-y-0 right-0 hidden w-[52%] md:block">
+          {#if heroCard.cover?.src}
+            <!-- Backdrop: the asset itself, blurred and dimmed (static asset treatment). -->
             <img
-              src={heroCard.cover?.src}
+              src={heroCard.cover.src}
               alt=""
-              class="h-full w-full object-cover"
+              aria-hidden="true"
+              class="absolute inset-0 h-full w-full scale-110 object-cover opacity-50 blur-2xl"
             />
+            <!-- Sharp media frame on wider screens. -->
+            <div class="absolute inset-y-0 right-0 hidden w-[52%] md:block">
+              <img
+                src={heroCard.cover.src}
+                alt=""
+                class="h-full w-full object-cover"
+              />
+              <div
+                class="absolute inset-0"
+                style:background="linear-gradient(90deg, #07080b 0%, rgba(7,8,11,0.45) 28%, rgba(7,8,11,0) 70%)"
+              ></div>
+            </div>
+          {:else}
+            <!-- No artwork: material gradient backdrop with a dim kind mark. -->
+            {@const HeroIcon = heroFallbackIcon}
             <div
               class="absolute inset-0"
-              style:background="linear-gradient(90deg, #07080b 0%, rgba(7,8,11,0.45) 28%, rgba(7,8,11,0) 70%)"
+              style:background="linear-gradient(135deg, #202734 0%, #11161d 45%, #07080b 100%)"
             ></div>
-          </div>
+            <HeroIcon
+              aria-hidden="true"
+              class="absolute right-[8%] top-1/2 hidden h-44 w-44 -translate-y-1/2 text-text-disabled opacity-25 md:block"
+            />
+          {/if}
           <div
             class="absolute inset-0"
             style:background="linear-gradient(180deg, rgba(7,8,11,0.25) 0%, rgba(7,8,11,0.55) 60%, rgba(7,8,11,0.92) 100%)"
@@ -355,7 +355,7 @@
 
           <div class="relative z-10 flex h-full max-w-2xl flex-col justify-end gap-3 p-5 sm:p-8">
             <p class="font-mono text-[11px] uppercase tracking-[0.25em] text-text-accent">
-              Continue watching
+              Continue
             </p>
             <h1 class="text-2xl font-semibold leading-tight text-text-primary sm:text-4xl">
               {heroCard.entity.title}
@@ -397,10 +397,10 @@
     {/if}
 
     {#if continueRowCards.length > 0}
-      {@render shelf("Continue Watching", PlayCircle, continueRowCards, null)}
+      <EntityShelf label="Continue" icon={PlayCircle} cards={continueRowCards} sizing="height" />
     {/if}
     {#if recentCards.length > 0}
-      {@render shelf("Recently Watched", History, recentCards, null)}
+      <EntityShelf label="Recent" icon={History} cards={recentCards} sizing="height" />
     {/if}
 
     {#each sections as section (section.kind)}
@@ -413,7 +413,12 @@
       {:else if section.display === "chips"}
         {@render chipBand(section.label, section.icon, section.cards, section.href)}
       {:else}
-        {@render shelf(section.label, section.icon, section.cards, section.href)}
+        <EntityShelf
+          label={section.label}
+          icon={section.icon}
+          cards={section.cards}
+          href={section.href}
+        />
       {/if}
     {/each}
   </div>
