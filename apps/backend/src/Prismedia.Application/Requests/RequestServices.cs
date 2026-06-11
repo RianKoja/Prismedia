@@ -124,7 +124,10 @@ public sealed class RequestSearchService(
 }
 
 /// <summary>Loads normalized detail metadata for an external request result.</summary>
-public sealed class RequestDetailService(IRequestServiceInstanceStore store, IRequestProviderClientFactory clients) {
+public sealed class RequestDetailService(
+    IRequestServiceInstanceStore store,
+    IRequestProviderClientFactory clients,
+    IRequestDetailEnrichmentSource enrichment) {
     public async Task<RequestDetailResponse?> GetAsync(RequestProviderKind source, RequestMediaKind kind, string externalId, Guid? serviceId, CancellationToken cancellationToken) {
         var instances = await store.ListDetailsAsync(cancellationToken);
         var instance = serviceId is { } id
@@ -144,7 +147,10 @@ public sealed class RequestDetailService(IRequestServiceInstanceStore store, IRe
         var client = clients.Get(source);
         var detail = await client.GetDetailAsync(instance, kind, externalId, cancellationToken);
         var options = await client.GetOptionsAsync(instance, cancellationToken);
-        return detail with { ServiceOptions = options };
+        detail = detail with { ServiceOptions = options };
+
+        var extra = await enrichment.GetAsync(kind, externalId, cancellationToken);
+        return extra is null ? detail : extra.Apply(detail);
     }
 }
 

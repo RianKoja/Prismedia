@@ -13,11 +13,20 @@ namespace Prismedia.Infrastructure.Requests;
 /// </summary>
 public static class TmdbProtocol {
     public const string SearchMovieUrl = "https://api.themoviedb.org/3/search/movie";
+    public const string MovieDetailUrlBase = "https://api.themoviedb.org/3/movie/";
+    public const string TvDetailUrlBase = "https://api.themoviedb.org/3/tv/";
+    public const string FindUrlBase = "https://api.themoviedb.org/3/find/";
     public const string QueryParam = "query";
     public const string IncludeAdultParam = "include_adult";
     public const string ApiKeyParam = "api_key";
+    public const string AppendToResponseParam = "append_to_response";
+    public const string ExternalSourceParam = "external_source";
+    public const string TvdbExternalSource = "tvdb_id";
+    public const string MovieDetailAppend = "credits,release_dates";
+    public const string TvDetailAppend = "credits,content_ratings";
 
     public const string Results = "results";
+    public const string TvResults = "tv_results";
     public const string Adult = "adult";
     public const string Id = "id";
     public const string Title = "title";
@@ -26,9 +35,41 @@ public static class TmdbProtocol {
     public const string BackdropPath = "backdrop_path";
     public const string ReleaseDate = "release_date";
     public const string VoteAverage = "vote_average";
+    public const string VoteCount = "vote_count";
+    public const string Credits = "credits";
+    public const string CastList = "cast";
+    public const string CrewList = "crew";
+    public const string Name = "name";
+    public const string Character = "character";
+    public const string Job = "job";
+    public const string ProfilePath = "profile_path";
+    public const string ReleaseDates = "release_dates";
+    public const string ContentRatings = "content_ratings";
+    public const string CountryCode = "iso_3166_1";
+    public const string Certification = "certification";
+    public const string ContentRating = "rating";
 
     public const string PosterImageBase = "https://image.tmdb.org/t/p/w342";
     public const string BackdropImageBase = "https://image.tmdb.org/t/p/w780";
+    public const string BackdropLargeImageBase = "https://image.tmdb.org/t/p/w1280";
+    public const string ProfileImageBase = "https://image.tmdb.org/t/p/w185";
+}
+
+/// <summary>
+/// Resolves the API key of the enabled TMDB metadata provider, shared by every
+/// TMDB-backed request source. Null when no enabled TMDB provider holds a key.
+/// </summary>
+public static class TmdbApiKeyResolver {
+    public static async Task<string?> ResolveAsync(PrismediaDbContext db, CancellationToken cancellationToken) =>
+        await db.ProviderConfigs
+            .AsNoTracking()
+            .Where(config => config.ProviderCode == ExternalIdProviders.Tmdb && config.Enabled)
+            .Join(
+                db.ProviderCredentials.AsNoTracking().Where(credential => credential.CredentialKey == RequestProviderHttp.ApiKeyCredential),
+                config => config.Id,
+                credential => credential.ProviderConfigId,
+                (config, credential) => credential.EncryptedValue)
+            .FirstOrDefaultAsync(cancellationToken);
 }
 
 /// <summary>
@@ -42,7 +83,7 @@ public static class TmdbProtocol {
 public sealed class TmdbAdultMovieSearchSource(HttpClient http, PrismediaDbContext db) : IAdultMovieSearchSource {
     public async Task<IReadOnlyList<RequestSearchResult>> SearchAsync(Guid serviceId, string query, CancellationToken cancellationToken) {
         try {
-            var apiKey = await GetApiKeyAsync(cancellationToken);
+            var apiKey = await TmdbApiKeyResolver.ResolveAsync(db, cancellationToken);
             if (string.IsNullOrWhiteSpace(apiKey)) {
                 return [];
             }
@@ -90,17 +131,6 @@ public sealed class TmdbAdultMovieSearchSource(HttpClient http, PrismediaDbConte
             null,
             null,
             true);
-
-    private async Task<string?> GetApiKeyAsync(CancellationToken cancellationToken) =>
-        await db.ProviderConfigs
-            .AsNoTracking()
-            .Where(config => config.ProviderCode == ExternalIdProviders.Tmdb && config.Enabled)
-            .Join(
-                db.ProviderCredentials.AsNoTracking().Where(credential => credential.CredentialKey == RequestProviderHttp.ApiKeyCredential),
-                config => config.Id,
-                credential => credential.ProviderConfigId,
-                (config, credential) => credential.EncryptedValue)
-            .FirstOrDefaultAsync(cancellationToken);
 
     private static string? ImageUrl(string baseUrl, string? path) =>
         string.IsNullOrWhiteSpace(path) ? null : baseUrl + path;

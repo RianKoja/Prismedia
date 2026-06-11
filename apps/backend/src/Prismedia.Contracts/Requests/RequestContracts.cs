@@ -137,12 +137,25 @@ public sealed record RequestDetailResponse(
     IReadOnlyList<string> Tags,
     IReadOnlyList<string> Studios,
     IReadOnlyList<string> Credits,
+    IReadOnlyList<RequestCastMember> Cast,
+    IReadOnlyList<RequestRatingValue> Ratings,
     IReadOnlyList<RequestChildOption> Children,
     IReadOnlyList<RequestTrack> Tracks,
     bool Tracked,
     string? UpstreamId,
     bool? Monitored,
     RequestServiceOptionsResponse ServiceOptions);
+
+/// <summary>One cast credit on a request detail, hydrated from the metadata provider.</summary>
+/// <param name="Role">Character or role name when known.</param>
+/// <param name="ImageUrl">Absolute profile/headshot URL when available.</param>
+public sealed record RequestCastMember(string Name, string? Role, string? ImageUrl);
+
+/// <summary>A rating from one source on a request detail.</summary>
+/// <param name="Value">Score in the source's native scale.</param>
+/// <param name="Scale">Maximum of the source's scale (10 for TMDB/IMDb, 100 for percent scores).</param>
+/// <param name="Votes">Vote count when the source reports one.</param>
+public sealed record RequestRatingValue(RequestRatingSource Source, decimal Value, decimal Scale, int? Votes);
 
 /// <summary>Selectable or informational child option, such as a season or album.</summary>
 /// <param name="Number">Ordering number where the provider has one (season number).</param>

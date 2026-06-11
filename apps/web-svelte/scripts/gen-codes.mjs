@@ -43,6 +43,7 @@ const ENUM_EXPORTS = [
   ["RequestMediaKind", "REQUEST_MEDIA_KIND", "RequestMediaKindCode"],
   ["RequestMinimumAvailability", "REQUEST_MINIMUM_AVAILABILITY", "RequestMinimumAvailabilityCode"],
   ["RequestHistoryStatus", "REQUEST_HISTORY_STATUS", "RequestHistoryStatusCode"],
+  ["RequestRatingSource", "REQUEST_RATING_SOURCE", "RequestRatingSourceCode"],
 ];
 
 const camel = (name) => (name.length === 0 ? name : name[0].toLowerCase() + name.slice(1));

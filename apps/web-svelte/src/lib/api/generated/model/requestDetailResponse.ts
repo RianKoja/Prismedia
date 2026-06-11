@@ -4,9 +4,11 @@
  * Prismedia.Api | v1
  * OpenAPI spec version: 1.0.0
  */
+import type { RequestCastMember } from './requestCastMember';
 import type { RequestChildOption } from './requestChildOption';
 import type { RequestMediaKind } from './requestMediaKind';
 import type { RequestProviderKind } from './requestProviderKind';
+import type { RequestRatingValue } from './requestRatingValue';
 import type { RequestServiceOptionsResponse } from './requestServiceOptionsResponse';
 import type { RequestTrack } from './requestTrack';
 
@@ -48,6 +50,8 @@ export interface RequestDetailResponse {
   tags: string[];
   studios: string[];
   credits: string[];
+  cast: RequestCastMember[];
+  ratings: RequestRatingValue[];
   children: RequestChildOption[];
   tracks: RequestTrack[];
   tracked: boolean;

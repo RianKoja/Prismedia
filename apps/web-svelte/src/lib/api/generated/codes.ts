@@ -284,6 +284,15 @@ export const REQUEST_HISTORY_STATUS = {
 
 export type RequestHistoryStatusCode = (typeof REQUEST_HISTORY_STATUS)[keyof typeof REQUEST_HISTORY_STATUS];
 
+export const REQUEST_RATING_SOURCE = {
+  tmdb: "tmdb",
+  imdb: "imdb",
+  rottenTomatoes: "rotten-tomatoes",
+  metacritic: "metacritic",
+} as const;
+
+export type RequestRatingSourceCode = (typeof REQUEST_RATING_SOURCE)[keyof typeof REQUEST_RATING_SOURCE];
+
 export const CAPABILITY_KIND = {
   classification: "classification",
   dates: "dates",

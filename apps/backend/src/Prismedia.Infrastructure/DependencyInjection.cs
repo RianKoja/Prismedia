@@ -266,6 +266,8 @@ public static class DependencyInjection {
         services.AddScoped<IRequestHistoryStore, EfRequestHistoryStore>();
         services.AddScoped<IAdultMovieSearchSource>(provider =>
             new TmdbAdultMovieSearchSource(new HttpClient(), provider.GetRequiredService<PrismediaDbContext>()));
+        services.AddScoped<IRequestDetailEnrichmentSource>(provider =>
+            new TmdbRequestEnrichmentSource(new HttpClient(), provider.GetRequiredService<PrismediaDbContext>()));
         services.AddScoped(_ => new RadarrRequestProviderClient(new HttpClient()));
         services.AddScoped(_ => new SonarrRequestProviderClient(new HttpClient()));
         services.AddScoped(_ => new LidarrRequestProviderClient(new HttpClient()));

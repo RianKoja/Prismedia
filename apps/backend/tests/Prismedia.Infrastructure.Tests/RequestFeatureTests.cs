@@ -336,6 +336,154 @@ public sealed class RequestFeatureTests {
     }
 
     [Fact]
+    public async Task TmdbEnrichmentHydratesMovieCastRatingsAndCertification() {
+        await using var db = CreateContext();
+        await SeedTmdbProviderAsync(db);
+
+        string? requestedUrl = null;
+        var handler = new FakeHttpHandler((request, body) => {
+            requestedUrl = request.RequestUri!.ToString();
+            return Json("""
+                {
+                  "id": 360920,
+                  "vote_average": 6.946,
+                  "vote_count": 4571,
+                  "backdrop_path": "/backdrop.jpg",
+                  "credits": {
+                    "cast": [
+                      { "name": "Benedict Cumberbatch", "character": "The Grinch (voice)", "profile_path": "/bc.jpg" },
+                      { "name": "Cameron Seely", "character": "Cindy-Lou Who (voice)", "profile_path": null }
+                    ],
+                    "crew": [
+                      { "name": "Yarrow Cheney", "job": "Director" },
+                      { "name": "Michael LeSieur", "job": "Writer" },
+                      { "name": "Some Grip", "job": "Key Grip" }
+                    ]
+                  },
+                  "release_dates": {
+                    "results": [
+                      { "iso_3166_1": "DE", "release_dates": [ { "certification": "0" } ] },
+                      { "iso_3166_1": "US", "release_dates": [ { "certification": "" }, { "certification": "PG" } ] }
+                    ]
+                  }
+                }
+                """);
+        });
+        var source = new TmdbRequestEnrichmentSource(new HttpClient(handler), db);
+
+        var enrichment = await source.GetAsync(RequestMediaKind.Movie, "360920", CancellationToken.None);
+
+        Assert.NotNull(enrichment);
+        Assert.Contains("movie/360920", requestedUrl);
+        Assert.Contains("append_to_response=credits,release_dates", requestedUrl);
+        Assert.Equal("https://image.tmdb.org/t/p/w1280/backdrop.jpg", enrichment.BackdropUrl);
+        Assert.Equal("PG", enrichment.Certification);
+        Assert.Equal(6.9m, enrichment.Rating);
+        Assert.Equal(2, enrichment.Cast.Count);
+        Assert.Equal("Benedict Cumberbatch", enrichment.Cast[0].Name);
+        Assert.Equal("The Grinch (voice)", enrichment.Cast[0].Role);
+        Assert.Equal("https://image.tmdb.org/t/p/w185/bc.jpg", enrichment.Cast[0].ImageUrl);
+        Assert.Null(enrichment.Cast[1].ImageUrl);
+        Assert.Equal(["Yarrow Cheney (Director)", "Michael LeSieur (Writer)"], enrichment.CrewCredits);
+        var rating = Assert.Single(enrichment.Ratings);
+        Assert.Equal(RequestRatingSource.Tmdb, rating.Source);
+        Assert.Equal(6.9m, rating.Value);
+        Assert.Equal(10m, rating.Scale);
+        Assert.Equal(4571, rating.Votes);
+    }
+
+    [Fact]
+    public async Task TmdbEnrichmentResolvesSeriesThroughTvdbFind() {
+        await using var db = CreateContext();
+        await SeedTmdbProviderAsync(db);
+
+        var urls = new List<string>();
+        var handler = new FakeHttpHandler((request, body) => {
+            urls.Add(request.RequestUri!.ToString());
+            if (request.RequestUri!.AbsolutePath.Contains("/find/")) {
+                return Json("""{ "tv_results": [ { "id": 1399 } ] }""");
+            }
+
+            return Json("""
+                {
+                  "id": 1399,
+                  "vote_average": 8.456,
+                  "vote_count": 21000,
+                  "backdrop_path": "/got.jpg",
+                  "credits": { "cast": [ { "name": "Emilia Clarke", "character": "Daenerys", "profile_path": "/ec.jpg" } ], "crew": [] },
+                  "content_ratings": { "results": [ { "iso_3166_1": "US", "rating": "TV-MA" } ] }
+                }
+                """);
+        });
+        var source = new TmdbRequestEnrichmentSource(new HttpClient(handler), db);
+
+        var enrichment = await source.GetAsync(RequestMediaKind.Series, "121361", CancellationToken.None);
+
+        Assert.NotNull(enrichment);
+        Assert.Contains(urls, url => url.Contains("find/121361") && url.Contains("external_source=tvdb_id"));
+        Assert.Contains(urls, url => url.Contains("tv/1399") && url.Contains("append_to_response=credits,content_ratings"));
+        Assert.Equal("TV-MA", enrichment.Certification);
+        Assert.Equal("Emilia Clarke", Assert.Single(enrichment.Cast).Name);
+    }
+
+    [Fact]
+    public async Task TmdbEnrichmentReturnsNullWithoutConfiguredProviderOrForUnsupportedKinds() {
+        await using var db = CreateContext();
+        var handler = new FakeHttpHandler((request, body) => throw new InvalidOperationException("TMDB must not be queried without a key."));
+        var source = new TmdbRequestEnrichmentSource(new HttpClient(handler), db);
+
+        Assert.Null(await source.GetAsync(RequestMediaKind.Movie, "360920", CancellationToken.None));
+
+        await SeedTmdbProviderAsync(db);
+        Assert.Null(await source.GetAsync(RequestMediaKind.Album, "mb-album", CancellationToken.None));
+    }
+
+    [Fact]
+    public void EnrichmentApplyFillsGapsAndCombinesRatingsBySource() {
+        var stub = new RequestDetailResponse(
+            RequestProviderKind.Radarr, RequestMediaKind.Movie, "360920", "The Grinch", "Illumination", 2018,
+            "Overview", "https://img/poster.jpg", null, null, 85, "PG", null,
+            ["Animation"], ["Illumination"], [],
+            [], [new RequestRatingValue(RequestRatingSource.Imdb, 6.4m, 10m, 1000), new RequestRatingValue(RequestRatingSource.Tmdb, 6.5m, 10m, 1)],
+            [], [], true, "213", true, new RequestServiceOptionsResponse([], [], [], []));
+        var enrichment = new RequestDetailEnrichment(
+            "https://img/backdrop.jpg",
+            "PG-13",
+            6.9m,
+            [new RequestCastMember("Benedict Cumberbatch", "The Grinch (voice)", null)],
+            [new RequestRatingValue(RequestRatingSource.Tmdb, 6.9m, 10m, 4571)],
+            ["Yarrow Cheney (Director)"]);
+
+        var merged = enrichment.Apply(stub);
+
+        Assert.Equal("https://img/backdrop.jpg", merged.BackdropUrl);
+        Assert.Equal("PG", merged.Certification);
+        Assert.Equal(6.9m, merged.Rating);
+        Assert.Equal("Benedict Cumberbatch", Assert.Single(merged.Cast).Name);
+        Assert.Equal(["Yarrow Cheney (Director)"], merged.Credits);
+        Assert.Equal(2, merged.Ratings.Count);
+        Assert.Equal(6.9m, merged.Ratings.Single(rating => rating.Source == RequestRatingSource.Tmdb).Value);
+        Assert.Equal(6.4m, merged.Ratings.Single(rating => rating.Source == RequestRatingSource.Imdb).Value);
+    }
+
+    private static async Task SeedTmdbProviderAsync(PrismediaDbContext db) {
+        var configId = Guid.NewGuid();
+        db.ProviderConfigs.Add(new Persistence.Entities.ProviderConfigRow {
+            Id = configId,
+            ProviderCode = Contracts.Entities.ExternalIdProviders.Tmdb,
+            DisplayName = "The Movie Database",
+            Enabled = true
+        });
+        db.ProviderCredentials.Add(new Persistence.Entities.ProviderCredentialRow {
+            Id = Guid.NewGuid(),
+            ProviderConfigId = configId,
+            CredentialKey = RequestProviderHttp.ApiKeyCredential,
+            EncryptedValue = "tmdb-key"
+        });
+        await db.SaveChangesAsync();
+    }
+
+    [Fact]
     public void AdultCertificationsGateOnlyAdultsOnlyRatings() {
         Assert.True(AdultCertifications.IsAdult("NC-17"));
         Assert.True(AdultCertifications.IsAdult("x"));
@@ -539,7 +687,7 @@ public sealed class RequestFeatureTests {
         var results = await client.SearchAsync(Instance(RequestProviderKind.Lidarr), "bowie", CancellationToken.None);
         Assert.Equal("mb-artist", Assert.Single(results).ExternalId);
 
-        var detail = new RequestDetailResponse(RequestProviderKind.Lidarr, RequestMediaKind.Artist, "mb-artist", "Bowie", null, null, null, null, null, null, null, null, null, [], [], [], [
+        var detail = new RequestDetailResponse(RequestProviderKind.Lidarr, RequestMediaKind.Artist, "mb-artist", "Bowie", null, null, null, null, null, null, null, null, null, [], [], [], [], [], [
             new RequestChildOption("9", "Low", RequestMediaKind.Album, true, null, null, null, null, null, null)
         ], [], false, null, null, new RequestServiceOptionsResponse([], [], [], []));
         await client.SubmitAsync(
@@ -642,7 +790,7 @@ public sealed class RequestFeatureTests {
             return Json("""{}""");
         });
         var client = new LidarrRequestProviderClient(new HttpClient(handler));
-        var detail = new RequestDetailResponse(RequestProviderKind.Lidarr, RequestMediaKind.Album, "mb-album", "Low", null, null, null, null, null, null, null, null, null, [], [], [], [], [], false, null, null, new RequestServiceOptionsResponse([], [], [], []));
+        var detail = new RequestDetailResponse(RequestProviderKind.Lidarr, RequestMediaKind.Album, "mb-album", "Low", null, null, null, null, null, null, null, null, null, [], [], [], [], [], [], [], false, null, null, new RequestServiceOptionsResponse([], [], [], []));
 
         var response = await client.SubmitAsync(
             Instance(RequestProviderKind.Lidarr),

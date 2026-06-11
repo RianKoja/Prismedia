@@ -31,8 +31,13 @@ public static class ArrJsonFields {
     public const string Overview = "overview";
     public const string Path = "path";
     public const string Poster = "poster";
+    public const string Imdb = "imdb";
+    public const string Metacritic = "metacritic";
     public const string QualityProfileId = "qualityProfileId";
     public const string Ratings = "ratings";
+    public const string RottenTomatoes = "rottenTomatoes";
+    public const string Tmdb = "tmdb";
+    public const string Votes = "votes";
     public const string RemoteUrl = "remoteUrl";
     public const string RootFolderPath = "rootFolderPath";
     public const string Runtime = "runtime";
@@ -821,7 +826,40 @@ public abstract class ArrRequestProviderClient(HttpClient http, RequestProviderK
         new(result.Source, result.Kind, result.ExternalId, result.Title, result.Subtitle, result.Year, result.Overview, result.PosterUrl,
             result.BackdropUrl, result.Rating, result.RuntimeMinutes, result.Certification, tracks?.Count > 0 ? tracks.Count : result.TrackCount, result.Tags,
             StringArray(item, ArrJsonFields.Studios).Concat(StringArray(item, ArrJsonFields.Networks)).ToArray(),
-            Credits(item), children, tracks ?? [], result.Tracked, result.UpstreamId, result.Monitored, EmptyOptions);
+            Credits(item), [], RatingValues(item), children, tracks ?? [], result.Tracked, result.UpstreamId, result.Monitored, EmptyOptions);
+
+    /// <summary>
+    /// Per-source ratings from the lookup's ratings block. Newer Arr payloads nest one
+    /// object per source (imdb/tmdb/rottenTomatoes/metacritic); percent sources use a
+    /// 0–100 scale and the rest 0–10.
+    /// </summary>
+    protected static IReadOnlyList<RequestRatingValue> RatingValues(JsonElement item) {
+        if (item.ValueKind != JsonValueKind.Object || !item.TryGetProperty(ArrJsonFields.Ratings, out var ratings) ||
+            ratings.ValueKind != JsonValueKind.Object) {
+            return [];
+        }
+
+        var sources = new (string Field, RequestRatingSource Source, decimal Scale)[] {
+            (ArrJsonFields.Tmdb, RequestRatingSource.Tmdb, 10m),
+            (ArrJsonFields.Imdb, RequestRatingSource.Imdb, 10m),
+            (ArrJsonFields.RottenTomatoes, RequestRatingSource.RottenTomatoes, 100m),
+            (ArrJsonFields.Metacritic, RequestRatingSource.Metacritic, 100m)
+        };
+
+        return sources
+            .Select(source => {
+                if (!ratings.TryGetProperty(source.Field, out var entry) || entry.ValueKind != JsonValueKind.Object ||
+                    !entry.TryGetProperty(ArrJsonFields.Value, out var value) ||
+                    !value.TryGetDecimal(out var rating) || rating <= 0) {
+                    return null;
+                }
+
+                return new RequestRatingValue(source.Source, Math.Round(rating, 1), source.Scale, Int(entry, ArrJsonFields.Votes));
+            })
+            .Where(rating => rating is not null)
+            .Cast<RequestRatingValue>()
+            .ToArray();
+    }
 
     /// <summary>Album runtime from Lidarr's millisecond duration field, rounded to whole minutes.</summary>
     private static int? AlbumRuntimeMinutes(JsonElement item) =>
