@@ -82,6 +82,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - Added a worker status badge to Job Control so stalled queues show when the background worker is offline.
 
 ### Fixed
+- Music request searches no longer fail with "503 Service Unavailable" on terms like "tarzan phil". Lidarr's album-only text search routes through a path on its metadata server that intermittently breaks for multi-word queries; Prismedia now searches Lidarr through the same combined artist+album endpoint Lidarr's own UI uses, which also makes music searches a single round-trip instead of two.
 - Request results no longer show broken artist images: artwork links that only resolve inside the Arr service itself are skipped in favor of real remote images, and anything that still fails to load falls back to a clean placeholder instead of a broken-image icon.
 - Opening a video or movie page no longer starts preparing the stream in the background. The poster, badges, and resume info still appear immediately, but the server only begins serving (and transcoding, when needed) the moment you press play — so browsing your library doesn't burn CPU on videos you never start.
 - The dashboard hero now always features the item you most recently played — it previously could show an older item while the row beneath led with a different one — and items without artwork get a clean fallback backdrop instead of being skipped.

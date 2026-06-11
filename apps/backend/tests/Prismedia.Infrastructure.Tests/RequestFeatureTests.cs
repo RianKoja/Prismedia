@@ -664,8 +664,8 @@ public sealed class RequestFeatureTests {
         var handler = new FakeHttpHandler((request, body) => {
             calls.Add($"{request.Method} {request.RequestUri!.AbsolutePath}");
             if (request.Method == HttpMethod.Get) {
-                if (request.RequestUri!.AbsolutePath.EndsWith("/album/lookup", StringComparison.Ordinal)) {
-                    return Json("[]");
+                if (request.RequestUri!.AbsolutePath.EndsWith("/search", StringComparison.Ordinal)) {
+                    return Json("""[{ "foreignId": "mb-artist", "artist": { "foreignArtistId": "mb-artist", "artistName": "Bowie", "overview": "Artist", "images": [] } }]""");
                 }
 
                 return Json("""[{ "foreignArtistId": "mb-artist", "artistName": "Bowie", "overview": "Artist", "images": [] }]""");
@@ -707,6 +707,25 @@ public sealed class RequestFeatureTests {
             calls.Add($"{request.Method} {request.RequestUri!.AbsolutePath}");
             if (request.RequestUri.Host == "musicbrainz.org") {
                 return Json("""{ "releases": [] }""");
+            }
+
+            if (request.RequestUri.AbsolutePath.EndsWith("/search", StringComparison.Ordinal)) {
+                return Json("""
+                    [
+                      {
+                        "foreignId": "mb-album",
+                        "album": {
+                          "id": 9,
+                          "foreignAlbumId": "mb-album",
+                          "title": "Low",
+                          "releaseDate": "1977-01-14",
+                          "overview": "Album",
+                          "artist": { "foreignArtistId": "mb-artist", "artistName": "David Bowie" },
+                          "images": [{ "coverType": "cover", "remoteUrl": "https://images.test/low.jpg" }]
+                        }
+                      }
+                    ]
+                    """);
             }
 
             if (request.RequestUri.AbsolutePath.EndsWith("/artist/lookup", StringComparison.Ordinal)) {

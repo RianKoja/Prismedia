@@ -100,6 +100,9 @@ public static class LidarrProtocol {
     public const string ArtistLookupEndpoint = "artist/lookup";
     public const string AlbumEndpoint = "album";
     public const string AlbumLookupEndpoint = "album/lookup";
+    public const string SearchEndpoint = "search";
+    public const string SearchAlbumRecord = "album";
+    public const string SearchArtistRecord = "artist";
     public const string AlbumMonitorEndpoint = "album/monitor";
     public const string AlbumSearchCommand = "AlbumSearch";
     public const string ArtistSearchCommand = "ArtistSearch";
@@ -361,12 +364,24 @@ public sealed class SonarrRequestProviderClient(HttpClient http) : ArrRequestPro
 }
 
 public sealed class LidarrRequestProviderClient(HttpClient http) : ArrRequestProviderClient(http, RequestProviderKind.Lidarr, RequestProviderHttp.LidarrApiPath) {
+    /// <summary>
+    /// Searches Lidarr through its combined <c>search</c> endpoint (artist and album
+    /// results wrapped in one list), the same path Lidarr's own UI uses. The
+    /// dedicated <c>album/lookup</c> text search routes through an album-typed query
+    /// on Lidarr's metadata server that intermittently fails with 503 for multi-word
+    /// terms, while the combined search stays healthy.
+    /// </summary>
     public override async Task<IReadOnlyList<RequestSearchResult>> SearchAsync(RequestServiceInstanceDetail instance, string query, CancellationToken cancellationToken) {
-        var artists = await GetArrayAsync(instance, $"{ApiPath}/{LidarrProtocol.ArtistLookupEndpoint}?term={Uri.EscapeDataString(query)}", cancellationToken);
-        var albums = await GetArrayAsync(instance, $"{ApiPath}/{LidarrProtocol.AlbumLookupEndpoint}?term={Uri.EscapeDataString(query)}", cancellationToken);
-        return artists.Select(item => MapArtist(instance.Id, item))
-            .Concat(albums.Select(item => MapAlbum(instance.Id, item)))
-            .ToArray();
+        var items = await GetArrayAsync(instance, $"{ApiPath}/{LidarrProtocol.SearchEndpoint}?term={Uri.EscapeDataString(query)}", cancellationToken);
+        var artists = items
+            .Select(item => Prop(item, LidarrProtocol.SearchArtistRecord))
+            .Where(record => record.ValueKind == JsonValueKind.Object)
+            .Select(record => MapArtist(instance.Id, record));
+        var albums = items
+            .Select(item => Prop(item, LidarrProtocol.SearchAlbumRecord))
+            .Where(record => record.ValueKind == JsonValueKind.Object)
+            .Select(record => MapAlbum(instance.Id, record));
+        return artists.Concat(albums).ToArray();
     }
 
     public override async Task<RequestDetailResponse> GetDetailAsync(RequestServiceInstanceDetail instance, RequestMediaKind kind, string externalId, CancellationToken cancellationToken) {
