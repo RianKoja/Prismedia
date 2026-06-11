@@ -73,7 +73,33 @@ export function useIdentifyDetailAction(
 
   const action = $derived.by((): EntityDetailActionButton | null => {
     const id = entityId();
-    if (!id || loading || (!isQueued && !hasReadyProvider)) return null;
+    if (!id) return null;
+
+    // The button always renders so the hero action row never reflows.
+    if (loading) {
+      return {
+        id: "identify",
+        label: "Identify",
+        icon: ScanSearch,
+        iconClass: "h-3.5 w-3.5",
+        title: "Checking identify providers…",
+        ariaLabel: "Identify (checking providers)",
+        disabled: true,
+      };
+    }
+
+    if (!isQueued && !hasReadyProvider) {
+      return {
+        id: "identify",
+        label: "Identify",
+        icon: ScanSearch,
+        iconClass: "h-3.5 w-3.5",
+        ariaLabel: "Identify (no compatible plugin installed)",
+        disabled: true,
+        disabledHint: "No compatible Identify plugin for this media type. Click to open Plugins and install one.",
+        onClick: () => void goto("/plugins"),
+      };
+    }
 
     return {
       id: "identify",

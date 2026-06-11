@@ -88,6 +88,13 @@
     title?: string;
     ariaLabel?: string;
     disabled?: boolean;
+    /**
+     * Hover/focus flyout shown for a disabled-looking action that stays
+     * clickable (e.g. Identify with no compatible plugin: the flyout explains
+     * why and the click leads to the fix). Without it, `disabled` renders a
+     * truly inert button.
+     */
+    disabledHint?: string;
     active?: boolean;
     hidden?: boolean;
     variant?: EntityDetailActionVariant;
@@ -1307,6 +1314,24 @@
                       <ActionIcon class={action.iconClass ?? "h-3.5 w-3.5"} fill={action.iconFill} />
                       <span class="entity-action-button-label">{action.label}</span>
                     </a>
+                  {:else if action.disabled && action.disabledHint}
+                    <span class="entity-action-flyout-host">
+                      <button
+                        type="button"
+                        class={[
+                          "entity-action-button",
+                          "entity-action-button-muted",
+                          action.variant === "danger" && "entity-action-button-danger",
+                        ]}
+                        aria-disabled="true"
+                        aria-label={action.ariaLabel ?? action.label}
+                        onclick={() => void action.onClick?.()}
+                      >
+                        <ActionIcon class={action.iconClass ?? "h-3.5 w-3.5"} fill={action.iconFill} />
+                        <span class="entity-action-button-label">{action.label}</span>
+                      </button>
+                      <span class="entity-action-flyout" role="tooltip">{action.disabledHint}</span>
+                    </span>
                   {:else}
                     <button
                       type="button"

@@ -435,6 +435,55 @@
     background: color-mix(in srgb, var(--entity-action-accent) 10%, transparent);
   }
 
+  /* Disabled-looking but still clickable: the action stays in place (no layout
+     shift) and its flyout explains how to make it available. */
+  .entity-action-button-muted {
+    color: var(--color-text-disabled, #5a6070);
+    border-color: var(--color-border-subtle, rgba(164, 172, 185, 0.07));
+    background: rgba(10, 12, 17, 0.6);
+    box-shadow: none;
+  }
+
+  .entity-action-button-muted:hover:not(:disabled) {
+    color: var(--color-text-muted, #a4acb9);
+    border-color: var(--color-border-default, rgba(164, 172, 185, 0.12));
+    background: rgba(10, 12, 17, 0.6);
+    box-shadow: none;
+  }
+
+  .entity-action-flyout-host {
+    position: relative;
+    display: inline-flex;
+  }
+
+  .entity-action-flyout {
+    position: absolute;
+    bottom: calc(100% + 0.45rem);
+    right: 0;
+    transform: translateY(2px);
+    z-index: 40;
+    width: max-content;
+    max-width: 240px;
+    padding: 0.45rem 0.6rem;
+    border: 1px solid var(--color-border-default, rgba(164, 172, 185, 0.12));
+    border-radius: var(--radius-sm, 6px);
+    background: var(--color-surface-4, #2a3038);
+    color: var(--color-text-secondary, #c8ccd4);
+    font-size: 0.72rem;
+    line-height: 1.35;
+    text-align: center;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s, transform 0.15s;
+  }
+
+  .entity-action-flyout-host:hover .entity-action-flyout,
+  .entity-action-flyout-host:focus-within .entity-action-flyout {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
   .entity-action-button-primary {
     color: color-mix(in srgb, var(--color-surface-0, #07090d) 88%, #000 12%);
     border-color: color-mix(in srgb, var(--entity-action-accent) 82%, rgba(255, 255, 255, 0.2));
