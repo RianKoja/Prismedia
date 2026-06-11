@@ -67,7 +67,9 @@
     [...new Set(services.map((service) => service.kind))] as RequestProviderKindCode[],
   );
   const availableKinds = $derived(
-    [...new Set(availableSources.flatMap((source) => kindsBySource[source] ?? []))],
+    [...new Set(availableSources.flatMap((source) => kindsBySource[source] ?? []))].sort(
+      (a, b) => sectionOrder.indexOf(a) - sectionOrder.indexOf(b),
+    ),
   );
 
   const filteredResults = $derived(
