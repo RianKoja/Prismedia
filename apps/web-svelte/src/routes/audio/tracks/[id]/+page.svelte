@@ -3,6 +3,7 @@
   import { page } from "$app/state";
   import { Play } from "@lucide/svelte";
   import EntityDetailSkeleton from "$lib/components/entities/EntityDetailSkeleton.svelte";
+  import EntityDetailHeroDates from "$lib/components/entities/EntityDetailHeroDates.svelte";
   import { fetchAudioTrack, type AudioTrackDetail } from "$lib/api/media";
   import { fetchEntityThumbnails } from "$lib/api/entities";
   import {
@@ -57,10 +58,7 @@
 
   const studio = $derived(studioCards[0]?.entity ?? null);
 
-  const dates = $derived.by(() => {
-    if (!track) return [];
-    return getCapability(track.capabilities, "dates")?.items ?? [];
-  });
+  const dates = $derived(card?.dates ?? []);
 
   const trackItem = $derived(track ? audioTrackDetailToListItem(track) : null);
 
@@ -192,10 +190,7 @@
         {#if studio}
           <a href={resolveEntityHref("studio", studio.id)} class="meta-item is-studio">{studio.title}</a>
         {/if}
-        {#each dates as date, i (date.code)}
-          {#if studio || i > 0}<span class="meta-sep"></span>{/if}
-          <span class="meta-item">{date.value}</span>
-        {/each}
+        <EntityDetailHeroDates {dates} leadingSeparator={Boolean(studio)} />
       {/snippet}
 
       {#snippet afterBody()}

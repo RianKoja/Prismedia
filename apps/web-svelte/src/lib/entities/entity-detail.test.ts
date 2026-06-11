@@ -1,6 +1,30 @@
 import { describe, expect, it } from "vitest";
 import type { EntityCard, EntityKind } from "$lib/api/generated/model";
-import { entityCardToDetailCard } from "./entity-detail";
+import { entityCardToDetailCard, formatDetailDateValue } from "./entity-detail";
+
+describe("formatDetailDateValue", () => {
+  it("humanizes full ISO dates", () => {
+    expect(formatDetailDateValue("2026-03-20")).toBe(
+      new Date(Date.UTC(2026, 2, 20)).toLocaleDateString(undefined, {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+        timeZone: "UTC",
+      }),
+    );
+  });
+
+  it("humanizes year-month values without inventing a day", () => {
+    const formatted = formatDetailDateValue("2026-03");
+    expect(formatted).toContain("2026");
+    expect(formatted).not.toMatch(/\b1\b/);
+  });
+
+  it("passes through bare years and non-dates unchanged", () => {
+    expect(formatDetailDateValue("2026")).toBe("2026");
+    expect(formatDetailDateValue("unknown")).toBe("unknown");
+  });
+});
 
 describe("entity detail view model", () => {
   it("uses backdrop artwork for the hero while keeping poster artwork for the poster slot", () => {

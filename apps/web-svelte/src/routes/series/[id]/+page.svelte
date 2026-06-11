@@ -68,16 +68,11 @@
   const identifyAction = useIdentifyDetailAction(() => card?.entity.id, () => card?.entity.kind);
   const heroActions = $derived.by((): EntityDetailActionButton[] => identifyAction.action ? [identifyAction.action] : []);
 
-  const dates = $derived.by(() => {
-    if (!series) return [];
-    const cap = getCapability(series.capabilities, "dates");
-    return cap?.items ?? [];
-  });
+  const dates = $derived(card?.dates ?? []);
 
-  const dateAired = $derived.by(() => {
-    const date = dates.find((item) => item.code === "first-air") ?? dates[0];
-    return date ? formatDateForHero(date.value) : null;
-  });
+  const airedDate = $derived(
+    dates.find((item) => item.code.toLowerCase().replaceAll("-", "") === "firstair") ?? dates[0] ?? null,
+  );
 
   const hasSeasons = $derived(seasonCards.length > 0);
   const hasChildSeries = $derived(childSeriesCards.length > 0);
@@ -220,11 +215,6 @@
     relationshipTags = relationshipCards.relationshipTags;
   }
 
-  function formatDateForHero(value: string): string {
-    const match = /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})$/.exec(value);
-    if (!match?.groups) return value;
-    return `${match.groups.day}-${match.groups.month}-${match.groups.year}`;
-  }
 </script>
 
 <svelte:head>
@@ -253,10 +243,13 @@
       actionButtons={heroActions}
     >
       {#snippet heroMeta()}
-        {#if dateAired}
-          <span class="meta-item">Date Aired: {dateAired}</span>
+        {#if airedDate}
+          <span class="meta-item">
+            <span class="meta-item-label">{airedDate.label}</span>
+            {airedDate.display}
+          </span>
         {/if}
-        {#if dateAired && (seasonCount > 0 || totalEpisodeCount > 0)}
+        {#if airedDate && (seasonCount > 0 || totalEpisodeCount > 0)}
           <span class="meta-sep"></span>
         {/if}
         {#if seasonCount > 0}

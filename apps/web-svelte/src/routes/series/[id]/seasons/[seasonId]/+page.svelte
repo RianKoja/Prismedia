@@ -3,6 +3,7 @@
   import { page } from "$app/state";
   import { Film, Info, SlidersHorizontal, Users } from "@lucide/svelte";
   import EntityDetailSkeleton from "$lib/components/entities/EntityDetailSkeleton.svelte";
+  import EntityDetailHeroDates from "$lib/components/entities/EntityDetailHeroDates.svelte";
   import { fetchSeason, fetchSeries, type VideoSeasonDetail, type VideoSeriesDetail } from "$lib/api/media";
   import {
     updateEntityRating,
@@ -69,11 +70,7 @@
     return item ? Number(item.value) : null;
   });
 
-  const dates = $derived.by(() => {
-    if (!season) return [];
-    const cap = getCapability(season.capabilities, "dates");
-    return cap?.items ?? [];
-  });
+  const dates = $derived(card?.dates ?? []);
 
   const hasCastAndCrew = $derived(studioCards.length > 0 || creditCards.length > 0);
   const detailSections = $derived.by((): EntityDetailSection[] => [
@@ -232,10 +229,7 @@
           <span class="meta-sep"></span>
           <span class="meta-item">Season {seasonNumber}</span>
         {/if}
-        {#each dates as date, i (date.code)}
-          <span class="meta-sep"></span>
-          <span class="meta-item">{date.value}</span>
-        {/each}
+        <EntityDetailHeroDates {dates} leadingSeparator={Boolean(parentSeries || seasonNumber != null)} />
       {/snippet}
 
       {#snippet heroBadges()}

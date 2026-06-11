@@ -3,6 +3,7 @@
   import { page } from "$app/state";
   import { Info, MicVocal, Music, Play, Shuffle, SlidersHorizontal, Users } from "@lucide/svelte";
   import EntityDetailSkeleton from "$lib/components/entities/EntityDetailSkeleton.svelte";
+  import EntityDetailHeroDates from "$lib/components/entities/EntityDetailHeroDates.svelte";
   import { fetchAudioLibrary, type AudioLibraryDetail } from "$lib/api/media";
   import {
     updateEntityRating,
@@ -69,11 +70,7 @@
 
   const studio = $derived(studioCards[0]?.entity ?? null);
 
-  const dates = $derived.by(() => {
-    if (!library) return [];
-    const cap = getCapability(library.capabilities, "dates");
-    return cap?.items ?? [];
-  });
+  const dates = $derived(card?.dates ?? []);
 
   const subLibraryCards = $derived(childCards.filter((c) => c.entity.kind === "audio-library"));
   const coverUrl = $derived.by(() => {
@@ -333,10 +330,7 @@
           {#if artistLink}<span class="meta-sep"></span>{/if}
           <a href={resolveEntityHref("studio", studio.id)} class="meta-item is-studio">{studio.title}</a>
         {/if}
-        {#each dates as date, i (date.code)}
-          {#if artistLink || studio || i > 0}<span class="meta-sep"></span>{/if}
-          <span class="meta-item">{date.value}</span>
-        {/each}
+        <EntityDetailHeroDates {dates} leadingSeparator={Boolean(artistLink || studio)} />
         {#if trackItems.length > 0}
           {#if artistLink || studio || dates.length > 0}<span class="meta-sep"></span>{/if}
           <span class="meta-item">{trackItems.length} {trackItems.length === 1 ? "track" : "tracks"}</span>

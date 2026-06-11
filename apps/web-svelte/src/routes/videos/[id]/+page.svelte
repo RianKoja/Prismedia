@@ -13,6 +13,7 @@
   } from "@lucide/svelte";
   import { cn } from "@prismedia/ui-svelte";
   import EntityDetailSkeleton from "$lib/components/entities/EntityDetailSkeleton.svelte";
+  import EntityDetailHeroDates from "$lib/components/entities/EntityDetailHeroDates.svelte";
   import { fetchEntity, fetchEntityThumbnails } from "$lib/api/entities";
   import { fetchVideo, type VideoDetail } from "$lib/api/media";
   import { fetchSettingsValues, type LibrarySettings } from "$lib/api/settings";
@@ -210,11 +211,7 @@
     ];
   });
 
-  const dates = $derived.by(() => {
-    if (!video) return [];
-    const cap = getCapability(video.capabilities, "dates");
-    return cap?.items ?? [];
-  });
+  const dates = $derived(card?.dates ?? []);
 
   const flagsNsfw = $derived.by(() => {
     if (!video) return false;
@@ -804,12 +801,7 @@
         {#if primaryStudio}
           <a href={resolveEntityHref(primaryStudio.kind, primaryStudio.id)} class="meta-item is-studio">{primaryStudio.title}</a>
         {/if}
-        {#each dates as date, i (date.code)}
-          {#if primaryStudio || i > 0}
-            <span class="meta-sep"></span>
-          {/if}
-          <span class="meta-item">{date.value}</span>
-        {/each}
+        <EntityDetailHeroDates {dates} leadingSeparator={Boolean(primaryStudio)} />
       {/snippet}
 
 

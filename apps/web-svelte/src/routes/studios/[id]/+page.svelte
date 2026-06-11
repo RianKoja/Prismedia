@@ -3,6 +3,7 @@
   import { page } from "$app/state";
   import { Film } from "@lucide/svelte";
   import EntityDetailSkeleton from "$lib/components/entities/EntityDetailSkeleton.svelte";
+  import EntityDetailHeroDates from "$lib/components/entities/EntityDetailHeroDates.svelte";
   import { fetchEntities } from "$lib/api/entities";
   import {
     updateEntityRating,
@@ -51,11 +52,7 @@
   const identifyAction = useIdentifyDetailAction(() => card?.entity.id, () => card?.entity.kind);
   const heroActions = $derived.by((): EntityDetailActionButton[] => identifyAction.action ? [identifyAction.action] : []);
 
-  const dates = $derived.by(() => {
-    if (!studio) return [];
-    const cap = getCapability(studio.capabilities, "dates");
-    return cap?.items ?? [];
-  });
+  const dates = $derived(card?.dates ?? []);
 
   onMount(() => {
     void loadStudio();
@@ -150,10 +147,7 @@
       actionButtons={heroActions}
     >
       {#snippet heroMeta()}
-        {#each dates as date, i (date.code)}
-          {#if i > 0}<span class="meta-sep"></span>{/if}
-          <span class="meta-item">{date.value}</span>
-        {/each}
+        <EntityDetailHeroDates {dates} />
         {#if relatedCards.length > 0}
           {#if dates.length > 0}<span class="meta-sep"></span>{/if}
           <span class="meta-item">{relatedCards.length} {relatedCards.length === 1 ? "title" : "titles"}</span>

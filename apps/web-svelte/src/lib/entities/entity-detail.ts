@@ -68,7 +68,10 @@ export interface EntityDetailStat {
 export interface EntityDetailDate {
   code: string;
   label: string;
+  /** Raw capability value; what edit drafts and metadata patches round-trip. */
   value: string;
+  /** Humanized value for display surfaces (hero meta, metadata cards). */
+  display: string;
   sortable: string | null;
 }
 
@@ -189,8 +192,68 @@ function formatResolution(width: number, height: number): string {
   return label ? `${width}×${height} (${label})` : `${width}×${height}`;
 }
 
+/**
+ * Friendly labels for the date codes providers commonly emit. Codes outside the
+ * map fall back to a generic title-cased form of the code itself.
+ */
+const DATE_CODE_LABELS: Record<string, string> = {
+  added: "Added",
+  air: "Aired",
+  birth: "Born",
+  created: "Created",
+  death: "Died",
+  ended: "Ended",
+  firstair: "First aired",
+  lastair: "Last aired",
+  published: "Published",
+  release: "Released",
+  released: "Released",
+  scanned: "Scanned",
+  started: "Started",
+  updated: "Updated",
+  uploaded: "Uploaded",
+};
+
 function formatDateCode(code: string): string {
-  return code.replaceAll("-", " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  const known = DATE_CODE_LABELS[code.trim().toLowerCase().replaceAll("-", "")];
+  if (known) return known;
+  return code
+    .replaceAll("-", " ")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .toLowerCase()
+    .replace(/^\w/, (c) => c.toUpperCase());
+}
+
+const MONTH_DATE = /^(\d{4})-(\d{2})$/;
+const DAY_DATE = /^(\d{4})-(\d{2})-(\d{2})/;
+
+/**
+ * Humanizes an ISO-ish date string for display ("2026-03-20" → "Mar 20, 2026",
+ * "2026-03" → "Mar 2026"). Values that are not recognizable dates pass through
+ * unchanged; the raw value stays available for editing and sorting.
+ */
+export function formatDetailDateValue(value: string): string {
+  const trimmed = value.trim();
+  const day = DAY_DATE.exec(trimmed);
+  if (day) {
+    const parsed = new Date(Date.UTC(Number(day[1]), Number(day[2]) - 1, Number(day[3])));
+    if (!Number.isNaN(parsed.getTime())) {
+      return parsed.toLocaleDateString(undefined, {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+        timeZone: "UTC",
+      });
+    }
+  }
+  const month = MONTH_DATE.exec(trimmed);
+  if (month) {
+    const parsed = new Date(Date.UTC(Number(month[1]), Number(month[2]) - 1, 1));
+    if (!Number.isNaN(parsed.getTime())) {
+      return parsed.toLocaleDateString(undefined, { year: "numeric", month: "short", timeZone: "UTC" });
+    }
+  }
+  return trimmed;
 }
 
 function formatStatCode(code: string): string {
@@ -404,6 +467,7 @@ export function entityCardToDetailCard(entity: EntityCard): EntityDetailCardFull
       code: item.code,
       label: formatDateCode(item.code),
       value: item.value,
+      display: formatDetailDateValue(item.value),
       sortable: item.sortableValue ?? null,
     })),
     technical: resolveTechnical(capabilities),

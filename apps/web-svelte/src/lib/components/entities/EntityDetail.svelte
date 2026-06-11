@@ -923,7 +923,7 @@
     <MetadataCard
       title="Dates"
       icon={Calendar}
-      rows={(cardFull.dates ?? []).map((r) => ({ label: r.label, value: r.value }))}
+      rows={(cardFull.dates ?? []).map((r) => ({ label: r.label, value: r.display }))}
     />
   {/if}
 {/snippet}
@@ -2052,6 +2052,14 @@
     max-width: 100%;
     white-space: inherit;
     overflow-wrap: inherit;
+  }
+
+  .meta-row :global(.meta-item .meta-item-label) {
+    margin-right: 0.3rem;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--detail-text-muted);
   }
 
   .meta-row :global(.meta-item.is-studio) {

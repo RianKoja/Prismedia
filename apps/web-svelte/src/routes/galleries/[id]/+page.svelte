@@ -2,6 +2,7 @@
   import { page } from "$app/state";
   import { Layers } from "@lucide/svelte";
   import EntityDetailSkeleton from "$lib/components/entities/EntityDetailSkeleton.svelte";
+  import EntityDetailHeroDates from "$lib/components/entities/EntityDetailHeroDates.svelte";
   import { fetchImage, fetchGallery, type GalleryDetail, type ImageDetail } from "$lib/api/media";
   import {
     updateEntityRating,
@@ -76,11 +77,7 @@
 
   const primaryStudio = $derived(studioCards[0]?.entity ?? null);
 
-  const dates = $derived.by(() => {
-    if (!gallery) return [];
-    const cap = getCapability(gallery.capabilities, "dates");
-    return cap?.items ?? [];
-  });
+  const dates = $derived(card?.dates ?? []);
 
   const imageChildren = $derived(childCards.filter((c) => c.entity.kind === "image"));
   const galleryChildren = $derived(childCards.filter((c) => c.entity.kind === "gallery"));
@@ -285,10 +282,7 @@
           {#if primaryStudio}<span class="meta-sep"></span>{/if}
           <span class="meta-item">{gallery.galleryType}</span>
         {/if}
-        {#each dates as date, i (date.code)}
-          <span class="meta-sep"></span>
-          <span class="meta-item">{date.value}</span>
-        {/each}
+        <EntityDetailHeroDates {dates} leadingSeparator={Boolean(primaryStudio || gallery?.galleryType)} />
         {#if childCards.length > 0}
           <span class="meta-sep"></span>
           <span class="meta-item">{childCards.length} {childCards.length === 1 ? "item" : "items"}</span>

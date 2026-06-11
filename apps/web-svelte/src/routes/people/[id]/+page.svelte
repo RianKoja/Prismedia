@@ -3,6 +3,7 @@
   import { page } from "$app/state";
   import { Film, Layers, BookOpen, Music, User } from "@lucide/svelte";
   import EntityDetailSkeleton from "$lib/components/entities/EntityDetailSkeleton.svelte";
+  import EntityDetailHeroDates from "$lib/components/entities/EntityDetailHeroDates.svelte";
   import { fetchEntities } from "$lib/api/entities";
   import {
     updateEntityRating,
@@ -52,11 +53,7 @@
   const identifyAction = useIdentifyDetailAction(() => card?.entity.id, () => card?.entity.kind);
   const heroActions = $derived.by((): EntityDetailActionButton[] => identifyAction.action ? [identifyAction.action] : []);
 
-  const dates = $derived.by(() => {
-    if (!person) return [];
-    const cap = getCapability(person.capabilities, "dates");
-    return cap?.items ?? [];
-  });
+  const dates = $derived(card?.dates ?? []);
 
   interface DetailRow { label: string; value: string }
   const bioRows = $derived.by((): DetailRow[] => {
@@ -176,10 +173,7 @@
           {#if person.gender}<span class="meta-sep"></span>{/if}
           <span class="meta-item">{person.country}</span>
         {/if}
-        {#each dates as date, i (date.code)}
-          <span class="meta-sep"></span>
-          <span class="meta-item">{date.value}</span>
-        {/each}
+        <EntityDetailHeroDates {dates} leadingSeparator={Boolean(person?.gender || person?.country)} />
       {/snippet}
 
 

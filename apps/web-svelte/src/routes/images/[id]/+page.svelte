@@ -4,6 +4,7 @@
   import { page } from "$app/state";
   import { Users } from "@lucide/svelte";
   import EntityDetailSkeleton from "$lib/components/entities/EntityDetailSkeleton.svelte";
+  import EntityDetailHeroDates from "$lib/components/entities/EntityDetailHeroDates.svelte";
   import { fetchImage, type ImageDetail } from "$lib/api/media";
   import {
     updateEntityRating,
@@ -64,11 +65,7 @@
 
   const credits = $derived.by((): Array<{ id: string; title: string }> => []);
 
-  const dates = $derived.by(() => {
-    if (!image) return [];
-    const cap = getCapability(image.capabilities, "dates");
-    return cap?.items ?? [];
-  });
+  const dates = $derived(card?.dates ?? []);
 
   onMount(() => {
     void loadImage();
@@ -161,12 +158,7 @@
             {#if studio}
               <a href={resolveEntityHref("studio", studio.id)} class="meta-item is-studio">{studio.title}</a>
             {/if}
-            {#each dates as date, i (date.code)}
-              {#if studio || i > 0}
-                <span class="meta-sep"></span>
-              {/if}
-              <span class="meta-item">{date.value}</span>
-            {/each}
+            <EntityDetailHeroDates {dates} leadingSeparator={Boolean(studio)} />
           {/snippet}
 
           {#snippet afterBody()}

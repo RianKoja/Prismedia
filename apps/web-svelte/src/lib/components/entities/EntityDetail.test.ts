@@ -334,7 +334,9 @@ describe("EntityDetail", () => {
         { id: "person-3", kind: "person", title: "Jan Morgenstern", thumbnail: null },
       ],
       stats: [{ code: "views", label: "Views", value: "1842" }],
-      dates: [{ code: "release", label: "Release", value: "2008-05-30", sortable: "2008-05-30" }],
+      dates: [
+        { code: "release", label: "Released", value: "2008-05-30", display: "May 30, 2008", sortable: "2008-05-30" },
+      ],
       technical: [{ label: "Resolution", value: "1920×1080 (1080p)" }],
       fingerprints: [{ algorithm: "oshash", value: "a1b2c3d4" }],
       markers: [],
@@ -375,8 +377,8 @@ describe("EntityDetail", () => {
     expect(screen.getByRole("link", { name: "Sacha Goedegebure" })).toHaveAttribute("href", "/people/person-1");
     expect(screen.getByText("Views")).toBeInTheDocument();
     expect(screen.getByText("1842")).toBeInTheDocument();
-    expect(screen.getByText("Release")).toBeInTheDocument();
-    expect(screen.getByText("2008-05-30")).toBeInTheDocument();
+    expect(screen.getByText("Released")).toBeInTheDocument();
+    expect(screen.getByText("May 30, 2008")).toBeInTheDocument();
     expect(screen.getByText("Resolution")).toBeInTheDocument();
     expect(screen.getByText("1920×1080 (1080p)")).toBeInTheDocument();
     expect(screen.getByText("watching")).toBeInTheDocument();
