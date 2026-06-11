@@ -59,12 +59,25 @@ export class EntityIndexPageState {
   readonly #options: EntityIndexPageStateOptions;
   #searchTimer: ReturnType<typeof setTimeout> | null = null;
   #searchAbort: AbortController | null = null;
+  #loadStarted = false;
 
   constructor(options: EntityIndexPageStateOptions) {
     this.#options = options;
   }
 
+  /**
+   * Loads the first page only if nothing has kicked off a load yet. The grid's
+   * initial request-change event usually triggers {@link loadInitial} before the
+   * page's own mount hook runs; this keeps the mount fallback from dispatching a
+   * duplicate of the same query.
+   */
+  async ensureLoaded() {
+    if (this.#loadStarted) return;
+    await this.loadInitial();
+  }
+
   async loadInitial() {
+    this.#loadStarted = true;
     this.#searchAbort?.abort();
     this.#searchAbort = new AbortController();
     const signal = this.#searchAbort.signal;

@@ -155,7 +155,7 @@
   let lightboxComponentLoad: Promise<void> | null = null;
 
   onMount(() => {
-    void page.loadInitial();
+    void page.ensureLoaded();
   });
 
   $effect(() => {
