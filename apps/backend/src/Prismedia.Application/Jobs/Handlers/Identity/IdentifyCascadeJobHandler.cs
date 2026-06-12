@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using Prismedia.Application.Jobs.Ports;
+using Prismedia.Application.Plugins;
 using Prismedia.Domain.Entities;
 
 namespace Prismedia.Application.Jobs.Handlers;
@@ -23,6 +24,13 @@ public sealed class IdentifyCascadeJobHandler(
             await context.ReportProgressAsync(100, "Children resolved", cancellationToken);
         } catch (OperationCanceledException) {
             throw;
+        } catch (Exception ex) when (ProviderTransientErrors.IsRetryable(ex.Message)) {
+            // A rate-limited or temporarily-down provider should defer the cascade (attempts
+            // refunded) rather than burn one of its retries on an upstream that just needs time.
+            logger.LogWarning(ex, "IdentifyCascade: provider temporarily unavailable for entity {EntityId}", payload.EntityId);
+            throw new JobRetryLaterException(
+                $"Identify cascade provider is temporarily unavailable: {ex.Message}",
+                TimeSpan.FromMinutes(1));
         } catch (Exception ex) {
             logger.LogWarning(ex, "IdentifyCascade: failed for entity {EntityId}", payload.EntityId);
             throw;

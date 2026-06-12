@@ -1,11 +1,11 @@
-namespace Prismedia.Infrastructure.Plugins;
+namespace Prismedia.Application.Plugins;
 
 /// <summary>
 /// Classifies provider error text as transient (rate limit, timeout, temporary outage) so identify
 /// jobs defer and retry later instead of recording a permanent no-match — and instead of falling
 /// through to another provider call that would hammer an already rate-limited upstream.
 /// </summary>
-internal static class ProviderTransientErrors {
+public static class ProviderTransientErrors {
     /// <summary>Whether the provider error text describes a temporary condition worth retrying.</summary>
     /// <param name="error">Provider error message, if any.</param>
     public static bool IsRetryable(string? error) {
