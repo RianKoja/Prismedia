@@ -156,7 +156,7 @@ public static class DependencyInjection {
         services.AddScoped<IdentifyQueueService>();
         services.AddScoped<IIdentifyQueueService>(provider =>
             provider.GetRequiredService<IdentifyQueueService>());
-        services.AddScoped<IBulkIdentifyProvider, BulkIdentifyProviderAdapter>();
+        services.AddScoped<IIdentifySearchRunner, IdentifySearchRunnerAdapter>();
         services.AddScoped<IAutoIdentifyRunner, AutoIdentifyRunner>();
         services.AddScoped<IIdentifyCascadeRunner, IdentifyCascadeRunnerAdapter>();
     }

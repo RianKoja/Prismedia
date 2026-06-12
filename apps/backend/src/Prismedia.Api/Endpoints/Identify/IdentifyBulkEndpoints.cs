@@ -1,9 +1,6 @@
-using Prismedia.Application.Jobs;
-using Prismedia.Application.Jobs.Handlers;
-using Prismedia.Contracts.Jobs;
+using Prismedia.Application.Plugins;
 using Prismedia.Contracts.Plugins;
 using Prismedia.Contracts.System;
-using Prismedia.Domain.Entities;
 
 namespace Prismedia.Api.Endpoints;
 
@@ -13,44 +10,23 @@ internal static class IdentifyBulkEndpoints {
             IdentifyBulkStartRequest request,
             bool? hideNsfw,
             HttpContext httpContext,
-            IJobQueueService queue,
+            IIdentifyQueueService queue,
             CancellationToken cancellationToken) => {
                 if (request.EntityIds.Count == 0) {
                     return Results.BadRequest(new ApiProblem(ApiProblemCodes.EmptyBulkIdentify, "Bulk identify requires at least one entity."));
                 }
 
-                var payload = new BulkIdentifyPayload(
+                var response = await queue.RequestSearchBatchAsync(
                     request.EntityIds,
-                    request.Provider,
-                    request.Query,
-                    NsfwVisibility.ShouldHide(hideNsfw, httpContext));
-
-                var job = await queue.EnqueueAsync(
-                    new EnqueueJobRequest(
-                        Type: JobType.BulkIdentify,
-                        PayloadJson: payload.ToJson(),
-                        TargetLabel: $"Bulk identify {request.EntityIds.Count} entities",
-                        Priority: JobPriorities.InteractiveIdentify),
+                    new IdentifyQueueSearchRequest(request.Provider, request.Query),
+                    NsfwVisibility.ShouldHide(hideNsfw, httpContext),
                     cancellationToken);
 
-                return Results.Accepted(
-                    $"/api/jobs/{job.Id}",
-                    new JobCreateResponse(new JobRun(
-                        job.Id,
-                        job.Type,
-                        job.Status,
-                        job.Progress,
-                        job.Message,
-                        job.TargetEntityKind,
-                        job.TargetEntityId,
-                        job.TargetLabel,
-                        job.CreatedAt,
-                        job.StartedAt,
-                        job.FinishedAt)));
+                return Results.Accepted("/api/identify/queue", response);
             })
             .WithName("StartBulkIdentify")
-            .WithSummary("Enqueues a bulk identify job that searches a provider for each entity.")
-            .Produces<JobCreateResponse>(StatusCodes.Status202Accepted)
+            .WithSummary("Requests identify searches for a batch of entities, one identify-search job per entity.")
+            .Produces<IdentifyBulkAcceptedResponse>(StatusCodes.Status202Accepted)
             .Produces<ApiProblem>(StatusCodes.Status400BadRequest);
 
         return group;

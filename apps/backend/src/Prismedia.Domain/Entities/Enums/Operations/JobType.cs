@@ -96,7 +96,11 @@ public enum JobType {
     RefreshEntity,
 
     // ── Identify ─────────────────────────────────────────────────
-    /// <summary>Identifies multiple entities in batch via a provider plugin.</summary>
+    /// <summary>Runs one requested provider search for a single identify queue item.</summary>
+    [Code("identify-search")]
+    IdentifySearch,
+
+    /// <summary>Legacy batch identify; retained so historical job rows decode. New batches enqueue one identify-search job per entity.</summary>
     [Code("bulk-identify")]
     BulkIdentify,
 

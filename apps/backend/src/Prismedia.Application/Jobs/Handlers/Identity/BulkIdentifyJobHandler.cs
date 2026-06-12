@@ -1,63 +1,43 @@
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
-using Prismedia.Application.Jobs.Ports;
+using Prismedia.Application.Plugins;
 using Prismedia.Contracts.Plugins;
 using Prismedia.Domain.Entities;
 
 namespace Prismedia.Application.Jobs.Handlers;
 
 /// <summary>
-/// Identifies multiple entities via a provider plugin, storing each result in the durable identify queue.
+/// Compatibility shim for legacy batch identify jobs that may still be queued across an upgrade.
+/// Explodes the old batch payload into one identify-search request per entity (the current model)
+/// and completes; new bulk requests never create this job type.
 /// </summary>
 public sealed class BulkIdentifyJobHandler(
-    IBulkIdentifyProvider provider,
-    AutoIdentifyConcurrencyGate gate,
-    ILogger<BulkIdentifyJobHandler> logger,
-    TimeSpan? identifyTimeout = null) : IJobHandler {
-    private static readonly TimeSpan DefaultIdentifyTimeout = TimeSpan.FromSeconds(90);
-    private readonly TimeSpan _identifyTimeout = identifyTimeout ?? DefaultIdentifyTimeout;
-
+    IIdentifyQueueService queue,
+    ILogger<BulkIdentifyJobHandler> logger) : IJobHandler {
     public JobType Type => JobType.BulkIdentify;
 
     public async Task HandleAsync(JobContext context, CancellationToken cancellationToken) {
         var payload = BulkIdentifyPayload.Parse(context.Job.PayloadJson);
-        var count = payload.EntityIds.Count;
-        logger.LogInformation("BulkIdentify: starting {Count} entities with provider {Provider}", count, payload.Provider);
+        logger.LogInformation(
+            "BulkIdentify: converting legacy batch of {Count} entities into per-entity identify-search jobs",
+            payload.EntityIds.Count);
 
-        using var lease = gate.TryEnterInteractive()
-            ?? throw new JobRetryLaterException("Bulk identify provider slot busy.", TimeSpan.FromSeconds(5));
+        var response = await queue.RequestSearchBatchAsync(
+            payload.EntityIds,
+            new IdentifyQueueSearchRequest(payload.Provider, payload.Query),
+            payload.HideNsfw,
+            cancellationToken);
 
-        for (var i = 0; i < count; i++) {
-            cancellationToken.ThrowIfCancellationRequested();
-            var entityId = payload.EntityIds[i];
-
-            // A deferred batch re-runs from the top, so resume past entities that already resolved
-            // (result stored, accepted, or rejected) since the batch was created instead of
-            // re-searching the whole list on every retry.
-            if (await provider.HasResultSinceAsync(entityId, payload.Provider, context.Job.CreatedAt, cancellationToken)) {
-                await context.ReportProgressAsync((i + 1) * 100 / count, $"Identified {i + 1}/{count}", cancellationToken);
-                continue;
-            }
-
-            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            timeout.CancelAfter(_identifyTimeout);
-            try {
-                await provider.SearchAndQueueAsync(entityId, payload.Provider, payload.Query, payload.HideNsfw, timeout.Token);
-            } catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested) {
-                throw new JobRetryLaterException(
-                    $"Bulk identify timed out after {_identifyTimeout.TotalSeconds:0} seconds.",
-                    TimeSpan.FromMinutes(1));
-            } catch (Exception ex) {
-                logger.LogWarning(ex, "BulkIdentify: failed to identify entity {EntityId}", entityId);
-            }
-
-            await context.ReportProgressAsync((i + 1) * 100 / count, $"Identified {i + 1}/{count}", cancellationToken);
-        }
-
-        logger.LogInformation("BulkIdentify: completed {Count} entities", count);
+        await context.ReportProgressAsync(
+            100,
+            $"Requeued {response.Enqueued}/{response.Requested} as identify-search jobs",
+            cancellationToken);
     }
 }
 
+/// <summary>
+/// Legacy batch identify payload, retained so historical job rows still parse.
+/// </summary>
 public sealed record BulkIdentifyPayload(
     IReadOnlyList<Guid> EntityIds,
     string Provider,

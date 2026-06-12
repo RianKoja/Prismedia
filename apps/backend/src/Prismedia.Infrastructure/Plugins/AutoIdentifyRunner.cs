@@ -90,7 +90,7 @@ public sealed class AutoIdentifyRunner(
             }
 
             if (!response.Ok || response.Result is null) {
-                if (IsRetryableProviderError(response.Error)) {
+                if (ProviderTransientErrors.IsRetryable(response.Error)) {
                     throw new JobRetryLaterException(
                         $"Auto identify provider {providerId} is temporarily unavailable: {response.Error}",
                         TimeSpan.FromMinutes(1));
@@ -120,7 +120,7 @@ public sealed class AutoIdentifyRunner(
                 }
 
                 if (!response.Ok || response.Result?.Patch is null) {
-                    if (IsRetryableProviderError(response.Error)) {
+                    if (ProviderTransientErrors.IsRetryable(response.Error)) {
                         throw new JobRetryLaterException(
                             $"Auto identify provider {providerId} is temporarily unavailable: {response.Error}",
                             TimeSpan.FromMinutes(1));
@@ -138,7 +138,7 @@ public sealed class AutoIdentifyRunner(
 
             var fields = SelectAllPresentFields(proposal);
             var images = SelectDefaultImages(proposal);
-            var acceptedProposal = MarkAcceptedProposalTreeOrganized(proposal);
+            var acceptedProposal = AcceptedProposalMarker.MarkTreeOrganized(proposal);
             var applied = await identify.ApplyAsync(entityId, acceptedProposal, fields, images, cancellationToken);
             if (!applied) {
                 continue;
@@ -223,21 +223,6 @@ public sealed class AutoIdentifyRunner(
         return normalized > 1d ? normalized / 100d : normalized;
     }
 
-    private static bool IsRetryableProviderError(string? error) {
-        if (string.IsNullOrWhiteSpace(error)) {
-            return false;
-        }
-
-        return error.Contains("429", StringComparison.OrdinalIgnoreCase) ||
-               error.Contains("rate limit", StringComparison.OrdinalIgnoreCase) ||
-               error.Contains("too many requests", StringComparison.OrdinalIgnoreCase) ||
-               error.Contains("timed out", StringComparison.OrdinalIgnoreCase) ||
-               error.Contains("timeout", StringComparison.OrdinalIgnoreCase) ||
-               error.Contains("temporarily", StringComparison.OrdinalIgnoreCase) ||
-               error.Contains("503", StringComparison.OrdinalIgnoreCase) ||
-               error.Contains("service unavailable", StringComparison.OrdinalIgnoreCase);
-    }
-
     /// <summary>
     /// Builds the field keys present in the proposal so auto-apply imports provider metadata while
     /// leaving user-owned fields such as rating untouched. Structural children are always applied by
@@ -288,31 +273,6 @@ public sealed class AutoIdentifyRunner(
 
         return images.Count > 0 ? images : null;
     }
-
-    private static EntityMetadataProposal MarkAcceptedProposalTreeOrganized(EntityMetadataProposal proposal) {
-        var children = (proposal.Children ?? []).Select(MarkAcceptedProposalTreeOrganized).ToArray();
-        var relationships = (proposal.Relationships ?? []).Select(MarkAcceptedProposalTreeOrganized).ToArray();
-
-        if (proposal.Patch is null) {
-            return proposal with {
-                Children = children,
-                Relationships = relationships
-            };
-        }
-
-        return proposal with {
-            Patch = proposal.Patch with {
-                Flags = MarkOrganized(proposal.Patch.Flags)
-            },
-            Children = children,
-            Relationships = relationships
-        };
-    }
-
-    private static EntityMetadataFlagsPatch MarkOrganized(EntityMetadataFlagsPatch? flags) =>
-        flags is null
-            ? new EntityMetadataFlagsPatch(null, null, true)
-            : flags with { IsOrganized = true };
 
     private async Task MarkOrganizedAsync(Guid entityId, CancellationToken cancellationToken) {
         var entity = await db.Entities.FirstOrDefaultAsync(row => row.Id == entityId, cancellationToken);

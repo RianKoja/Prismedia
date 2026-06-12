@@ -160,6 +160,14 @@ public sealed class IdentifyQueueItemRow {
     /// </summary>
     public Guid? CascadeJobId { get; set; }
 
+    /// <summary>
+    /// Id of the <see cref="Prismedia.Domain.Entities.JobType.IdentifySearch"/> run that owns the
+    /// item's pending search, or null when no search is requested or running. A newer search request
+    /// cancels the old job and restamps this marker; a job whose id no longer matches must not write
+    /// its result, mirroring the <see cref="CascadeJobId"/> ownership pattern.
+    /// </summary>
+    public Guid? SearchJobId { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
     public DateTimeOffset? CompletedAt { get; set; }

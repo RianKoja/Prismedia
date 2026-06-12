@@ -10,7 +10,7 @@ namespace Prismedia.Contracts.Plugins;
 /// <param name="EntityKind">Entity kind code for provider filtering and UI grouping.</param>
 /// <param name="Title">Current entity title.</param>
 /// <param name="IsNsfw">Whether the queued entity is flagged as NSFW.</param>
-/// <param name="State">Queue state code: search, proposal, done, deleted, or error.</param>
+/// <param name="State">Queue state code: queued, searching, search (candidates ready), proposal, done, deleted, or error.</param>
 /// <param name="Provider">Provider code used by the latest search, when selected.</param>
 /// <param name="Action">Provider action used by the latest search.</param>
 /// <param name="Query">Latest user/provider query used for the search.</param>
@@ -66,11 +66,15 @@ public sealed record IdentifyApplyProgress(
     DateTimeOffset UpdatedAt);
 
 /// <summary>
-/// Request body for starting or retrying an identify provider search.
+/// Request body for requesting an identify provider search. The search itself runs as a background
+/// identify-search job; the returned queue item reports its progress through the state codes.
 /// </summary>
-/// <param name="Provider">Provider code selected by the user.</param>
+/// <param name="Provider">
+/// Provider code selected by the user, or null to let the server walk the enabled providers that
+/// can identify the entity's kind, in catalog order, until one returns a result.
+/// </param>
 /// <param name="Query">Optional title, URL, or external ID override.</param>
-public sealed record IdentifyQueueSearchRequest(string Provider, IdentifyQuery? Query);
+public sealed record IdentifyQueueSearchRequest(string? Provider, IdentifyQuery? Query);
 
 /// <summary>
 /// Request body for accepting a reviewed identify queue proposal.

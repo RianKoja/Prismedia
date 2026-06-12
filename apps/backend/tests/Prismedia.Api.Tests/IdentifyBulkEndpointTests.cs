@@ -4,10 +4,8 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
-using Prismedia.Application.Jobs;
-using Prismedia.Contracts.Jobs;
+using Prismedia.Application.Plugins;
 using Prismedia.Contracts.Plugins;
-using Prismedia.Domain.Entities;
 using Prismedia.Infrastructure.Serialization;
 
 namespace Prismedia.Api.Tests;
@@ -17,103 +15,87 @@ public sealed class IdentifyBulkEndpointTests {
         new(JsonSerializerDefaults.Web) { Converters = { new CodecJsonConverterFactory() } };
 
     [Fact]
-    public async Task StartBulkIdentifyEnqueuesInteractiveIdentifyPriority() {
+    public async Task StartBulkIdentifyRequestsOneSearchPerEntity() {
+        using var factory = CreateFactory();
+        using var client = factory.CreateAuthenticatedClient();
+        var entityIds = new[] {
+            Guid.Parse("11111111-1111-1111-1111-111111111111"),
+            Guid.Parse("11111111-1111-1111-1111-111111111112"),
+        };
+
+        using var response = await client.PostAsJsonAsync(
+            "/api/identify/bulk",
+            new IdentifyBulkStartRequest("tmdb", entityIds, new IdentifyQuery("Hint", null, null)),
+            CodecJson);
+        var body = await response.Content.ReadFromJsonAsync<IdentifyBulkAcceptedResponse>(CodecJson);
+
+        var queue = factory.Services.GetRequiredService<RecordingIdentifyQueueService>();
+        var call = Assert.Single(queue.BatchRequests);
+        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+        Assert.NotNull(body);
+        Assert.Equal(2, body.Requested);
+        Assert.Equal(2, body.Enqueued);
+        Assert.Equal(entityIds, call.EntityIds);
+        Assert.Equal("tmdb", call.Request.Provider);
+        Assert.Equal("Hint", call.Request.Query?.Title);
+    }
+
+    [Fact]
+    public async Task StartBulkIdentifyRejectsEmptyEntityList() {
         using var factory = CreateFactory();
         using var client = factory.CreateAuthenticatedClient();
 
         using var response = await client.PostAsJsonAsync(
             "/api/identify/bulk",
-            new IdentifyBulkStartRequest(
-                "tmdb",
-                [Guid.Parse("11111111-1111-1111-1111-111111111111")],
-                null),
+            new IdentifyBulkStartRequest("tmdb", [], null),
             CodecJson);
-        var body = await response.Content.ReadFromJsonAsync<JobCreateResponse>(CodecJson);
 
-        var queue = factory.Services.GetRequiredService<RecordingJobQueueService>();
-        var request = Assert.Single(queue.Enqueued);
-        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
-        Assert.NotNull(body);
-        Assert.Equal(JobType.BulkIdentify, body.Job.Type);
-        Assert.Equal(JobType.BulkIdentify, request.Type);
-        Assert.Equal(JobPriorities.InteractiveIdentify, request.Priority);
-        Assert.True(request.Priority > JobPriorities.AutoIdentify);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Empty(factory.Services.GetRequiredService<RecordingIdentifyQueueService>().BatchRequests);
     }
 
     private static WebApplicationFactory<Program> CreateFactory() =>
         new WebApplicationFactory<Program>()
             .WithWebHostBuilder(builder => {
                 builder.ConfigureServices(services => {
-                    services.AddSingleton<RecordingJobQueueService>();
-                    services.AddScoped<IJobQueueService>(provider =>
-                        provider.GetRequiredService<RecordingJobQueueService>());
+                    services.AddSingleton<RecordingIdentifyQueueService>();
+                    services.AddScoped<IIdentifyQueueService>(provider =>
+                        provider.GetRequiredService<RecordingIdentifyQueueService>());
                 });
             })
             .WithTestAuth();
 
-    private sealed class RecordingJobQueueService : IJobQueueService {
-        private static readonly Guid CreatedJobId = Guid.Parse("22222222-2222-2222-2222-222222222222");
-        private readonly List<EnqueueJobRequest> _enqueued = [];
+    private sealed class RecordingIdentifyQueueService : IIdentifyQueueService {
+        public List<(IReadOnlyList<Guid> EntityIds, IdentifyQueueSearchRequest Request, bool HideNsfw)> BatchRequests { get; } = [];
 
-        public IReadOnlyList<EnqueueJobRequest> Enqueued => _enqueued;
-
-        public Task<JobRunSnapshot> EnqueueAsync(EnqueueJobRequest request, CancellationToken cancellationToken) {
-            _enqueued.Add(request);
-            return Task.FromResult(new JobRunSnapshot(
-                CreatedJobId,
-                request.Type,
-                JobRunStatus.Queued,
-                0,
-                null,
-                request.PayloadJson ?? "{}",
-                request.TargetEntityKind,
-                request.TargetEntityId,
-                request.TargetLabel,
-                DateTimeOffset.UnixEpoch,
-                null,
-                null));
+        public Task<IdentifyBulkAcceptedResponse> RequestSearchBatchAsync(
+            IReadOnlyList<Guid> entityIds,
+            IdentifyQueueSearchRequest request,
+            bool hideNsfw,
+            CancellationToken cancellationToken) {
+            BatchRequests.Add((entityIds, request, hideNsfw));
+            return Task.FromResult(new IdentifyBulkAcceptedResponse(entityIds.Count, entityIds.Count));
         }
 
-        public Task<JobRunSnapshot> EnqueueAsync(JobType type, CancellationToken cancellationToken) =>
-            EnqueueAsync(new EnqueueJobRequest(type), cancellationToken);
-
-        public Task<IReadOnlyList<JobRunSnapshot>> ListAsync(bool hideNsfw, CancellationToken cancellationToken) =>
+        public Task<IReadOnlyList<IdentifyQueueItem>> ListAsync(bool includeCompleted, bool hideNsfw, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
 
-        public Task<bool> HasPendingAsync(JobType type, string? targetEntityId, CancellationToken cancellationToken) =>
+        public Task<IdentifyQueueItem> AddAsync(Guid entityId, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
 
-        public Task<int> EnqueueBatchAsync(IReadOnlyList<EnqueueJobRequest> requests, CancellationToken cancellationToken) =>
+        public Task<IdentifyQueueItem?> GetAsync(Guid entityId, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
 
-        public Task<int> CancelAsync(JobType? type, CancellationToken cancellationToken) =>
+        public Task<IdentifyQueueItem> RequestSearchAsync(Guid entityId, IdentifyQueueSearchRequest request, bool hideNsfw, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
 
-        public Task<bool> CancelRunAsync(Guid id, CancellationToken cancellationToken) =>
+        public Task<IdentifyQueueItem> ApplyAsync(Guid entityId, ApplyIdentifyQueueItemRequest request, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
 
-        public Task<int> ClearFailuresAsync(JobType? type, CancellationToken cancellationToken) =>
+        public Task<IdentifyQueueItem> SaveProposalAsync(Guid entityId, EntityMetadataProposal proposal, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
 
-        public Task<JobRunSnapshot?> ClaimNextAsync(string workerId, CancellationToken cancellationToken, int? minPriority = null) =>
-            throw new NotSupportedException();
-
-        public Task<int> RecoverStaleRunningAsync(string currentWorkerId, TimeSpan staleAfter, CancellationToken cancellationToken) =>
-            throw new NotSupportedException();
-
-        public Task UpdateProgressAsync(Guid id, int progress, string? message, CancellationToken cancellationToken) =>
-            throw new NotSupportedException();
-
-        public Task CompleteAsync(Guid id, string? message, CancellationToken cancellationToken) =>
-            throw new NotSupportedException();
-
-        public Task FailAsync(Guid id, string message, TimeSpan retryDelay, CancellationToken cancellationToken) =>
-            throw new NotSupportedException();
-
-        public Task<IReadOnlyList<JobQueueCount>> GetQueueCountsAsync(bool hideNsfw, CancellationToken cancellationToken) =>
-            throw new NotSupportedException();
-
-        public Task<int> PruneHistoryAsync(TimeSpan retention, CancellationToken cancellationToken) =>
+        public Task<IdentifyQueueItem?> DeleteAsync(Guid entityId, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
     }
 }

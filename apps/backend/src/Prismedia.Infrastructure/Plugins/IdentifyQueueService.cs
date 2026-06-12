@@ -59,6 +59,7 @@ public sealed class IdentifyQueueService : IIdentifyQueueService {
             .ThenBy(row => row.Id)
             .ToArrayAsync(cancellationToken);
 
+        await ReconcileOrphanedSearchesAsync(rows, cancellationToken);
         return await MapRowsAsync(rows, cancellationToken);
     }
 
@@ -73,29 +74,49 @@ public sealed class IdentifyQueueService : IIdentifyQueueService {
             return null;
         }
 
+        await ReconcileOrphanedSearchesAsync([row], cancellationToken);
         return await MapRowAsync(row, cancellationToken);
     }
 
     /// <summary>
-    /// Whether the entity's queue item was resolved at or after the given instant: the user accepted
-    /// or rejected it, or a search by this provider stored a proposal, candidates, or an error.
-    /// Used by retried bulk identify jobs to resume past entities finished on earlier attempts.
+    /// Flips queued/searching rows whose identify-search job is gone or terminal into the error
+    /// state, so the UI never waits on a search that will not run (a job cancelled from the jobs
+    /// page, a worker death past stale-lease recovery, or rows backfilled by migration). The detached
+    /// snapshots are updated in place so the caller maps the reconciled state.
     /// </summary>
-    public Task<bool> HasResultSinceAsync(
-        Guid entityId,
-        string provider,
-        DateTimeOffset since,
-        CancellationToken cancellationToken) =>
-        _db.IdentifyQueueItems.AsNoTracking().AnyAsync(row =>
-            row.EntityId == entityId &&
-            row.UpdatedAt >= since &&
-            (row.State == IdentifyQueueState.Done ||
-             row.State == IdentifyQueueState.Deleted ||
-             (row.ProviderCode == provider &&
-              (row.State == IdentifyQueueState.Proposal ||
-               row.State == IdentifyQueueState.Error ||
-               (row.State == IdentifyQueueState.Search && row.CandidatesJson != null)))),
-            cancellationToken);
+    private async Task ReconcileOrphanedSearchesAsync(
+        IReadOnlyList<IdentifyQueueItemRow> rows,
+        CancellationToken cancellationToken) {
+        var changed = false;
+        foreach (var row in rows) {
+            if (row.State is not (IdentifyQueueState.Queued or IdentifyQueueState.Searching)) {
+                continue;
+            }
+
+            if (row.SearchJobId is not null &&
+                await _jobs.HasPendingAsync(JobType.IdentifySearch, row.EntityId.ToString(), cancellationToken)) {
+                continue;
+            }
+
+            var tracked = await _db.IdentifyQueueItems
+                .FirstOrDefaultAsync(item => item.Id == row.Id, cancellationToken);
+            if (tracked is null ||
+                tracked.State is not (IdentifyQueueState.Queued or IdentifyQueueState.Searching)) {
+                continue;
+            }
+
+            FinishOwnedSearch(tracked, IdentifyQueueState.Error, "The queued search is no longer running. Search again.");
+            row.State = tracked.State;
+            row.Error = tracked.Error;
+            row.SearchJobId = null;
+            row.UpdatedAt = tracked.UpdatedAt;
+            changed = true;
+        }
+
+        if (changed) {
+            await _db.SaveChangesAsync(cancellationToken);
+        }
+    }
 
     /// <summary>
     /// Adds an entity to the identify queue, preserving active work and resetting terminal items.
@@ -126,9 +147,12 @@ public sealed class IdentifyQueueService : IIdentifyQueueService {
     }
 
     /// <summary>
-    /// Runs a provider search for the queued entity and persists candidates or a hydrated proposal.
+    /// Requests a provider search for the entity: the item enters the <see cref="IdentifyQueueState.Queued"/>
+    /// state and a background identify-search job runs the actual provider work. Any cascade or search
+    /// job still in flight for the item is superseded (cancelled and its ownership marker restamped),
+    /// so the newest request always owns the item's next result.
     /// </summary>
-    public async Task<IdentifyQueueItem> SearchAsync(
+    public async Task<IdentifyQueueItem> RequestSearchAsync(
         Guid entityId,
         IdentifyQueueSearchRequest request,
         bool hideNsfw,
@@ -138,30 +162,235 @@ public sealed class IdentifyQueueService : IIdentifyQueueService {
         var row = await EnsureMutableRowAsync(entityId, cancellationToken);
         var entity = await LoadEntityAsync(entityId, cancellationToken)
             ?? throw new KeyNotFoundException($"Entity '{entityId}' was not found.");
-        var now = DateTimeOffset.UtcNow;
 
-        // A fresh search abandons any cascade still streaming the previous result.
+        await StampQueuedSearchAsync(row, entity, request, hideNsfw, cancellationToken);
+        await _db.SaveChangesAsync(cancellationToken);
+        return MapRow(row, entity);
+    }
+
+    /// <summary>
+    /// Requests provider searches for a batch of entities, one identify-search job per entity.
+    /// Entities that no longer exist are skipped.
+    /// </summary>
+    public async Task<IdentifyBulkAcceptedResponse> RequestSearchBatchAsync(
+        IReadOnlyList<Guid> entityIds,
+        IdentifyQueueSearchRequest request,
+        bool hideNsfw,
+        CancellationToken cancellationToken) {
+        ArgumentNullException.ThrowIfNull(entityIds);
+        ArgumentNullException.ThrowIfNull(request);
+
+        var enqueued = 0;
+        foreach (var entityId in entityIds.Distinct()) {
+            try {
+                await RequestSearchAsync(entityId, request, hideNsfw, cancellationToken);
+                enqueued++;
+            } catch (KeyNotFoundException) {
+                // The entity was removed since the user selected it; skip it.
+            }
+        }
+
+        return new IdentifyBulkAcceptedResponse(entityIds.Count, enqueued);
+    }
+
+    /// <summary>
+    /// Moves the row into <see cref="IdentifyQueueState.Queued"/> for a fresh search request: cancels
+    /// any in-flight cascade and search job, clears prior results, persists the provider hint and
+    /// query, enqueues the identify-search job, and stamps its id as the row's search owner.
+    /// </summary>
+    private async Task StampQueuedSearchAsync(
+        IdentifyQueueItemRow row,
+        EntityRow entity,
+        IdentifyQueueSearchRequest request,
+        bool hideNsfw,
+        CancellationToken cancellationToken) {
         await CancelCascadeAsync(row, cancellationToken);
+        await CancelSearchJobAsync(row, cancellationToken);
 
-        // Seed only: identify the entity and bind whatever children the provider returned in its own
-        // proposal, but do NOT walk the local child tree here — that runs in the background cascade job
-        // so the request stays fast. The full tree is streamed onto the proposal afterwards.
-        var response = await _identify.IdentifyAsync(
-            entityId,
-            request.Provider,
-            request.Query,
-            parentExternalIds: null,
-            hideNsfw,
-            cancellationToken,
-            cascadeChildren: false);
-
-        row.ProviderCode = request.Provider;
+        row.State = IdentifyQueueState.Queued;
+        row.ProviderCode = string.IsNullOrWhiteSpace(request.Provider) ? null : request.Provider;
         row.Action = GuessAction(request.Query);
         row.QueryJson = request.Query is null ? null : JsonSerializer.Serialize(request.Query, JsonOptions);
+        row.CandidatesJson = null;
+        row.ProposalJson = null;
+        row.Error = null;
+        row.UpdatedAt = DateTimeOffset.UtcNow;
+        row.CompletedAt = null;
+
+        var payload = new IdentifySearchPayload(entity.Id, row.ProviderCode, request.Query, hideNsfw);
+        var job = await _jobs.EnqueueAsync(
+            new EnqueueJobRequest(
+                JobType.IdentifySearch,
+                payload.ToJson(),
+                TargetEntityKind: entity.KindCode,
+                TargetEntityId: entity.Id.ToString(),
+                TargetLabel: entity.Title,
+                Priority: JobPriorities.InteractiveIdentify),
+            cancellationToken);
+        row.SearchJobId = job.Id;
+    }
+
+    /// <summary>
+    /// Runs a requested search in the background identify-search job. Walks the requested provider
+    /// (or every enabled capable provider when none was requested) until one resolves a proposal or
+    /// candidates, persisting <see cref="IdentifyQueueState.Searching"/> per attempt so the UI can
+    /// show which provider is being tried. Only writes while the item's search marker still names
+    /// <paramref name="searchJobId"/>; a superseded or deleted item is left untouched. Transient
+    /// provider failures (rate limits, timeouts) defer the job and drop the item back to
+    /// <see cref="IdentifyQueueState.Queued"/> instead of recording a permanent error.
+    /// </summary>
+    public async Task RunSearchAsync(
+        IdentifySearchPayload payload,
+        Guid searchJobId,
+        bool isFinalAttempt,
+        CancellationToken cancellationToken) {
+        var row = await _db.IdentifyQueueItems
+            .FirstOrDefaultAsync(item => item.EntityId == payload.EntityId, cancellationToken);
+        if (row is null || row.SearchJobId != searchJobId ||
+            row.State is not (IdentifyQueueState.Queued or IdentifyQueueState.Searching)) {
+            return;
+        }
+
+        var entity = await LoadEntityAsync(payload.EntityId, cancellationToken);
+        if (entity is null) {
+            FinishOwnedSearch(row, IdentifyQueueState.Error, "The entity no longer exists.");
+            await _db.SaveChangesAsync(cancellationToken);
+            return;
+        }
+
+        var providers = await ResolveSearchProvidersAsync(payload.Provider, entity, payload.HideNsfw, cancellationToken);
+        if (providers.Count == 0) {
+            FinishOwnedSearch(row, IdentifyQueueState.Error, $"No enabled provider can identify '{entity.KindCode}'.");
+            await _db.SaveChangesAsync(cancellationToken);
+            return;
+        }
+
+        try {
+            foreach (var provider in providers) {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (!await IsSearchActiveAsync(payload.EntityId, searchJobId, cancellationToken)) {
+                    return;
+                }
+
+                row.State = IdentifyQueueState.Searching;
+                row.ProviderCode = provider;
+                row.UpdatedAt = DateTimeOffset.UtcNow;
+                await _db.SaveChangesAsync(cancellationToken);
+
+                var resolved = await SearchProviderWithTitleFallbackAsync(
+                    row, entity, provider, payload.Query, payload.HideNsfw, cancellationToken);
+
+                if (row.State == IdentifyQueueState.Error && ProviderTransientErrors.IsRetryable(row.Error)) {
+                    // Rate limited or temporarily down: defer the whole job instead of hammering the
+                    // next provider, and drop back to queued so the UI chip stays honest.
+                    var transientError = row.Error;
+                    row.State = IdentifyQueueState.Queued;
+                    row.Error = null;
+                    row.UpdatedAt = DateTimeOffset.UtcNow;
+                    await _db.SaveChangesAsync(cancellationToken);
+                    throw new JobRetryLaterException(
+                        $"Identify provider {provider} is temporarily unavailable: {transientError}",
+                        TimeSpan.FromMinutes(1));
+                }
+
+                if (resolved) {
+                    break;
+                }
+
+                // Persist this provider's miss before walking on; the last error stands if all miss.
+                await _db.SaveChangesAsync(cancellationToken);
+            }
+
+            // Resolved (proposal or candidates) or exhausted with the last error standing — either
+            // way the requested search is finished, so release the ownership marker.
+            row.SearchJobId = null;
+            row.UpdatedAt = DateTimeOffset.UtcNow;
+            await _db.SaveChangesAsync(cancellationToken);
+        } catch (OperationCanceledException) {
+            // Handler timeout (the job defers) or worker shutdown (the run is recovered later):
+            // return to queued so the retry resumes from an honest state. The marker stays ours.
+            await TryResetOwnedSearchToQueuedAsync(payload.EntityId, searchJobId);
+            throw;
+        } catch (JobRetryLaterException) {
+            throw;
+        } catch (Exception ex) {
+            if (isFinalAttempt) {
+                await TryFailOwnedSearchAsync(payload.EntityId, searchJobId, ex.Message);
+            } else {
+                await TryResetOwnedSearchToQueuedAsync(payload.EntityId, searchJobId);
+            }
+
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Searches one provider, retrying once with the entity title when a plain no-query search
+    /// errored (ported from the old client-side fallback). Returns true when the row resolved into
+    /// a proposal or candidates.
+    /// </summary>
+    private async Task<bool> SearchProviderWithTitleFallbackAsync(
+        IdentifyQueueItemRow row,
+        EntityRow entity,
+        string provider,
+        IdentifyQuery? query,
+        bool hideNsfw,
+        CancellationToken cancellationToken) {
+        await RunProviderSearchAsync(row, entity, provider, query, hideNsfw, cancellationToken);
+
+        if (row.State == IdentifyQueueState.Error &&
+            !ProviderTransientErrors.IsRetryable(row.Error) &&
+            IsPlainSearch(query) &&
+            !string.IsNullOrWhiteSpace(entity.Title)) {
+            await RunProviderSearchAsync(
+                row, entity, provider,
+                new IdentifyQuery(entity.Title, Url: null, ExternalIds: null),
+                hideNsfw, cancellationToken);
+        }
+
+        return IsResolvedSearchOutcome(row);
+    }
+
+    /// <summary>
+    /// Runs one provider identify call and writes the outcome onto the row (without saving): a
+    /// hydrated proposal (which also enqueues the child cascade), candidates for user choice, or an
+    /// error. Provider exceptions become an error outcome so a crashing provider does not abort a
+    /// multi-provider walk.
+    /// </summary>
+    private async Task RunProviderSearchAsync(
+        IdentifyQueueItemRow row,
+        EntityRow entity,
+        string provider,
+        IdentifyQuery? query,
+        bool hideNsfw,
+        CancellationToken cancellationToken) {
+        var now = DateTimeOffset.UtcNow;
+        row.ProviderCode = provider;
+        row.Action = GuessAction(query);
+        row.QueryJson = query is null ? null : JsonSerializer.Serialize(query, JsonOptions);
         row.UpdatedAt = now;
         row.CompletedAt = null;
 
-        var requireChoice = request.Query?.RequireChoice == true;
+        // Seed only: identify the entity and bind whatever children the provider returned in its own
+        // proposal, but do NOT walk the local child tree here — that runs in the background cascade job
+        // so the search stays bounded. The full tree is streamed onto the proposal afterwards.
+        IdentifyPluginResponse response;
+        try {
+            response = await _identify.IdentifyAsync(
+                entity.Id,
+                provider,
+                query,
+                parentExternalIds: null,
+                hideNsfw,
+                cancellationToken,
+                cascadeChildren: false);
+        } catch (OperationCanceledException) {
+            throw;
+        } catch (Exception ex) {
+            response = new IdentifyPluginResponse(false, null, ex.Message);
+        }
+
+        var requireChoice = query?.RequireChoice == true;
         if (!response.Ok) {
             row.State = IdentifyQueueState.Error;
             row.Error = response.Error ?? "Identify failed.";
@@ -185,7 +414,7 @@ public sealed class IdentifyQueueService : IIdentifyQueueService {
             row.Error = null;
             row.CandidatesJson = null;
             row.ProposalJson = JsonSerializer.Serialize(response.Result, JsonOptions);
-            await EnqueueCascadeIfNeededAsync(row, entity, request, hideNsfw, cancellationToken);
+            await EnqueueCascadeIfNeededAsync(row, entity, provider, query, hideNsfw, cancellationToken);
         } else if (response.Result?.Candidates is { Count: > 0 } candidates) {
             row.State = IdentifyQueueState.Search;
             row.Error = null;
@@ -197,9 +426,121 @@ public sealed class IdentifyQueueService : IIdentifyQueueService {
             row.CandidatesJson = null;
             row.ProposalJson = null;
         }
+    }
 
-        await _db.SaveChangesAsync(cancellationToken);
-        return MapRow(row, entity);
+    /// <summary>
+    /// Resolves which providers a search walks: the explicitly requested one, or every installed,
+    /// enabled, credentialed provider capable of the entity's kind, in catalog order. Mirrors the
+    /// review screen's provider filter; the auto-identify settings gate deliberately does not apply
+    /// to user-requested searches.
+    /// </summary>
+    private async Task<IReadOnlyList<string>> ResolveSearchProvidersAsync(
+        string? requestedProvider,
+        EntityRow entity,
+        bool hideNsfw,
+        CancellationToken cancellationToken) {
+        if (!string.IsNullOrWhiteSpace(requestedProvider)) {
+            return [requestedProvider];
+        }
+
+        return (await _identify.ListProvidersAsync(entity.KindCode, cancellationToken))
+            .Where(provider => provider.Installed &&
+                provider.Enabled &&
+                provider.MissingAuthKeys.Count == 0 &&
+                (!hideNsfw || !provider.IsNsfw))
+            .Select(provider => provider.Id)
+            .ToArray();
+    }
+
+    /// <summary>Whether the search query carries no user-provided hints (plain search).</summary>
+    private static bool IsPlainSearch(IdentifyQuery? query) =>
+        string.IsNullOrWhiteSpace(query?.Title) &&
+        string.IsNullOrWhiteSpace(query?.Url) &&
+        query?.ExternalIds is not { Count: > 0 } &&
+        query?.RequireChoice != true;
+
+    /// <summary>Whether the row holds a reviewable search result (proposal or candidates).</summary>
+    private static bool IsResolvedSearchOutcome(IdentifyQueueItemRow row) =>
+        row.State == IdentifyQueueState.Proposal ||
+        (row.State == IdentifyQueueState.Search && row.CandidatesJson is not null);
+
+    /// <summary>Writes a terminal search outcome and releases the row's search ownership marker.</summary>
+    private static void FinishOwnedSearch(IdentifyQueueItemRow row, IdentifyQueueState state, string? error) {
+        row.State = state;
+        row.Error = error;
+        row.CandidatesJson = null;
+        row.ProposalJson = null;
+        row.SearchJobId = null;
+        row.UpdatedAt = DateTimeOffset.UtcNow;
+    }
+
+    /// <summary>
+    /// Reports whether the requested search is still live: the row exists, is still awaiting or
+    /// running a search, and is still marked with this run's job id. Fresh read so a supersede from
+    /// another request is observed mid-walk.
+    /// </summary>
+    private async Task<bool> IsSearchActiveAsync(Guid entityId, Guid searchJobId, CancellationToken cancellationToken) {
+        var row = await _db.IdentifyQueueItems
+            .AsNoTracking()
+            .FirstOrDefaultAsync(item => item.EntityId == entityId, cancellationToken);
+        return row is { State: IdentifyQueueState.Queued or IdentifyQueueState.Searching }
+            && row.SearchJobId == searchJobId;
+    }
+
+    /// <summary>Cancels the pending identify-search job for a row, if any, and clears its marker.</summary>
+    private async Task CancelSearchJobAsync(IdentifyQueueItemRow row, CancellationToken cancellationToken) {
+        if (row.SearchJobId is not { } jobId) {
+            return;
+        }
+
+        try {
+            await _jobs.CancelRunAsync(jobId, cancellationToken);
+        } catch {
+            // Best-effort: the job may already be terminal.
+        }
+
+        row.SearchJobId = null;
+    }
+
+    /// <summary>
+    /// Best-effort: returns an owned in-flight search to <see cref="IdentifyQueueState.Queued"/> so a
+    /// deferred job's retry resumes from an honest state. No-ops when the marker is no longer ours.
+    /// </summary>
+    private async Task TryResetOwnedSearchToQueuedAsync(Guid entityId, Guid searchJobId) {
+        try {
+            var row = await _db.IdentifyQueueItems
+                .FirstOrDefaultAsync(item => item.EntityId == entityId, CancellationToken.None);
+            if (row is null || row.SearchJobId != searchJobId ||
+                row.State is not (IdentifyQueueState.Queued or IdentifyQueueState.Searching)) {
+                return;
+            }
+
+            row.State = IdentifyQueueState.Queued;
+            row.UpdatedAt = DateTimeOffset.UtcNow;
+            await _db.SaveChangesAsync(CancellationToken.None);
+        } catch {
+            // Best effort: orphan reconciliation repairs the state on the next read.
+        }
+    }
+
+    /// <summary>
+    /// Best-effort: marks an owned search as failed on its final attempt so the item never stays
+    /// queued/searching for a job that will not run again.
+    /// </summary>
+    private async Task TryFailOwnedSearchAsync(Guid entityId, Guid searchJobId, string error) {
+        try {
+            var row = await _db.IdentifyQueueItems
+                .FirstOrDefaultAsync(item => item.EntityId == entityId, CancellationToken.None);
+            if (row is null || row.SearchJobId != searchJobId ||
+                row.State is not (IdentifyQueueState.Queued or IdentifyQueueState.Searching)) {
+                return;
+            }
+
+            FinishOwnedSearch(row, IdentifyQueueState.Error, error);
+            await _db.SaveChangesAsync(CancellationToken.None);
+        } catch {
+            // Best effort: orphan reconciliation repairs the state on the next read.
+        }
     }
 
     /// <summary>
@@ -209,7 +550,8 @@ public sealed class IdentifyQueueService : IIdentifyQueueService {
     private async Task EnqueueCascadeIfNeededAsync(
         IdentifyQueueItemRow row,
         EntityRow entity,
-        IdentifyQueueSearchRequest request,
+        string provider,
+        IdentifyQuery? query,
         bool hideNsfw,
         CancellationToken cancellationToken) {
         if (!EntityKindRegistry.EnumeratesIdentifyChildren(entity.KindCode)) {
@@ -223,7 +565,7 @@ public sealed class IdentifyQueueService : IIdentifyQueueService {
             return;
         }
 
-        var payload = new IdentifyCascadePayload(entity.Id, request.Provider, request.Query, hideNsfw);
+        var payload = new IdentifyCascadePayload(entity.Id, provider, query, hideNsfw);
         var job = await _jobs.EnqueueAsync(
             new EnqueueJobRequest(
                 JobType.IdentifyCascade,
@@ -380,6 +722,13 @@ public sealed class IdentifyQueueService : IIdentifyQueueService {
                 $"Identify queue item for entity '{entityId}' is already '{row.State.ToCode()}' and cannot be applied again.");
         }
 
+        // A queued or running search means the stored ProposalJson is stale (the request cleared it,
+        // or a new result is about to land): applying now would write the wrong metadata.
+        if (row.State is IdentifyQueueState.Queued or IdentifyQueueState.Searching) {
+            throw new InvalidOperationException(
+                $"Identify queue item for entity '{entityId}' is awaiting its requested search; cannot apply yet.");
+        }
+
         // Do not apply while the background cascade is still streaming the child tree: the stored proposal
         // is only partial until the cascade clears its marker, so applying now would drop the children
         // that have not streamed in yet. The single-item review disables Accept on this same signal;
@@ -400,7 +749,7 @@ public sealed class IdentifyQueueService : IIdentifyQueueService {
         if (proposal.TargetKind.ToEntityKind() != entity.KindCode.DecodeAs<EntityKind>()) {
             throw new InvalidOperationException("Identify proposal kind does not match the queued entity.");
         }
-        var acceptedProposal = MarkAcceptedProposalTreeOrganized(proposal);
+        var acceptedProposal = AcceptedProposalMarker.MarkTreeOrganized(proposal);
         IdentifyApplyProgressReporter? progressReporter = null;
         if (request.ProgressId is { } progressId) {
             _progress.Begin(progressId, entityId, CountApplySteps(acceptedProposal, request.SelectedFields));
@@ -486,6 +835,7 @@ public sealed class IdentifyQueueService : IIdentifyQueueService {
             ?? throw new KeyNotFoundException($"Entity '{entityId}' was not found.");
         var now = DateTimeOffset.UtcNow;
         await CancelCascadeAsync(row, cancellationToken);
+        await CancelSearchJobAsync(row, cancellationToken);
         row.State = IdentifyQueueState.Deleted;
         row.Error = null;
         row.UpdatedAt = now;
@@ -558,6 +908,7 @@ public sealed class IdentifyQueueService : IIdentifyQueueService {
         row.ProposalJson = null;
         row.Error = null;
         row.CascadeJobId = null;
+        row.SearchJobId = null;
         row.UpdatedAt = now;
         row.CompletedAt = null;
     }
@@ -612,31 +963,6 @@ public sealed class IdentifyQueueService : IIdentifyQueueService {
 
         return null;
     }
-
-    private static EntityMetadataProposal MarkAcceptedProposalTreeOrganized(EntityMetadataProposal proposal) {
-        var children = proposal.Children.Select(MarkAcceptedProposalTreeOrganized).ToArray();
-        var relationships = (proposal.Relationships ?? []).Select(MarkAcceptedProposalTreeOrganized).ToArray();
-
-        if (proposal.Patch is null) {
-            return proposal with {
-                Children = children,
-                Relationships = relationships
-            };
-        }
-
-        return proposal with {
-            Patch = proposal.Patch with {
-                Flags = MarkOrganized(proposal.Patch.Flags)
-            },
-            Children = children,
-            Relationships = relationships
-        };
-    }
-
-    private static EntityMetadataFlagsPatch MarkOrganized(EntityMetadataFlagsPatch? flags) =>
-        flags is null
-            ? new EntityMetadataFlagsPatch(null, null, true)
-            : flags with { IsOrganized = true };
 
     private static int CountApplySteps(EntityMetadataProposal proposal, IReadOnlyCollection<string> selectedFields) {
         var selected = selectedFields.ToHashSet(StringComparer.OrdinalIgnoreCase);

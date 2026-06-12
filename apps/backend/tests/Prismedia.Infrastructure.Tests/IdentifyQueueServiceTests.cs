@@ -76,7 +76,7 @@ public sealed class IdentifyQueueServiceTests : IDisposable {
         var service = CreateQueueService(db, new CandidateThenProposalProcessExecutor(), _tempRoot);
         await service.AddAsync(entityId, CancellationToken.None);
 
-        var item = await service.SearchAsync(entityId, new IdentifyQueueSearchRequest("tmdb", new IdentifyQuery("Ambiguous", null, null)), hideNsfw: false, CancellationToken.None);
+        var item = await SearchToCompletionAsync(service, db, entityId, new IdentifyQueueSearchRequest("tmdb", new IdentifyQuery("Ambiguous", null, null)), hideNsfw: false, CancellationToken.None);
 
         Assert.Equal("search", item.State);
         Assert.Equal("tmdb", item.Provider);
@@ -99,7 +99,7 @@ public sealed class IdentifyQueueServiceTests : IDisposable {
         var service = CreateQueueService(db, new CanonicalCandidateProcessExecutor(), _tempRoot);
         await service.AddAsync(entityId, CancellationToken.None);
 
-        var item = await service.SearchAsync(entityId, new IdentifyQueueSearchRequest("tmdb", new IdentifyQuery("Candidate", null, null)), hideNsfw: false, CancellationToken.None);
+        var item = await SearchToCompletionAsync(service, db, entityId, new IdentifyQueueSearchRequest("tmdb", new IdentifyQuery("Candidate", null, null)), hideNsfw: false, CancellationToken.None);
 
         var candidate = Assert.Single(item.Candidates);
         Assert.Equal("Candidate Movie", candidate.Title);
@@ -118,7 +118,7 @@ public sealed class IdentifyQueueServiceTests : IDisposable {
         var service = CreateQueueService(db, new ProposalProcessExecutor(), _tempRoot);
         await service.AddAsync(entityId, CancellationToken.None);
 
-        var item = await service.SearchAsync(entityId, new IdentifyQueueSearchRequest("tmdb", new IdentifyQuery(null, null, new Dictionary<string, string> { ["tmdb"] = "123" })), hideNsfw: false, CancellationToken.None);
+        var item = await SearchToCompletionAsync(service, db, entityId, new IdentifyQueueSearchRequest("tmdb", new IdentifyQuery(null, null, new Dictionary<string, string> { ["tmdb"] = "123" })), hideNsfw: false, CancellationToken.None);
 
         Assert.Equal("proposal", item.State);
         Assert.Equal("tmdb", item.Provider);
@@ -150,7 +150,7 @@ public sealed class IdentifyQueueServiceTests : IDisposable {
         await service.AddAsync(seriesId, CancellationToken.None);
 
         var query = new IdentifyQuery(null, null, new Dictionary<string, string> { ["tmdb"] = "series-1" });
-        var item = await service.SearchAsync(
+        var item = await SearchToCompletionAsync(service, db, 
             seriesId,
             new IdentifyQueueSearchRequest("tmdb", query),
             hideNsfw: false,
@@ -199,9 +199,9 @@ public sealed class IdentifyQueueServiceTests : IDisposable {
         await service.AddAsync(seriesId, CancellationToken.None);
 
         var query = new IdentifyQuery(null, null, new Dictionary<string, string> { ["tmdb"] = "series-1" });
-        await service.SearchAsync(seriesId, new IdentifyQueueSearchRequest("tmdb", query), hideNsfw: false, CancellationToken.None);
+        await SearchToCompletionAsync(service, db, seriesId, new IdentifyQueueSearchRequest("tmdb", query), hideNsfw: false, CancellationToken.None);
 
-        var request = Assert.Single(queue.Enqueued);
+        var request = Assert.Single(queue.Enqueued, enqueued => enqueued.Type == JobType.IdentifyCascade);
         Assert.Equal(JobType.IdentifyCascade, request.Type);
         Assert.Equal(JobPriorities.InteractiveIdentify, request.Priority);
         Assert.True(request.Priority > JobPriorities.Scan);
@@ -226,7 +226,7 @@ public sealed class IdentifyQueueServiceTests : IDisposable {
         await service.AddAsync(seriesId, CancellationToken.None);
 
         var query = new IdentifyQuery(null, null, new Dictionary<string, string> { ["tmdb"] = "series-1" });
-        await service.SearchAsync(seriesId, new IdentifyQueueSearchRequest("tmdb", query), hideNsfw: false, CancellationToken.None);
+        await SearchToCompletionAsync(service, db, seriesId, new IdentifyQueueSearchRequest("tmdb", query), hideNsfw: false, CancellationToken.None);
         var cascadeJobId = (await db.IdentifyQueueItems.AsNoTracking().SingleAsync(i => i.EntityId == seriesId)).CascadeJobId!.Value;
 
         // The user removes the item from the queue before the background cascade gets to run.
@@ -419,7 +419,7 @@ public sealed class IdentifyQueueServiceTests : IDisposable {
         var service = CreateQueueService(db, new ProposalProcessExecutor(), _tempRoot);
         await service.AddAsync(entityId, CancellationToken.None);
 
-        var item = await service.SearchAsync(
+        var item = await SearchToCompletionAsync(service, db, 
             entityId,
             new IdentifyQueueSearchRequest("tmdb", new IdentifyQuery("Different Movie", null, null, RequireChoice: true)),
             hideNsfw: false,
@@ -454,7 +454,7 @@ public sealed class IdentifyQueueServiceTests : IDisposable {
         var service = CreateQueueService(db, new StoredIdLockingProcessExecutor(), _tempRoot);
         await service.AddAsync(entityId, CancellationToken.None);
 
-        var item = await service.SearchAsync(
+        var item = await SearchToCompletionAsync(service, db, 
             entityId,
             new IdentifyQueueSearchRequest("tmdb", new IdentifyQuery("Different Movie", null, null, RequireChoice: true)),
             hideNsfw: false,
@@ -487,7 +487,7 @@ public sealed class IdentifyQueueServiceTests : IDisposable {
         var service = CreateQueueService(db, new SearchCandidatesElseProposalProcessExecutor(), _tempRoot);
         await service.AddAsync(episodeId, CancellationToken.None);
 
-        var item = await service.SearchAsync(
+        var item = await SearchToCompletionAsync(service, db, 
             episodeId,
             new IdentifyQueueSearchRequest("tmdb", new IdentifyQuery("Manual Term", null, null, RequireChoice: true)),
             hideNsfw: false,
@@ -715,6 +715,233 @@ public sealed class IdentifyQueueServiceTests : IDisposable {
         return new PrismediaDbContext(options);
     }
 
+    /// <summary>
+    /// Requests a search and immediately runs its identify-search job to completion, mirroring what
+    /// the worker does, so tests can assert on the final persisted outcome.
+    /// </summary>
+    private static async Task<IdentifyQueueItem> SearchToCompletionAsync(
+        IdentifyQueueService service,
+        PrismediaDbContext db,
+        Guid entityId,
+        IdentifyQueueSearchRequest request,
+        bool hideNsfw,
+        CancellationToken cancellationToken) {
+        await service.RequestSearchAsync(entityId, request, hideNsfw, cancellationToken);
+        var row = await db.IdentifyQueueItems
+            .AsNoTracking()
+            .FirstAsync(item => item.EntityId == entityId, cancellationToken);
+        await service.RunSearchAsync(
+            new IdentifySearchPayload(entityId, request.Provider, request.Query, hideNsfw),
+            row.SearchJobId!.Value,
+            isFinalAttempt: true,
+            cancellationToken);
+        return (await service.GetAsync(entityId, cancellationToken))!;
+    }
+
+    [Fact]
+    public async Task RequestSearchAsyncQueuesItemAndStampsSearchJob() {
+        await using var db = CreateContext();
+        var entityId = Guid.Parse("66666666-6666-6666-6666-666666666661");
+        SeedProvider(db);
+        SeedEntity(db, entityId, "video", "Queued Movie");
+        await db.SaveChangesAsync();
+        var queue = new RecordingJobQueue();
+        var service = new IdentifyQueueService(
+            db,
+            CreateIdentifyService(db, new ProposalProcessExecutor(), _tempRoot),
+            new InMemoryIdentifyApplyProgressStore(),
+            queue);
+
+        var item = await service.RequestSearchAsync(
+            entityId, new IdentifyQueueSearchRequest("tmdb", null), hideNsfw: false, CancellationToken.None);
+
+        Assert.Equal("queued", item.State);
+        Assert.Equal("tmdb", item.Provider);
+        var job = Assert.Single(queue.Enqueued);
+        Assert.Equal(JobType.IdentifySearch, job.Type);
+        Assert.Equal(entityId.ToString(), job.TargetEntityId);
+        Assert.Equal(JobPriorities.InteractiveIdentify, job.Priority);
+        var row = await db.IdentifyQueueItems.AsNoTracking().SingleAsync();
+        Assert.Equal(IdentifyQueueState.Queued, row.State);
+        Assert.NotNull(row.SearchJobId);
+    }
+
+    [Fact]
+    public async Task RequestSearchAsyncSupersedesAPendingSearch() {
+        await using var db = CreateContext();
+        var entityId = Guid.Parse("66666666-6666-6666-6666-666666666662");
+        SeedProvider(db);
+        SeedEntity(db, entityId, "video", "Superseded Movie");
+        await db.SaveChangesAsync();
+        var queue = new RecordingJobQueue();
+        var service = new IdentifyQueueService(
+            db,
+            CreateIdentifyService(db, new ProposalProcessExecutor(), _tempRoot),
+            new InMemoryIdentifyApplyProgressStore(),
+            queue);
+
+        await service.RequestSearchAsync(entityId, new IdentifyQueueSearchRequest("tmdb", null), false, CancellationToken.None);
+        var firstJobId = (await db.IdentifyQueueItems.AsNoTracking().SingleAsync()).SearchJobId!.Value;
+
+        await service.RequestSearchAsync(
+            entityId,
+            new IdentifyQueueSearchRequest("tmdb", new IdentifyQuery("Other", null, null)),
+            false,
+            CancellationToken.None);
+
+        var row = await db.IdentifyQueueItems.AsNoTracking().SingleAsync();
+        Assert.NotEqual(firstJobId, row.SearchJobId);
+        // The first job was cancelled, so only the new one is still pending.
+        var pending = Assert.Single(queue.Pending);
+        Assert.Equal(row.SearchJobId, pending.Id);
+    }
+
+    [Fact]
+    public async Task RunSearchAsyncWithStaleMarkerLeavesTheItemUntouched() {
+        await using var db = CreateContext();
+        var entityId = Guid.Parse("66666666-6666-6666-6666-666666666663");
+        SeedProvider(db);
+        SeedEntity(db, entityId, "video", "Fenced Movie");
+        await db.SaveChangesAsync();
+        var queue = new RecordingJobQueue();
+        var service = new IdentifyQueueService(
+            db,
+            CreateIdentifyService(db, new ProposalProcessExecutor(), _tempRoot),
+            new InMemoryIdentifyApplyProgressStore(),
+            queue);
+        await service.RequestSearchAsync(entityId, new IdentifyQueueSearchRequest("tmdb", null), false, CancellationToken.None);
+
+        var staleJobId = Guid.NewGuid();
+        await service.RunSearchAsync(
+            new IdentifySearchPayload(entityId, "tmdb", null, false), staleJobId, isFinalAttempt: true, CancellationToken.None);
+
+        var row = await db.IdentifyQueueItems.AsNoTracking().SingleAsync();
+        Assert.Equal(IdentifyQueueState.Queued, row.State);
+        Assert.Null(row.ProposalJson);
+    }
+
+    [Fact]
+    public async Task RunSearchAsyncDefersWhenProviderIsRateLimited() {
+        await using var db = CreateContext();
+        var entityId = Guid.Parse("66666666-6666-6666-6666-666666666664");
+        SeedProvider(db);
+        SeedEntity(db, entityId, "video", "Throttled Movie");
+        await db.SaveChangesAsync();
+        var queue = new RecordingJobQueue();
+        var service = new IdentifyQueueService(
+            db,
+            CreateIdentifyService(db, new RateLimitedProcessExecutor(), _tempRoot),
+            new InMemoryIdentifyApplyProgressStore(),
+            queue);
+        await service.RequestSearchAsync(entityId, new IdentifyQueueSearchRequest("tmdb", null), false, CancellationToken.None);
+        var searchJobId = (await db.IdentifyQueueItems.AsNoTracking().SingleAsync()).SearchJobId!.Value;
+
+        var retry = await Assert.ThrowsAsync<JobRetryLaterException>(() =>
+            service.RunSearchAsync(
+                new IdentifySearchPayload(entityId, "tmdb", null, false), searchJobId, isFinalAttempt: false, CancellationToken.None));
+
+        Assert.Contains("temporarily unavailable", retry.Message);
+        var row = await db.IdentifyQueueItems.AsNoTracking().SingleAsync();
+        // Back to queued with the marker kept, so the deferred job's retry still owns the search.
+        Assert.Equal(IdentifyQueueState.Queued, row.State);
+        Assert.Equal(searchJobId, row.SearchJobId);
+    }
+
+    [Fact]
+    public async Task RunSearchAsyncWalksEnabledProvidersWhenNoneRequested() {
+        await using var db = CreateContext();
+        var entityId = Guid.Parse("66666666-6666-6666-6666-666666666665");
+        SeedProvider(db);
+        SeedEntity(db, entityId, "video", "Walked Movie");
+        await db.SaveChangesAsync();
+        var queue = new RecordingJobQueue();
+        var service = new IdentifyQueueService(
+            db,
+            CreateIdentifyService(db, new ProposalProcessExecutor(), _tempRoot),
+            new InMemoryIdentifyApplyProgressStore(),
+            queue);
+        await service.RequestSearchAsync(entityId, new IdentifyQueueSearchRequest(null, null), false, CancellationToken.None);
+        var searchJobId = (await db.IdentifyQueueItems.AsNoTracking().SingleAsync()).SearchJobId!.Value;
+
+        await service.RunSearchAsync(
+            new IdentifySearchPayload(entityId, null, null, false), searchJobId, isFinalAttempt: true, CancellationToken.None);
+
+        var item = (await service.GetAsync(entityId, CancellationToken.None))!;
+        Assert.Equal("proposal", item.State);
+        Assert.Equal("tmdb", item.Provider);
+        var row = await db.IdentifyQueueItems.AsNoTracking().SingleAsync();
+        Assert.Null(row.SearchJobId);
+    }
+
+    [Fact]
+    public async Task ApplyAsyncRejectsItemAwaitingItsSearch() {
+        await using var db = CreateContext();
+        var entityId = Guid.Parse("66666666-6666-6666-6666-666666666666");
+        SeedProvider(db);
+        SeedEntity(db, entityId, "video", "Pending Movie");
+        await db.SaveChangesAsync();
+        var queue = new RecordingJobQueue();
+        var service = new IdentifyQueueService(
+            db,
+            CreateIdentifyService(db, new ProposalProcessExecutor(), _tempRoot),
+            new InMemoryIdentifyApplyProgressStore(),
+            queue);
+        await service.RequestSearchAsync(entityId, new IdentifyQueueSearchRequest("tmdb", null), false, CancellationToken.None);
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.ApplyAsync(entityId, new ApplyIdentifyQueueItemRequest(null, ["title"], null), CancellationToken.None));
+
+        Assert.Contains("awaiting its requested search", error.Message);
+    }
+
+    [Fact]
+    public async Task DeleteAsyncCancelsThePendingSearchJob() {
+        await using var db = CreateContext();
+        var entityId = Guid.Parse("66666666-6666-6666-6666-666666666667");
+        SeedProvider(db);
+        SeedEntity(db, entityId, "video", "Rejected Movie");
+        await db.SaveChangesAsync();
+        var queue = new RecordingJobQueue();
+        var service = new IdentifyQueueService(
+            db,
+            CreateIdentifyService(db, new ProposalProcessExecutor(), _tempRoot),
+            new InMemoryIdentifyApplyProgressStore(),
+            queue);
+        await service.RequestSearchAsync(entityId, new IdentifyQueueSearchRequest("tmdb", null), false, CancellationToken.None);
+
+        var item = await service.DeleteAsync(entityId, CancellationToken.None);
+
+        Assert.Equal("deleted", item!.State);
+        Assert.Empty(queue.Pending);
+        var row = await db.IdentifyQueueItems.AsNoTracking().SingleAsync();
+        Assert.Null(row.SearchJobId);
+    }
+
+    [Fact]
+    public async Task GetAsyncReconcilesAnOrphanedQueuedItem() {
+        await using var db = CreateContext();
+        var entityId = Guid.Parse("66666666-6666-6666-6666-666666666668");
+        SeedEntity(db, entityId, "video", "Orphaned Movie");
+        // A backfilled or abandoned row: queued, but no identify-search job owns it.
+        db.IdentifyQueueItems.Add(new IdentifyQueueItemRow {
+            Id = Guid.NewGuid(),
+            EntityId = entityId,
+            State = IdentifyQueueState.Queued,
+            Action = IdentifyAction.Search,
+            CreatedAt = DateTimeOffset.UtcNow,
+            UpdatedAt = DateTimeOffset.UtcNow
+        });
+        await db.SaveChangesAsync();
+        var service = CreateQueueService(db, new ProposalProcessExecutor(), _tempRoot);
+
+        var item = await service.GetAsync(entityId, CancellationToken.None);
+
+        Assert.Equal("error", item!.State);
+        Assert.Contains("no longer running", item.Error);
+        var row = await db.IdentifyQueueItems.AsNoTracking().SingleAsync();
+        Assert.Equal(IdentifyQueueState.Error, row.State);
+    }
+
     private static IdentifyQueueService CreateQueueService(
         PrismediaDbContext db,
         ProcessExecutor executor,
@@ -737,6 +964,7 @@ public sealed class IdentifyQueueServiceTests : IDisposable {
     /// <summary>Minimal in-memory job queue for tests: records enqueues, no worker runs the cascade.</summary>
     private sealed class RecordingJobQueue : IJobQueueService {
         public List<EnqueueJobRequest> Enqueued { get; } = [];
+        public List<JobRunSnapshot> Pending { get; } = [];
 
         public Task<JobRunSnapshot> EnqueueAsync(EnqueueJobRequest request, CancellationToken cancellationToken) {
             Enqueued.Add(request);
@@ -744,6 +972,7 @@ public sealed class IdentifyQueueServiceTests : IDisposable {
                 Guid.NewGuid(), request.Type, JobRunStatus.Queued, 0, null,
                 request.PayloadJson ?? string.Empty, request.TargetEntityKind, request.TargetEntityId,
                 request.TargetLabel, DateTimeOffset.UtcNow, null, null);
+            Pending.Add(snapshot);
             return Task.FromResult(snapshot);
         }
 
@@ -752,10 +981,14 @@ public sealed class IdentifyQueueServiceTests : IDisposable {
 
         public Task<IReadOnlyList<JobRunSnapshot>> ListAsync(bool hideNsfw, CancellationToken cancellationToken) =>
             Task.FromResult<IReadOnlyList<JobRunSnapshot>>([]);
-        public Task<bool> HasPendingAsync(JobType type, string? targetEntityId, CancellationToken cancellationToken) => Task.FromResult(false);
+        public Task<bool> HasPendingAsync(JobType type, string? targetEntityId, CancellationToken cancellationToken) =>
+            Task.FromResult(Pending.Any(job => job.Type == type && job.TargetEntityId == targetEntityId));
         public Task<int> EnqueueBatchAsync(IReadOnlyList<EnqueueJobRequest> requests, CancellationToken cancellationToken) => Task.FromResult(0);
         public Task<int> CancelAsync(JobType? type, CancellationToken cancellationToken) => Task.FromResult(0);
-        public Task<bool> CancelRunAsync(Guid id, CancellationToken cancellationToken) => Task.FromResult(true);
+        public Task<bool> CancelRunAsync(Guid id, CancellationToken cancellationToken) {
+            Pending.RemoveAll(job => job.Id == id);
+            return Task.FromResult(true);
+        }
         public Task<int> ClearFailuresAsync(JobType? type, CancellationToken cancellationToken) => Task.FromResult(0);
         public Task<JobRunSnapshot?> ClaimNextAsync(string workerId, CancellationToken cancellationToken, int? minPriority = null) => Task.FromResult<JobRunSnapshot?>(null);
         public Task<int> RecoverStaleRunningAsync(string currentWorkerId, TimeSpan staleAfter, CancellationToken cancellationToken) => Task.FromResult(0);
@@ -975,6 +1208,21 @@ public sealed class IdentifyQueueServiceTests : IDisposable {
     };
 
     /// <summary>A plugin process that always crashes, to simulate a cascade attempt throwing mid-walk.</summary>
+    private sealed class RateLimitedProcessExecutor : ProcessExecutor {
+        public override Task<ProcessExecutionResult> RunAsync(
+            string fileName,
+            IReadOnlyList<string> arguments,
+            IReadOnlyDictionary<string, string>? environment,
+            CancellationToken cancellationToken, bool lowPriority = false) {
+            var wire = new {
+                ok = false,
+                result = (object?)null,
+                error = "429 Too Many Requests"
+            };
+            return Task.FromResult(new ProcessExecutionResult(0, JsonSerializer.Serialize(wire, JsonOptions), string.Empty));
+        }
+    }
+
     private sealed class ThrowingProcessExecutor : ProcessExecutor {
         public override Task<ProcessExecutionResult> RunAsync(
             string fileName,

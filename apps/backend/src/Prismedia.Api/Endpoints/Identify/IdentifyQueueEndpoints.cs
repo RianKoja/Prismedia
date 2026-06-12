@@ -57,7 +57,7 @@ internal static class IdentifyQueueEndpoints {
             IIdentifyQueueService queue,
             CancellationToken cancellationToken) => {
                 try {
-                    return Results.Ok(await queue.SearchAsync(
+                    return Results.Ok(await queue.RequestSearchAsync(
                         entityId,
                         request,
                         NsfwVisibility.ShouldHide(hideNsfw, httpContext),
@@ -67,7 +67,7 @@ internal static class IdentifyQueueEndpoints {
                 }
             })
             .WithName("SearchIdentifyQueueItem")
-            .WithSummary("Runs a provider search and stores candidates or a proposal on the queue item.")
+            .WithSummary("Requests a provider search; a background identify-search job runs it and the item reports progress through its state.")
             .Produces<IdentifyQueueItem>()
             .Produces<ApiProblem>(StatusCodes.Status404NotFound);
 

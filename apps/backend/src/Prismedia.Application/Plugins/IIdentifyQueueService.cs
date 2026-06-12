@@ -18,9 +18,23 @@ public interface IIdentifyQueueService {
     /// <summary>Gets the queue item for an entity, or null when it is not queued.</summary>
     Task<IdentifyQueueItem?> GetAsync(Guid entityId, CancellationToken cancellationToken);
 
-    /// <summary>Runs a provider search and persists candidates or a proposal.</summary>
-    Task<IdentifyQueueItem> SearchAsync(
+    /// <summary>
+    /// Requests a provider search for the entity. The item enters the queued state and a background
+    /// identify-search job runs the provider work; any search or cascade already in flight for the
+    /// item is superseded.
+    /// </summary>
+    Task<IdentifyQueueItem> RequestSearchAsync(
         Guid entityId,
+        IdentifyQueueSearchRequest request,
+        bool hideNsfw,
+        CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Requests provider searches for a batch of entities, one identify-search job per entity.
+    /// Entities that no longer exist are skipped.
+    /// </summary>
+    Task<IdentifyBulkAcceptedResponse> RequestSearchBatchAsync(
+        IReadOnlyList<Guid> entityIds,
         IdentifyQueueSearchRequest request,
         bool hideNsfw,
         CancellationToken cancellationToken);

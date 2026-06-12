@@ -90,9 +90,20 @@ public sealed record IdentifyEntityRequest(
     IReadOnlyDictionary<string, string>? ParentExternalIds = null);
 
 /// <summary>
-/// Request body for starting a transient bulk identify review session.
+/// Request body for requesting identify searches for a batch of entities. Each entity gets its own
+/// identify-search job and queue item; the dashboard tracks progress through queue item states.
 /// </summary>
+/// <param name="Provider">Provider to search with, or null to let the server walk enabled providers per entity.</param>
+/// <param name="EntityIds">Entities to queue for identification.</param>
+/// <param name="Query">Optional query override applied to every entity's search.</param>
 public sealed record IdentifyBulkStartRequest(
-    string Provider,
+    string? Provider,
     IReadOnlyList<Guid> EntityIds,
     IdentifyQuery? Query);
+
+/// <summary>
+/// Response for an accepted bulk identify request.
+/// </summary>
+/// <param name="Requested">Number of entities in the request.</param>
+/// <param name="Enqueued">Number of identify-search jobs actually enqueued (duplicates pending searches are skipped).</param>
+public sealed record IdentifyBulkAcceptedResponse(int Requested, int Enqueued);
