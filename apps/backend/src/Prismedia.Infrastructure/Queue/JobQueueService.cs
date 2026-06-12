@@ -68,6 +68,18 @@ public sealed class JobQueueService : IJobQueueService {
             }
         }
 
+        if (request.TargetEntityId is not null) {
+            var existing = await _db.JobRuns.AsNoTracking()
+                .Where(job => job.Type == request.Type &&
+                              job.TargetEntityId == request.TargetEntityId &&
+                              (job.Status == JobRunStatus.Queued || job.Status == JobRunStatus.Running))
+                .OrderBy(job => job.CreatedAt)
+                .FirstOrDefaultAsync(cancellationToken);
+            if (existing is not null) {
+                return ToSnapshot(existing);
+            }
+        }
+
         var now = DateTimeOffset.UtcNow;
         var row = new JobRunRow {
             Id = Guid.NewGuid(),
@@ -86,7 +98,22 @@ public sealed class JobQueueService : IJobQueueService {
         };
 
         _db.JobRuns.Add(row);
-        await _db.SaveChangesAsync(cancellationToken);
+        try {
+            await _db.SaveChangesAsync(cancellationToken);
+        } catch (DbUpdateException) when (request.TargetEntityId is not null) {
+            _db.Entry(row).State = EntityState.Detached;
+            var existing = await _db.JobRuns.AsNoTracking()
+                .Where(job => job.Type == request.Type &&
+                              job.TargetEntityId == request.TargetEntityId &&
+                              (job.Status == JobRunStatus.Queued || job.Status == JobRunStatus.Running))
+                .OrderBy(job => job.CreatedAt)
+                .FirstOrDefaultAsync(cancellationToken);
+            if (existing is null) {
+                throw;
+            }
+
+            return ToSnapshot(existing);
+        }
 
         return ToSnapshot(row);
     }

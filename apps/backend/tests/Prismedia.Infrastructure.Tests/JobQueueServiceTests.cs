@@ -50,6 +50,33 @@ public sealed class JobQueueServiceTests {
     }
 
     [Fact]
+    public async Task TargetedJobsReturnExistingPendingRunInsteadOfStackingDuplicates() {
+        await using var db = CreateContext();
+        var service = new JobQueueService(db);
+        var entityId = Guid.Parse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee").ToString();
+
+        var first = await service.EnqueueAsync(new EnqueueJobRequest(
+            JobType.AutoIdentify,
+            TargetEntityKind: EntityKindRegistry.AudioLibrary.Code,
+            TargetEntityId: entityId,
+            TargetLabel: "Album"), CancellationToken.None);
+        var duplicate = await service.EnqueueAsync(new EnqueueJobRequest(
+            JobType.AutoIdentify,
+            TargetEntityKind: EntityKindRegistry.AudioLibrary.Code,
+            TargetEntityId: entityId,
+            TargetLabel: "Album again"), CancellationToken.None);
+        var otherType = await service.EnqueueAsync(new EnqueueJobRequest(
+            JobType.GeneratePreview,
+            TargetEntityKind: EntityKindRegistry.AudioLibrary.Code,
+            TargetEntityId: entityId,
+            TargetLabel: "Album preview"), CancellationToken.None);
+
+        Assert.Equal(first.Id, duplicate.Id);
+        Assert.NotEqual(first.Id, otherType.Id);
+        Assert.Equal(2, await db.JobRuns.CountAsync());
+    }
+
+    [Fact]
     public async Task ListKeepsActiveAndFailedRunsVisibleWhenBacklogExceedsRecentLimit() {
         await using var db = CreateContext();
         var service = new JobQueueService(db);

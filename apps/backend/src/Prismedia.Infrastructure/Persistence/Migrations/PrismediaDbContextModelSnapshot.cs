@@ -1629,6 +1629,11 @@ namespace Prismedia.Infrastructure.Persistence.Migrations
                     b.HasIndex("Type", "TargetEntityId", "Status")
                         .HasDatabaseName("ix_job_runs_dedup");
 
+                    b.HasIndex("Type", "TargetEntityId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_job_runs_pending_type_target")
+                        .HasFilter("status IN ('queued', 'running') AND target_entity_id IS NOT NULL");
+
                     b.ToTable("job_runs", null, t =>
                         {
                             t.HasCheckConstraint("ck_job_runs_attempts", "attempts >= 0 AND max_attempts > 0");
