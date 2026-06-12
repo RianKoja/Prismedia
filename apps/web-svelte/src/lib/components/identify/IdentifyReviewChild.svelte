@@ -38,6 +38,7 @@
     relationshipCard,
     creditCard,
     childCard as buildChildCard,
+    isLocalUnmatchedProposal,
     tagRelationshipForTitle,
   } from "./identify-review-helpers";
   import type { EntityMetadataProposal } from "$lib/api/identify-types";
@@ -483,14 +484,15 @@
       {/snippet}
       <div class="identify-thumbnail-grid grid grid-cols-2 gap-2 p-3.5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
         {#each children as child, i (child.proposalId)}
+          {@const localUnmatched = isLocalUnmatchedProposal(child)}
           <EntityThumbnail
             card={buildChildCard(child, i, "Episode", "video", selectedImages, proposal.proposalId, store, child.targetEntityId ? localChildrenById.get(child.targetEntityId) : null)}
             linkable={false}
             onActivate={() => goToChild(child)}
-            selectable
+            selectable={!localUnmatched}
             selectMode
-            selected={store.isReviewProposalSelected(child.proposalId)}
-            onSelectedChange={(selected) => store.setReviewProposalSelected(child.proposalId, selected)}
+            selected={!localUnmatched && store.isReviewProposalSelected(child.proposalId)}
+            onSelectedChange={(selected) => !localUnmatched && store.setReviewProposalSelected(child.proposalId, selected)}
           />
         {/each}
       </div>

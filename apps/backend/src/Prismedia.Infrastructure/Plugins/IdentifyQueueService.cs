@@ -209,7 +209,8 @@ public sealed class IdentifyQueueService : IIdentifyQueueService {
                 payload.ToJson(),
                 TargetEntityKind: entity.KindCode,
                 TargetEntityId: entity.Id.ToString(),
-                TargetLabel: entity.Title),
+                TargetLabel: entity.Title,
+                Priority: JobPriorities.InteractiveIdentify),
             cancellationToken);
         row.CascadeJobId = job.Id;
     }
