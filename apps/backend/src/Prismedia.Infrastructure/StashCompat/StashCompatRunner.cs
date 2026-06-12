@@ -66,6 +66,10 @@ public sealed class StashCompatRunner : IIdentifyRunner {
                 false,
                 null,
                 $"Scraper '{definition.Name}' requires python script execution, which is not available yet.");
+        } catch (TimeoutException ex) {
+            // "timed out" in the error marks the failure as retryable for auto identify; manual
+            // searches surface it on the queue item instead of hanging the request forever.
+            return new IdentifyPluginResponse(false, null, ex.Message);
         }
     }
 

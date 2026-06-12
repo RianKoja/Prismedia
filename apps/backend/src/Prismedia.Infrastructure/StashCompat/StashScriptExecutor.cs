@@ -14,6 +14,13 @@ namespace Prismedia.Infrastructure.StashCompat;
 public sealed class StashScriptExecutor {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
+    /// <summary>
+    /// Hard ceiling on one script invocation. Scraper scripts call external sites and can hang
+    /// indefinitely on a stuck connection; without this bound a manual identify search never
+    /// returns. Matches the dotnet plugin runner's identify timeout.
+    /// </summary>
+    private static readonly TimeSpan ScriptTimeout = TimeSpan.FromSeconds(60);
+
     private readonly ProcessExecutor _processes;
 
     /// <summary>
@@ -135,6 +142,9 @@ public sealed class StashScriptExecutor {
             ["PYTHONPATH"] = BuildPythonPath(scraperDir)
         };
 
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(ScriptTimeout);
+
         ProcessExecutionResult result;
         try {
             result = await _processes.RunWithStdinAsync(
@@ -143,7 +153,10 @@ public sealed class StashScriptExecutor {
                 stdin,
                 environment,
                 scraperDir,
-                cancellationToken);
+                timeout.Token);
+        } catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested) {
+            throw new TimeoutException(
+                $"Scraper script '{command}' timed out after {ScriptTimeout.TotalSeconds:0} seconds.");
         } catch (Win32Exception ex) {
             throw new StashPythonUnavailableException(command, ex);
         } catch (InvalidOperationException ex) {
