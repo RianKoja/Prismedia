@@ -180,6 +180,34 @@ public sealed class IdentifyQueueServiceTests : IDisposable {
     }
 
     [Fact]
+    public async Task SearchAsyncEnqueuesInteractiveCascadeAboveScanBacklogs() {
+        await using var db = CreateContext();
+        var seriesId = Guid.Parse("33333333-3333-3333-3333-333333333338");
+        var episodeId = Guid.Parse("33333333-3333-3333-3333-333333333339");
+        SeedProvider(db);
+        SeedEntity(db, seriesId, "video-series", "Known Series");
+        var episode = SeedEntity(db, episodeId, "video", "Local Episode 1");
+        episode.ParentEntityId = seriesId;
+        episode.SortOrder = 1;
+        await db.SaveChangesAsync();
+        var queue = new RecordingJobQueue();
+        var service = new IdentifyQueueService(
+            db,
+            CreateIdentifyService(db, new StructuralChildrenProcessExecutor(), _tempRoot),
+            new InMemoryIdentifyApplyProgressStore(),
+            queue);
+        await service.AddAsync(seriesId, CancellationToken.None);
+
+        var query = new IdentifyQuery(null, null, new Dictionary<string, string> { ["tmdb"] = "series-1" });
+        await service.SearchAsync(seriesId, new IdentifyQueueSearchRequest("tmdb", query), hideNsfw: false, CancellationToken.None);
+
+        var request = Assert.Single(queue.Enqueued);
+        Assert.Equal(JobType.IdentifyCascade, request.Type);
+        Assert.Equal(JobPriorities.InteractiveIdentify, request.Priority);
+        Assert.True(request.Priority > JobPriorities.Scan);
+    }
+
+    [Fact]
     public async Task RunCascadeDoesNotReviveAQueueItemRemovedBeforeItRuns() {
         await using var db = CreateContext();
         var seriesId = Guid.Parse("55555555-5555-5555-5555-555555555550");

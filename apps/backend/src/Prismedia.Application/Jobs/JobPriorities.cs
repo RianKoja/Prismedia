@@ -8,6 +8,9 @@ namespace Prismedia.Application.Jobs;
 /// large backlog of it never delays newly added media from appearing.
 /// </summary>
 public static class JobPriorities {
+    /// <summary>User-triggered identify review cascades — interactive UI work must not wait behind scan backlogs.</summary>
+    public const int InteractiveIdentify = 70;
+
     /// <summary>Library scan — creates the entities the UI shows. Highest so new media appears fast.</summary>
     public const int Scan = 60;
 
