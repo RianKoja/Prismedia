@@ -79,6 +79,20 @@ public sealed class StructuralChildMatcherTests {
     }
 
     [Fact]
+    public void CountMismatchAllowsTinySpellingDifferenceWhenEpisodeNumberMatches() {
+        var localEpisode = Local(EntityKindRegistry.Video.Code, "Safari, So Good!", 10);
+        var providerEpisode = Proposal(ProposalKind.VideoEpisode, "Safari, So Goodie", ("episodeNumber", 10));
+
+        var match = StructuralChildMatcher.FindProviderChild(
+            localEpisode,
+            [providerEpisode],
+            new HashSet<int>(),
+            cautious: true);
+
+        Assert.Same(providerEpisode, match);
+    }
+
+    [Fact]
     public void CountMismatchDoesNotBindAlbumTrackWhenNumberMatchesButTitleConflicts() {
         var localTrack = Local(EntityKindRegistry.AudioTrack.Code, "Local Hidden Track", 7);
         var providerTrack = Proposal(ProposalKind.AudioTrack, "Provider Bonus Track", ("trackNumber", 7));

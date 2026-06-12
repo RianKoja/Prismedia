@@ -149,8 +149,12 @@ internal static class StructuralChildMatcher {
             return StructuralTitleCompatibility.Exact;
         }
 
-        return ContainsTokenSequence(leftTokens, rightTokens) || ContainsTokenSequence(rightTokens, leftTokens)
-            ? StructuralTitleCompatibility.Contains
+        if (ContainsTokenSequence(leftTokens, rightTokens) || ContainsTokenSequence(rightTokens, leftTokens)) {
+            return StructuralTitleCompatibility.Contains;
+        }
+
+        return HasTinyTokenDifference(leftTokens, rightTokens)
+            ? StructuralTitleCompatibility.TinyDifference
             : StructuralTitleCompatibility.None;
     }
 
@@ -190,6 +194,66 @@ internal static class StructuralChildMatcher {
         }
 
         return false;
+    }
+
+    private static bool HasTinyTokenDifference(string[] leftTokens, string[] rightTokens) {
+        if (leftTokens.Length != rightTokens.Length || leftTokens.Length < 2) {
+            return false;
+        }
+
+        var differences = 0;
+        for (var index = 0; index < leftTokens.Length; index++) {
+            if (leftTokens[index].Equals(rightTokens[index], StringComparison.OrdinalIgnoreCase)) {
+                continue;
+            }
+
+            differences++;
+            if (differences > 1 || !IsTinyTokenDifference(leftTokens[index], rightTokens[index])) {
+                return false;
+            }
+        }
+
+        return differences == 1;
+    }
+
+    private static bool IsTinyTokenDifference(string left, string right) {
+        if (left.Length < 4 || right.Length < 4) {
+            return false;
+        }
+
+        return BoundedEditDistance(left, right, maxDistance: 2) <= 2;
+    }
+
+    private static int BoundedEditDistance(string left, string right, int maxDistance) {
+        if (Math.Abs(left.Length - right.Length) > maxDistance) {
+            return maxDistance + 1;
+        }
+
+        var previous = new int[right.Length + 1];
+        var current = new int[right.Length + 1];
+        for (var column = 0; column <= right.Length; column++) {
+            previous[column] = column;
+        }
+
+        for (var row = 1; row <= left.Length; row++) {
+            current[0] = row;
+            var rowBest = current[0];
+            for (var column = 1; column <= right.Length; column++) {
+                var substitutionCost = char.ToUpperInvariant(left[row - 1]) == char.ToUpperInvariant(right[column - 1]) ? 0 : 1;
+                current[column] = Math.Min(
+                    Math.Min(previous[column] + 1, current[column - 1] + 1),
+                    previous[column - 1] + substitutionCost);
+                rowBest = Math.Min(rowBest, current[column]);
+            }
+
+            if (rowBest > maxDistance) {
+                return maxDistance + 1;
+            }
+
+            (previous, current) = (current, previous);
+        }
+
+        return previous[right.Length];
     }
 
     private static bool IsGenericStructuralTitle(string[] tokens) {
@@ -244,6 +308,7 @@ internal static class StructuralChildMatcher {
 
     private enum StructuralTitleCompatibility {
         None,
+        TinyDifference,
         Contains,
         Exact
     }
