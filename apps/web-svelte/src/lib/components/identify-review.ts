@@ -418,6 +418,7 @@ export function buildProposalForApply(
     patch,
     images: imagesForSelectedProposal(result, selections, fields),
     children: structuralChildProposals(result)
+      .filter((child) => !isLocalUnmatchedProposal(child))
       .filter((child) => selections.selectedCascade[child.proposalId] !== false)
       .map((child) => buildProposalForApply(child, selections)),
     relationships: relationshipProposals(result)
@@ -425,6 +426,10 @@ export function buildProposalForApply(
       .filter((child) => shouldKeepRelationship(child, patch, fields))
       .map((child) => buildProposalForApply(child, selections)),
   };
+}
+
+function isLocalUnmatchedProposal(result: EntityMetadataProposal): boolean {
+  return result.matchReason === "local-unmatched" || result.proposalId.startsWith("local-unmatched:");
 }
 
 function shouldKeepRelationship(

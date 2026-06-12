@@ -103,10 +103,6 @@ internal static class StructuralChildMatcher {
             return 0;
         }
 
-        if (providerChild.TargetEntityId is { } targetEntityId && targetEntityId == localChild.EntityId) {
-            return 100;
-        }
-
         var providerSortOrder = EntityMetadataPositionRules.SortOrderFor(
             localChild.KindCode,
             EntityMetadataPositionRules.Normalize(providerChild.Patch.Positions));
@@ -115,6 +111,12 @@ internal static class StructuralChildMatcher {
             localSortOrder == matchedSortOrder;
         var titleCompatibility = TitleCompatibility(localChild.Title, providerChild.Patch.Title);
         var titlesCompatible = titleCompatibility != StructuralTitleCompatibility.None;
+        if (providerChild.TargetEntityId is { } targetEntityId && targetEntityId == localChild.EntityId) {
+            return !titlesCompatible && HasUsefulTitle(localChild.Title) && HasUsefulTitle(providerChild.Patch.Title)
+                ? 0
+                : 100;
+        }
+
         if (titlesCompatible && numbersMatch) {
             return 90;
         }
@@ -160,7 +162,13 @@ internal static class StructuralChildMatcher {
     private static string[] NormalizeTitleTokens(string? value) =>
         string.IsNullOrWhiteSpace(value)
             ? []
-            : value.Trim().Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+            : value
+                .Replace("&", " and ", StringComparison.Ordinal)
+                .Trim()
+                .Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)
+                .Select(CleanTitleToken)
+                .Where(token => token.Length > 0)
+                .ToArray();
 
     private static bool ContainsTokenSequence(string[] haystack, string[] needle) {
         if (needle.Length == 0 || needle.Length > haystack.Length) {

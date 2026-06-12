@@ -117,8 +117,148 @@ public sealed partial class IdentifyPluginService {
             }
         }
 
-        return Root(structuralChildren);
+        var relocatedChildren = await RelocateUnmatchedChildrenIntoProviderContainersAsync(
+            structuralChildren,
+            baseChildren,
+            descriptor,
+            auth,
+            ancestorPath,
+            includeNsfw,
+            cancellationToken);
+        return Root(relocatedChildren);
     }
+
+    /// <summary>
+    /// When a local child is scanned under one structural container but the provider catalogs it under
+    /// a sibling container (Bluey's long special “The Sign” is season 0 on TMDB, while a file may sit in
+    /// season 3), hydrate the provider's unbound sibling containers and move the local match into the
+    /// provider's proposed location. The later apply walk will materialize that provider container and
+    /// adopt the existing local entity beneath it, rather than showing a false “matched” placeholder in
+    /// the original container.
+    /// </summary>
+    private async Task<IReadOnlyList<EntityMetadataProposal>> RelocateUnmatchedChildrenIntoProviderContainersAsync(
+        IReadOnlyList<EntityMetadataProposal> resolvedChildren,
+        IReadOnlyList<EntityMetadataProposal> baseChildren,
+        PluginDescriptor descriptor,
+        IReadOnlyDictionary<string, string> auth,
+        IReadOnlyList<IdentifyEntitySnapshot> ancestorPath,
+        bool includeNsfw,
+        CancellationToken cancellationToken) {
+        var unmatched = CollectLocalUnmatchedDescendants(resolvedChildren).ToArray();
+        var candidateContainers = baseChildren
+            .Where(child => child.TargetEntityId is null &&
+                IsStructuralContainerKind(child.TargetKind) &&
+                !EntityMetadataProposalTraversal.IsRelationshipKind(child.TargetKind))
+            .ToArray();
+        if (unmatched.Length == 0 || candidateContainers.Length == 0) {
+            return resolvedChildren;
+        }
+
+        var relocatedById = new Dictionary<Guid, EntityMetadataProposal>();
+        var containers = new List<EntityMetadataProposal>();
+        foreach (var container in candidateContainers) {
+            var hydrated = await HydrateUnboundProviderContainerAsync(
+                container, descriptor, auth, ancestorPath, includeNsfw, cancellationToken);
+            if (hydrated?.Patch is null) {
+                continue;
+            }
+
+            var providerChildren = EntityMetadataProposalTraversal.StructuralChildren(hydrated);
+            if (providerChildren.Count == 0) {
+                continue;
+            }
+
+            var usedProviderIndexes = new HashSet<int>();
+            var matchedChildren = new List<EntityMetadataProposal>();
+            foreach (var local in unmatched) {
+                if (relocatedById.ContainsKey(local.EntityId)) {
+                    continue;
+                }
+
+                var providerChild = StructuralChildMatcher.FindProviderChild(
+                    new StructuralLocalChild(local.EntityId, local.KindCode, local.Title, local.SortOrder),
+                    providerChildren,
+                    usedProviderIndexes,
+                    cautious: true);
+                if (providerChild is null) {
+                    continue;
+                }
+
+                var boundChild = providerChild with { TargetEntityId = local.EntityId };
+                relocatedById[local.EntityId] = boundChild;
+                matchedChildren.Add(boundChild);
+            }
+
+            if (matchedChildren.Count > 0) {
+                containers.Add(hydrated with { Children = matchedChildren });
+            }
+        }
+
+        if (relocatedById.Count == 0) {
+            return resolvedChildren;
+        }
+
+        return RemoveRelocatedLocalUnmatched(resolvedChildren, relocatedById.Keys.ToHashSet())
+            .Concat(containers)
+            .ToArray();
+    }
+
+    private async Task<EntityMetadataProposal?> HydrateUnboundProviderContainerAsync(
+        EntityMetadataProposal container,
+        PluginDescriptor descriptor,
+        IReadOnlyDictionary<string, string> auth,
+        IReadOnlyList<IdentifyEntitySnapshot> ancestorPath,
+        bool includeNsfw,
+        CancellationToken cancellationToken) {
+        var kind = container.TargetKind.ToEntityKind();
+        var request = new IdentifyPluginRequest(
+            ProtocolVersion: 2,
+            Action: IdentifyAction.LookupId,
+            Auth: auth,
+            Entity: new IdentifyEntitySnapshot(
+                Guid.Empty,
+                kind,
+                container.Patch.Title ?? kind.ToCode(),
+                container.Patch.ExternalIds,
+                container.Patch.Urls),
+            Query: new IdentifyQuery(null, null, null),
+            Hints: new IdentifyMatchHints(container.Patch.ExternalIds, container.Patch.Urls, container.Patch.Title, null),
+            StructuralContext: new IdentifyStructuralContext(ancestorPath, container.Patch.Positions),
+            IncludeNsfw: includeNsfw);
+
+        var response = await _runners.Resolve(descriptor).IdentifyAsync(descriptor, request, cancellationToken);
+        return response.Ok && response.Result?.Patch is not null ? response.Result : null;
+    }
+
+    private static IEnumerable<RelocatableLocalChild> CollectLocalUnmatchedDescendants(
+        IEnumerable<EntityMetadataProposal> proposals) {
+        foreach (var proposal in proposals) {
+            if (IsLocalUnmatchedProposal(proposal) && proposal.TargetEntityId is { } targetId) {
+                yield return new RelocatableLocalChild(
+                    targetId,
+                    proposal.TargetKind.ToEntityKind().ToCode(),
+                    proposal.Patch.Title ?? string.Empty,
+                    StructuralSortOrder(proposal));
+            }
+
+            foreach (var child in CollectLocalUnmatchedDescendants(EntityMetadataProposalTraversal.StructuralChildren(proposal))) {
+                yield return child;
+            }
+        }
+    }
+
+    private static IReadOnlyList<EntityMetadataProposal> RemoveRelocatedLocalUnmatched(
+        IReadOnlyList<EntityMetadataProposal> proposals,
+        ISet<Guid> relocatedIds) =>
+        proposals
+            .Where(proposal => !(IsLocalUnmatchedProposal(proposal) &&
+                proposal.TargetEntityId is { } targetId && relocatedIds.Contains(targetId)))
+            .Select(proposal => proposal with {
+                Children = RemoveRelocatedLocalUnmatched(
+                    EntityMetadataProposalTraversal.StructuralChildren(proposal),
+                    relocatedIds)
+            })
+            .ToArray();
 
     /// <summary>Publishes a partial root to the cascade sink, swallowing failures so streaming never aborts the cascade.</summary>
     private static async Task SafeFlushAsync(IIdentifyCascadeSink sink, EntityMetadataProposal partialRoot, CancellationToken cancellationToken) {
@@ -146,22 +286,22 @@ public sealed partial class IdentifyPluginService {
         HashSet<Guid> visited,
         CancellationToken cancellationToken) {
         if (!await HasSupportedStructuralChildrenAsync(child.Entity.Id, descriptor.Manifest, cancellationToken)) {
-            return providerChild;
+            return providerChild with { TargetEntityId = child.Entity.Id };
         }
 
         var providerStructuralChildren = EntityMetadataProposalTraversal.StructuralChildren(providerChild);
         if (providerStructuralChildren.Count > 0 &&
             !await HasMissingSupportedStructuralChildrenAsync(
                 child.Entity.Id, providerStructuralChildren, descriptor.Manifest, cancellationToken)) {
-            return providerChild;
+            return providerChild with { TargetEntityId = child.Entity.Id };
         }
 
         var childResponse = await IdentifyEntityWithStructuralContextAsync(
             child.Entity, descriptor, auth, query: null, ancestors: ancestorPath,
             parentSortOrder: child.SortOrder, includeNsfw, visited, cancellationToken);
         return childResponse.Ok && childResponse.Result?.Patch is not null
-            ? EnsureStructuralPositions(childResponse.Result, child)
-            : providerChild;
+            ? EnsureStructuralPositions(childResponse.Result, child) with { TargetEntityId = child.Entity.Id }
+            : providerChild with { TargetEntityId = child.Entity.Id };
     }
 
     private async Task<bool> HasSupportedStructuralChildrenAsync(
@@ -459,6 +599,10 @@ public sealed partial class IdentifyPluginService {
             TargetEntityId: child.Entity.Id,
             Relationships: []);
 
+    private static bool IsLocalUnmatchedProposal(EntityMetadataProposal proposal) =>
+        proposal.ProposalId.StartsWith("local-unmatched:", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(proposal.MatchReason, "local-unmatched", StringComparison.OrdinalIgnoreCase);
+
     /// <summary>
     /// True when the caller is steering this identify by hand — a manual title search or an
     /// explicit pick-from-candidates request — so the entity's stored ids and urls must not
@@ -606,6 +750,8 @@ public sealed partial class IdentifyPluginService {
         manifest.Supports.Any(support => PluginEntityKindCompatibility.SupportsKind(support, kind));
 
     private sealed record StructuralChild(int? SortOrder, EntityRow Entity);
+
+    private sealed record RelocatableLocalChild(Guid EntityId, string KindCode, string Title, int? SortOrder);
 
     private static StructuralLocalChild ToMatchInput(StructuralChild child) =>
         new(child.Entity.Id, child.Entity.KindCode, child.Entity.Title, child.SortOrder);

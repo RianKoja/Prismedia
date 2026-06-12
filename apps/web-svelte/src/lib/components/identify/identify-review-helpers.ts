@@ -130,8 +130,12 @@ export function proposalStatusCustom(
 }
 
 export function childStatusCustom(child: EntityMetadataProposal): EntityThumbnailCard["custom"] {
-  const label = "Matched";
+  const label = isLocalUnmatchedProposal(child) ? "No match" : "Matched";
   return { bottomLeft: { label, title: `${label} ${relationshipKindLabel(child.targetKind)}` } };
+}
+
+export function isLocalUnmatchedProposal(child: EntityMetadataProposal): boolean {
+  return child.matchReason === "local-unmatched" || child.proposalId.startsWith("local-unmatched:");
 }
 
 export function relationshipCard(
