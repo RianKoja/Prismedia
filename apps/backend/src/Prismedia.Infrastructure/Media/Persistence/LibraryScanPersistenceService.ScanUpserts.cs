@@ -181,7 +181,9 @@ public sealed partial class LibraryScanPersistenceService {
         if (existing is not null) {
             var tracked = await _db.Entities.FindAsync([existing.Id], cancellationToken);
             if (tracked is not null) {
-                tracked.Title = title;
+                if (!tracked.IsOrganized) {
+                    tracked.Title = title;
+                }
                 tracked.ParentEntityId = parentEntityId;
                 tracked.SortOrder = sortOrder;
                 tracked.UpdatedAt = DateTimeOffset.UtcNow;

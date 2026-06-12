@@ -259,6 +259,37 @@ public sealed class AutoIdentifyRunnerTests {
     }
 
     [Fact]
+    public async Task MarksAppliedProposalTreeOrganizedBeforeAutoApply() {
+        await using var db = CreateContext();
+        var albumId = await SeedVideoAsync(db, organized: false, kind: EntityKindRegistry.AudioLibrary.Code, title: "What You Want (2020)");
+        var trackId = Guid.NewGuid();
+        var proposal = Proposal("musicbrainz", confidence: 0.95m, title: "What You Want", targetKind: ProposalKind.AudioLibrary) with {
+            TargetEntityId = albumId,
+            Children = [
+                Proposal("musicbrainz", confidence: 0.95m, title: "Introduction", targetKind: ProposalKind.AudioTrack) with {
+                    TargetEntityId = trackId,
+                    Images = []
+                }
+            ]
+        };
+        var settings = await ConfigureAsync(db, enabled: true, providers: ["musicbrainz"], confidencePercent: 90m);
+        var identify = new FakeIdentifyProvider {
+            ProposalsByProvider = { ["musicbrainz"] = proposal },
+            SupportedKindsByProvider = { ["musicbrainz"] = [EntityKindRegistry.AudioLibrary.Code] },
+        };
+        var runner = new AutoIdentifyRunner(settings, identify, db, NullLogger<AutoIdentifyRunner>.Instance);
+
+        var result = await runner.RunAsync(albumId, CancellationToken.None);
+
+        Assert.True(result.Applied);
+        var applied = Assert.Single(identify.AppliedProposals);
+        Assert.True(applied.Patch.Flags?.IsOrganized);
+        var child = Assert.Single(applied.Children);
+        Assert.True(child.Patch.Flags?.IsOrganized);
+        Assert.Contains("title", Assert.Single(identify.ApplyCalls).Fields);
+    }
+
+    [Fact]
     public async Task ThrowsRetryLaterWhenProviderReportsRateLimit() {
         await using var db = CreateContext();
         var albumId = await SeedVideoAsync(db, organized: false, kind: EntityKindRegistry.AudioLibrary.Code, title: "Abbey Road");
@@ -401,6 +432,7 @@ public sealed class AutoIdentifyRunnerTests {
         public Dictionary<string, string[]> SupportedKindsByProvider { get; } = new(StringComparer.Ordinal);
         public List<(Guid EntityId, string Provider, IdentifyQuery? Query)> IdentifyCalls { get; } = [];
         public List<(IReadOnlyCollection<string> Fields, IReadOnlyDictionary<string, string?>? SelectedImages)> ApplyCalls { get; } = [];
+        public List<EntityMetadataProposal> AppliedProposals { get; } = [];
 
         public Task<IReadOnlyList<PluginProvider>> ListProvidersAsync(string? entityKind, CancellationToken cancellationToken) {
             IReadOnlyList<PluginProvider> result = ProposalsByProvider.Keys
@@ -450,6 +482,7 @@ public sealed class AutoIdentifyRunnerTests {
             IReadOnlyDictionary<string, string?>? selectedImages,
             CancellationToken cancellationToken) {
             ApplyCalls.Add((selectedFields, selectedImages));
+            AppliedProposals.Add(proposal);
             return Task.FromResult(true);
         }
     }

@@ -132,7 +132,8 @@ public sealed class AutoIdentifyRunner(
 
             var fields = SelectAllPresentFields(proposal);
             var images = SelectDefaultImages(proposal);
-            var applied = await identify.ApplyAsync(entityId, proposal, fields, images, cancellationToken);
+            var acceptedProposal = MarkAcceptedProposalTreeOrganized(proposal);
+            var applied = await identify.ApplyAsync(entityId, acceptedProposal, fields, images, cancellationToken);
             if (!applied) {
                 continue;
             }
@@ -267,6 +268,31 @@ public sealed class AutoIdentifyRunner(
 
         return images.Count > 0 ? images : null;
     }
+
+    private static EntityMetadataProposal MarkAcceptedProposalTreeOrganized(EntityMetadataProposal proposal) {
+        var children = (proposal.Children ?? []).Select(MarkAcceptedProposalTreeOrganized).ToArray();
+        var relationships = (proposal.Relationships ?? []).Select(MarkAcceptedProposalTreeOrganized).ToArray();
+
+        if (proposal.Patch is null) {
+            return proposal with {
+                Children = children,
+                Relationships = relationships
+            };
+        }
+
+        return proposal with {
+            Patch = proposal.Patch with {
+                Flags = MarkOrganized(proposal.Patch.Flags)
+            },
+            Children = children,
+            Relationships = relationships
+        };
+    }
+
+    private static EntityMetadataFlagsPatch MarkOrganized(EntityMetadataFlagsPatch? flags) =>
+        flags is null
+            ? new EntityMetadataFlagsPatch(null, null, true)
+            : flags with { IsOrganized = true };
 
     private async Task MarkOrganizedAsync(Guid entityId, CancellationToken cancellationToken) {
         var entity = await db.Entities.FirstOrDefaultAsync(row => row.Id == entityId, cancellationToken);

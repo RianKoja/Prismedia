@@ -687,6 +687,39 @@ public sealed class LibraryScanPersistenceServiceTests {
     }
 
     [Fact]
+    public async Task UpsertAudioLibraryPreservesOrganizedTitleOnRescan() {
+        await using var db = CreateContext();
+        var service = new LibraryScanPersistenceService(db);
+        var libraryId = await service.UpsertAudioLibraryAsync(
+            "/media/audio/NateWantsToBattle/What You Want (2020)",
+            "What You Want (2020)",
+            Guid.NewGuid(),
+            parentEntityId: null,
+            sortOrder: 0,
+            isNsfw: false,
+            CancellationToken.None);
+        var album = await db.Entities.SingleAsync(entity => entity.Id == libraryId);
+        album.Title = "What You Want";
+        album.IsOrganized = true;
+        await db.SaveChangesAsync();
+
+        var rescannedId = await service.UpsertAudioLibraryAsync(
+            "/media/audio/NateWantsToBattle/What You Want (2020)",
+            "What You Want (2020)",
+            Guid.NewGuid(),
+            parentEntityId: null,
+            sortOrder: 0,
+            isNsfw: true,
+            CancellationToken.None);
+
+        var rescannedAlbum = await db.Entities.SingleAsync(entity => entity.Id == libraryId);
+        Assert.Equal(libraryId, rescannedId);
+        Assert.Equal("What You Want", rescannedAlbum.Title);
+        Assert.True(rescannedAlbum.IsOrganized);
+        Assert.True(rescannedAlbum.IsNsfw);
+    }
+
+    [Fact]
     public async Task UpsertAudioTrackPreservesOrganizedTitleOnRescan() {
         await using var db = CreateContext();
         var service = new LibraryScanPersistenceService(db);
