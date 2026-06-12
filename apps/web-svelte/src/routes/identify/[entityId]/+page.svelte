@@ -12,6 +12,7 @@
     ScanSearch,
   } from "@lucide/svelte";
   import IdentifyProviderSelect from "$lib/components/identify/IdentifyProviderSelect.svelte";
+  import IdentifyTargetPreview from "$lib/components/identify/IdentifyTargetPreview.svelte";
   import IdentifyRejectQueueActions from "$lib/components/identify/IdentifyRejectQueueActions.svelte";
   import IdentifyReviewChoice from "$lib/components/identify/IdentifyReviewChoice.svelte";
   import IdentifyReviewParent from "$lib/components/identify/IdentifyReviewParent.svelte";
@@ -238,6 +239,9 @@
       providerId={current.provider}
     />
   {:else}
+    <!-- The choice and proposal reviews render their own "To Identify" preview; the manual
+         search state shows it too so the entity being matched is always one expand away. -->
+    <IdentifyTargetPreview entity={current.entity} />
     <section class="surface-panel overflow-visible">
       <header class="flex items-center gap-2.5 border-b border-border-subtle bg-surface-2 px-3.5 py-2.5">
         <Search class="h-3.5 w-3.5 text-text-accent" />
