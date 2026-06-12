@@ -681,31 +681,63 @@ public sealed partial class EfEntityReadService : IEntityReadService {
                 return new EntityCreditMetadata(
                     link.TargetEntityId,
                     metadata.Role,
-                    metadata.Character);
+                    metadata.Character,
+                    metadata.Roles,
+                    metadata.Characters);
             })
             .ToArray();
     }
 
-    private static (string? Role, string? Character) DecodeCreditMetadata(string? metadataJson) {
+    private static (string? Role, string? Character, IReadOnlyList<string> Roles, IReadOnlyList<string> Characters) DecodeCreditMetadata(string? metadataJson) {
         if (string.IsNullOrWhiteSpace(metadataJson)) {
-            return (null, null);
+            return (null, null, [], []);
         }
 
         try {
             using var document = JsonDocument.Parse(metadataJson);
             var root = document.RootElement;
+            var role = TryGetString(root, "role");
+            var character = TryGetString(root, "character");
             return (
-                TryGetString(root, "role"),
-                TryGetString(root, "character"));
+                role,
+                character,
+                WithPrimaryFirst(TryGetStringArray(root, "roles"), role),
+                WithPrimaryFirst(TryGetStringArray(root, "characters"), character));
         } catch (JsonException) {
-            return (null, null);
+            return (null, null, [], []);
         }
+    }
+
+    /// <summary>
+    /// Normalizes a stored distinct-value list so the primary value (when known) is always the
+    /// first element, giving editors a stable list they can round-trip losslessly.
+    /// </summary>
+    private static IReadOnlyList<string> WithPrimaryFirst(IReadOnlyList<string> values, string? primary) {
+        if (string.IsNullOrWhiteSpace(primary)) {
+            return values;
+        }
+
+        if (values.Count > 0 && string.Equals(values[0], primary, StringComparison.OrdinalIgnoreCase)) {
+            return values;
+        }
+
+        return [primary, .. values.Where(value => !string.Equals(value, primary, StringComparison.OrdinalIgnoreCase))];
     }
 
     private static string? TryGetString(JsonElement root, string propertyName) =>
         root.TryGetProperty(propertyName, out var property) && property.ValueKind == JsonValueKind.String
             ? property.GetString()
             : null;
+
+    private static IReadOnlyList<string> TryGetStringArray(JsonElement root, string propertyName) =>
+        root.TryGetProperty(propertyName, out var property) && property.ValueKind == JsonValueKind.Array
+            ? property.EnumerateArray()
+                .Where(item => item.ValueKind == JsonValueKind.String)
+                .Select(item => item.GetString())
+                .Where(value => !string.IsNullOrWhiteSpace(value))
+                .Select(value => value!)
+                .ToArray()
+            : [];
 
     private static string RelationshipLabel(string code) =>
         code.TryDecodeAs<RelationshipKind>(out var kind)

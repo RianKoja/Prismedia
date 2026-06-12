@@ -53,7 +53,9 @@ public static class EntityCardProjector {
             .Select(credit => new EntityCreditMetadata(
                 credit.Person.Id,
                 credit.Role.ToCode(),
-                credit.Label))
+                credit.Label,
+                [credit.Role.ToCode()],
+                credit.Label is null ? [] : [credit.Label]))
             .ToArray() ?? [];
 
     private static IReadOnlyList<ContractCapability> MapCapabilities(Entity entity) {

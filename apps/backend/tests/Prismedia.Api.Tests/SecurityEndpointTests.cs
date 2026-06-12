@@ -944,8 +944,8 @@ public sealed partial class SecurityEndpointTests : IDisposable {
                 ChildrenByKind = [],
                 Relationships = Relationships(),
                 CreditMetadata = [
-                    new EntityCreditMetadata(ActorId, "actor", "Hero"),
-                    new EntityCreditMetadata(DirectorId, "director", null)
+                    new EntityCreditMetadata(ActorId, "actor", "Hero", ["actor"], ["Hero"]),
+                    new EntityCreditMetadata(DirectorId, "director", null, ["director"], [])
                 ],
                 SubtitlesExtractedAt = null
             };

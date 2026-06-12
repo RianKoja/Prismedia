@@ -11,4 +11,6 @@ export interface EntityCreditMetadata {
   role: string | null;
   /** @nullable */
   character: string | null;
+  roles: string[];
+  characters: string[];
 }

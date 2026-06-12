@@ -4,9 +4,23 @@ namespace Prismedia.Contracts.Entities;
 
 /// <summary>Credit metadata exposed by detail routes that need character or role labels.</summary>
 /// <param name="PersonId">Referenced person entity identifier.</param>
-/// <param name="Role">Provider or domain role code, when known.</param>
-/// <param name="Character">Character, credit subtitle, or contribution label, when known.</param>
-public sealed record EntityCreditMetadata(Guid PersonId, string? Role, string? Character);
+/// <param name="Role">Primary provider or domain role code, when known.</param>
+/// <param name="Character">Primary character, credit subtitle, or contribution label, when known.</param>
+/// <param name="Roles">
+/// Every distinct role code linked to the person (e.g. director and writer). Contains
+/// <paramref name="Role"/> first when one is known; editors must round-trip the full list so
+/// secondary roles survive full-replace metadata saves.
+/// </param>
+/// <param name="Characters">
+/// Every distinct character linked to the person. Contains <paramref name="Character"/> first
+/// when one is known; editors must round-trip the full list.
+/// </param>
+public sealed record EntityCreditMetadata(
+    Guid PersonId,
+    string? Role,
+    string? Character,
+    IReadOnlyList<string> Roles,
+    IReadOnlyList<string> Characters);
 
 /// <summary>
 /// Shared shape implemented by every entity card and kind-specific detail contract.
