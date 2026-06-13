@@ -95,7 +95,8 @@
   <div class="credits-editor">
     {#if credits.length > 0}
       <ul class="credit-rows">
-        {#each credits as credit, i (credit.name)}
+        {#each credits as credit, i (i)}
+          {@const rolesOptions = availableRoles(credit)}
           <li class="credit-row">
             <div class="credit-identity">
               {#if credit.thumbnailUrl}
@@ -132,10 +133,10 @@
                     </button>
                   </span>
                 {/each}
-                {#if availableRoles(credit).length > 0}
+                {#if rolesOptions.length > 0}
                   {#key credit.roles.length}
                     <Select
-                      options={availableRoles(credit)}
+                      options={rolesOptions}
                       placeholder="+ Role"
                       size="sm"
                       class="role-add-select"

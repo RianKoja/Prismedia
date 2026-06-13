@@ -102,9 +102,9 @@ export function draftFromCard(
     credits: (cardFull.credits ?? []).map((c) => ({
       name: c.title,
       thumbnailUrl: c.thumbnail,
-      roles: [...c.roles],
-      character: c.characters[0] ?? "",
-      extraCharacters: c.characters.slice(1),
+      roles: [...(c.roles ?? [])],
+      character: c.characters?.[0] ?? "",
+      extraCharacters: c.characters?.slice(1) ?? [],
     })),
     dates: "dates" in card
       ? ((card as EntityDetailCard & { dates?: Array<{ code: string; value: string }> }).dates ?? []).map((d) => ({ key: d.code, value: d.value }))

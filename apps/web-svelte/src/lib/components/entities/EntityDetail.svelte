@@ -275,6 +275,10 @@
   // label or flags (e.g. credits labeled "Members" on artists) by re-declaring its id.
   const availableSections = $derived([...sections, ...coreSections]);
   const cardFull = $derived(card as EntityDetailCard & Partial<EntityDetailCardFull>);
+  // Built once per credits/studio change rather than on every detail re-render
+  // (favorite toggle, tab switch, edit-mode flip) — the display snippets read these.
+  const creditThumbnailCards = $derived((cardFull.credits ?? []).map(creditToThumbnailCard));
+  const studioThumbnailCards = $derived(cardFull.studio ? [creditToThumbnailCard(cardFull.studio)] : []);
   const urlLinks = $derived(card.links.filter((link) => !hasProvider(link)));
   const providerIdLinks = $derived(card.links.filter(hasProvider));
   const visibleActionButtons = $derived.by(() => actionButtons.filter((action) => !action.hidden));
@@ -911,10 +915,10 @@
 {/snippet}
 
 {#snippet studioSection(section: EntityDetailSection)}
-  {#if cardFull.studio}
+  {#if studioThumbnailCards.length > 0}
     <section class="detail-section" aria-label={section.label ?? "Studio"}>
       <EntityCastAndCrewSection
-        studioCards={[creditToThumbnailCard(cardFull.studio)]}
+        studioCards={studioThumbnailCards}
         studioLabel={section.label ?? "Studio"}
       />
     </section>
@@ -922,10 +926,10 @@
 {/snippet}
 
 {#snippet creditsSection(section: EntityDetailSection)}
-  {#if (cardFull.credits?.length ?? 0) > 0}
+  {#if creditThumbnailCards.length > 0}
     <section class="detail-section" aria-label={section.label ?? peopleLabel}>
       <EntityCastAndCrewSection
-        creditCards={(cardFull.credits ?? []).map(creditToThumbnailCard)}
+        creditCards={creditThumbnailCards}
         castLabel={section.label ?? peopleLabel}
       />
     </section>

@@ -5,7 +5,6 @@ import type {
 } from "$lib/api/generated/model";
 import { fetchEntityThumbnails } from "$lib/api/entities";
 import { getRelationshipIds } from "./entity-children";
-import { creditSubtitle, type EntityCredit } from "./entity-credits";
 import type { EntityDetailCredit, EntityDetailTag } from "./entity-detail";
 import { entityCardToThumbnailCard } from "./entity-grid";
 import type { EntityThumbnailCard } from "./entity-thumbnail";
@@ -55,29 +54,6 @@ export function tagsFromThumbnails(thumbnails: EntityThumbnail[]): EntityDetailT
     title: thumbnail.title,
     href: resolveEntityHref(thumbnail.kind, thumbnail.id) ?? null,
   }));
-}
-
-export function creditCardsFromThumbnails(
-  thumbnails: EntityThumbnail[],
-  metadata: EntityCreditMetadata[] = [],
-): EntityThumbnailCard[] {
-  const metadataByPersonId = new Map(metadata.map((item) => [item.personId, item]));
-  return thumbnailsToCards(thumbnails, {
-    subtitleFor: (thumbnail) => {
-      const item = metadataByPersonId.get(thumbnail.id);
-      const credit: EntityCredit = {
-        character: item?.character ?? null,
-        role: item?.role ?? null,
-        person: {
-          id: thumbnail.id,
-          kind: thumbnail.kind,
-          title: thumbnail.title,
-          thumbnailUrl: thumbnail.coverUrl,
-        },
-      };
-      return creditSubtitle(credit);
-    },
-  });
 }
 
 export function firstRelationshipThumbnail(
