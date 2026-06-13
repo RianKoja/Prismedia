@@ -2,7 +2,6 @@
   import { onMount } from "svelte";
   import { goto } from "$app/navigation";
   import { page } from "$app/state";
-  import { Users } from "@lucide/svelte";
   import EntityDetailSkeleton from "$lib/components/entities/EntityDetailSkeleton.svelte";
   import EntityDetailHeroDates from "$lib/components/entities/EntityDetailHeroDates.svelte";
   import { fetchImage, type ImageDetail } from "$lib/api/media";
@@ -21,8 +20,10 @@
     toggleOptimisticEntityFlag,
     updateOptimisticEntityRating,
   } from "$lib/entities/entity-detail-state";
-  import { entityCardToDetailCard, type EntityDetailCardFull } from "$lib/entities/entity-detail";
+  import { entityCardToDetailCard, type EntityDetailCardFull, type EntityDetailCredit, type EntityDetailTag } from "$lib/entities/entity-detail";
+  import { hydrateStandardRelationshipCards } from "$lib/entities/entity-relationship-thumbnails";
   import { resolveEntityHref } from "$lib/entities/entity-routes";
+  import type { EntityKindCode } from "$lib/entities/entity-codes";
   import EntityDetail, {
     type EntityMetadataUpdateRequest,
   } from "$lib/components/entities/EntityDetail.svelte";
@@ -40,10 +41,18 @@
   let errorMessage: string | null = $state(null);
   let lastNsfwMode = $state(nsfw.mode);
   let ratingBusy = $state(false);
+  let relationshipCredits = $state<EntityDetailCredit[]>([]);
+  let relationshipStudio = $state<EntityDetailCredit | null>(null);
+  let relationshipTags = $state<EntityDetailTag[]>([]);
 
   const card = $derived.by((): EntityDetailCardFull | null => {
     if (!image) return null;
-    return entityCardToDetailCard(image);
+    return {
+      ...entityCardToDetailCard(image),
+      tags: relationshipTags,
+      credits: relationshipCredits,
+      studio: relationshipStudio,
+    };
   });
 
   const lightboxEntity = $derived.by((): UniversalLightboxEntity | null => {
@@ -61,9 +70,7 @@
   });
 
   const lightboxEntities = $derived(lightboxEntity ? [lightboxEntity] : []);
-  const studio = $derived.by((): { id: string; title: string } | null => null);
-
-  const credits = $derived.by((): Array<{ id: string; title: string }> => []);
+  const studio = $derived(relationshipStudio);
 
   const dates = $derived(card?.dates ?? []);
 
@@ -81,7 +88,12 @@
     loadState = "loading";
     errorMessage = null;
     try {
-      image = await fetchImage(page.params.id ?? "");
+      const nextImage = await fetchImage(page.params.id ?? "");
+      const relationships = await hydrateStandardRelationshipCards(nextImage);
+      image = nextImage;
+      relationshipCredits = relationships.credits;
+      relationshipStudio = relationships.studio;
+      relationshipTags = relationships.relationshipTags;
       loadState = "ready";
     } catch (err) {
       if (redirectHiddenEntityNotFound(err, nsfw.mode)) return;
@@ -156,28 +168,11 @@
         >
           {#snippet heroMeta()}
             {#if studio}
-              <a href={resolveEntityHref("studio", studio.id)} class="meta-item is-studio">{studio.title}</a>
+              <a href={resolveEntityHref(studio.kind as EntityKindCode, studio.id)} class="meta-item is-studio">{studio.title}</a>
             {/if}
             <EntityDetailHeroDates {dates} leadingSeparator={Boolean(studio)} />
           {/snippet}
 
-          {#snippet afterBody()}
-            {#if credits.length > 0}
-              <div class="credits-section">
-                <h2 class="section-label">
-                  <Users class="h-4 w-4" />
-                  People
-                </h2>
-                <div class="credits-grid">
-                  {#each credits as person (person.id)}
-                    <a href={resolveEntityHref("person", person.id)} class="credit-chip">
-                      {person.title}
-                    </a>
-                  {/each}
-                </div>
-              </div>
-            {/if}
-          {/snippet}
         </EntityDetail>
       </div>
     {/snippet}
@@ -196,11 +191,5 @@
   :global(.meta-item.is-studio:hover) { opacity: 0.8; }
   :global(.meta-sep) { display: inline-block; width: 3px; height: 3px; margin: 0 0.5rem; background: var(--color-text-muted, #8a93a6); opacity: 0.5; }
 
-  .credits-section { padding: 1rem 1.5rem; border-top: 1px solid var(--color-border, #1c2235); }
-  .section-label { display: flex; align-items: center; gap: 0.45rem; margin: 0 0 0.75rem; font-family: var(--font-mono, "JetBrains Mono", monospace); font-size: 0.68rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--color-text-muted, #8a93a6); }
-  .credits-grid { display: flex; flex-wrap: wrap; gap: 0.35rem; }
-  .credit-chip { padding: 0.22rem 0.55rem; font-size: 0.75rem; color: var(--color-text-secondary, #c4c9d4); border: 1px solid var(--color-border, #1c2235); background: var(--color-surface-3, #151a28); text-decoration: none; transition: border-color 0.15s, color 0.15s; }
-  .credit-chip:hover { color: var(--color-text-accent, #c49a5a); border-color: rgba(196, 154, 90, 0.35); }
 
-  @media (min-width: 640px) { .credits-section { padding: 1rem 2rem; } }
 </style>

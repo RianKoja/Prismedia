@@ -20,10 +20,39 @@ import type {
   EntityUrl,
 } from "$lib/api/generated/model";
 import { CAPABILITY_KIND, ENTITY_FILE_ROLE } from "./entity-codes";
+import { creditRoleCharacterSubtitle } from "./entity-credits";
 import { entityCardToThumbnailCard, getEntityKindLabel } from "./entity-grid";
 import {
+  entityReferenceToThumbnailCard,
   type EntityThumbnailCard,
 } from "./entity-thumbnail";
+
+/**
+ * Lower metadata sections rendered (and edited) by detail routes without tabs whose entity
+ * kind owns relationships (galleries, images, audio tracks). Includes the studio/credits
+ * editors alongside the scalar metadata editors.
+ */
+export const DEFAULT_STANDALONE_METADATA_SECTION_IDS = [
+  "studio",
+  "credits",
+  "stats",
+  "dates",
+  "technical",
+  "progress",
+  "positions",
+  "classification",
+  "sources",
+  "fingerprints",
+  "links",
+];
+
+/**
+ * Lower metadata sections for reference/taxonomy entities (people, studios, tags) that are
+ * pointed AT by relationships rather than owning them. The backend ignores studio/credits
+ * patches for these kinds, so the editors are omitted instead of silently no-oping.
+ */
+export const REFERENCE_STANDALONE_METADATA_SECTION_IDS =
+  DEFAULT_STANDALONE_METADATA_SECTION_IDS.filter((id) => id !== "studio" && id !== "credits");
 
 /** Entity payload consumed by the shared detail surface. */
 export interface EntityDetailEntity extends Omit<EntityCard, "sortOrder" | "relationships"> {
@@ -87,6 +116,13 @@ export interface EntityDetailCredit {
   kind: string;
   title: string;
   thumbnail: string | null;
+  /**
+   * Distinct credit role codes linked to the person, primary first. Editors round-trip
+   * the full list so secondary roles (e.g. director and writer) survive metadata saves.
+   */
+  roles: string[];
+  /** Distinct characters linked to the person, primary first. Round-tripped like roles. */
+  characters: string[];
 }
 
 /** A linked tag shown in the shared detail tag row. */
@@ -492,6 +528,22 @@ export function entityCardToDetailCard(entity: EntityCard): EntityDetailCardFull
     sources: sourcesCap?.items ?? [],
     presentCapabilities,
   };
+}
+
+/**
+ * Maps a detail-card credit (person or studio reference) to the shared thumbnail card used
+ * by the credits/studio display rails, with the character/role subtitle when known.
+ */
+export function creditToThumbnailCard(credit: EntityDetailCredit): EntityThumbnailCard {
+  return entityReferenceToThumbnailCard(
+    {
+      id: credit.id,
+      kind: credit.kind as EntityDetailEntity["kind"],
+      title: credit.title,
+      thumbnailUrl: credit.thumbnail,
+    },
+    { subtitle: creditRoleCharacterSubtitle(credit.roles[0] ?? null, credit.characters[0] ?? null) },
+  );
 }
 
 /** Returns whether this detail card has any visual hero/banner imagery. */

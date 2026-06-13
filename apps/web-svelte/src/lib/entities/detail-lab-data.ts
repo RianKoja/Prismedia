@@ -271,13 +271,15 @@ export const detailLabRows: EntityDetailLabRow[] = [
           kind: "studio",
           title: "Blender Foundation",
           thumbnail: svgArt("BF", forest, brass, graphite, "square"),
+          roles: [],
+          characters: [],
         };
         card.credits = [
-          { id: "person-sacha", kind: "person", title: "Sacha Goedegebure", thumbnail: creditThumbs["person-sacha"] ?? null },
-          { id: "person-nathan", kind: "person", title: "Nathan Vegdahl", thumbnail: creditThumbs["person-nathan"] ?? null },
-          { id: "person-jan", kind: "person", title: "Jan Morgenstern", thumbnail: creditThumbs["person-jan"] ?? null },
-          { id: "person-emma", kind: "person", title: "Emma Silverton", thumbnail: creditThumbs["person-emma"] ?? null },
-          { id: "person-kira", kind: "person", title: "Kira Vasquez", thumbnail: creditThumbs["person-kira"] ?? null },
+          { id: "person-sacha", kind: "person", title: "Sacha Goedegebure", thumbnail: creditThumbs["person-sacha"] ?? null, roles: ["director", "writer"], characters: [] },
+          { id: "person-nathan", kind: "person", title: "Nathan Vegdahl", thumbnail: creditThumbs["person-nathan"] ?? null, roles: ["actor"], characters: ["Big Buck"] },
+          { id: "person-jan", kind: "person", title: "Jan Morgenstern", thumbnail: creditThumbs["person-jan"] ?? null, roles: ["composer"], characters: [] },
+          { id: "person-emma", kind: "person", title: "Emma Silverton", thumbnail: creditThumbs["person-emma"] ?? null, roles: ["actor"], characters: [] },
+          { id: "person-kira", kind: "person", title: "Kira Vasquez", thumbnail: creditThumbs["person-kira"] ?? null, roles: [], characters: [] },
         ];
         return card;
       })(),

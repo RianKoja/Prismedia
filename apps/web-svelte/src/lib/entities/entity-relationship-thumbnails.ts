@@ -6,7 +6,7 @@ import type {
 import { fetchEntityThumbnails } from "$lib/api/entities";
 import { getRelationshipIds } from "./entity-children";
 import { creditSubtitle, type EntityCredit } from "./entity-credits";
-import type { EntityDetailTag } from "./entity-detail";
+import type { EntityDetailCredit, EntityDetailTag } from "./entity-detail";
 import { entityCardToThumbnailCard } from "./entity-grid";
 import type { EntityThumbnailCard } from "./entity-thumbnail";
 import {
@@ -87,6 +87,43 @@ export function firstRelationshipThumbnail(
   return thumbnails.find((thumbnail) => thumbnail.kind === kind) ?? null;
 }
 
+/**
+ * Builds the shared detail-card credit view models that feed both the credits display
+ * section and the credits edit draft. Carrying the full role/character lists here is what
+ * lets metadata saves round-trip credits losslessly through the full-replace patch.
+ */
+export function detailCreditsFromThumbnails(
+  thumbnails: EntityThumbnail[],
+  metadata: EntityCreditMetadata[] = [],
+): EntityDetailCredit[] {
+  const metadataByPersonId = new Map(metadata.map((item) => [item.personId, item]));
+  return thumbnails.map((thumbnail) => {
+    const item = metadataByPersonId.get(thumbnail.id);
+    return {
+      id: thumbnail.id,
+      kind: thumbnail.kind,
+      title: thumbnail.title,
+      thumbnail: entityCardToThumbnailCard(thumbnail).cover?.src ?? null,
+      roles: item?.roles ?? (item?.role ? [item.role] : []),
+      characters: item?.characters ?? (item?.character ? [item.character] : []),
+    };
+  });
+}
+
+/** Builds the detail-card studio view model from the studio relationship thumbnail. */
+export function detailStudioFromThumbnails(thumbnails: EntityThumbnail[]): EntityDetailCredit | null {
+  const thumbnail = thumbnails[0];
+  if (!thumbnail) return null;
+  return {
+    id: thumbnail.id,
+    kind: thumbnail.kind,
+    title: thumbnail.title,
+    thumbnail: entityCardToThumbnailCard(thumbnail).cover?.src ?? null,
+    roles: [],
+    characters: [],
+  };
+}
+
 export async function hydrateStandardRelationshipThumbnails(
   entity: EntityRelationshipSource,
 ): Promise<{
@@ -110,14 +147,14 @@ export async function hydrateStandardRelationshipThumbnails(
 export async function hydrateStandardRelationshipCards(
   entity: EntityRelationshipSource & { creditMetadata?: EntityCreditMetadata[] },
 ): Promise<{
-  creditCards: EntityThumbnailCard[];
   relationshipTags: EntityDetailTag[];
-  studioCards: EntityThumbnailCard[];
+  credits: EntityDetailCredit[];
+  studio: EntityDetailCredit | null;
 }> {
   const relationships = await hydrateStandardRelationshipThumbnails(entity);
   return {
-    creditCards: creditCardsFromThumbnails(relationships.cast, entity.creditMetadata ?? []),
     relationshipTags: tagsFromThumbnails(relationships.tags),
-    studioCards: thumbnailsToCards(relationships.studio),
+    credits: detailCreditsFromThumbnails(relationships.cast, entity.creditMetadata ?? []),
+    studio: detailStudioFromThumbnails(relationships.studio),
   };
 }

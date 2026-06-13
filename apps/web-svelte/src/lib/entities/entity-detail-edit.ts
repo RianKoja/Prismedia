@@ -1,6 +1,23 @@
 import type { KeyValuePair } from "$lib/components/forms";
 import type { EntityPickerItem } from "$lib/components/forms/EntityPicker.svelte";
+import { CREDIT_ROLE } from "$lib/entities/entity-codes";
 import type { EntityDetailCard, EntityDetailCardFull } from "$lib/entities/entity-detail";
+
+/**
+ * One credited person in the edit draft. Saves use full-replace semantics, so the draft
+ * carries every role and character linked to the person — not just the primary pair —
+ * and re-emits them all when building the patch.
+ */
+export interface EntityCreditDraft {
+  name: string;
+  thumbnailUrl: string | null;
+  /** Distinct credit role codes, primary first. Empty falls back to the generic person role. */
+  roles: string[];
+  /** Primary character, editable in the credits editor. Empty means no character. */
+  character: string;
+  /** Additional characters preserved through the round-trip but not surfaced for editing. */
+  extraCharacters: string[];
+}
 
 export interface EntityDetailEditDraft {
   title: string;
@@ -9,7 +26,7 @@ export interface EntityDetailEditDraft {
   links: string[];
   tagPicks: EntityPickerItem[];
   studioPick: EntityPickerItem[];
-  creditPicks: EntityPickerItem[];
+  credits: EntityCreditDraft[];
   dates: KeyValuePair[];
   stats: KeyValuePair[];
   positions: KeyValuePair[];
@@ -82,10 +99,12 @@ export function draftFromCard(
     studioPick: cardFull.studio
       ? [{ id: cardFull.studio.id, title: cardFull.studio.title, thumbnailUrl: cardFull.studio.thumbnail }]
       : [],
-    creditPicks: (cardFull.credits ?? []).map((c) => ({
-      id: c.id,
-      title: c.title,
+    credits: (cardFull.credits ?? []).map((c) => ({
+      name: c.title,
       thumbnailUrl: c.thumbnail,
+      roles: [...c.roles],
+      character: c.characters[0] ?? "",
+      extraCharacters: c.characters.slice(1),
     })),
     dates: "dates" in card
       ? ((card as EntityDetailCard & { dates?: Array<{ code: string; value: string }> }).dates ?? []).map((d) => ({ key: d.code, value: d.value }))
@@ -165,6 +184,37 @@ export function emptyPatch(): EntityMetadataPatch {
   };
 }
 
+/**
+ * Expands one credit draft into the patch rows the backend accumulates back into a single
+ * cast link: one row per role (character on the first), plus one row per preserved extra
+ * character so the stored distinct lists survive the full-replace save.
+ */
+function creditPatchRows(
+  credit: EntityCreditDraft,
+  sortOrder: number,
+): EntityMetadataPatch["credits"] {
+  const name = credit.name.trim();
+  if (!name) return [];
+
+  const roles = credit.roles.filter((role) => role.trim()).length > 0
+    ? credit.roles.filter((role) => role.trim())
+    : [CREDIT_ROLE.person];
+  const character = credit.character.trim() ? credit.character.trim() : null;
+  const rows = roles.map((role, index) => ({
+    name,
+    role,
+    character: index === 0 ? character : null,
+    sortOrder,
+  }));
+  for (const extra of credit.extraCharacters) {
+    const value = extra.trim();
+    if (value && value.toLowerCase() !== character?.toLowerCase()) {
+      rows.push({ name, role: roles[0], character: value, sortOrder });
+    }
+  }
+  return rows;
+}
+
 function kvToRecord(pairs: KeyValuePair[]): Record<string, string> {
   const result: Record<string, string> = {};
   for (const { key, value } of pairs) {
@@ -219,11 +269,7 @@ export function buildMetadataUpdate(activeSections: EditableSection[], draft: En
   }
   if (hasSection("credits")) {
     addField("credits");
-    patch.credits = draft.creditPicks.map((p, i) => ({
-      name: p.title,
-      role: "performer",
-      sortOrder: i,
-    }));
+    patch.credits = draft.credits.flatMap(creditPatchRows);
   }
   if (hasSection("dates")) {
     addField("dates");

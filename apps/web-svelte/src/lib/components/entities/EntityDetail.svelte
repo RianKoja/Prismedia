@@ -29,9 +29,14 @@
     X,
   } from "@lucide/svelte";
   import type { LucideIcon } from "@lucide/svelte";
-  import type { EntityDetailCard, EntityDetailCardFull, EntityDetailCredit, EntityDetailLink } from "$lib/entities/entity-detail";
+  import type { EntityDetailCard, EntityDetailCardFull, EntityDetailLink } from "$lib/entities/entity-detail";
   import { renderEntityDescriptionMarkdown } from "$lib/entities/entity-detail-markdown";
-  import { hasHero, hasPoster } from "$lib/entities/entity-detail";
+  import {
+    creditToThumbnailCard,
+    hasHero,
+    hasPoster,
+    DEFAULT_STANDALONE_METADATA_SECTION_IDS,
+  } from "$lib/entities/entity-detail";
   import {
     entityReferenceToThumbnailCard,
     placeholderGradient,
@@ -42,9 +47,10 @@
   import MetadataCard from "$lib/components/MetadataCard.svelte";
   import MetadataCardGrid from "$lib/components/MetadataCardGrid.svelte";
   import EntityTagChips from "./EntityTagChips.svelte";
-  import EntityDetailReferenceRail from "./EntityDetailReferenceRail.svelte";
+  import EntityCastAndCrewSection from "./EntityCastAndCrewSection.svelte";
   import MarkdownEditor from "$lib/components/forms/MarkdownEditor.svelte";
   import EntityPicker from "$lib/components/forms/EntityPicker.svelte";
+  import CreditsEditor from "$lib/components/forms/CreditsEditor.svelte";
   import ListEditor from "$lib/components/forms/ListEditor.svelte";
   import KeyValueEditor from "$lib/components/forms/KeyValueEditor.svelte";
   import FormField from "$lib/components/forms/FormField.svelte";
@@ -53,7 +59,7 @@
   import { getImagesCapability, isNsfw as hasNsfwCapability } from "$lib/api/capabilities";
   import { clearEntityImageAsset, uploadEntityImageAsset } from "$lib/api/entity-mutations";
   import { useNsfw } from "$lib/nsfw/store.svelte";
-  import { ENTITY_FILE_ROLE, type EntityFileRoleCode } from "$lib/entities/entity-codes";
+  import { CREDIT_ROLE, ENTITY_FILE_ROLE, type CreditRoleCode, type EntityFileRoleCode } from "$lib/entities/entity-codes";
   import {
     draftFromCard,
     serializeDraft,
@@ -115,26 +121,14 @@
   export type EntityMetadataPatch = _Patch;
   export type EntityMetadataUpdateRequest = _Request;
 
-  const DEFAULT_STANDALONE_METADATA_SECTION_IDS = [
-    "studio",
-    "credits",
-    "stats",
-    "dates",
-    "technical",
-    "progress",
-    "positions",
-    "classification",
-    "sources",
-    "fingerprints",
-    "links",
-  ];
-
   interface Props {
     card: EntityDetailCard;
     onRatingChange?: (value: number | null) => void;
     onFavoriteToggle?: () => void;
     onOrganizedToggle?: () => void;
     peopleLabel?: string;
+    /** Credit role pre-selected when adding people in the credits editor. */
+    defaultCreditRole?: CreditRoleCode;
     posterSize?: EntityDetailPosterSize;
     ratingBusy?: boolean;
     showHero?: boolean;
@@ -172,6 +166,7 @@
     onFavoriteToggle,
     onOrganizedToggle,
     peopleLabel = "Cast & Crew",
+    defaultCreditRole = CREDIT_ROLE.person,
     posterSize = "medium",
     ratingBusy = false,
     showHero = true,
@@ -213,7 +208,7 @@
     links: [],
     tagPicks: [],
     studioPick: [],
-    creditPicks: [],
+    credits: [],
     dates: [],
     stats: [],
     positions: [],
@@ -276,12 +271,14 @@
     { id: "sources", label: "Sources", icon: Database },
     { id: "fingerprints", label: "Fingerprints", icon: Fingerprint },
   ]);
-  const availableSections = $derived([...coreSections, ...sections]);
+  // Route-provided sections take precedence so a route can override a core section's
+  // label or flags (e.g. credits labeled "Members" on artists) by re-declaring its id.
+  const availableSections = $derived([...sections, ...coreSections]);
   const cardFull = $derived(card as EntityDetailCard & Partial<EntityDetailCardFull>);
   const urlLinks = $derived(card.links.filter((link) => !hasProvider(link)));
   const providerIdLinks = $derived(card.links.filter(hasProvider));
   const visibleActionButtons = $derived.by(() => actionButtons.filter((action) => !action.hidden));
-  const visibleTabs = $derived.by(() => tabs.filter(tabHasDisplayContent));
+  const visibleTabs = $derived.by(() => tabs.filter(tabHasContent));
   const hasTabs = $derived(visibleTabs.length > 0);
   const activeTab = $derived(visibleTabs.find((tab) => tab.id === activeTabId) ?? visibleTabs[0] ?? null);
   const activeTabSections = $derived(activeTab ? sectionsForTab(activeTab) : []);
@@ -327,7 +324,11 @@
       .filter((section): section is EntityDetailSection => Boolean(section))
       .filter(sectionEditable);
   });
-  const currentEditSections = $derived(hasTabs ? activeTabSections : standaloneEditSections);
+  // Only editable sections feed the save request: a displayed-but-read-only section (e.g.
+  // inherited series cast on a season) must never widen the patch's field scope.
+  const currentEditSections = $derived(
+    hasTabs ? activeTabSections.filter(sectionEditable) : standaloneEditSections,
+  );
   const editValidationErrors = $derived.by(() => validateDraft(currentEditSections, editDraft, card.rating?.max ?? 5));
   const editDirty = $derived(Boolean(initialDraft && serializeDraft(initialDraft) !== serializeDraft(editDraft)));
   const saveDisabled = $derived(!editDirty || editValidationErrors.length > 0 || savingEdit);
@@ -414,11 +415,13 @@
     }
   }
 
-  function tabHasDisplayContent(tab: EntityDetailTab): boolean {
+  function tabHasContent(tab: EntityDetailTab): boolean {
+    // A tab stays reachable when any of its sections can be edited, even with no display
+    // content yet — otherwise empty metadata (external IDs, dates, …) could never be added.
     return tab.sections
       .map(findSection)
       .filter((section): section is EntityDetailSection => Boolean(section))
-      .some(sectionHasDisplayContent);
+      .some((section) => sectionHasDisplayContent(section) || (canEdit && sectionEditable(section) && !section.hidden));
   }
 
   function sectionsForTab(tab: EntityDetailTab): EntityDetailSection[] {
@@ -781,19 +784,16 @@
   </section>
 {/snippet}
 
-{#snippet creditsEditSection()}
+{#snippet creditsEditSection(section: EntityDetailSection)}
   <section class="detail-section edit-section">
-    <EntityPicker
-      values={editDraft.creditPicks}
+    <CreditsEditor
+      credits={editDraft.credits}
       onChange={(v) => {
-        editDraft.creditPicks = v;
+        editDraft.credits = v;
       }}
       onSearch={searchPeople}
-      label={peopleLabel}
-      placeholder="Search people…"
-      canAddNew={true}
-      addNewLabel="person"
-      mode="multi"
+      label={section.label ?? peopleLabel}
+      defaultRole={defaultCreditRole}
     />
   </section>
 {/snippet}
@@ -910,15 +910,25 @@
   </section>
 {/snippet}
 
-{#snippet studioSection()}
+{#snippet studioSection(section: EntityDetailSection)}
   {#if cardFull.studio}
-    <EntityDetailReferenceRail icon={Building2} title="Studio" references={[cardFull.studio]} />
+    <section class="detail-section" aria-label={section.label ?? "Studio"}>
+      <EntityCastAndCrewSection
+        studioCards={[creditToThumbnailCard(cardFull.studio)]}
+        studioLabel={section.label ?? "Studio"}
+      />
+    </section>
   {/if}
 {/snippet}
 
-{#snippet creditsSection()}
+{#snippet creditsSection(section: EntityDetailSection)}
   {#if (cardFull.credits?.length ?? 0) > 0}
-    <EntityDetailReferenceRail icon={Users} title="Credits" references={cardFull.credits ?? []} />
+    <section class="detail-section" aria-label={section.label ?? peopleLabel}>
+      <EntityCastAndCrewSection
+        creditCards={(cardFull.credits ?? []).map(creditToThumbnailCard)}
+        castLabel={section.label ?? peopleLabel}
+      />
+    </section>
   {/if}
 {/snippet}
 
@@ -1032,38 +1042,39 @@
 {/snippet}
 
 {#snippet renderDetailSection(section: EntityDetailSection)}
-  {#if isEditingActiveTab && section.id === "description"}
+  {@const editingSection = isEditingActiveTab && sectionEditable(section)}
+  {#if editingSection && section.id === "description"}
     {@render descriptionEditSection()}
-  {:else if isEditingActiveTab && section.id === "tags"}
+  {:else if editingSection && section.id === "tags"}
     {@render tagsEditSection()}
-  {:else if isEditingActiveTab && section.id === "links"}
+  {:else if editingSection && section.id === "links"}
     {@render linksEditSection()}
-  {:else if isEditingActiveTab && section.id === "dates"}
+  {:else if editingSection && section.id === "dates"}
     {@render datesEditSection()}
-  {:else if isEditingActiveTab && section.id === "stats"}
+  {:else if editingSection && section.id === "stats"}
     {@render statsEditSection()}
-  {:else if isEditingActiveTab && section.id === "positions"}
+  {:else if editingSection && section.id === "positions"}
     {@render positionsEditSection()}
-  {:else if isEditingActiveTab && section.id === "classification"}
+  {:else if editingSection && section.id === "classification"}
     {@render classificationEditSection()}
-  {:else if isEditingActiveTab && section.id === "rating"}
+  {:else if editingSection && section.id === "rating"}
     {@render ratingEditSection()}
-  {:else if isEditingActiveTab && section.id === "flags"}
+  {:else if editingSection && section.id === "flags"}
     {@render flagsEditSection()}
+  {:else if editingSection && section.id === "studio"}
+    {@render studioEditSection()}
+  {:else if editingSection && section.id === "credits"}
+    {@render creditsEditSection(section)}
   {:else if section.id === "description"}
     {@render descriptionSection()}
   {:else if section.id === "tags"}
     {@render tagsSection()}
   {:else if section.id === "links"}
     {@render linksSection()}
-  {:else if isEditingActiveTab && section.id === "studio"}
-    {@render studioEditSection()}
-  {:else if isEditingActiveTab && section.id === "credits"}
-    {@render creditsEditSection()}
   {:else if section.id === "studio"}
-    {@render studioSection()}
+    {@render studioSection(section)}
   {:else if section.id === "credits"}
-    {@render creditsSection()}
+    {@render creditsSection(section)}
   {:else if section.id === "stats"}
     {@render statsSection()}
   {:else if section.id === "dates"}
@@ -1478,11 +1489,23 @@
           {/if}
           {#key activeTab.id}
             <div class="detail-tab-sections">
-              <MetadataCardGrid>
-                {#each activeTabSections as section (section.id)}
-                  {@render renderDetailSection(section)}
-                {/each}
-              </MetadataCardGrid>
+              {#if activeTabSections.length === 0 && !isEditingActiveTab}
+                <div class="tab-empty-state">
+                  <p>No {activeTab.label.toLowerCase()} yet.</p>
+                  {#if canEdit}
+                    <button type="button" class="edit-action secondary" onclick={() => startEdit(activeTab ?? undefined)}>
+                      <Pencil class="h-3.5 w-3.5" />
+                      Edit {activeTab.label}
+                    </button>
+                  {/if}
+                </div>
+              {:else}
+                <MetadataCardGrid>
+                  {#each activeTabSections as section (section.id)}
+                    {@render renderDetailSection(section)}
+                  {/each}
+                </MetadataCardGrid>
+              {/if}
             </div>
           {/key}
         </div>
@@ -2385,6 +2408,20 @@
   .detail-tab-sections {
     min-width: 0;
     padding: 1rem 1.5rem 1.5rem;
+  }
+
+  .tab-empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 2rem 1rem;
+  }
+
+  .tab-empty-state p {
+    margin: 0;
+    color: var(--detail-text-muted, #8a93a6);
+    font-size: 0.85rem;
   }
 
   .detail-tab-sections .detail-body {

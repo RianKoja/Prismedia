@@ -17,7 +17,8 @@
     toggleOptimisticEntityFlag,
     updateOptimisticEntityRating,
   } from "$lib/entities/entity-detail-state";
-  import { entityCardToDetailCard, type EntityDetailCardFull, type EntityDetailTag } from "$lib/entities/entity-detail";
+  import { entityCardToDetailCard, type EntityDetailCardFull, type EntityDetailCredit, type EntityDetailTag } from "$lib/entities/entity-detail";
+  import { CREDIT_ROLE } from "$lib/entities/entity-codes";
   import { resolveEntityHref } from "$lib/entities/entity-routes";
   import {
     fetchOrderedEntityThumbnails,
@@ -53,9 +54,9 @@
   let lastNsfwMode = $state(nsfw.mode);
   let ratingBusy = $state(false);
   let childCards = $state<EntityThumbnailCard[]>([]);
-  let studioCards = $state<EntityThumbnailCard[]>([]);
   let artistCards = $state<EntityThumbnailCard[]>([]);
-  let creditCards = $state<EntityThumbnailCard[]>([]);
+  let relationshipCredits = $state<EntityDetailCredit[]>([]);
+  let relationshipStudio = $state<EntityDetailCredit | null>(null);
   let relationshipTags = $state<EntityDetailTag[]>([]);
   let trackItems = $state<AudioTrackListItemDto[]>([]);
   let artistLink = $state<{ id: string; title: string } | null>(null);
@@ -65,10 +66,12 @@
     return {
       ...entityCardToDetailCard(library),
       tags: relationshipTags,
+      credits: relationshipCredits,
+      studio: relationshipStudio,
     };
   });
 
-  const studio = $derived(studioCards[0]?.entity ?? null);
+  const studio = $derived(relationshipStudio);
 
   const dates = $derived(card?.dates ?? []);
 
@@ -104,18 +107,14 @@
   });
 
   // Description + artist/studio/performers stay on the main "Details" tab; metadata cards move to a
-  // separate "Metadata" tab. Empty sections and tabs auto-hide.
+  // separate "Metadata" tab. Built-in sections come from EntityDetail's core catalog; only the
+  // artist rail and the credits label override are declared here.
   const detailSections = $derived.by((): EntityDetailSection[] => [
-    { id: "performers", label: "Performers", icon: Users, hidden: artistCards.length === 0 && studioCards.length === 0 && creditCards.length === 0 },
-    { id: "stats", label: "Stats" },
-    { id: "dates", label: "Dates" },
-    { id: "classification", label: "Classification" },
-    { id: "technical", label: "Technical" },
-    { id: "source", label: "Source" },
-    { id: "links", label: "Links" },
+    { id: "artists", hidden: artistCards.length === 0 },
+    { id: "credits", label: "Performers", icon: Users },
   ]);
   const detailTabs = $derived.by((): EntityDetailTab[] => [
-    { id: "details", label: "Details", icon: Info, sections: ["description", "tags", "performers"] },
+    { id: "details", label: "Details", icon: Info, sections: ["description", "tags", "artists", "studio", "credits"] },
     { id: "metadata", label: "Metadata", icon: SlidersHorizontal, sections: ["stats", "dates", "classification", "technical", "source", "links"], layout: "grid" },
   ]);
 
@@ -168,22 +167,16 @@
       childCards = thumbnailsToCards(children, {
         hrefFor: (thumbnail) => resolveEntityHref("audio-library", thumbnail.id),
       });
-      studioCards = relationships.studioCards;
+      relationshipStudio = relationships.studio;
       // An album is always scanned under its artist, so surface that music-artist as the lead
-      // "Artist" card (its own thumbnail, linking to /artists/{id}). Performer credits are stored
-      // as separate `person` entities, so drop any that merely duplicate the artist by name to
-      // avoid showing the same name twice.
+      // "Artist" card (its own thumbnail, linking to /artists/{id}). The credit list stays
+      // unfiltered: it feeds the edit draft, and a hidden credit would be deleted on save.
       artistCards = parentThumb
         ? thumbnailsToCards([parentThumb], {
             hrefFor: (thumbnail) => resolveEntityHref("music-artist", thumbnail.id),
           })
         : [];
-      creditCards = resolvedArtist
-        ? relationships.creditCards.filter(
-            (card) =>
-              card.entity.title.trim().toLowerCase() !== resolvedArtist.title.trim().toLowerCase(),
-          )
-        : relationships.creditCards;
+      relationshipCredits = relationships.credits;
       relationshipTags = relationships.relationshipTags;
 
       // Build track items from entity thumbnails already in the response — no N+1 fetches
@@ -317,6 +310,7 @@
       onMetadataSave={handleMetadataSave}
       {ratingBusy}
       peopleLabel="Performers"
+      defaultCreditRole={CREDIT_ROLE.artist}
       posterSize="large"
       actionButtons={heroActions}
       tabs={detailTabs}
@@ -339,10 +333,8 @@
 
 
       {#snippet sectionContent(section)}
-        {#if section.id === "performers" && (artistCards.length > 0 || studioCards.length > 0 || creditCards.length > 0)}
+        {#if section.id === "artists" && artistCards.length > 0}
           <EntityCastAndCrewSection
-            {studioCards}
-            {creditCards}
             relatedCards={artistCards}
             relatedLabel="Artist"
             relatedIcon={MicVocal}

@@ -15,9 +15,8 @@
     toggleOptimisticEntityFlag,
     updateOptimisticEntityRating,
   } from "$lib/entities/entity-detail-state";
-  import EntityCastAndCrewSection from "$lib/components/entities/EntityCastAndCrewSection.svelte";
   import { useIdentifyDetailAction } from "$lib/components/identify/use-identify-detail-action.svelte";
-  import type { EntityDetailTag } from "$lib/entities/entity-detail";
+  import type { EntityDetailCredit, EntityDetailTag } from "$lib/entities/entity-detail";
   import { entityCardToDetailCard, type EntityDetailCardFull } from "$lib/entities/entity-detail";
   import { getChildIds } from "$lib/entities/entity-children";
   import {
@@ -26,7 +25,7 @@
     thumbnailsToCards,
   } from "$lib/entities/entity-relationship-thumbnails";
   import type { EntityThumbnailCard } from "$lib/entities/entity-thumbnail";
-  import { ENTITY_KIND } from "$lib/entities/entity-codes";
+  import { CREDIT_ROLE, ENTITY_KIND } from "$lib/entities/entity-codes";
   import EntityDetail, {
     type EntityDetailActionButton,
     type EntityMetadataUpdateRequest,
@@ -53,8 +52,8 @@
   let seasonCards = $state<EntityThumbnailCard[]>([]);
   let childSeriesCards = $state<EntityThumbnailCard[]>([]);
   let videoCards = $state<EntityThumbnailCard[]>([]);
-  let studioCards = $state<EntityThumbnailCard[]>([]);
-  let creditCards = $state<EntityThumbnailCard[]>([]);
+  let relationshipCredits = $state<EntityDetailCredit[]>([]);
+  let relationshipStudio = $state<EntityDetailCredit | null>(null);
   let relationshipTags = $state<EntityDetailTag[]>([]);
 
   const card = $derived.by((): EntityDetailCardFull | null => {
@@ -62,6 +61,8 @@
     return {
       ...entityCardToDetailCard(series),
       tags: relationshipTags,
+      credits: relationshipCredits,
+      studio: relationshipStudio,
     };
   });
 
@@ -77,41 +78,36 @@
   const hasSeasons = $derived(seasonCards.length > 0);
   const hasChildSeries = $derived(childSeriesCards.length > 0);
   const hasVideos = $derived(videoCards.length > 0);
-  const hasCastAndCrew = $derived(studioCards.length > 0 || creditCards.length > 0);
   const seasonCount = $derived(seasonCards.length);
   const totalEpisodeCount = $derived(
     videoCards.length + Object.values(seasonEpisodeCounts).reduce((total, count) => total + count, 0),
   );
+  // Built-in sections come from EntityDetail's core catalog; only label overrides
+  // are declared here.
   const detailSections = $derived.by((): EntityDetailSection[] => [
     {
-      id: "cast-and-crew",
-      label: "Cast and Crew",
+      id: "credits",
+      label: "Cast",
       icon: Users,
-      hidden: !hasCastAndCrew,
     },
   ]);
   const detailTabs = $derived.by((): EntityDetailTab[] => {
     if (!card) return [];
-    const tabs: EntityDetailTab[] = [
+    return [
       {
         id: "details",
         label: "Details",
         icon: Info,
-        sections: ["description", "tags", "cast-and-crew"],
+        sections: ["description", "tags", "studio", "credits"],
       },
-    ];
-
-    if (card.links.length > 0) {
-      tabs.push({
+      {
         id: "metadata",
         label: "Metadata",
         icon: SlidersHorizontal,
-        count: card.links.length,
-        sections: ["links"],
-      });
-    }
-
-    return tabs;
+        sections: ["stats", "dates", "classification", "source", "links"],
+        layout: "grid",
+      },
+    ];
   });
 
   onMount(() => {
@@ -210,8 +206,8 @@
     });
     childSeriesCards = thumbnailsToCards(childSeries);
     videoCards = thumbnailsToCards(videos);
-    studioCards = relationshipCards.studioCards;
-    creditCards = relationshipCards.creditCards;
+    relationshipCredits = relationshipCards.credits;
+    relationshipStudio = relationshipCards.studio;
     relationshipTags = relationshipCards.relationshipTags;
   }
 
@@ -241,6 +237,7 @@
       tabs={detailTabs}
       sections={detailSections}
       actionButtons={heroActions}
+      defaultCreditRole={CREDIT_ROLE.actor}
     >
       {#snippet heroMeta()}
         {#if airedDate}
@@ -263,12 +260,6 @@
         {/if}
       {/snippet}
 
-
-      {#snippet sectionContent(section)}
-        {#if section.id === "cast-and-crew"}
-          <EntityCastAndCrewSection {studioCards} {creditCards} />
-        {/if}
-      {/snippet}
     </EntityDetail>
 
     {#if hasSeasons}

@@ -9,6 +9,7 @@ export { default as FormActions } from "./FormActions.svelte";
 export { default as EditFormShell } from "./EditFormShell.svelte";
 export { default as MarkdownEditor } from "./MarkdownEditor.svelte";
 export { default as EntityPicker } from "./EntityPicker.svelte";
+export { default as CreditsEditor } from "./CreditsEditor.svelte";
 export { default as ListEditor } from "./ListEditor.svelte";
 export { default as KeyValueEditor } from "./KeyValueEditor.svelte";
 

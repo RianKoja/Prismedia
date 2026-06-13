@@ -35,12 +35,14 @@ describe("series detail layout", () => {
     expect(rule).not.toContain("margin: 0 auto");
   });
 
-  it("uses shared thumbnails for series cast instead of custom chips", () => {
+  it("renders series cast through the shared built-in credits section", () => {
     const source = readLocalSource("./[id]/+page.svelte");
+    const detailSource = readLocalSource("../../lib/components/entities/EntityDetail.svelte");
 
-    expect(source).toContain("EntityCastAndCrewSection");
-    expect(source).toContain("creditCards");
-    expect(source).toContain("studioCards");
+    expect(source).toContain('id: "credits"');
+    expect(source).toContain('label: "Cast"');
+    expect(detailSource).toContain("EntityCastAndCrewSection");
+    expect(source).not.toContain("EntityCastAndCrewSection");
     expect(source).not.toContain('class="credit-chip"');
     expect(source).not.toContain("credit-scroller");
   });
@@ -51,8 +53,8 @@ describe("series detail layout", () => {
     expect(source).toContain("tabs={detailTabs}");
     expect(source).toContain("sections={detailSections}");
     expect(source).toContain('id: "metadata"');
-    expect(source).toContain('sections: ["links"]');
-    expect(source).toContain('sections: ["description", "tags", "cast-and-crew"]');
+    expect(source).toContain('sections: ["stats", "dates", "classification", "source", "links"]');
+    expect(source).toContain('sections: ["description", "tags", "studio", "credits"]');
   });
 
   it("keeps studio and rendering mode out of the series hero header", () => {
@@ -74,13 +76,15 @@ describe("series detail layout", () => {
     expect(source).not.toContain("item\" : \"items\"");
   });
 
-  it("moves season links out of the main details tab", () => {
+  it("moves season links out of the main details tab and keeps inherited sections read-only", () => {
     const source = readLocalSource("./[id]/seasons/[seasonId]/+page.svelte");
 
     expect(source).toContain("tabs={detailTabs}");
     expect(source).toContain("sections={detailSections}");
     expect(source).toContain('id: "metadata"');
-    expect(source).toContain('sections: ["links"]');
-    expect(source).toContain('sections: ["description", "tags", "cast-and-crew"]');
+    expect(source).toContain('sections: ["stats", "dates", "links"]');
+    expect(source).toContain('sections: ["description", "tags", "studio", "credits"]');
+    // Seasons do not own relationships; the inherited series sections must stay read-only.
+    expect(source).toContain("editable: false");
   });
 });

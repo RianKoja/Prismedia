@@ -16,7 +16,8 @@
     toggleOptimisticEntityFlag,
     updateOptimisticEntityRating,
   } from "$lib/entities/entity-detail-state";
-  import { entityCardToDetailCard, type EntityDetailCardFull, type EntityDetailTag } from "$lib/entities/entity-detail";
+  import { entityCardToDetailCard, type EntityDetailCardFull, type EntityDetailCredit, type EntityDetailTag } from "$lib/entities/entity-detail";
+  import { CREDIT_ROLE } from "$lib/entities/entity-codes";
   import { resolveEntityHref } from "$lib/entities/entity-routes";
   import {
     fetchOrderedEntityThumbnails,
@@ -26,7 +27,6 @@
   import { entityThumbnailToTrackItem } from "$lib/entities/audio-track-items";
   import type { EntityThumbnailCard } from "$lib/entities/entity-thumbnail";
   import { useAudioPlayback, type PlaybackContext } from "$lib/stores/audio-playback.svelte";
-  import EntityCastAndCrewSection from "$lib/components/entities/EntityCastAndCrewSection.svelte";
   import EntityDetail, {
     type EntityDetailActionButton,
     type EntityDetailSection,
@@ -51,7 +51,7 @@
   let lastNsfwMode = $state(nsfw.mode);
   let ratingBusy = $state(false);
   let albumCards = $state<EntityThumbnailCard[]>([]);
-  let creditCards = $state<EntityThumbnailCard[]>([]);
+  let relationshipCredits = $state<EntityDetailCredit[]>([]);
   let relationshipTags = $state<EntityDetailTag[]>([]);
   let queueBusy = $state(false);
 
@@ -66,6 +66,7 @@
     return {
       ...entityCardToDetailCard(artist),
       tags: relationshipTags,
+      credits: relationshipCredits,
     };
   });
 
@@ -97,16 +98,13 @@
   });
 
   // Keep description + band members on the main "Details" tab; tuck the metadata cards into a
-  // separate "Metadata" tab. Empty sections and tabs auto-hide.
+  // separate "Metadata" tab. Built-in sections come from EntityDetail's core catalog; only
+  // the credits label override is declared here.
   const detailSections = $derived.by((): EntityDetailSection[] => [
-    { id: "members", label: "Members", icon: Users, hidden: creditCards.length === 0 },
-    { id: "stats", label: "Stats" },
-    { id: "dates", label: "Dates" },
-    { id: "classification", label: "Classification" },
-    { id: "links", label: "Links" },
+    { id: "credits", label: "Members", icon: Users },
   ]);
   const detailTabs = $derived.by((): EntityDetailTab[] => [
-    { id: "details", label: "Details", icon: Info, sections: ["description", "tags", "members"] },
+    { id: "details", label: "Details", icon: Info, sections: ["description", "tags", "credits"] },
     { id: "metadata", label: "Metadata", icon: SlidersHorizontal, sections: ["stats", "dates", "classification", "links"], layout: "grid" },
   ]);
 
@@ -186,7 +184,7 @@
       albumCards = thumbnailsToCards(albums, {
         hrefFor: (thumbnail) => resolveEntityHref("audio-library", thumbnail.id),
       });
-      creditCards = relationships.creditCards;
+      relationshipCredits = relationships.credits;
       relationshipTags = relationships.relationshipTags;
 
       loadState = "ready";
@@ -245,6 +243,7 @@
       onMetadataSave={handleMetadataSave}
       {ratingBusy}
       peopleLabel="Members"
+      defaultCreditRole={CREDIT_ROLE.artist}
       posterSize="large"
       actionButtons={heroActions}
       tabs={detailTabs}
@@ -256,11 +255,6 @@
         {/if}
       {/snippet}
 
-      {#snippet sectionContent(section)}
-        {#if section.id === "members" && creditCards.length > 0}
-          <EntityCastAndCrewSection studioCards={[]} {creditCards} castLabel="Members" />
-        {/if}
-      {/snippet}
     </EntityDetail>
 
     {#if albumCards.length > 0}

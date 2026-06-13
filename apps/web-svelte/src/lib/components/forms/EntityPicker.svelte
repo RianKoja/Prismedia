@@ -31,6 +31,12 @@
     /** Multi-select (tags) or single-select (studio). */
     mode?: "multi" | "single";
     maxResults?: number;
+    /**
+     * Renders the selected items as inline chips (default). Hosts that present
+     * selections themselves (e.g. the credits editor's per-person rows) turn this
+     * off and use the picker purely as a search-and-add control.
+     */
+    showSelectedChips?: boolean;
   }
 
   let {
@@ -47,6 +53,7 @@
     addNewLabel = "item",
     mode = "multi",
     maxResults = 20,
+    showSelectedChips = true,
   }: Props = $props();
 
   let query = $state("");
@@ -144,7 +151,7 @@
       }
       return;
     }
-    if (e.key === "Backspace" && query === "" && values.length > 0 && mode === "multi") {
+    if (e.key === "Backspace" && query === "" && values.length > 0 && mode === "multi" && showSelectedChips) {
       removeAt(values.length - 1);
       return;
     }
@@ -195,7 +202,9 @@
       }}
       onkeydown={() => {}}
     >
-      {#if mode === "multi"}
+      {#if !showSelectedChips}
+        <!-- Host renders selections; the picker is search-and-add only. -->
+      {:else if mode === "multi"}
         {#each values as item, i (item.id)}
           <span class="picker-chip">
             {#if item.thumbnailUrl}

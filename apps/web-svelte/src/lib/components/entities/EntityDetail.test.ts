@@ -327,11 +327,11 @@ describe("EntityDetail", () => {
   it("renders built-in extended metadata sections without route custom content", async () => {
     const card = {
       ...buildCard(),
-      studio: { id: "studio-1", kind: "studio", title: "Blender Foundation", thumbnail: null },
+      studio: { id: "studio-1", kind: "studio", title: "Blender Foundation", thumbnail: null, roles: [], characters: [] },
       credits: [
-        { id: "person-1", kind: "person", title: "Sacha Goedegebure", thumbnail: null },
-        { id: "person-2", kind: "person", title: "Nathan Vegdahl", thumbnail: null },
-        { id: "person-3", kind: "person", title: "Jan Morgenstern", thumbnail: null },
+        { id: "person-1", kind: "person", title: "Sacha Goedegebure", thumbnail: null, roles: ["director"], characters: [] },
+        { id: "person-2", kind: "person", title: "Nathan Vegdahl", thumbnail: null, roles: [], characters: [] },
+        { id: "person-3", kind: "person", title: "Jan Morgenstern", thumbnail: null, roles: [], characters: [] },
       ],
       stats: [{ code: "views", label: "Views", value: "1842" }],
       dates: [
@@ -391,11 +391,11 @@ describe("EntityDetail", () => {
   it("renders reference sections with non-selectable entity thumbnails", () => {
     const card = {
       ...buildCard(),
-      studio: { id: "studio-1", kind: "studio", title: "Blender Foundation", thumbnail: null },
+      studio: { id: "studio-1", kind: "studio", title: "Blender Foundation", thumbnail: null, roles: [], characters: [] },
       credits: [
-        { id: "person-1", kind: "person", title: "Sacha Goedegebure", thumbnail: null },
-        { id: "person-2", kind: "person", title: "Nathan Vegdahl", thumbnail: null },
-        { id: "person-3", kind: "person", title: "Jan Morgenstern", thumbnail: null },
+        { id: "person-1", kind: "person", title: "Sacha Goedegebure", thumbnail: null, roles: ["director"], characters: [] },
+        { id: "person-2", kind: "person", title: "Nathan Vegdahl", thumbnail: null, roles: [], characters: [] },
+        { id: "person-3", kind: "person", title: "Jan Morgenstern", thumbnail: null, roles: [], characters: [] },
       ],
       stats: [],
       dates: [],
@@ -417,16 +417,14 @@ describe("EntityDetail", () => {
     });
 
     const thumbnails = container.querySelectorAll(".entity-thumbnail");
-    const referenceLists = container.querySelectorAll(".reference-list");
+    const creditRails = container.querySelectorAll(".credit-scroller");
 
     expect(thumbnails).toHaveLength(4);
-    expect(referenceLists.length).toBeGreaterThan(0);
-    for (const list of referenceLists) {
-      expect(list).toHaveClass("reference-list");
-      expect(list).toHaveClass("is-horizontal-rail");
-    }
+    expect(creditRails.length).toBeGreaterThan(0);
     expect(screen.getByRole("link", { name: "Blender Foundation" })).toHaveAttribute("href", "/studios/studio-1");
-    expect(screen.getByRole("link", { name: "Sacha Goedegebure" })).toHaveAttribute("href", "/people/person-1");
+    expect(screen.getByRole("link", { name: /Sacha Goedegebure/ })).toHaveAttribute("href", "/people/person-1");
+    // The primary role surfaces as the credit subtitle.
+    expect(screen.getByText("Director")).toBeInTheDocument();
     expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
     expect(container.querySelector(".selection")).not.toBeInTheDocument();
   });

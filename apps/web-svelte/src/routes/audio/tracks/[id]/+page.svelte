@@ -21,12 +21,11 @@
     type EntityDetailActionButton,
     type EntityMetadataUpdateRequest,
   } from "$lib/components/entities/EntityDetail.svelte";
-  import EntityCastAndCrewSection from "$lib/components/entities/EntityCastAndCrewSection.svelte";
-  import { entityCardToDetailCard, type EntityDetailCardFull, type EntityDetailTag } from "$lib/entities/entity-detail";
+  import { entityCardToDetailCard, type EntityDetailCardFull, type EntityDetailCredit, type EntityDetailTag } from "$lib/entities/entity-detail";
+  import { CREDIT_ROLE } from "$lib/entities/entity-codes";
   import { resolveEntityHref } from "$lib/entities/entity-routes";
   import { hydrateStandardRelationshipCards } from "$lib/entities/entity-relationship-thumbnails";
   import { audioTrackDetailToListItem } from "$lib/entities/audio-track-items";
-  import type { EntityThumbnailCard } from "$lib/entities/entity-thumbnail";
   import { redirectHiddenEntityNotFound } from "$lib/nsfw/hidden-entity";
   import { useNsfw } from "$lib/nsfw/store.svelte";
   import { useAppChrome } from "$lib/stores/app-chrome.svelte";
@@ -43,8 +42,8 @@
   let errorMessage = $state<string | null>(null);
   let lastNsfwMode = $state(nsfw.mode);
   let ratingBusy = $state(false);
-  let studioCards = $state<EntityThumbnailCard[]>([]);
-  let creditCards = $state<EntityThumbnailCard[]>([]);
+  let relationshipCredits = $state<EntityDetailCredit[]>([]);
+  let relationshipStudio = $state<EntityDetailCredit | null>(null);
   let relationshipTags = $state<EntityDetailTag[]>([]);
   let parentCoverUrl = $state<string | undefined>(undefined);
 
@@ -53,10 +52,12 @@
     return {
       ...entityCardToDetailCard(track),
       tags: relationshipTags,
+      credits: relationshipCredits,
+      studio: relationshipStudio,
     };
   });
 
-  const studio = $derived(studioCards[0]?.entity ?? null);
+  const studio = $derived(relationshipStudio);
 
   const dates = $derived(card?.dates ?? []);
 
@@ -113,8 +114,8 @@
       const nextTrack = await fetchAudioTrack(page.params.id ?? "");
       const relationships = await hydrateStandardRelationshipCards(nextTrack);
       track = nextTrack;
-      studioCards = relationships.studioCards;
-      creditCards = relationships.creditCards;
+      relationshipCredits = relationships.credits;
+      relationshipStudio = relationships.studio;
       relationshipTags = relationships.relationshipTags;
 
       // Fetch parent library cover for player thumbnail
@@ -183,6 +184,7 @@
       onMetadataSave={handleMetadataSave}
       {ratingBusy}
       peopleLabel="Performers"
+      defaultCreditRole={CREDIT_ROLE.artist}
       posterSize="large"
       actionButtons={heroActions}
     >
@@ -193,13 +195,6 @@
         <EntityDetailHeroDates {dates} leadingSeparator={Boolean(studio)} />
       {/snippet}
 
-      {#snippet afterBody()}
-        {#if studioCards.length > 0 || creditCards.length > 0}
-          <div class="credits-section">
-            <EntityCastAndCrewSection {studioCards} {creditCards} castLabel="Performers" />
-          </div>
-        {/if}
-      {/snippet}
     </EntityDetail>
   {/if}
 </div>
@@ -208,7 +203,6 @@
   .detail-page { display: grid; gap: 1.25rem; padding: 0; max-width: none; margin: 0; }
   .error-notice { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1rem; border: 1px solid color-mix(in srgb, #ef4444 50%, var(--color-border, #1c2235)); background: var(--color-surface-2, #101420); color: var(--color-text-muted, #8a93a6); font-size: 0.85rem; }
   .error-notice button { border: 1px solid var(--color-border, #1c2235); background: var(--color-surface-3, #151a28); color: var(--color-text-muted, #8a93a6); padding: 0.4rem 0.8rem; font-size: 0.78rem; cursor: pointer; }
-  .credits-section { display: grid; gap: 0.7rem; padding: 1rem 1.5rem 1.5rem; }
   :global(.meta-item) { white-space: nowrap; font-size: 0.82rem; }
   :global(.meta-item.is-studio) { color: var(--color-text-accent, #c49a5a); text-decoration: none; transition: opacity 0.15s; }
   :global(.meta-item.is-studio:hover) { opacity: 0.8; }

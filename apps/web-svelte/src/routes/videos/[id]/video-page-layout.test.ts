@@ -66,10 +66,13 @@ describe("/videos/[id] detail layout", () => {
   it("uses shared thumbnails for the cast and crew rows", () => {
     const pageSource = readLocalSource("./+page.svelte");
     const videoSectionsSource = readLocalSource("./VideoDetailSectionContent.svelte");
+    const detailSource = readLocalSource("../../../lib/components/entities/EntityDetail.svelte");
     const sectionSource = readLocalSource("../../../lib/components/entities/EntityCastAndCrewSection.svelte");
 
-    expect(pageSource).toContain("Cast and Crew");
+    expect(pageSource).toContain('id: "credits"');
+    expect(pageSource).toContain('label: "Cast"');
     expect(pageSource).toContain("VideoDetailSectionContent");
+    expect(detailSource).toContain("EntityCastAndCrewSection");
     expect(videoSectionsSource).toContain("EntityCastAndCrewSection");
     expect(sectionSource).toContain('titleAlign="center"');
     expect(sectionSource).toContain('titleSize="compact"');
@@ -87,7 +90,7 @@ describe("/videos/[id] detail layout", () => {
   it("renders character credit subtitles without adding a label prefix", () => {
     const helperSource = readLocalSource("../../../lib/entities/entity-credits.ts");
 
-    expect(helperSource).toContain("if (character) return character;");
+    expect(helperSource).toContain("if (trimmedCharacter) return trimmedCharacter;");
     expect(helperSource).not.toContain("Character ${character}");
   });
 

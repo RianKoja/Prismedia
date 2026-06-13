@@ -1,11 +1,13 @@
 import {
   CAPABILITY_KIND,
+  CREDIT_ROLE,
   ENTITY_FILE_ROLE,
   ENTITY_KIND,
   ENTITY_KIND_LABELS,
   PROPOSAL_KIND,
   RELATIONSHIP_CODE,
   type CapabilityKindCode,
+  type CreditRoleCode,
   type EntityFileRoleCode,
   type EntityKindCode,
   type ProposalKindCode,
@@ -17,13 +19,14 @@ import {
 // concerns: the kind label lookup and the route resolution rules.
 export {
   CAPABILITY_KIND,
+  CREDIT_ROLE,
   ENTITY_FILE_ROLE,
   ENTITY_KIND,
   ENTITY_KIND_LABELS,
   PROPOSAL_KIND,
   RELATIONSHIP_CODE,
 };
-export type { CapabilityKindCode, EntityFileRoleCode, EntityKindCode, ProposalKindCode, RelationshipCode };
+export type { CapabilityKindCode, CreditRoleCode, EntityFileRoleCode, EntityKindCode, ProposalKindCode, RelationshipCode };
 
 /**
  * Maps a plugin-proposal kind to the entity kind Prismedia persists it as. Every proposal kind

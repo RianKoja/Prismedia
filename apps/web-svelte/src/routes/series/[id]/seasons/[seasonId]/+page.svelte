@@ -16,8 +16,7 @@
     updateOptimisticEntityRating,
   } from "$lib/entities/entity-detail-state";
   import { getChildIds } from "$lib/entities/entity-children";
-  import EntityCastAndCrewSection from "$lib/components/entities/EntityCastAndCrewSection.svelte";
-  import type { EntityDetailTag } from "$lib/entities/entity-detail";
+  import type { EntityDetailCredit, EntityDetailTag } from "$lib/entities/entity-detail";
   import { entityCardToDetailCard, type EntityDetailCardFull } from "$lib/entities/entity-detail";
   import {
     fetchOrderedEntityThumbnails,
@@ -48,8 +47,8 @@
   let lastNsfwMode = $state(nsfw.mode);
   let ratingBusy = $state(false);
   let episodeCards = $state<EntityThumbnailCard[]>([]);
-  let studioCards = $state<EntityThumbnailCard[]>([]);
-  let creditCards = $state<EntityThumbnailCard[]>([]);
+  let relationshipCredits = $state<EntityDetailCredit[]>([]);
+  let relationshipStudio = $state<EntityDetailCredit | null>(null);
   let relationshipTags = $state<EntityDetailTag[]>([]);
 
   const seriesId = $derived(page.params.id ?? "");
@@ -60,6 +59,8 @@
     return {
       ...entityCardToDetailCard(season),
       tags: relationshipTags,
+      credits: relationshipCredits,
+      studio: relationshipStudio,
     };
   });
 
@@ -72,38 +73,32 @@
 
   const dates = $derived(card?.dates ?? []);
 
-  const hasCastAndCrew = $derived(studioCards.length > 0 || creditCards.length > 0);
+  // Seasons are not relationship owners: tags, studio, and cast belong to the series and
+  // are shown here as inherited context only. Editing them on a season would write through
+  // to the series via the backend's owner resolution, so the sections are read-only.
   const detailSections = $derived.by((): EntityDetailSection[] => [
-    {
-      id: "cast-and-crew",
-      label: "Cast and Crew",
-      icon: Users,
-      hidden: !hasCastAndCrew,
-    },
+    { id: "tags", label: "Tags", editable: false },
+    { id: "studio", label: "Studio", editable: false },
+    { id: "credits", label: "Cast", icon: Users, editable: false },
   ]);
 
   const detailTabs = $derived.by((): EntityDetailTab[] => {
     if (!card) return [];
-    const tabs: EntityDetailTab[] = [
+    return [
       {
         id: "details",
         label: "Details",
         icon: Info,
-        sections: ["description", "tags", "cast-and-crew"],
+        sections: ["description", "tags", "studio", "credits"],
       },
-    ];
-
-    if (card.links.length > 0) {
-      tabs.push({
+      {
         id: "metadata",
         label: "Metadata",
         icon: SlidersHorizontal,
-        count: card.links.length,
-        sections: ["links"],
-      });
-    }
-
-    return tabs;
+        sections: ["stats", "dates", "links"],
+        layout: "grid",
+      },
+    ];
   });
 
   onMount(() => {
@@ -184,15 +179,15 @@
   ) {
     let relationshipCards = await hydrateStandardRelationshipCards(seasonDetail);
     if (
-      relationshipCards.studioCards.length === 0 &&
-      relationshipCards.creditCards.length === 0 &&
+      !relationshipCards.studio &&
+      relationshipCards.credits.length === 0 &&
       relationshipCards.relationshipTags.length === 0
     ) {
       relationshipCards = await hydrateStandardRelationshipCards(seriesDetail);
     }
 
-    studioCards = relationshipCards.studioCards;
-    creditCards = relationshipCards.creditCards;
+    relationshipCredits = relationshipCards.credits;
+    relationshipStudio = relationshipCards.studio;
     relationshipTags = relationshipCards.relationshipTags;
   }
 </script>
@@ -238,11 +233,6 @@
         {/if}
       {/snippet}
 
-      {#snippet sectionContent(section)}
-        {#if section.id === "cast-and-crew"}
-          <EntityCastAndCrewSection {studioCards} {creditCards} />
-        {/if}
-      {/snippet}
     </EntityDetail>
 
     {#if episodeCards.length > 0}

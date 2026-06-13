@@ -5,7 +5,6 @@
     Captions,
     Info,
     MapPin,
-    MonitorCog,
     Play,
     SlidersHorizontal,
     Users,
@@ -38,7 +37,7 @@
     updateOptimisticEntityRating,
   } from "$lib/entities/entity-detail-state";
   import { useIdentifyDetailAction } from "$lib/components/identify/use-identify-detail-action.svelte";
-  import type { EntityDetailTag } from "$lib/entities/entity-detail";
+  import type { EntityDetailCredit, EntityDetailTag } from "$lib/entities/entity-detail";
   import { entityCardToDetailCard, type EntityDetailCardFull } from "$lib/entities/entity-detail";
   import {
     hydrateStandardRelationshipCards,
@@ -46,7 +45,7 @@
   } from "$lib/entities/entity-relationship-thumbnails";
   import { resolveEntityHref } from "$lib/entities/entity-routes";
   import { getChildIds } from "$lib/entities/entity-children";
-  import { ENTITY_KIND } from "$lib/entities/entity-codes";
+  import { CREDIT_ROLE, ENTITY_KIND, type EntityKindCode } from "$lib/entities/entity-codes";
   import { extractVideoPlayerProps, getPlaybackState } from "$lib/entities/video-capabilities";
   import { useNsfw } from "$lib/nsfw/store.svelte";
   import { useAppChrome } from "$lib/stores/app-chrome.svelte";
@@ -84,8 +83,8 @@
   let lastNsfwMode = $state(nsfw.mode);
   let ratingBusy = $state(false);
   let librarySettings = $state<LibrarySettings | null>(null);
-  let studioCards = $state<EntityThumbnailCard[]>([]);
-  let creditCards = $state<EntityThumbnailCard[]>([]);
+  let relationshipCredits = $state<EntityDetailCredit[]>([]);
+  let relationshipStudio = $state<EntityDetailCredit | null>(null);
   let relationshipTags = $state<EntityDetailTag[]>([]);
 
   let playerHandle: VideoPlayerHandle | undefined = $state();
@@ -113,6 +112,8 @@
     return {
       ...entityCardToDetailCard(movie),
       tags: relationshipTags,
+      credits: relationshipCredits,
+      studio: relationshipStudio,
     };
   });
   const videoCard = $derived.by((): EntityDetailCardFull | null => (
@@ -127,27 +128,11 @@
     return extractVideoPlayerProps(video.id, video.capabilities, playbackInfo, selectedAudioStreamIndex);
   });
 
-  const primaryStudio = $derived(studioCards[0]?.entity ?? null);
+  const primaryStudio = $derived(relationshipStudio);
 
-  const hasCastAndCrew = $derived(studioCards.length > 0 || creditCards.length > 0);
+  // Built-in sections come from EntityDetail's core catalog; only route-specific
+  // sections and label overrides are declared here.
   const detailSections = $derived.by((): EntityDetailSection[] => [
-    {
-      id: "cast-and-crew",
-      label: "Cast and Crew",
-      icon: Users,
-      hidden: !hasCastAndCrew,
-    },
-    {
-      id: "technical",
-      label: "Technical",
-      icon: MonitorCog,
-      hidden: (videoCard?.technical.length ?? 0) === 0,
-    },
-    {
-      id: "dates",
-      label: "Dates",
-      hidden: (card?.dates.length ?? 0) === 0,
-    },
     {
       id: "playback",
       label: "Playback",
@@ -155,9 +140,9 @@
       hidden: !playbackState,
     },
     {
-      id: "source",
-      label: "Source",
-      hidden: (videoCard?.sources.length ?? 0) === 0 && (videoCard?.fingerprints.length ?? 0) === 0,
+      id: "credits",
+      label: "Cast",
+      icon: Users,
     },
     {
       id: "markers",
@@ -178,13 +163,13 @@
         id: "details",
         label: "Details",
         icon: Info,
-        sections: ["description", "playback", "tags", "cast-and-crew", "links"],
+        sections: ["description", "playback", "tags", "studio", "credits"],
       },
       {
         id: "metadata",
         label: "Metadata",
         icon: SlidersHorizontal,
-        sections: ["technical", "dates", "source"],
+        sections: ["stats", "dates", "classification", "technical", "source", "links"],
         layout: "grid",
       },
       {
@@ -437,8 +422,8 @@
 
   async function hydrateMovieRelationships(nextMovie: MovieDetail) {
     const relationships = await hydrateStandardRelationshipCards(nextMovie);
-    studioCards = relationships.studioCards;
-    creditCards = relationships.creditCards;
+    relationshipCredits = relationships.credits;
+    relationshipStudio = relationships.studio;
     relationshipTags = relationships.relationshipTags;
   }
 
@@ -741,10 +726,11 @@
       tabs={detailTabs}
       sections={detailSections}
       actionButtons={heroActions}
+      defaultCreditRole={CREDIT_ROLE.actor}
     >
       {#snippet heroMeta()}
         {#if primaryStudio}
-          <a href={resolveEntityHref(primaryStudio.kind, primaryStudio.id)} class="meta-item is-studio">{primaryStudio.title}</a>
+          <a href={resolveEntityHref(primaryStudio.kind as EntityKindCode, primaryStudio.id)} class="meta-item is-studio">{primaryStudio.title}</a>
         {/if}
         <EntityDetailHeroDates {dates} leadingSeparator={Boolean(primaryStudio)} />
       {/snippet}
@@ -754,8 +740,6 @@
         <VideoDetailSectionContent
           {section}
           card={detailCardForSection(section)}
-          {studioCards}
-          {creditCards}
           {videoId}
           {playbackState}
           {durationSeconds}

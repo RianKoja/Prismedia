@@ -99,19 +99,16 @@
         id: "details",
         label: "Details",
         icon: Info,
-        sections: ["description", "tags", "stats", "positions", "source"],
+        sections: ["description", "stats", "positions", "source"],
       },
-    ];
-
-    if (card.links.length > 0) {
-      tabs.push({
+      {
         id: "metadata",
         label: "Metadata",
         icon: SlidersHorizontal,
-        count: card.links.length,
-        sections: ["links"],
-      });
-    }
+        sections: ["dates", "links"],
+        layout: "grid",
+      },
+    ];
 
     return tabs;
   });

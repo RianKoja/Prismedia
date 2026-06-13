@@ -19,7 +19,7 @@
     toggleOptimisticEntityFlag,
     updateOptimisticEntityRating,
   } from "$lib/entities/entity-detail-state";
-  import { entityCardToDetailCard, type EntityDetailCardFull, type EntityDetailTag } from "$lib/entities/entity-detail";
+  import { entityCardToDetailCard, type EntityDetailCardFull, type EntityDetailCredit, type EntityDetailTag } from "$lib/entities/entity-detail";
   import {
     bookEntityProgressDisplay,
     orderedBookChildren,
@@ -32,9 +32,8 @@
     hydrateStandardRelationshipCards,
     thumbnailsToCards,
   } from "$lib/entities/entity-relationship-thumbnails";
-  import { ENTITY_KIND } from "$lib/entities/entity-codes";
+  import { CREDIT_ROLE, ENTITY_KIND } from "$lib/entities/entity-codes";
   import type { EntityThumbnailCard } from "$lib/entities/entity-thumbnail";
-  import EntityCastAndCrewSection from "$lib/components/entities/EntityCastAndCrewSection.svelte";
   import EntityDetail, {
     type EntityDetailActionButton,
     type EntityDetailSection,
@@ -73,8 +72,8 @@
   let progressChapterSummary = $state.raw<BookReaderChapter | null>(null);
   let childBookCards = $state<EntityThumbnailCard[]>([]);
   let volumeCards = $state<EntityThumbnailCard[]>([]);
-  let studioCards = $state<EntityThumbnailCard[]>([]);
-  let creditCards = $state<EntityThumbnailCard[]>([]);
+  let relationshipCredits = $state<EntityDetailCredit[]>([]);
+  let relationshipStudio = $state<EntityDetailCredit | null>(null);
   let relationshipTags = $state<EntityDetailTag[]>([]);
   let selectedChapterId: string | null = $state(null);
   let loadedBookId: string | null = null;
@@ -90,6 +89,9 @@
   // Single-file books have no chapter entities, so they need their own progress-panel display.
   const singleFileProgressDisplay = $derived(isSingleFileBook ? singleFileBookProgressDisplay(book) : null);
   const peopleLabel = $derived(bookType === "comic" || bookType === "manga" ? "Artists" : "People");
+  const defaultCreditRole = $derived(
+    bookType === "comic" || bookType === "manga" ? CREDIT_ROLE.artist : CREDIT_ROLE.writer,
+  );
   const bookTitle = $derived(book?.title ?? "Book");
   const chapterSummaries = $derived(combineChapterSummaries(chapterDetails, progressChapterSummary));
   const chapterCards = $derived(chapterDetails.map((chapter) => chapter.card));
@@ -114,13 +116,14 @@
   const primaryReadLabel = $derived(
     comicCompleted ? "Re-read" : comicStarted ? "Resume" : "Read",
   );
-  const hasCastAndCrew = $derived(studioCards.length > 0 || creditCards.length > 0);
 
   const card = $derived.by((): EntityDetailCardFull | null => {
     if (!book) return null;
     return {
       ...entityCardToDetailCard(book),
       tags: relationshipTags,
+      credits: relationshipCredits,
+      studio: relationshipStudio,
     };
   });
 
@@ -150,37 +153,33 @@
     return actions;
   });
 
+  // Built-in sections come from EntityDetail's core catalog; only label overrides
+  // are declared here.
   const detailSections = $derived.by((): EntityDetailSection[] => [
     {
-      id: "cast-and-crew",
+      id: "credits",
       label: peopleLabel,
       icon: Users,
-      hidden: !hasCastAndCrew,
     },
   ]);
 
   const detailTabs = $derived.by((): EntityDetailTab[] => {
     if (!card) return [];
-    const tabs: EntityDetailTab[] = [
+    return [
       {
         id: "details",
         label: "Details",
         icon: Info,
-        sections: ["description", "tags", "cast-and-crew"],
+        sections: ["description", "tags", "studio", "credits"],
       },
-    ];
-
-    if (card.links.length > 0) {
-      tabs.push({
+      {
         id: "metadata",
         label: "Metadata",
         icon: SlidersHorizontal,
-        count: card.links.length,
-        sections: ["links"],
-      });
-    }
-
-    return tabs;
+        sections: ["stats", "dates", "classification", "source", "links"],
+        layout: "grid",
+      },
+    ];
   });
 
   onMount(() => {
@@ -233,8 +232,8 @@
       volumeCards = thumbnailsToCards(orderedBookChildren(nextBook, ENTITY_KIND.bookVolume), {
         hrefFor: (volume) => `/books/${nextBook.id}/volumes/${volume.id}`,
       });
-      studioCards = relationships.studioCards;
-      creditCards = relationships.creditCards;
+      relationshipCredits = relationships.credits;
+      relationshipStudio = relationships.studio;
       relationshipTags = relationships.relationshipTags;
 
       const nextProgress = bookEntityProgressDisplay(nextBook, combineChapterSummaries(chapters, progressSummary));
@@ -523,6 +522,7 @@
       tabs={detailTabs}
       sections={detailSections}
       actionButtons={heroActions}
+      {defaultCreditRole}
     >
       {#snippet heroMeta()}
         {#if bookType}
@@ -548,12 +548,6 @@
         {/if}
       {/snippet}
 
-
-      {#snippet sectionContent(section)}
-        {#if section.id === "cast-and-crew"}
-          <EntityCastAndCrewSection {studioCards} {creditCards} castLabel={peopleLabel} />
-        {/if}
-      {/snippet}
     </EntityDetail>
 
     {#if progressDisplay}

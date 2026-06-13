@@ -1,6 +1,5 @@
 <script lang="ts">
   import EntityCastAndCrewSection from "$lib/components/entities/EntityCastAndCrewSection.svelte";
-  import MetadataCard from "$lib/components/MetadataCard.svelte";
   import type {
     EntityDetailCardFull,
   } from "$lib/entities/entity-detail";
@@ -10,13 +9,11 @@
   import VideoMarkerEditor from "$lib/components/VideoMarkerEditor.svelte";
   import VideoTranscriptPanel from "$lib/components/VideoTranscriptPanel.svelte";
   import VideoPlaybackStatus from "./VideoPlaybackStatus.svelte";
-  import { MonitorCog, Calendar, Database, Tv } from "@lucide/svelte";
+  import { Tv } from "@lucide/svelte";
 
   interface Props {
     section: EntityDetailSection;
     card: EntityDetailCardFull;
-    studioCards: EntityThumbnailCard[];
-    creditCards: EntityThumbnailCard[];
     seriesCards?: EntityThumbnailCard[];
     videoId: string;
     playbackState: PlaybackState | null;
@@ -41,8 +38,6 @@
   let {
     section,
     card,
-    studioCards,
-    creditCards,
     seriesCards = [],
     videoId,
     playbackState,
@@ -65,30 +60,12 @@
   }: Props = $props();
 </script>
 
-{#if section.id === "cast-and-crew"}
+{#if section.id === "related"}
   <EntityCastAndCrewSection
-    {studioCards}
-    {creditCards}
     relatedCards={seriesCards}
     relatedLabel="Series"
     relatedIcon={Tv}
   />
-{:else if section.id === "technical"}
-  {#if card.technical.length > 0}
-    <MetadataCard
-      title="Technical"
-      icon={MonitorCog}
-      rows={card.technical.map((r) => ({ label: r.label, value: r.value }))}
-    />
-  {/if}
-{:else if section.id === "dates"}
-  {#if card.dates.length > 0}
-    <MetadataCard
-      title="Dates"
-      icon={Calendar}
-      rows={card.dates.map((r) => ({ label: r.label, value: r.value }))}
-    />
-  {/if}
 {:else if section.id === "playback"}
   {#if playbackState}
     <VideoPlaybackStatus
@@ -101,15 +78,6 @@
       {onResume}
       {onStartOver}
       {onToggleWatched}
-    />
-  {/if}
-{:else if section.id === "source"}
-  {#if card.sources.length > 0 || card.fingerprints.length > 0}
-    <MetadataCard title="Source" icon={Database}
-      rows={[
-        ...card.sources.map((s) => ({ label: s.code, value: s.value })),
-        ...card.fingerprints.map((f) => ({ label: String(f.algorithm), value: f.value })),
-      ]}
     />
   {/if}
 {:else if section.id === "markers"}

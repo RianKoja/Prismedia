@@ -21,8 +21,8 @@
     updateOptimisticEntityRating,
   } from "$lib/entities/entity-detail-state";
   import { getAllChildIds } from "$lib/entities/entity-children";
-  import EntityCastAndCrewSection from "$lib/components/entities/EntityCastAndCrewSection.svelte";
-  import type { EntityDetailTag } from "$lib/entities/entity-detail";
+  import type { EntityDetailCredit, EntityDetailTag } from "$lib/entities/entity-detail";
+  import type { EntityKindCode } from "$lib/entities/entity-codes";
   import { entityCardToDetailCard, type EntityDetailCardFull } from "$lib/entities/entity-detail";
   import { resolveEntityHref } from "$lib/entities/entity-routes";
   import { redirectHiddenEntityNotFound } from "$lib/nsfw/hidden-entity";
@@ -56,8 +56,8 @@
   let errorMessage: string | null = $state(null);
   let ratingBusy = $state(false);
   let childCards = $state<EntityThumbnailCard[]>([]);
-  let studioCards = $state<EntityThumbnailCard[]>([]);
-  let creditCards = $state<EntityThumbnailCard[]>([]);
+  let relationshipCredits = $state<EntityDetailCredit[]>([]);
+  let relationshipStudio = $state<EntityDetailCredit | null>(null);
   let relationshipTags = $state<EntityDetailTag[]>([]);
   let lightboxOpen = $state(false);
   let lightboxCards = $state.raw<EntityThumbnailCard[]>([]);
@@ -72,10 +72,12 @@
     return {
       ...entityCardToDetailCard(gallery),
       tags: relationshipTags,
+      credits: relationshipCredits,
+      studio: relationshipStudio,
     };
   });
 
-  const primaryStudio = $derived(studioCards[0]?.entity ?? null);
+  const primaryStudio = $derived(relationshipStudio);
 
   const dates = $derived(card?.dates ?? []);
 
@@ -135,8 +137,8 @@
     childCards = thumbnailsToCards(children, {
       hrefFor: (thumbnail) => resolveEntityHref(thumbnail.kind, thumbnail.id),
     });
-    studioCards = relationships.studioCards;
-    creditCards = relationships.creditCards;
+    relationshipCredits = relationships.credits;
+    relationshipStudio = relationships.studio;
     relationshipTags = relationships.relationshipTags;
   }
 
@@ -276,7 +278,7 @@
     >
       {#snippet heroMeta()}
         {#if primaryStudio}
-          <a href={resolveEntityHref(primaryStudio.kind, primaryStudio.id)} class="meta-item is-studio">{primaryStudio.title}</a>
+          <a href={resolveEntityHref(primaryStudio.kind as EntityKindCode, primaryStudio.id)} class="meta-item is-studio">{primaryStudio.title}</a>
         {/if}
         {#if gallery?.galleryType}
           {#if primaryStudio}<span class="meta-sep"></span>{/if}
@@ -295,13 +297,6 @@
         {/if}
       {/snippet}
 
-      {#snippet afterBody()}
-        {#if studioCards.length > 0 || creditCards.length > 0}
-          <div class="credits-section">
-            <EntityCastAndCrewSection {studioCards} {creditCards} castLabel="People" />
-          </div>
-        {/if}
-      {/snippet}
     </EntityDetail>
 
     {#if galleryChildren.length > 0}
@@ -399,9 +394,7 @@
   :global(.meta-item.is-studio:hover) { opacity: 0.8; }
   :global(.meta-sep) { display: inline-block; width: 3px; height: 3px; margin: 0 0.5rem; background: var(--color-text-muted, #8a93a6); opacity: 0.5; }
 
-  .credits-section { padding: 1rem 1.5rem; border-top: 1px solid var(--color-border, #1c2235); }
 
   .empty-children { padding: 2rem; border: 1px solid var(--color-border-subtle, #1c2235); background: var(--color-surface-1, #0c0f15); color: var(--color-text-muted, #8a93a6); text-align: center; font-size: 0.85rem; }
 
-  @media (min-width: 640px) { .credits-section { padding: 1rem 2rem; } }
 </style>
