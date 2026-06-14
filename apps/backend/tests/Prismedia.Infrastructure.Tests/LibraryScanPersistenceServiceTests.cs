@@ -1338,6 +1338,43 @@ public sealed class LibraryScanPersistenceServiceTests {
     }
 
     [Fact]
+    public async Task RemoveEntitiesOutsideLibraryRootsDeletesStaleSourceMediaAndKeepsConfiguredRootMedia() {
+        await using var db = CreateContext();
+        var keptId = Guid.Parse("bbbbbbbb-1111-1111-1111-111111111111");
+        var staleMovieId = Guid.Parse("bbbbbbbb-2222-2222-2222-222222222222");
+        var staleVideoId = Guid.Parse("bbbbbbbb-3333-3333-3333-333333333333");
+        SeedLibraryRoot(db, RootId, "/media/kept");
+        SeedSourceEntity(db, keptId, EntityKindRegistry.Video.Code, "/media/kept/video.mkv");
+        SeedSourceEntity(db, staleMovieId, EntityKindRegistry.Movie.Code, "/media/deleted/movie");
+        SeedSourceEntity(db, staleVideoId, EntityKindRegistry.Video.Code, "/media/deleted/movie/video.mkv", staleMovieId);
+        await db.SaveChangesAsync();
+
+        var service = new LibraryScanPersistenceService(db);
+        var removed = await service.RemoveEntitiesOutsideLibraryRootsAsync(CancellationToken.None);
+
+        Assert.Equal(2, removed);
+        Assert.NotNull(await db.Entities.FindAsync([keptId]));
+        Assert.Null(await db.Entities.FindAsync([staleMovieId]));
+        Assert.Null(await db.Entities.FindAsync([staleVideoId]));
+    }
+
+    [Fact]
+    public async Task RemoveEntitiesOutsideLibraryRootsKeepsMediaInDisabledLibraryRoots() {
+        await using var db = CreateContext();
+        var disabledRootId = Guid.Parse("bbbbbbbb-4444-4444-4444-444444444444");
+        var disabledVideoId = Guid.Parse("bbbbbbbb-5555-5555-5555-555555555555");
+        SeedLibraryRoot(db, disabledRootId, "/media/disabled");
+        SeedSourceEntity(db, disabledVideoId, EntityKindRegistry.Video.Code, "/media/disabled/video.mkv");
+        await db.SaveChangesAsync();
+
+        var service = new LibraryScanPersistenceService(db);
+        var removed = await service.RemoveEntitiesOutsideLibraryRootsAsync(CancellationToken.None);
+
+        Assert.Equal(0, removed);
+        Assert.NotNull(await db.Entities.FindAsync([disabledVideoId]));
+    }
+
+    [Fact]
     public async Task ApplyVideoSidecarMetadataFillsMissingFieldsAndKeepsExistingDescription() {
         await using var db = CreateContext();
         var videoId = Guid.Parse("aaaaaaaa-1111-1111-1111-111111111111");

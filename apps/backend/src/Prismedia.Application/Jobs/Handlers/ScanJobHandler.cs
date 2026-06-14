@@ -62,7 +62,9 @@ public abstract class ScanJobHandler(
 
         // Runs once per scan job after every root is processed — including when every root's detailed
         // pass was skipped by the incremental fast path — so global cleanup that does not depend on
-        // file changes (e.g. orphaned taxonomy) still happens on an otherwise no-op rescan.
+        // file changes (e.g. deleted library roots and orphaned taxonomy) still happens on an
+        // otherwise no-op rescan.
+        await RemoveEntitiesOutsideConfiguredRootsAsync(cancellationToken);
         await RemoveOrphanTagsIfEnabledAsync(cancellationToken);
     }
 
@@ -142,6 +144,20 @@ public abstract class ScanJobHandler(
 
     /// <summary>Discovers files, creates/updates entities, and enqueues downstream jobs for one root.</summary>
     protected abstract Task ScanRootCoreAsync(JobContext context, LibraryRootData root, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Removes source-backed media that is no longer covered by any configured library root. This
+    /// catches leftovers from older library-root deletions even when this scan's detailed per-root
+    /// pass was skipped by the snapshot fast path.
+    /// </summary>
+    private async Task RemoveEntitiesOutsideConfiguredRootsAsync(CancellationToken cancellationToken) {
+        var removed = await roots.RemoveEntitiesOutsideLibraryRootsAsync(cancellationToken);
+        if (removed > 0) {
+            logger.LogInformation(
+                "{JobType}: removed {Count} media entries outside configured library roots",
+                Type.ToCode(), removed);
+        }
+    }
 
     /// <summary>
     /// Deletes tags that nothing references when the "Remove orphan tags" setting is on. Runs once at

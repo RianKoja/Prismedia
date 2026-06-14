@@ -12,6 +12,14 @@ public interface ILibraryScanRootPersistence {
     Task<int> RemoveEntitiesInExcludedPathsAsync(Guid rootId, CancellationToken cancellationToken);
 
     /// <summary>
+    /// Deletes media source entities whose source file paths are no longer under any configured
+    /// library root. This recovers data left behind by older root deletions that removed the root row
+    /// before media cleanup could run. Disabled roots still count as configured roots so their hidden
+    /// media can be restored by re-enabling them.
+    /// </summary>
+    Task<int> RemoveEntitiesOutsideLibraryRootsAsync(CancellationToken cancellationToken);
+
+    /// <summary>
     /// Deletes tags that nothing references (no inbound relationship links). Returns the count
     /// removed. Lives here, on the scan-root port, because orphan-tag cleanup runs once at the end of
     /// every scan kind — not just the video scan — so the base scan handler can invoke it.

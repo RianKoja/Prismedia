@@ -2104,6 +2104,9 @@ public sealed class ScanJobHandlerTests {
         public Task<int> RemoveEntitiesInExcludedPathsAsync(Guid rootId, CancellationToken cancellationToken) =>
             Task.FromResult(0);
 
+        public Task<int> RemoveEntitiesOutsideLibraryRootsAsync(CancellationToken cancellationToken) =>
+            Task.FromResult(0);
+
         public Task<Guid> UpsertVideoAsync(string filePath, string title, Guid libraryRootId, bool isNsfw, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
 

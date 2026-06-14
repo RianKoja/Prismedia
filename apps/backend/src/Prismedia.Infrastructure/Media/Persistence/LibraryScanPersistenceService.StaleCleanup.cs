@@ -170,6 +170,60 @@ public sealed partial class LibraryScanPersistenceService {
         return await RemoveStaleEntitiesBySourcePath(bookIds, validPaths, cancellationToken);
     }
 
+    public async Task<int> RemoveEntitiesOutsideLibraryRootsAsync(CancellationToken cancellationToken) {
+        var rootPaths = (await _db.LibraryRoots.AsNoTracking()
+                .Select(root => root.Path)
+                .ToArrayAsync(cancellationToken))
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .ToArray();
+
+        var sourceRows = await _db.EntityFiles.AsNoTracking()
+            .Where(file => file.Role == EntityFileRole.Source)
+            .Select(file => new { file.EntityId, file.Path })
+            .ToArrayAsync(cancellationToken);
+
+        var validSourceIds = sourceRows
+            .Where(file => rootPaths.Any(rootPath => LibraryScanPathRules.IsPathUnderRoot(file.Path, rootPath)))
+            .Select(file => file.EntityId)
+            .ToHashSet();
+        var idsToRemove = sourceRows
+            .Select(file => file.EntityId)
+            .Distinct()
+            .Where(entityId => !validSourceIds.Contains(entityId))
+            .ToHashSet();
+
+        if (idsToRemove.Count > 0) {
+            var allEntityParents = await _db.Entities.AsNoTracking()
+                .Where(entity => entity.ParentEntityId != null)
+                .Select(entity => new { entity.Id, ParentEntityId = entity.ParentEntityId!.Value })
+                .ToArrayAsync(cancellationToken);
+            var childrenByParentId = allEntityParents
+                .GroupBy(entity => entity.ParentEntityId)
+                .ToDictionary(group => group.Key, group => group.Select(entity => entity.Id).ToArray());
+            var pending = new Queue<Guid>(idsToRemove);
+
+            while (pending.Count > 0) {
+                var parentId = pending.Dequeue();
+                if (!childrenByParentId.TryGetValue(parentId, out var childIds)) {
+                    continue;
+                }
+
+                foreach (var childId in childIds) {
+                    if (validSourceIds.Contains(childId) || !idsToRemove.Add(childId)) {
+                        continue;
+                    }
+
+                    pending.Enqueue(childId);
+                }
+            }
+        }
+
+        var removed = idsToRemove.Count == 0
+            ? 0
+            : await RemoveEntitiesByIdAsync(idsToRemove.ToList(), cancellationToken);
+        return removed + await RemoveOrphanSeriesAndSeasonsAsync(cancellationToken);
+    }
+
     public async Task<int> RemoveOrphanSeriesAndSeasonsAsync(CancellationToken cancellationToken) {
         var movieCode = EntityKindRegistry.Movie.Code;
         var seasonCode = EntityKindRegistry.VideoSeason.Code;
