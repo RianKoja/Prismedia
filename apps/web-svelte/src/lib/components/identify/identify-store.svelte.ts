@@ -10,6 +10,7 @@ import {
   fetchIdentifyQueue,
   fetchIdentifyQueueItem,
   requestIdentifySearch,
+  resolveIdentifyQueueCandidate,
   startBulkIdentify,
 } from "$lib/api/identify-client";
 import { fetchPluginProviders } from "$lib/api/plugins";
@@ -359,7 +360,19 @@ export class IdentifyStore {
     providerId: string,
     candidate: EntitySearchCandidate,
   ) {
-    return this.identifyEntity(entity, providerId, { externalIds: candidate.externalIds });
+    this.error = null;
+    try {
+      const existing = this.queue.find((queued) => queued.entityId === entity.id);
+      const item = await resolveIdentifyQueueCandidate(entity.id, providerId, candidate, this.#getHideNsfw());
+      const detail = existing?.detail ?? await fetchEntityDetail(entity.id);
+      const mapped = queueItemFromApi(item, entity, detail);
+      this.#upsertQueueItem(mapped);
+      this.ensureQueuePolling();
+      return mapped;
+    } catch (err) {
+      this.error = readError(err);
+      return null;
+    }
   }
 
   async backToSearch(entity: EntityCard, providerId?: string | null) {

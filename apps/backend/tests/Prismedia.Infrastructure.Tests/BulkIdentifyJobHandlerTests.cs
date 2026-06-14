@@ -69,6 +69,9 @@ public sealed class BulkIdentifyJobHandlerTests {
         public Task<IdentifyQueueItem> RequestSearchAsync(Guid entityId, IdentifyQueueSearchRequest request, bool hideNsfw, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
 
+        public Task<IdentifyQueueItem> ResolveCandidateAsync(Guid entityId, IdentifyQueueCandidateRequest request, bool hideNsfw, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
         public Task<IdentifyQueueItem> ApplyAsync(Guid entityId, ApplyIdentifyQueueItemRequest request, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
 

@@ -71,6 +71,33 @@ internal static class IdentifyQueueEndpoints {
             .Produces<IdentifyQueueItem>()
             .Produces<ApiProblem>(StatusCodes.Status404NotFound);
 
+        group.MapPost("/queue/entities/{entityId:guid}/candidate", async (
+            Guid entityId,
+            IdentifyQueueCandidateRequest request,
+            bool? hideNsfw,
+            HttpContext httpContext,
+            IIdentifyQueueService queue,
+            CancellationToken cancellationToken) => {
+                try {
+                    return Results.Ok(await queue.ResolveCandidateAsync(
+                        entityId,
+                        request,
+                        NsfwVisibility.ShouldHide(hideNsfw, httpContext),
+                        cancellationToken));
+                } catch (ArgumentException ex) {
+                    return Results.BadRequest(new ApiProblem(ApiProblemCodes.IdentifyFailed, ex.Message));
+                } catch (InvalidOperationException ex) {
+                    return Results.BadRequest(new ApiProblem(ApiProblemCodes.IdentifyFailed, ex.Message));
+                } catch (KeyNotFoundException ex) {
+                    return Results.NotFound(new ApiProblem(ApiProblemCodes.EntityNotFound, ex.Message));
+                }
+            })
+            .WithName("ResolveIdentifyQueueCandidate")
+            .WithSummary("Resolves one selected search candidate into the queue item's proposal without enqueueing a new search.")
+            .Produces<IdentifyQueueItem>()
+            .Produces<ApiProblem>(StatusCodes.Status400BadRequest)
+            .Produces<ApiProblem>(StatusCodes.Status404NotFound);
+
         group.MapPost("/queue/entities/{entityId:guid}/apply", async (
             Guid entityId,
             ApplyIdentifyQueueItemRequest request,

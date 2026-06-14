@@ -22,12 +22,13 @@ import type {
   ListIdentifyQueueParams,
   SaveIdentifyQueueProposalRequest,
 } from "$lib/api/generated/model";
-import { requestInit, unwrapGenerated, type RequestOptions } from "$lib/api/generated-response";
+import { problemMessage, requestInit, unwrapGenerated, type RequestOptions } from "$lib/api/generated-response";
 import { apiPath, fetchApi } from "$lib/api/orval-fetch";
 import { fetchEntities, fetchEntity, type EntityCard, type EntityDetailCard, type EntityListResponse } from "$lib/api/entities";
 import type {
   IdentifyApplyProgress,
   EntityMetadataProposal,
+  EntitySearchCandidate,
   IdentifyQuery,
   IdentifyQueueItem,
   PluginProvider,
@@ -122,6 +123,65 @@ export function requestIdentifySearch(
   } as IdentifyQueueSearchRequest, { hideNsfw }, requestInit(options)).then((response) =>
     unwrapGenerated(response, "Failed to request identify search") as IdentifyQueueItem,
   );
+}
+
+/**
+ * Resolves a selected candidate into the queue item's proposal. Unlike a fresh search request,
+ * this does not enqueue an identify-search job or clear the current candidate results while the
+ * provider ID lookup is running.
+ */
+export function resolveIdentifyQueueCandidate(
+  entityId: string,
+  provider: string,
+  candidate: EntitySearchCandidate,
+  hideNsfw?: boolean,
+  options?: RequestOptions,
+): Promise<IdentifyQueueItem> {
+  const params = new URLSearchParams();
+  if (hideNsfw !== undefined) params.set("hideNsfw", String(hideNsfw));
+  const suffix = params.toString() ? `?${params}` : "";
+
+  return fetchIdentifyQueueMutation(
+    `/identify/queue/entities/${encodeURIComponent(entityId)}/candidate${suffix}`,
+    {
+      provider,
+      candidate,
+    },
+    "Failed to resolve selected identify candidate",
+    options,
+  );
+}
+
+async function fetchIdentifyQueueMutation<T>(
+  path: string,
+  body: unknown,
+  fallback: string,
+  options?: RequestOptions,
+): Promise<T> {
+  const response = await fetch(apiPath(path), {
+    ...requestInit(options),
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+
+  const text = await response.text();
+  const data = parseJsonOrText(text);
+  if (!response.ok) {
+    throw new Error(problemMessage(data) ?? fallback);
+  }
+
+  return data as T;
+}
+
+function parseJsonOrText(text: string): unknown {
+  if (!text) return undefined;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return text;
+  }
 }
 
 export function applyIdentifyQueueItem(
@@ -223,4 +283,3 @@ export function startBulkIdentify(
     unwrapGenerated(response, "Failed to start bulk identify", [202]) as IdentifyBulkAcceptedResponse,
   );
 }
-

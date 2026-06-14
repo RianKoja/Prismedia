@@ -92,16 +92,10 @@ describe("IdentifyReviewChoice", () => {
     expect(store.identifyWithCandidate).toHaveBeenCalledWith(entity(), "tmdb", candidate);
   });
 
-  it("waits for a selected candidate to resolve and opens the proposal review", async () => {
+  it("opens the proposal returned for a selected candidate without waiting on a queued search", async () => {
     const candidate = searchCandidate();
     const resolved = resolvedProposalQueueItem();
-    store.identifyWithCandidate.mockResolvedValue({
-      state: "queued",
-      provider: "tmdb",
-      candidates: [],
-      proposal: null,
-    });
-    store.waitForIdentifyResult.mockResolvedValue(resolved);
+    store.identifyWithCandidate.mockResolvedValue(resolved);
 
     render(IdentifyReviewChoice, {
       props: {
@@ -113,20 +107,14 @@ describe("IdentifyReviewChoice", () => {
     await fireEvent.click(screen.getByRole("button", { name: "Use The Chair Company (2025)" }));
 
     expect(store.identifyWithCandidate).toHaveBeenCalledWith(entity(), "tmdb", candidate);
-    await waitFor(() => expect(store.waitForIdentifyResult).toHaveBeenCalledWith("series-1", "tmdb"));
+    expect(store.waitForIdentifyResult).not.toHaveBeenCalled();
     expect(store.reviewResolvedQueueItem).toHaveBeenCalledWith(resolved);
     expect(store.navigateToDashboard).not.toHaveBeenCalled();
   });
 
-  it("clears the selected candidate progress and surfaces wait errors without leaving the item", async () => {
+  it("clears the selected candidate progress and surfaces resolve errors without leaving the item", async () => {
     const candidate = searchCandidate();
-    store.identifyWithCandidate.mockResolvedValue({
-      state: "queued",
-      provider: "tmdb",
-      candidates: [],
-      proposal: null,
-    });
-    store.waitForIdentifyResult.mockRejectedValue(new Error("Provider failed"));
+    store.identifyWithCandidate.mockRejectedValue(new Error("Provider failed"));
 
     const { container } = render(IdentifyReviewChoice, {
       props: {
@@ -139,6 +127,7 @@ describe("IdentifyReviewChoice", () => {
 
     await waitFor(() => expect(store.error).toBe("Provider failed"));
     expect(container.querySelector(".animate-spin")).toBeNull();
+    expect(store.waitForIdentifyResult).not.toHaveBeenCalled();
     expect(store.reviewResolvedQueueItem).not.toHaveBeenCalled();
     expect(store.navigateToDashboard).not.toHaveBeenCalled();
   });

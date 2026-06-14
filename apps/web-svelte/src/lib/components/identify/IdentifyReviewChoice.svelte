@@ -162,10 +162,6 @@
     return isReviewableIdentifyResult(item);
   }
 
-  function isIdentifyResult(item: IdentifyQueueItem): boolean {
-    return isReviewableIdentifyResult(item) || item.state === IDENTIFY_QUEUE_STATE.error;
-  }
-
   function isReviewableIdentifyResult(item: IdentifyQueueItem): boolean {
     return (
       (item.state === IDENTIFY_QUEUE_STATE.proposal && Boolean(item.proposal)) ||
@@ -180,13 +176,7 @@
     checkingCandidateTitle = candidate.title;
     store.error = null;
     try {
-      const queued = await store.identifyWithCandidate(entity, providerId, candidate);
-      if (!queued) return;
-
-      const result = isIdentifyResult(queued)
-        ? queued
-        : await store.waitForIdentifyResult(entity.id, providerId);
-
+      const result = await store.identifyWithCandidate(entity, providerId, candidate);
       if (result && isReviewableIdentifyResult(result)) {
         store.reviewResolvedQueueItem(result);
       }

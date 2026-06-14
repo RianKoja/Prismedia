@@ -10,6 +10,7 @@ const fetchIdentifyEntity = vi.fn();
 const fetchIdentifyQueueItem = vi.fn();
 const addIdentifyQueueItem = vi.fn();
 const requestIdentifySearch = vi.fn();
+const resolveIdentifyQueueCandidate = vi.fn();
 const applyIdentifyQueueItem = vi.fn();
 const deleteIdentifyQueueItem = vi.fn();
 const fetchIdentifyApplyProgress = vi.fn();
@@ -34,6 +35,7 @@ vi.mock("$lib/api/identify-client", async (importOriginal) => {
     fetchIdentifyQueueItem: (...args: unknown[]) => fetchIdentifyQueueItem(...args),
     addIdentifyQueueItem: (...args: unknown[]) => addIdentifyQueueItem(...args),
     requestIdentifySearch: (...args: unknown[]) => requestIdentifySearch(...args),
+    resolveIdentifyQueueCandidate: (...args: unknown[]) => resolveIdentifyQueueCandidate(...args),
     applyIdentifyQueueItem: (...args: unknown[]) => applyIdentifyQueueItem(...args),
     deleteIdentifyQueueItem: (...args: unknown[]) => deleteIdentifyQueueItem(...args),
     fetchIdentifyApplyProgress: (...args: unknown[]) => fetchIdentifyApplyProgress(...args),
@@ -51,6 +53,7 @@ describe("IdentifyStore", () => {
     fetchIdentifyQueueItem.mockReset();
     addIdentifyQueueItem.mockReset();
     requestIdentifySearch.mockReset();
+    resolveIdentifyQueueCandidate.mockReset();
     applyIdentifyQueueItem.mockReset();
     deleteIdentifyQueueItem.mockReset();
     fetchIdentifyApplyProgress.mockReset();
@@ -60,6 +63,11 @@ describe("IdentifyStore", () => {
     fetchIdentifyQueueItem.mockResolvedValue(queueItem("video-1"));
     addIdentifyQueueItem.mockResolvedValue(queueItem("video-1"));
     requestIdentifySearch.mockResolvedValue(queueItem("video-1", { state: "queued" }));
+    resolveIdentifyQueueCandidate.mockResolvedValue(queueItem("video-1", {
+      state: "proposal",
+      provider: "tmdb",
+      proposal: proposal("tmdb:movie:123", { targetKind: "video", title: "Friendship" }),
+    }));
     applyIdentifyQueueItem.mockResolvedValue(queueItem("video-1", { state: "done" }));
     deleteIdentifyQueueItem.mockResolvedValue(queueItem("video-1", { state: "deleted" }));
     identifyEntityTransient.mockReset();
@@ -283,6 +291,59 @@ describe("IdentifyStore", () => {
       requireChoice: true,
     }, false);
     expect(store.queue.find((item) => item.entityId === "video-1")?.state).toBe("queued");
+  });
+
+  it("resolves a selected candidate directly without requesting another queued search", async () => {
+    const store = new IdentifyStore();
+    const movie = entity("video-1", { kind: "video", title: "Friendship" });
+    const candidate = searchCandidate();
+    const resolved = queueItem("video-1", {
+      state: "proposal",
+      provider: "tmdb",
+      proposal: proposal("tmdb:movie:2005", { targetKind: "video", title: "Friendship identified" }),
+    });
+    store.queue = [{
+      ...queueItem("video-1", {
+        state: "search",
+        provider: "tmdb",
+        candidates: [candidate],
+      }),
+      entity: movie,
+      detail: detail("video-1", { kind: "video", title: "Friendship" }),
+    }];
+    resolveIdentifyQueueCandidate.mockResolvedValue(resolved);
+
+    const item = await store.identifyWithCandidate(movie, "tmdb", candidate);
+
+    expect(resolveIdentifyQueueCandidate).toHaveBeenCalledWith("video-1", "tmdb", candidate, false);
+    expect(requestIdentifySearch).not.toHaveBeenCalled();
+    expect(item?.state).toBe("proposal");
+    expect(store.queue.find((queued) => queued.entityId === "video-1")?.proposal?.proposalId).toBe("tmdb:movie:2005");
+  });
+
+  it("keeps candidate results visible when selected candidate resolution fails", async () => {
+    const store = new IdentifyStore();
+    const movie = entity("video-1", { kind: "video", title: "Friendship" });
+    const candidate = searchCandidate();
+    store.queue = [{
+      ...queueItem("video-1", {
+        state: "search",
+        provider: "tmdb",
+        candidates: [candidate],
+      }),
+      entity: movie,
+      detail: detail("video-1", { kind: "video", title: "Friendship" }),
+    }];
+    resolveIdentifyQueueCandidate.mockRejectedValue(new Error("Provider failed"));
+
+    const item = await store.identifyWithCandidate(movie, "tmdb", candidate);
+
+    expect(item).toBeNull();
+    expect(store.error).toBe("Provider failed");
+    expect(requestIdentifySearch).not.toHaveBeenCalled();
+    const queued = store.queue.find((entry) => entry.entityId === "video-1");
+    expect(queued?.state).toBe("search");
+    expect(queued?.candidates).toEqual([candidate]);
   });
 
   it("polls the queue item while a cascade streams children and stops when it completes", async () => {
@@ -560,6 +621,17 @@ function detail(id: string, options: Partial<EntityDetailCard> = {}): EntityDeta
     childrenByKind: [],
     relationships: [],
     ...options,
+  };
+}
+
+function searchCandidate() {
+  return {
+    externalIds: { tmdb: "2005" },
+    title: "Friendship",
+    year: 2024,
+    overview: "Candidate overview.",
+    posterUrl: "https://image.example.test/poster.jpg",
+    popularity: 8.5,
   };
 }
 

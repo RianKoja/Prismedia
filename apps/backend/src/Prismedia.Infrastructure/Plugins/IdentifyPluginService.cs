@@ -391,6 +391,12 @@ public sealed partial class IdentifyPluginService : IIdentifyProviderService {
             return response;
         }
 
+        // Explicit user-picked provider IDs, including candidate picks from the identify queue,
+        // must not silently turn into a generic provider search if that exact lookup misses.
+        if (request.Query.ExternalIds?.ContainsKey(descriptor.Manifest.Id) == true) {
+            return response;
+        }
+
         var supportsSearch = PluginEntityKindCompatibility
             .ActionsFor(descriptor.Manifest, entity.KindCode)
             .Any(action => action.Equals(IdentifyAction.Search.ToCode(), StringComparison.OrdinalIgnoreCase));

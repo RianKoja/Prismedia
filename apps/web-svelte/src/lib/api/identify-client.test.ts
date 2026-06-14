@@ -4,6 +4,7 @@ import {
   fetchIdentifyQueue,
   fetchOptionalIdentifyQueueItem,
   requestIdentifySearch,
+  resolveIdentifyQueueCandidate,
   startBulkIdentify,
 } from "./identify-client";
 
@@ -31,6 +32,31 @@ describe("identify client", () => {
         body: JSON.stringify({ provider: "tmdb", query: { title: "Friendship" } }),
       }),
     );
+  });
+
+  it("posts selected candidates through the direct queue resolve endpoint", async () => {
+    const fetchMock = mockFetch(queueItem("video-1", { state: "proposal" }));
+    const candidate = searchCandidate();
+
+    await resolveIdentifyQueueCandidate("video-1", "tmdb", candidate, true);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/identify/queue/entities/video-1/candidate?hideNsfw=true",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ provider: "tmdb", candidate }),
+      }),
+    );
+  });
+
+  it("uses API problem messages for selected candidate resolve errors", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(
+      JSON.stringify({ code: "identify_failed", message: "No TMDB match was found." }),
+      { headers: { "Content-Type": "application/json" }, status: 400 },
+    )));
+
+    await expect(resolveIdentifyQueueCandidate("video-1", "tmdb", searchCandidate()))
+      .rejects.toThrow("No TMDB match was found.");
   });
 
   it("applies reviewed queue proposals with selected fields and images", async () => {
@@ -99,6 +125,17 @@ function queueItem(id: string, options: { state?: string } = {}) {
     createdAt: "2026-05-27T00:00:00Z",
     updatedAt: "2026-05-27T00:00:00Z",
     completedAt: null,
+  };
+}
+
+function searchCandidate() {
+  return {
+    externalIds: { tmdb: "2005" },
+    title: "Ambiguous Movie",
+    year: 2005,
+    overview: "Candidate overview.",
+    posterUrl: "https://image.test/poster.jpg",
+    popularity: 9.1,
   };
 }
 

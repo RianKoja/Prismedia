@@ -199,6 +199,99 @@ public sealed class IdentifyQueueService : IIdentifyQueueService {
     }
 
     /// <summary>
+    /// Resolves a selected candidate into a proposal without restamping the queue row as a new
+    /// background search. The existing candidate list remains visible until the provider returns a
+    /// proposal, so a slow or failed ID lookup does not collapse the review back to queued/searching.
+    /// </summary>
+    public async Task<IdentifyQueueItem> ResolveCandidateAsync(
+        Guid entityId,
+        IdentifyQueueCandidateRequest request,
+        bool hideNsfw,
+        CancellationToken cancellationToken) {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(request.Candidate);
+
+        var provider = request.Provider.Trim();
+        if (string.IsNullOrWhiteSpace(provider)) {
+            throw new ArgumentException("A provider is required to resolve a selected identify candidate.", nameof(request));
+        }
+
+        if (request.Candidate.ExternalIds is null) {
+            throw new ArgumentException("Selected identify candidate has no provider IDs to resolve.", nameof(request));
+        }
+
+        var externalIds = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (key, value) in request.Candidate.ExternalIds) {
+            if (string.IsNullOrWhiteSpace(key) || string.IsNullOrWhiteSpace(value)) {
+                continue;
+            }
+
+            externalIds[key] = value;
+        }
+
+        if (externalIds.Count == 0) {
+            throw new ArgumentException("Selected identify candidate has no provider IDs to resolve.", nameof(request));
+        }
+
+        if (!externalIds.ContainsKey(provider)) {
+            throw new ArgumentException(
+                $"Selected identify candidate is missing a provider ID for '{provider}'.",
+                nameof(request));
+        }
+
+        var row = await _db.IdentifyQueueItems
+            .FirstOrDefaultAsync(item => item.EntityId == entityId, cancellationToken)
+            ?? throw new KeyNotFoundException($"Identify queue item for entity '{entityId}' was not found.");
+        if (row.State != IdentifyQueueState.Search || string.IsNullOrWhiteSpace(row.CandidatesJson)) {
+            throw new InvalidOperationException("Only an identify queue item with candidate results can resolve a selected candidate.");
+        }
+
+        var originalUpdatedAt = row.UpdatedAt;
+        var entity = await LoadEntityAsync(entityId, cancellationToken)
+            ?? throw new KeyNotFoundException($"Entity '{entityId}' was not found.");
+        var query = new IdentifyQuery(Title: null, Url: null, ExternalIds: externalIds);
+
+        var response = await _identify.IdentifyAsync(
+            entity.Id,
+            provider,
+            query,
+            parentExternalIds: null,
+            hideNsfw,
+            cancellationToken,
+            cascadeChildren: false);
+        if (!response.Ok) {
+            throw new InvalidOperationException(response.Error ?? "Selected identify candidate could not be resolved.");
+        }
+
+        var proposal = response.Result;
+        if (proposal?.Patch is null) {
+            throw new InvalidOperationException(response.Error ?? "Selected identify candidate did not return provider metadata.");
+        }
+
+        await _db.Entry(row).ReloadAsync(cancellationToken);
+        if (row.State != IdentifyQueueState.Search || row.UpdatedAt != originalUpdatedAt) {
+            throw new InvalidOperationException("Identify queue item changed while the selected candidate was resolving. Review the latest result and try again.");
+        }
+
+        await CancelCascadeAsync(row, cancellationToken);
+        await CancelSearchJobAsync(row, cancellationToken);
+
+        row.State = IdentifyQueueState.Proposal;
+        row.ProviderCode = provider;
+        row.Action = IdentifyAction.LookupId;
+        row.QueryJson = JsonSerializer.Serialize(query, JsonOptions);
+        row.CandidatesJson = null;
+        row.ProposalJson = JsonSerializer.Serialize(proposal, JsonOptions);
+        row.Error = null;
+        row.UpdatedAt = DateTimeOffset.UtcNow;
+        row.CompletedAt = null;
+
+        await EnqueueCascadeIfNeededAsync(row, entity, provider, query, hideNsfw, isForeground: true, cancellationToken);
+        await _db.SaveChangesAsync(cancellationToken);
+        return MapRow(row, entity);
+    }
+
+    /// <summary>
     /// Moves the row into <see cref="IdentifyQueueState.Queued"/> for a fresh search request: cancels
     /// any in-flight cascade and search job, clears prior results, persists the provider hint and
     /// query, enqueues the identify-search job, and stamps its id as the row's search owner.

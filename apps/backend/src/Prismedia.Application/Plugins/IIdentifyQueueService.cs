@@ -39,6 +39,16 @@ public interface IIdentifyQueueService {
         bool hideNsfw,
         CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Resolves a selected search candidate directly into a queue proposal without enqueueing a
+    /// second search job or clearing the current candidate results while the provider lookup runs.
+    /// </summary>
+    Task<IdentifyQueueItem> ResolveCandidateAsync(
+        Guid entityId,
+        IdentifyQueueCandidateRequest request,
+        bool hideNsfw,
+        CancellationToken cancellationToken);
+
     /// <summary>Applies a reviewed queue proposal and marks the item done.</summary>
     Task<IdentifyQueueItem> ApplyAsync(
         Guid entityId,

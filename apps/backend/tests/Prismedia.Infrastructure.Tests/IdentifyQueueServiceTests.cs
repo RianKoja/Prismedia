@@ -132,6 +132,89 @@ public sealed class IdentifyQueueServiceTests : IDisposable {
     }
 
     [Fact]
+    public async Task ResolveCandidateAsyncUsesSelectedProviderIdWithoutQueueingAnotherSearch() {
+        await using var db = CreateContext();
+        var entityId = Guid.Parse("33333333-3333-3333-3333-33333333333a");
+        SeedProvider(db);
+        SeedEntity(db, entityId, "video", "Ambiguous Movie");
+        await db.SaveChangesAsync();
+        var queue = new RecordingJobQueue();
+        var service = new IdentifyQueueService(
+            db,
+            CreateIdentifyService(db, new CandidateThenProposalProcessExecutor(), _tempRoot),
+            new InMemoryIdentifyApplyProgressStore(),
+            queue);
+        await service.AddAsync(entityId, CancellationToken.None);
+        var search = await SearchToCompletionAsync(
+            service,
+            db,
+            entityId,
+            new IdentifyQueueSearchRequest("tmdb", new IdentifyQuery("Ambiguous", null, null)),
+            hideNsfw: false,
+            CancellationToken.None);
+        var candidate = Assert.Single(search.Candidates);
+        queue.Enqueued.Clear();
+
+        var item = await service.ResolveCandidateAsync(
+            entityId,
+            new IdentifyQueueCandidateRequest("tmdb", candidate),
+            hideNsfw: false,
+            CancellationToken.None);
+
+        Assert.Equal("proposal", item.State);
+        Assert.Equal("tmdb", item.Provider);
+        Assert.Equal("lookup-id", item.Action);
+        Assert.Empty(item.Candidates);
+        Assert.NotNull(item.Proposal);
+        Assert.Equal("Auto-resolved title", item.Proposal!.Patch.Title);
+        Assert.NotNull(item.Query?.ExternalIds);
+        Assert.True(item.Query!.ExternalIds!.TryGetValue("tmdb", out var selectedId));
+        Assert.Equal("2005", selectedId);
+        Assert.DoesNotContain(queue.Enqueued, job => job.Type == JobType.IdentifySearch);
+    }
+
+    [Fact]
+    public async Task ResolveCandidateAsyncDoesNotFallBackToGenericSearchWhenSelectedIdMisses() {
+        await using var db = CreateContext();
+        var entityId = Guid.Parse("33333333-3333-3333-3333-33333333333b");
+        SeedProvider(db);
+        SeedEntity(db, entityId, "video", "Ambiguous Movie");
+        await db.SaveChangesAsync();
+        var executor = new CandidateThenLookupMissProcessExecutor();
+        var queue = new RecordingJobQueue();
+        var service = new IdentifyQueueService(
+            db,
+            CreateIdentifyService(db, executor, _tempRoot),
+            new InMemoryIdentifyApplyProgressStore(),
+            queue);
+        await service.AddAsync(entityId, CancellationToken.None);
+        var search = await SearchToCompletionAsync(
+            service,
+            db,
+            entityId,
+            new IdentifyQueueSearchRequest("tmdb", new IdentifyQuery("Ambiguous", null, null)),
+            hideNsfw: false,
+            CancellationToken.None);
+        var candidate = Assert.Single(search.Candidates);
+        queue.Enqueued.Clear();
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.ResolveCandidateAsync(
+                entityId,
+                new IdentifyQueueCandidateRequest("tmdb", candidate),
+                hideNsfw: false,
+                CancellationToken.None));
+
+        Assert.Contains("No TMDB match", error.Message);
+        Assert.Equal(["search", "lookup-id"], executor.Actions);
+        Assert.DoesNotContain(queue.Enqueued, job => job.Type == JobType.IdentifySearch);
+        var row = await db.IdentifyQueueItems.AsNoTracking().SingleAsync();
+        Assert.Equal(IdentifyQueueState.Search, row.State);
+        Assert.NotNull(row.CandidatesJson);
+        Assert.Null(row.ProposalJson);
+    }
+
+    [Fact]
     public async Task SearchAsyncKeepsOnlyProviderStructuralChildrenMatchedToLocalChildren() {
         await using var db = CreateContext();
         var seriesId = Guid.Parse("33333333-3333-3333-3333-333333333335");
@@ -1522,6 +1605,49 @@ public sealed class IdentifyQueueServiceTests : IDisposable {
                     0,
                     SerializeWireProposal(request.Entity.Id, "Auto-resolved title"),
                     string.Empty);
+            }
+
+            var wire = new {
+                ok = true,
+                result = new {
+                    type = "candidates",
+                    proposal = (object?)null,
+                    candidates = new[] {
+                        new EntitySearchCandidate(
+                            new Dictionary<string, string> { ["tmdb"] = "2005" },
+                            "Ambiguous Movie (2005)",
+                            2005,
+                            "A search result that still needs user confirmation.",
+                            "https://example.test/poster.jpg",
+                            9.1m)
+                    }
+                },
+                error = (string?)null
+            };
+
+            return new ProcessExecutionResult(0, JsonSerializer.Serialize(wire, JsonOptions), string.Empty);
+        }
+    }
+
+    private sealed class CandidateThenLookupMissProcessExecutor : ProcessExecutor {
+        public List<string> Actions { get; } = [];
+
+        public override async Task<ProcessExecutionResult> RunAsync(
+            string fileName,
+            IReadOnlyList<string> arguments,
+            IReadOnlyDictionary<string, string>? environment,
+            CancellationToken cancellationToken, bool lowPriority = false) {
+            var requestJson = await File.ReadAllTextAsync(arguments[1], cancellationToken);
+            var request = JsonSerializer.Deserialize<IdentifyPluginRequest>(requestJson, JsonOptions)!;
+            Actions.Add(request.Action.ToCode());
+
+            if (request.Action == IdentifyAction.LookupId) {
+                var none = new {
+                    ok = true,
+                    result = new { type = "none", proposal = (object?)null, candidates = Array.Empty<object>() },
+                    error = (string?)null
+                };
+                return new ProcessExecutionResult(0, JsonSerializer.Serialize(none, JsonOptions), string.Empty);
             }
 
             var wire = new {

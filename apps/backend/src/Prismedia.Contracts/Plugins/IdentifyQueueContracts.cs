@@ -77,6 +77,13 @@ public sealed record IdentifyApplyProgress(
 public sealed record IdentifyQueueSearchRequest(string? Provider, IdentifyQuery? Query);
 
 /// <summary>
+/// Request body for resolving a specific candidate already shown on an identify queue item.
+/// </summary>
+/// <param name="Provider">Provider code that produced the selected candidate.</param>
+/// <param name="Candidate">Candidate chosen by the user, including its provider external IDs.</param>
+public sealed record IdentifyQueueCandidateRequest(string Provider, EntitySearchCandidate Candidate);
+
+/// <summary>
 /// Request body for accepting a reviewed identify queue proposal.
 /// </summary>
 /// <param name="Proposal">Optional reviewed proposal payload. When null, the stored proposal is applied.</param>
