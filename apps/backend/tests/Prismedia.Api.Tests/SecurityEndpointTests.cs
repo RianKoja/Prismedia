@@ -456,9 +456,9 @@ public sealed partial class SecurityEndpointTests : IDisposable {
         Assert.Contains("Logo", item.ImageTags.Keys);
         Assert.Single(item.BackdropImageTags);
 
-        Assert.Equal(["Adventure", "Cozy"], item.Tags);
-        Assert.Equal(["Adventure", "Cozy"], item.Genres);
-        Assert.Equal(["Adventure", "Cozy"], item.GenreItems!.Select(genre => genre.Name).ToArray());
+        Assert.Null(item.Tags);
+        Assert.Null(item.Genres);
+        Assert.Null(item.GenreItems);
 
         var studio = Assert.Single(item.Studios!);
         Assert.Equal("Studio One", studio.Name);
