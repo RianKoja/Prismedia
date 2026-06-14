@@ -89,6 +89,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 ### Fixed
 - Job Control's Kill all action now stops running work instead of only marking rows cancelled, and cancelled scans can no longer keep spawning follow-up jobs after you stop them.
 - Identify Seek and manual search now stay within providers that support the item being matched, so a stale provider from another media kind can no longer drive the search while the picker shows a different provider.
+- Jellyfin-compatible clients now show collections directly at the root next to Movies and Series, and skip collection rows entirely when the profile has no visible collections.
 - Jellyfin-compatible video details now prioritize Prismedia descriptions for clients like Infuse and omit tag-derived taxonomy fields that could appear as pseudo-descriptions.
 - Manual identify searches now use their own foreground job lane, so a direct search from an item jumps ahead of older bulk/background identify work while still preserving provider rate-limit safety.
 - The Docs button now opens the live Prismedia documentation landing page instead of a missing quick-start URL.
