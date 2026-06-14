@@ -5,6 +5,7 @@ using Prismedia.Application.Settings;
 using Prismedia.Contracts.Settings;
 using Prismedia.Domain.Entities;
 using Prismedia.Infrastructure.Persistence;
+using Prismedia.Infrastructure.Persistence.Entities;
 using Prismedia.Infrastructure.Settings;
 
 namespace Prismedia.Infrastructure.Tests;
@@ -106,6 +107,72 @@ public sealed class SettingsServiceTests {
             CancellationToken.None);
 
         Assert.Empty(queue.Enqueued);
+    }
+
+    [Fact]
+    public async Task DeleteLibraryRootRemovesRootEntitiesBeforeDeletingRoot() {
+        await using var db = CreateContext();
+        var rootId = Guid.NewGuid();
+        var ownedEntityId = Guid.NewGuid();
+        var unrelatedEntityId = Guid.NewGuid();
+        var now = DateTimeOffset.UtcNow;
+        db.LibraryRoots.Add(new LibraryRootRow {
+            Id = rootId,
+            Path = "/media/removed",
+            Label = "Removed",
+            Enabled = true,
+            Recursive = true,
+            ScanVideos = true,
+            ScanImages = true,
+            ScanAudio = true,
+            ScanBooks = false,
+            IsNsfw = false,
+            AutoIdentify = true,
+            CreatedAt = now,
+            UpdatedAt = now,
+        });
+        db.Entities.AddRange(
+            new EntityRow {
+                Id = ownedEntityId,
+                KindCode = EntityKindRegistry.Video.Code,
+                Title = "stale video",
+                CreatedAt = now,
+                UpdatedAt = now,
+            },
+            new EntityRow {
+                Id = unrelatedEntityId,
+                KindCode = EntityKindRegistry.Video.Code,
+                Title = "other video",
+                CreatedAt = now,
+                UpdatedAt = now,
+            });
+        db.VideoDetails.Add(new VideoDetailRow { EntityId = ownedEntityId, LibraryRootId = rootId });
+        db.EntityFiles.AddRange(
+            new EntityFileRow {
+                Id = Guid.NewGuid(),
+                EntityId = ownedEntityId,
+                Role = EntityFileRole.Source,
+                Path = "/media/removed/stale.mp4",
+                CreatedAt = now,
+                UpdatedAt = now,
+            },
+            new EntityFileRow {
+                Id = Guid.NewGuid(),
+                EntityId = unrelatedEntityId,
+                Role = EntityFileRole.Source,
+                Path = "/media/kept/other.mp4",
+                CreatedAt = now,
+                UpdatedAt = now,
+            });
+        await db.SaveChangesAsync();
+        var service = new SettingsService(new EfSettingsPersistence(db));
+
+        var deleted = await service.DeleteLibraryRootAsync(rootId, CancellationToken.None);
+
+        Assert.True(deleted);
+        Assert.False(await db.Entities.AnyAsync(entity => entity.Id == ownedEntityId));
+        Assert.True(await db.Entities.AnyAsync(entity => entity.Id == unrelatedEntityId));
+        Assert.False(await db.LibraryRoots.AnyAsync(root => root.Id == rootId));
     }
 
     [Fact]

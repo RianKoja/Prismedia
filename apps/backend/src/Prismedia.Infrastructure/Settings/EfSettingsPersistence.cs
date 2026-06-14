@@ -1,6 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using Prismedia.Application.Settings;
 using Prismedia.Contracts.Settings;
+using Prismedia.Domain.Entities;
+using Prismedia.Infrastructure.Media.Persistence;
 using Prismedia.Infrastructure.Persistence;
 using Prismedia.Infrastructure.Persistence.Entities;
 
@@ -145,9 +147,122 @@ public sealed class EfSettingsPersistence : ISettingsPersistence {
             return false;
         }
 
+        await DeleteEntitiesForLibraryRootAsync(row, cancellationToken);
         _db.LibraryRoots.Remove(row);
         await _db.SaveChangesAsync(cancellationToken);
         return true;
+    }
+
+    private async Task DeleteEntitiesForLibraryRootAsync(LibraryRootRow root, CancellationToken cancellationToken) {
+        var entityIds = new HashSet<Guid>();
+        var containerIds = new HashSet<Guid>();
+
+        foreach (var entityId in await _db.VideoDetails.AsNoTracking()
+            .Where(detail => detail.LibraryRootId == root.Id)
+            .Select(detail => detail.EntityId)
+            .ToArrayAsync(cancellationToken)) {
+            entityIds.Add(entityId);
+        }
+
+        foreach (var entityId in await _db.GalleryDetails.AsNoTracking()
+            .Where(detail => detail.LibraryRootId == root.Id)
+            .Select(detail => detail.EntityId)
+            .ToArrayAsync(cancellationToken)) {
+            entityIds.Add(entityId);
+            containerIds.Add(entityId);
+        }
+
+        foreach (var entityId in await _db.BookDetails.AsNoTracking()
+            .Where(detail => detail.LibraryRootId == root.Id)
+            .Select(detail => detail.EntityId)
+            .ToArrayAsync(cancellationToken)) {
+            entityIds.Add(entityId);
+            containerIds.Add(entityId);
+        }
+
+        foreach (var entityId in await _db.MusicArtistDetails.AsNoTracking()
+            .Where(detail => detail.LibraryRootId == root.Id)
+            .Select(detail => detail.EntityId)
+            .ToArrayAsync(cancellationToken)) {
+            entityIds.Add(entityId);
+            containerIds.Add(entityId);
+        }
+
+        foreach (var entityId in await _db.AudioLibraryDetails.AsNoTracking()
+            .Where(detail => detail.LibraryRootId == root.Id)
+            .Select(detail => detail.EntityId)
+            .ToArrayAsync(cancellationToken)) {
+            entityIds.Add(entityId);
+            containerIds.Add(entityId);
+        }
+
+        if (!string.IsNullOrWhiteSpace(root.Path)) {
+            var sourceFiles = await _db.EntityFiles.AsNoTracking()
+                .Where(file => file.Role == EntityFileRole.Source)
+                .Select(file => new { file.EntityId, file.Path })
+                .ToArrayAsync(cancellationToken);
+            foreach (var file in sourceFiles.Where(file => LibraryScanPathRules.IsPathUnderRoot(file.Path, root.Path))) {
+                entityIds.Add(file.EntityId);
+            }
+        }
+
+        if (containerIds.Count > 0) {
+            var childrenByParentId = await LoadChildrenByParentIdAsync(cancellationToken);
+            var pending = new Queue<Guid>(containerIds);
+            while (pending.Count > 0) {
+                var parentId = pending.Dequeue();
+                if (!childrenByParentId.TryGetValue(parentId, out var childIds)) {
+                    continue;
+                }
+
+                foreach (var childId in childIds) {
+                    if (entityIds.Add(childId)) {
+                        pending.Enqueue(childId);
+                    }
+                }
+            }
+        }
+
+        if (entityIds.Count > 0) {
+            var entities = await _db.Entities
+                .Where(entity => entityIds.Contains(entity.Id))
+                .ToArrayAsync(cancellationToken);
+            _db.Entities.RemoveRange(entities);
+            await _db.SaveChangesAsync(cancellationToken);
+        }
+
+        await RemoveOrphanMediaContainersAsync(cancellationToken);
+    }
+
+    private async Task RemoveOrphanMediaContainersAsync(CancellationToken cancellationToken) {
+        var containerCodes = new[] {
+            EntityKindRegistry.Movie.Code,
+            EntityKindRegistry.VideoSeason.Code,
+            EntityKindRegistry.VideoSeries.Code,
+        };
+
+        while (true) {
+            var orphanContainers = await _db.Entities
+                .Where(entity => containerCodes.Contains(entity.KindCode)
+                    && !_db.Entities.Any(child => child.ParentEntityId == entity.Id))
+                .ToArrayAsync(cancellationToken);
+            if (orphanContainers.Length == 0) {
+                return;
+            }
+
+            _db.Entities.RemoveRange(orphanContainers);
+            await _db.SaveChangesAsync(cancellationToken);
+        }
+    }
+
+    private async Task<Dictionary<Guid, Guid[]>> LoadChildrenByParentIdAsync(CancellationToken cancellationToken) {
+        var childRows = await _db.Entities.AsNoTracking()
+            .Where(entity => entity.ParentEntityId != null)
+            .Select(entity => new { entity.Id, ParentEntityId = entity.ParentEntityId!.Value })
+            .ToArrayAsync(cancellationToken);
+        return childRows
+            .GroupBy(entity => entity.ParentEntityId)
+            .ToDictionary(group => group.Key, group => group.Select(entity => entity.Id).ToArray());
     }
 
     private static LibraryRoot ToContract(LibraryRootRow row) =>
