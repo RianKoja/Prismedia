@@ -398,8 +398,8 @@ public sealed partial class HlsAssetService {
     /// fMP4-HLS-capable client decodes AAC, so this is universally safe without inspecting the client's
     /// audio capabilities. Any other codec is transcoded to stereo AAC — the safe universal baseline —
     /// because we cannot assume the client can decode it. Honoring the full per-client copy decision for
-    /// AC3/EAC3/etc. is gated on the device-profile audio capability and is tracked separately (see
-    /// docs/hls-streaming-parity-plan.md, Track B / CopyAudio).
+    /// AC3/EAC3/etc. is gated on the device-profile audio capability and should only be expanded
+    /// when the playback negotiation path can prove the client accepts the source codec.
     /// </remarks>
     internal static IReadOnlyList<string> RemuxAudioArguments(VideoSourceFile source, int? audioStreamIndex) =>
         IsAacCodec(SelectedAudioStreamCodec(source, audioStreamIndex))

@@ -8,6 +8,10 @@ coverage/
 playwright-report/
 test-results/
 .tmp/
+*.log
+.claude/
+.vscode/
+videos/
 
 apps/web-svelte/.svelte-kit/
 apps/web-svelte/build/
@@ -18,9 +22,6 @@ documentation-site/build/
 **/obj/
 **/*.lscache
 apps/backend/data/
-
-# Claude Code harness runtime lock
-.claude/scheduled_tasks.lock
 
 # Local dev tools (host-specific binaries, e.g. jellyfin-ffmpeg for the VSCode launch configs)
 .tools/

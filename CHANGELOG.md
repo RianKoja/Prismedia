@@ -460,7 +460,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ### Docs
 - Documented the Request workflow: a new "Requests" page on the documentation site (connecting Radarr/Sonarr/Lidarr, searching with filters and NSFW behavior, already-tracked updates, TMDB/MusicBrainz detail enrichment, and request history with live statuses), a Request Services section in the Settings reference, and a Requests feature section with fresh screenshots in the README.
-- Added a full design & architecture audit and execution plans under `docs/audits/` (the design audit, a magic-string elimination & prevention plan, a shared UI building-block catalog, and a 2026-06-08 reconciliation addendum), and codified the resulting "Identifier Discipline" and "UI Composition Discipline" contracts in `AGENTS.md`.
 - Overhauled the documentation site and README for the current app, restructured into Getting Started, Using Prismedia, Library & Scanning, Jellyfin Clients, Deployment & Security, Developers, Plugins, and Advanced.
 - Added a Library & Scanning reference with per-entity-type folder trees and exact supported-extension lists for videos/movies/series, images and galleries, comics and eBooks (`.cbz`/`.zip`, `.epub`, `.pdf`), and audio.
 - Added Jellyfin Compatibility docs covering tested clients (Infuse, Manet, Finamp, Symfonium), creating sign-in profiles, the API key, per-profile NSFW "servers", and client setup.
@@ -477,4 +476,3 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - Refreshed the README and documentation site for the current Prismedia v1 app surface, including Files, Identify, collections, playback, settings, operations, and Prism Noir Luxe guidance.
 - Restored the GitHub Pages documentation-site workflow so the Docusaurus docs build and deploy from `main`.
 - Clarified the Docker quick start so it describes the .NET API serving the built Svelte UI and uses 1.0.0-based image tag examples.
-- Removed stale implementation planning artifacts from the docs tree.

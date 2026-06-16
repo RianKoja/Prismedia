@@ -154,9 +154,9 @@ has exactly one source of truth and is referenced from it.
 
 When in doubt, grep for the literal: if it already lives in a `[Code]` enum or
 `codes.ts`, reference that. If it does not but is a closed set, you are adding the
-canonical home, not another copy. Enforcement (Roslyn analyzer, architecture tests,
-`codes.ts` CI parity, and a frontend `no-magic-codes` lint) is being rolled out per
-`docs/audits/magic-string-elimination-plan.md`; do not bypass it.
+canonical home, not another copy. Enforcement belongs in Roslyn analyzers,
+architecture tests, `codes.ts` CI parity, and a frontend `no-magic-codes` lint; do
+not bypass it.
 
 ## UI Composition Discipline (Shared Building Blocks)
 
@@ -175,8 +175,7 @@ control or layout, find the block that owns the pattern and use it.
   scaffolds as they are extracted).
 - Do NOT hand-roll raw `<input>/<select>/<button>`, search boxes, chips/badges,
   dialogs, popovers, or detail-page scaffolding when a shared block exists or is
-  planned. The canonical catalog and migration map live in
-  `docs/audits/ui-building-block-catalog.md`.
+  planned.
 
 ## Quality Bar
 

@@ -24,9 +24,6 @@
     "docs:build": "pnpm --filter @prismedia/documentation-site build",
     "docs:serve": "node scripts/docs-site.mjs serve",
     "docs:check": "pnpm --filter @prismedia/documentation-site typecheck && pnpm --filter @prismedia/documentation-site build",
-    "dev:db:backup": "node scripts/dev/db-backup.mjs",
-    "dev:db:restore": "node scripts/dev/db-restore.mjs",
-    "dev:seed-scroll": "node scripts/dev/seed-scroll-fixtures.mjs",
     "dev:kill": "bash scripts/dev/kill-orphans.sh",
     "release:check": "node scripts/release/check-version.mjs"
   },
