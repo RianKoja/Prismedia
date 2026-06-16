@@ -460,6 +460,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - Removed Stash-compatible perceptual hashing (pHash). Prismedia no longer computes video or image pHashes, the "Perceptual hash (pHash)" generation setting is gone, and fingerprint identify/contribution now relies on MD5 and oshash. The MD5 and OpenSubtitles (oshash) fingerprints are unchanged, and Stash-Box identify and fingerprint submission continue to work with them.
 
 ### Docs
+- Added a developer Codebase Flow Map with rendered architecture, request, job, entity, generated-client, identify, playback, and release-readiness diagrams for onboarding and pre-release review.
 - Documented the Request workflow: a new "Requests" page on the documentation site (connecting Radarr/Sonarr/Lidarr, searching with filters and NSFW behavior, already-tracked updates, TMDB/MusicBrainz detail enrichment, and request history with live statuses), a Request Services section in the Settings reference, and a Requests feature section with fresh screenshots in the README.
 - Overhauled the documentation site and README for the current app, restructured into Getting Started, Using Prismedia, Library & Scanning, Jellyfin Clients, Deployment & Security, Developers, Plugins, and Advanced.
 - Added a Library & Scanning reference with per-entity-type folder trees and exact supported-extension lists for videos/movies/series, images and galleries, comics and eBooks (`.cbz`/`.zip`, `.epub`, `.pdf`), and audio.

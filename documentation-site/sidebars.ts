@@ -66,6 +66,7 @@ const sidebars: SidebarsConfig = {
       collapsed: true,
       items: [
         'developers/architecture',
+        'developers/codebase-flow',
         'developers/monorepo',
         'developers/database',
         'developers/api-and-jobs',

@@ -32,6 +32,10 @@ const config: Config = {
   future: {
     v4: true, // Improve compatibility with the upcoming Docusaurus v4
   },
+  markdown: {
+    mermaid: true,
+  },
+  themes: ['@docusaurus/theme-mermaid'],
 
   // Set the production url of your site here
   url: 'https://pauljoda.github.io',
@@ -161,6 +165,12 @@ const config: Config = {
       theme: prismThemes.github,
       darkTheme: prismNoirLuxe,
       additionalLanguages: ['bash', 'json', 'yaml', 'sql', 'python', 'css'],
+    },
+    mermaid: {
+      theme: {
+        light: 'neutral',
+        dark: 'dark',
+      },
     },
   } satisfies Preset.ThemeConfig,
 };
