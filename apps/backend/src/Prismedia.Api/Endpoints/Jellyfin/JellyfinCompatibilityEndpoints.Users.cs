@@ -14,13 +14,24 @@ public static partial class JellyfinCompatibilityEndpoints {
     private static JellyfinPublicSystemInfo ToPublicSystemInfo(HttpContext httpContext, AppSecurityState state) {
         var version = typeof(Program).Assembly.GetName().Version?.ToString(3) ?? "1.0.0";
         return new JellyfinPublicSystemInfo(
-            $"{httpContext.Request.Scheme}://{httpContext.Request.Host}",
+            PublicBaseUrl(httpContext.Request),
             "Prismedia",
             version,
             "Prismedia",
             state.ServerId.ToString("N"),
             StartupWizardCompleted: true);
     }
+
+    private static string PublicBaseUrl(HttpRequest request) {
+        var scheme = FirstForwardedValue(request.Headers["X-Forwarded-Proto"]) ?? request.Scheme;
+        var host = FirstForwardedValue(request.Headers["X-Forwarded-Host"]) ?? request.Host.Value;
+        return $"{scheme}://{host}";
+    }
+
+    private static string? FirstForwardedValue(IEnumerable<string?> values) =>
+        values
+            .SelectMany(value => (value ?? "").Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+            .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
 
     private static async Task<IReadOnlyList<JellyfinUserDto>> JellyfinUsersAsync(
         PrismediaSecurityService security,

@@ -264,6 +264,24 @@ public sealed partial class SecurityEndpointTests : IDisposable {
     }
 
     [Fact]
+    public async Task JellyfinPublicSystemInfoUsesForwardedOriginForCaptureProxy() {
+        using var factory = CreateFactory();
+        using var client = factory.CreateClient();
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/System/Info/Public");
+        request.Headers.Host = "127.0.0.1:8008";
+        request.Headers.Add("X-Forwarded-Host", "10.68.95.131:8096");
+        request.Headers.Add("X-Forwarded-Proto", "http");
+        request.Headers.Add("X-Forwarded-For", "10.68.95.22");
+
+        using var response = await client.SendAsync(request);
+        var publicInfo = await response.Content.ReadFromJsonAsync<JellyfinPublicSystemInfo>();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(publicInfo);
+        Assert.Equal("http://10.68.95.131:8096", publicInfo.LocalAddress);
+    }
+
+    [Fact]
     public async Task JellyfinDisabledQuickConnectRoutesReturnJsonInsteadOfFallingThrough() {
         using var factory = CreateFactory();
         using var client = factory.CreateClient();

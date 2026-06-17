@@ -49,7 +49,15 @@ const server = http.createServer(async (req, res) => {
     bodyPreview: previewBody(body, req.headers["content-type"])
   };
 
-  const upstreamHeaders = { ...req.headers, host: target.host };
+  const originalHost = req.headers.host ?? `${listenHost}:${listenPort}`;
+  const remoteAddress = req.socket.remoteAddress;
+  const upstreamHeaders = {
+    ...req.headers,
+    host: target.host,
+    "x-forwarded-host": originalHost,
+    "x-forwarded-proto": "http",
+    "x-forwarded-for": appendForwardedFor(req.headers["x-forwarded-for"], remoteAddress)
+  };
   delete upstreamHeaders.connection;
   delete upstreamHeaders["proxy-connection"];
   delete upstreamHeaders["content-length"];
@@ -204,4 +212,17 @@ function resolvePort(url) {
   }
 
   return url.protocol === "https:" ? 443 : 80;
+}
+
+function appendForwardedFor(existing, remoteAddress) {
+  const remote = remoteAddress?.replace(/^::ffff:/, "");
+  if (!remote) {
+    return existing;
+  }
+
+  if (Array.isArray(existing)) {
+    return [...existing, remote].join(", ");
+  }
+
+  return existing ? `${existing}, ${remote}` : remote;
 }
