@@ -78,6 +78,36 @@ public sealed class JellyfinCatalogExtrasEndpointTests {
     }
 
     [Fact]
+    public async Task SimilarItemsReturnsEmptyJellyfinPagedResult() {
+        using var factory = CreateFactory();
+        using var client = factory.CreateAuthenticatedClient();
+
+        using var response = await client.GetAsync($"/Items/{ItemId}/Similar?Limit=5");
+        var body = await response.Content.ReadFromJsonAsync<JellyfinQueryResult<JellyfinBaseItemDto>>();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("application/json", response.Content.Headers.ContentType?.MediaType);
+        Assert.NotNull(body);
+        Assert.Empty(body.Items);
+        Assert.Equal(0, body.TotalRecordCount);
+        Assert.Equal(0, body.StartIndex);
+    }
+
+    [Theory]
+    [InlineData("/Items/Images/Primary")]
+    [InlineData("/Items/Images/Thumb")]
+    [InlineData("/Items/Images/Backdrop")]
+    public async Task MalformedItemImageProbeReturnsJsonNotSpaHtml(string path) {
+        using var factory = CreateFactory();
+        using var client = factory.CreateAuthenticatedClient();
+
+        using var response = await client.GetAsync($"{path}?fillWidth=400&quality=80");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Equal("application/json", response.Content.Headers.ContentType?.MediaType);
+    }
+
+    [Fact]
     public async Task UserViewsIncludesMoviesLibrary() {
         using var factory = CreateFactory();
         using var client = factory.CreateAuthenticatedClient();

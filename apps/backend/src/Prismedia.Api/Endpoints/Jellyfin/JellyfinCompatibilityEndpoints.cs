@@ -274,6 +274,23 @@ public static partial class JellyfinCompatibilityEndpoints {
             .Produces<JellyfinBaseItemDto>()
             .Produces<ApiProblem>(StatusCodes.Status404NotFound);
 
+        routes.MapGet("/Items/{itemId:guid}/Similar", EmptyPagedItemListAsync)
+            .WithTags("Jellyfin Catalog")
+            .WithName("GetJellyfinSimilarItems")
+            .Produces<JellyfinQueryResult<JellyfinBaseItemDto>>();
+
+        routes.MapGet("/Shows/{itemId:guid}/Similar", EmptyPagedItemListAsync)
+            .WithTags("Jellyfin Catalog")
+            .WithName("GetJellyfinSimilarShows")
+            .ExcludeFromDescription()
+            .Produces<JellyfinQueryResult<JellyfinBaseItemDto>>();
+
+        routes.MapGet("/Movies/{itemId:guid}/Similar", EmptyPagedItemListAsync)
+            .WithTags("Jellyfin Catalog")
+            .WithName("GetJellyfinSimilarMovies")
+            .ExcludeFromDescription()
+            .Produces<JellyfinQueryResult<JellyfinBaseItemDto>>();
+
         routes.MapGet("/Items/Latest", GetLatestAsync)
             .WithTags("Jellyfin Catalog")
             .WithName("GetJellyfinLatestItems")
@@ -399,6 +416,18 @@ public static partial class JellyfinCompatibilityEndpoints {
 
         routes.MapMethods("/Items/{itemId:guid}/Images/{imageType}/{imageIndex:int}", [HttpMethods.Head], StreamImageAsync)
             .ExcludeFromDescription();
+
+        routes.MapGet("/Items/Images/{imageType}", MalformedItemImageProbe)
+            .WithTags("Jellyfin Images")
+            .WithName("GetMalformedJellyfinItemImageProbe")
+            .ExcludeFromDescription()
+            .Produces<ApiProblem>(StatusCodes.Status404NotFound);
+
+        routes.MapGet("/Items/Images/{imageType}/{imageIndex:int}", MalformedItemImageProbe)
+            .WithTags("Jellyfin Images")
+            .WithName("GetMalformedJellyfinItemImageProbeByIndex")
+            .ExcludeFromDescription()
+            .Produces<ApiProblem>(StatusCodes.Status404NotFound);
     }
 
     private static void MapJellyfinLibraryEndpoints(this IEndpointRouteBuilder routes) {
@@ -578,6 +607,11 @@ public static partial class JellyfinCompatibilityEndpoints {
         httpContext.Response.Headers.ETag = $"\"{file.ImageTag}\"";
         return Results.File(File.OpenRead(file.FilePath!), file.ContentType, enableRangeProcessing: false);
     }
+
+    private static IResult MalformedItemImageProbe(string imageType) =>
+        Results.NotFound(new ApiProblem(
+            ApiProblemCodes.JellyfinImageNotFound,
+            $"Image '{imageType}' was not found."));
 
     private static JellyfinItemQuery ItemQueryFrom(HttpRequest request) =>
         new(

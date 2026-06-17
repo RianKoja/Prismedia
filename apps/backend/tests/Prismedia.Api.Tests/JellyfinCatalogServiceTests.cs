@@ -10,9 +10,9 @@ using Prismedia.Domain.Entities;
 namespace Prismedia.Api.Tests;
 
 /// <summary>
-/// Unit coverage for the Jellyfin catalog projection behaviours that keep Infuse browsing fast and
-/// complete: lean playable-list responses (no per-row detail hydration), collection poster
-/// fallback, and actor filmography resolution.
+/// Unit coverage for Jellyfin catalog projection behaviours: large browse lists stay lean, playback
+/// shelves include full source data for strict clients, and related collection/filmography rows stay
+/// complete.
 /// </summary>
 public sealed class JellyfinCatalogServiceTests {
     private const string ServerId = "0123456789abcdef0123456789abcdef";
@@ -170,6 +170,51 @@ public sealed class JellyfinCatalogServiceTests {
         var item = Assert.Single(result.Items);
         Assert.Equal(unwatchedMovieId, item.Id);
         Assert.Contains(entities.ListCalls, call => call.Kind == "movie" && call.Played == false);
+    }
+
+    [Fact]
+    public async Task PlaybackShelvesHydratePlayableMediaSourcesFromDetail() {
+        var videoId = Guid.NewGuid();
+        var sourcePath = Path.Combine(Path.GetTempPath(), $"prismedia-jellyfin-source-{Guid.NewGuid():N}.mkv");
+        await File.WriteAllBytesAsync(sourcePath, [1, 2, 3, 4, 5, 6]);
+        try {
+            var entities = new FakeEntityReadService();
+            entities.ListByKind["video"] = [
+                Thumb(videoId, EntityKind.Video, "Neighbours") with {
+                    Progress = 0.42,
+                    Meta = [
+                        new EntityThumbnailMeta("duration", "42:00"),
+                        new EntityThumbnailMeta("video", "1080p"),
+                        new EntityThumbnailMeta("video", "H264"),
+                        new EntityThumbnailMeta("video", "mkv")
+                    ]
+                }
+            ];
+            entities.Cards[videoId] = new EntityCard {
+                Id = videoId,
+                Kind = EntityKind.Video,
+                Title = "Neighbours",
+                ParentEntityId = null,
+                SortOrder = null,
+                Capabilities = [
+                    new TechnicalCapability(TimeSpan.FromMinutes(42), 1920, 1080, 23.976, 4_000_000, 48_000, 2, "h264", "mkv", "matroska"),
+                    new FilesCapability([new Contracts.Entities.EntityFile("source", sourcePath, "video/x-matroska")]),
+                    new PlaybackCapability(0, 0, 60, DateTimeOffset.Parse("2026-06-17T18:42:00Z"), null)
+                ],
+                ChildrenByKind = [],
+                Relationships = []
+            };
+            var catalog = new JellyfinCatalogService(entities, new FakeCollections());
+
+            var resume = await catalog.GetResumeAsync(0, 10, ServerId, hideNsfw: false, CancellationToken.None);
+            var latest = await catalog.GetLatestAsync(null, 10, ServerId, hideNsfw: false, CancellationToken.None);
+
+            AssertHydratedPlayableShelfItem(Assert.Single(resume.Items), sourcePath);
+            AssertHydratedPlayableShelfItem(Assert.Single(latest.Items), sourcePath);
+            Assert.Contains(entities.DetailCalls, id => id == videoId);
+        } finally {
+            File.Delete(sourcePath);
+        }
     }
 
     [Fact]
@@ -863,6 +908,16 @@ public sealed class JellyfinCatalogServiceTests {
     private static JsonElement.ArrayEnumerator JellyfinItems(JsonDocument document) {
         // prism-vocab: external Jellyfin JSON result field asserted at the wire boundary.
         return document.RootElement.GetProperty("Items").EnumerateArray();
+    }
+
+    private static void AssertHydratedPlayableShelfItem(JellyfinBaseItemDto item, string sourcePath) {
+        Assert.Equal(sourcePath, item.Path);
+        Assert.Contains(item.MediaStreams, stream => stream.Type == JellyfinProtocol.MediaTypes.Audio);
+        var source = Assert.Single(item.MediaSources);
+        Assert.Equal(sourcePath, source.Path);
+        Assert.Equal(new FileInfo(sourcePath).Length, source.Size);
+        Assert.Contains(source.MediaStreams, stream => stream.Type == JellyfinProtocol.MediaTypes.Audio);
+        Assert.Equal(1, source.DefaultAudioStreamIndex);
     }
 
     private static void AssertEmptyStrictClientTaxonomyArrays(JsonElement item) {

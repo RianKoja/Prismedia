@@ -150,6 +150,9 @@ public static partial class JellyfinCompatibilityEndpoints {
     private static IResult EmptyItemListAsync(Guid itemId) =>
         Results.Ok(Array.Empty<JellyfinBaseItemDto>());
 
+    private static IResult EmptyPagedItemListAsync(Guid itemId) =>
+        Results.Ok(new JellyfinQueryResult<JellyfinBaseItemDto>([], 0, 0));
+
     private static IResult GetMediaSegmentsAsync(Guid itemId) =>
         Results.Ok(new JellyfinQueryResult<JellyfinMediaSegmentDto>([], 0, 0));
 

@@ -87,6 +87,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - Added a worker status badge to Job Control so stalled queues show when the background worker is offline.
 
 ### Fixed
+- Swiftfin and other strict Jellyfin clients no longer receive the Prismedia app shell while probing similar-item or malformed image URLs, and playback shelves now include full media source and audio stream details before playback starts.
 - Library scans now treat missing generated asset files as stale instead of complete, so thumbnails and grid images are regenerated after a local cache is cleared or partially rebuilt.
 - Swiftfin and other strict Jellyfin clients can now finish login after successful authentication because Prismedia includes Jellyfin's required user policy provider IDs and answers the login splashscreen probe like a Jellyfin server with no splashscreen configured.
 - Native Jellyfin clients have a broader compatibility path for connection and playback: Prismedia now answers more Jellyfin bootstrap/session probes, advertises the client-facing server address and Jellyfin-compatible product/protocol identifiers, includes the public system field strict clients decode, and accepts Jellyfin's `main.m3u8` and `stream.{container}` video URL aliases.

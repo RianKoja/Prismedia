@@ -1255,6 +1255,39 @@ export const getJellyfinItem = async (itemId: string, options?: RequestInit): Pr
 
 
 
+export type getJellyfinSimilarItemsResponse200 = {
+  data: JellyfinQueryResultOfJellyfinBaseItemDto
+  status: 200
+}
+
+export type getJellyfinSimilarItemsResponseSuccess = (getJellyfinSimilarItemsResponse200) & {
+  headers: Headers;
+};
+;
+
+export type getJellyfinSimilarItemsResponse = (getJellyfinSimilarItemsResponseSuccess)
+
+export const getGetJellyfinSimilarItemsUrl = (itemId: string,) => {
+
+
+
+
+  return `/Items/${itemId}/Similar`
+}
+
+export const getJellyfinSimilarItems = async (itemId: string, options?: RequestInit): Promise<getJellyfinSimilarItemsResponse> => {
+
+  return orvalFetch<getJellyfinSimilarItemsResponse>(getGetJellyfinSimilarItemsUrl(itemId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
 export type getJellyfinLatestItemsResponse200 = {
   data: JellyfinBaseItemDto[]
   status: 200

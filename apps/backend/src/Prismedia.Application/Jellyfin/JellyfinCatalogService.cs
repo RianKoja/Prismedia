@@ -373,7 +373,7 @@ public sealed partial class JellyfinCatalogService {
                 viewItems = await FillCollectionCoversAsync(viewItems, visibility, cancellationToken);
             }
 
-            var mapped = viewItems.Select(item => MapThumbnail(item, serverId)).ToArray();
+            var mapped = await MapPlaybackShelfItemsAsync(viewItems, serverId, visibility, cancellationToken);
             return new JellyfinQueryResult<JellyfinBaseItemDto>(mapped, viewResponse.TotalCount, 0);
         }
 
@@ -387,7 +387,7 @@ public sealed partial class JellyfinCatalogService {
             sort: "added",
             sortDir: "desc",
             nsfw: visibility.NsfwFilter);
-        var items = response.Items.Select(item => MapThumbnail(item, serverId)).ToArray();
+        var items = await MapPlaybackShelfItemsAsync(response.Items, serverId, visibility, cancellationToken);
         return new JellyfinQueryResult<JellyfinBaseItemDto>(items, response.TotalCount, 0);
     }
 
@@ -422,8 +422,8 @@ public sealed partial class JellyfinCatalogService {
             sortDir: "desc",
             status: "in-progress",
             nsfw: visibility.NsfwFilter);
-        var items = response.Items.Select(item => MapThumbnail(item, serverId)).ToArray();
-        var total = items.Length;
+        var items = await MapPlaybackShelfItemsAsync(response.Items, serverId, visibility, cancellationToken);
+        var total = items.Count;
         var start = Math.Clamp(startIndex, 0, total);
         return new JellyfinQueryResult<JellyfinBaseItemDto>(items.Skip(start).Take(limit).ToArray(), total, start);
     }
@@ -467,11 +467,11 @@ public sealed partial class JellyfinCatalogService {
             sortDir: "desc",
             status: "in-progress",
             nsfw: visibility.NsfwFilter);
-        var episodes = response.Items
-            .Select(item => MapThumbnail(item, serverId))
-            .Where(item => item.Type.Equals(JellyfinProtocol.ItemTypes.Episode, StringComparison.OrdinalIgnoreCase))
+        var episodeThumbnails = response.Items
+            .Where(item => JellyfinType(item.Kind, item.ParentEntityId).Equals(JellyfinProtocol.ItemTypes.Episode, StringComparison.OrdinalIgnoreCase))
             .ToArray();
-        var total = episodes.Length;
+        var episodes = await MapPlaybackShelfItemsAsync(episodeThumbnails, serverId, visibility, cancellationToken);
+        var total = episodes.Count;
         var start = Math.Clamp(startIndex, 0, total);
         return new JellyfinQueryResult<JellyfinBaseItemDto>(episodes.Skip(start).Take(limit).ToArray(), total, start);
     }
@@ -859,6 +859,31 @@ public sealed partial class JellyfinCatalogService {
     // would route them through the detail mapper, which lacks the added-date.
     private static bool ShouldHydrateCatalogItem(JellyfinBaseItemDto item) =>
         item.Type is JellyfinProtocol.ItemTypes.Series or JellyfinProtocol.ItemTypes.Season;
+
+    private async Task<IReadOnlyList<JellyfinBaseItemDto>> MapPlaybackShelfItemsAsync(
+        IReadOnlyList<EntityThumbnail> thumbnails,
+        string serverId,
+        JellyfinContentVisibility visibility,
+        CancellationToken cancellationToken) {
+        var items = new List<JellyfinBaseItemDto>(thumbnails.Count);
+        foreach (var thumbnail in thumbnails) {
+            if (!IsPlayable(thumbnail.Kind)) {
+                items.Add(MapThumbnail(thumbnail, serverId));
+                continue;
+            }
+
+            var detail = await GetDetailedCardAsync(thumbnail.Id, visibility, cancellationToken);
+            if (detail is null) {
+                items.Add(MapThumbnail(thumbnail, serverId));
+                continue;
+            }
+
+            var context = await ResolveStandaloneContextAsync(detail, visibility, cancellationToken);
+            items.Add(await MapDetailAsync(detail, serverId, context, visibility, cancellationToken));
+        }
+
+        return items;
+    }
 
     private async Task<IEntityCard?> GetDetailedCardAsync(
         Guid id,
