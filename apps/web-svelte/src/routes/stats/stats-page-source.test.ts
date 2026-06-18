@@ -9,4 +9,10 @@ describe("stats page source", () => {
     expect(source).toContain("PLAYBACK_EVENT_KIND");
     expect(source).toContain("ENTITY_KIND.");
   });
+
+  it("renders playback thumbnails through the shared EntityThumbnail component", () => {
+    expect(source).toContain("EntityThumbnail");
+    expect(source).toContain("entityReferenceToThumbnailCard");
+    expect(source).not.toContain("{#snippet entityArtwork");
+  });
 });
