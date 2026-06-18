@@ -50,6 +50,7 @@
   import SettingsControl from "$lib/components/settings/SettingsControl.svelte";
   import RequestServicesSection from "$lib/components/settings/RequestServicesSection.svelte";
   import AutoIdentifySection from "$lib/components/settings/AutoIdentifySection.svelte";
+  import DatabaseBackupsSection from "$lib/components/settings/DatabaseBackupsSection.svelte";
   import DiagnosticsSection from "$lib/components/settings/DiagnosticsSection.svelte";
   import TranscodeCacheSection from "$lib/components/settings/TranscodeCacheSection.svelte";
   import WatchedLibrariesSection from "$lib/components/settings/WatchedLibrariesSection.svelte";
@@ -883,6 +884,9 @@
 
   <!-- ── Transcode Cache ── -->
   <TranscodeCacheSection {catalog} onCommit={handleSettingCommit} />
+
+  <!-- ── Database Backups ── -->
+  <DatabaseBackupsSection />
 
   <!-- ── Diagnostics ── -->
   <DiagnosticsSection />

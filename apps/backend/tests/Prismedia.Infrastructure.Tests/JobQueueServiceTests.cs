@@ -25,7 +25,7 @@ public sealed class JobQueueServiceTests {
     }
 
     [Fact]
-    public async Task ScanJobsArePerKindSingletonsThatDropDuplicateEnqueues() {
+    public async Task SingletonJobsDropDuplicateEnqueues() {
         await using var db = CreateContext();
         var service = new JobQueueService(db);
 
@@ -37,7 +37,10 @@ public sealed class JobQueueServiceTests {
 
         Assert.Equal(first.Id, duplicate.Id);
         Assert.NotEqual(first.Id, gallery.Id);
-        Assert.Equal(2, await db.JobRuns.CountAsync());
+        var backup = await service.EnqueueAsync(JobType.DatabaseBackup, CancellationToken.None);
+        var duplicateBackup = await service.EnqueueAsync(JobType.DatabaseBackup, CancellationToken.None);
+        Assert.Equal(backup.Id, duplicateBackup.Id);
+        Assert.Equal(3, await db.JobRuns.CountAsync());
 
         // Once the first scan reaches a terminal state, a fresh scan of that kind enqueues again.
         var firstRow = await db.JobRuns.FirstAsync(job => job.Id == first.Id);
@@ -46,7 +49,7 @@ public sealed class JobQueueServiceTests {
 
         var rescan = await service.EnqueueAsync(JobType.ScanLibrary, CancellationToken.None);
         Assert.NotEqual(first.Id, rescan.Id);
-        Assert.Equal(3, await db.JobRuns.CountAsync());
+        Assert.Equal(4, await db.JobRuns.CountAsync());
     }
 
     [Fact]

@@ -111,6 +111,7 @@ export const JOB_TYPE = {
   importMetadata: "import-metadata",
   refreshCollection: "refresh-collection",
   libraryMaintenance: "library-maintenance",
+  databaseBackup: "database-backup",
   refreshEntity: "refresh-entity",
   identifySearch: "identify-search",
   bulkIdentify: "bulk-identify",
@@ -129,6 +130,14 @@ export const JOB_RUN_STATUS = {
 } as const;
 
 export type JobRunStatusCode = (typeof JOB_RUN_STATUS)[keyof typeof JOB_RUN_STATUS];
+
+export const DATABASE_BACKUP_STATUS = {
+  running: "running",
+  completed: "completed",
+  failed: "failed",
+} as const;
+
+export type DatabaseBackupStatusCode = (typeof DATABASE_BACKUP_STATUS)[keyof typeof DATABASE_BACKUP_STATUS];
 
 export const PLAYBACK_MODE = {
   direct: "direct",

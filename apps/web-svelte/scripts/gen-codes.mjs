@@ -25,6 +25,7 @@ const ENUM_EXPORTS = [
   ["CreditRole", "CREDIT_ROLE", "CreditRoleCode"],
   ["JobType", "JOB_TYPE", "JobTypeCode"],
   ["JobRunStatus", "JOB_RUN_STATUS", "JobRunStatusCode"],
+  ["DatabaseBackupStatus", "DATABASE_BACKUP_STATUS", "DatabaseBackupStatusCode"],
   ["PlaybackMode", "PLAYBACK_MODE", "PlaybackModeCode"],
   ["MusicPlayerRepeatMode", "MUSIC_PLAYER_REPEAT_MODE", "MusicPlayerRepeatModeCode"],
   ["MusicPlayerMiniSide", "MUSIC_PLAYER_MINI_SIDE", "MusicPlayerMiniSideCode"],

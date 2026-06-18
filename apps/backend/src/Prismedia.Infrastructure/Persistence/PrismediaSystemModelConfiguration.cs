@@ -311,9 +311,13 @@ internal static partial class PrismediaModelConfiguration {
                 .HasMaxLength(32)
                 .HasConversion(value => value.ToCode(), value => value.DecodeAs<DatabaseBackupStatus>())
                 .IsRequired();
+            entity.Property(row => row.IsManual).HasColumnName("is_manual");
+            entity.Property(row => row.SizeBytes).HasColumnName("size_bytes");
             entity.Property(row => row.Error).HasColumnName("error");
             entity.Property(row => row.CreatedAt).HasColumnName("created_at");
             entity.Property(row => row.CompletedAt).HasColumnName("completed_at");
+            entity.Property(row => row.ExpiresAt).HasColumnName("expires_at");
+            entity.HasIndex(row => new { row.IsManual, row.ExpiresAt });
         });
 
         modelBuilder.Entity<JobRunRow>(entity => {

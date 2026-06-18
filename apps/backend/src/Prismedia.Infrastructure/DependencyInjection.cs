@@ -13,6 +13,7 @@ using Prismedia.Application.Settings;
 using Prismedia.Application.Health;
 using Prismedia.Application.Jellyfin;
 using Prismedia.Application.Audio;
+using Prismedia.Application.Backups;
 using Prismedia.Application.Plugins;
 using Prismedia.Application.Requests;
 using Prismedia.Application.Security;
@@ -78,7 +79,7 @@ public static class DependencyInjection {
         RegisterFilesAndOrganization(services);
         RegisterPlayback(services, configuration, cacheDir, mediaToolOptions);
         RegisterRequests(services);
-        RegisterJobsSettingsAndState(services, dataDir);
+        RegisterJobsSettingsAndState(services, configuration, dataDir, connectionString);
 
         return services;
     }
@@ -256,8 +257,35 @@ public static class DependencyInjection {
                 provider.GetRequiredService<MediaToolOptions>()));
     }
 
-    private static void RegisterJobsSettingsAndState(IServiceCollection services, string dataDir) {
+    private static void RegisterJobsSettingsAndState(
+        IServiceCollection services,
+        IConfiguration configuration,
+        string dataDir,
+        string connectionString) {
+        var backupDir = NormalizePath(configuration["PRISMEDIA_BACKUP_DIR"] ??
+            configuration["Prismedia:Backups:Directory"] ??
+            Path.Combine(dataDir, "backups", "database"), dataDir);
+        var retentionDays = int.TryParse(
+                configuration["PRISMEDIA_BACKUP_RETENTION_DAYS"] ??
+                configuration["Prismedia:Backups:RetentionDays"],
+                out var configuredRetentionDays) && configuredRetentionDays > 0
+            ? configuredRetentionDays
+            : 7;
+
+        services.AddSingleton(new DatabaseBackupOptions(
+            connectionString,
+            backupDir,
+            Path.Combine(backupDir, "restore-request.json"),
+            configuration["PRISMEDIA_PG_DUMP_PATH"] ??
+            configuration["Prismedia:Backups:PgDumpPath"] ??
+            "pg_dump",
+            configuration["PRISMEDIA_PG_RESTORE_PATH"] ??
+            configuration["Prismedia:Backups:PgRestorePath"] ??
+            "pg_restore",
+            retentionDays,
+            TimeSpan.FromDays(1)));
         services.AddSingleton<IWorkerHeartbeatStore>(new FileWorkerHeartbeatStore(dataDir));
+        services.AddScoped<IDatabaseBackupService, DatabaseBackupService>();
         services.AddScoped<IJobQueueService, JobQueueService>();
         services.AddScoped<ISettingsPersistence, EfSettingsPersistence>();
         services.AddScoped<ISecurityPersistence, EfSecurityPersistence>();

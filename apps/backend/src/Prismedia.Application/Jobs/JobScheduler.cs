@@ -1,7 +1,9 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Prismedia.Application.Backups;
 using Prismedia.Application.Settings;
+using Prismedia.Domain.Entities;
 
 namespace Prismedia.Application.Jobs;
 
@@ -21,6 +23,7 @@ public sealed class JobScheduler(
         while (!stoppingToken.IsCancellationRequested) {
             try {
                 await ScheduleRecurringScansAsync(stoppingToken);
+                await ScheduleRecurringBackupsAsync(stoppingToken);
             } catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) {
                 break;
             } catch (Exception ex) {
@@ -100,6 +103,22 @@ public sealed class JobScheduler(
         if (queued > 0) {
             logger.LogInformation("Scheduled {Count} aggregate scan job(s) across {Roots} due root(s).", queued, dueRootIds.Count);
         }
+    }
+
+    internal async Task ScheduleRecurringBackupsAsync(CancellationToken cancellationToken) {
+        await using var scope = scopeFactory.CreateAsyncScope();
+        var backups = scope.ServiceProvider.GetRequiredService<IDatabaseBackupService>();
+        if (!await backups.IsAutomaticBackupDueAsync(cancellationToken)) {
+            return;
+        }
+
+        var queue = scope.ServiceProvider.GetRequiredService<IJobQueueService>();
+        await queue.EnqueueAsync(
+            new EnqueueJobRequest(
+                JobType.DatabaseBackup,
+                TargetLabel: "Daily database backup",
+                Priority: -100),
+            cancellationToken);
     }
 
     private static DateTimeOffset GetWindowStart(DateTimeOffset now, TimeSpan interval) {

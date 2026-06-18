@@ -43,21 +43,21 @@ public sealed class JobQueueService : IJobQueueService {
     }
 
     /// <summary>
-    /// Library scan job types. Each scan covers every enabled root of its kind, so only one of each
+    /// Queue-wide singleton job types. Each scan covers every enabled root of its kind, so only one of each
     /// may be queued or running at a time — see the singleton guard in <see cref="EnqueueAsync(EnqueueJobRequest, CancellationToken)"/>.
     /// </summary>
-    private static readonly JobType[] ScanJobTypes =
-        [JobType.ScanLibrary, JobType.ScanGallery, JobType.ScanBook, JobType.ScanAudio];
+    private static readonly JobType[] SingletonJobTypes =
+        [JobType.ScanLibrary, JobType.ScanGallery, JobType.ScanBook, JobType.ScanAudio, JobType.DatabaseBackup];
 
     public async Task<JobRunSnapshot> EnqueueAsync(JobType type, CancellationToken cancellationToken) {
         return await EnqueueAsync(new EnqueueJobRequest(type), cancellationToken);
     }
 
     public async Task<JobRunSnapshot> EnqueueAsync(EnqueueJobRequest request, CancellationToken cancellationToken) {
-        // Scans are per-kind singletons: a scan job already walks every enabled root of its kind
-        // (skipping unchanged ones), so a second scan of the same kind would only duplicate work. When
-        // one is already queued or running, return the in-flight job instead of stacking another.
-        if (ScanJobTypes.Contains(request.Type)) {
+        // Some jobs are queue-wide singletons: scans already walk every enabled root of their kind,
+        // and database backups should never overlap. When one is already queued or running, return
+        // the in-flight job instead of stacking another.
+        if (SingletonJobTypes.Contains(request.Type)) {
             var existing = await _db.JobRuns.AsNoTracking()
                 .Where(job => job.Type == request.Type &&
                               (job.Status == JobRunStatus.Queued || job.Status == JobRunStatus.Running))

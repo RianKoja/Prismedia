@@ -29,6 +29,10 @@ import type {
   CollectionRulePreviewResponse,
   CollectionWriteRequest,
   CreateFileFolderParams,
+  DatabaseBackupDto,
+  DatabaseBackupListResponse,
+  DatabaseRestoreRequest,
+  DatabaseRestoreScheduledResponse,
   DeleteFileParams,
   EntityCard,
   EntityCreateRequest,
@@ -7323,6 +7327,134 @@ export const clearTranscodeCache = async ( options?: RequestInit): Promise<clear
     method: 'POST'
 
 
+  }
+);}
+
+
+
+export type listDatabaseBackupsResponse200 = {
+  data: DatabaseBackupListResponse
+  status: 200
+}
+
+export type listDatabaseBackupsResponseSuccess = (listDatabaseBackupsResponse200) & {
+  headers: Headers;
+};
+;
+
+export type listDatabaseBackupsResponse = (listDatabaseBackupsResponseSuccess)
+
+export const getListDatabaseBackupsUrl = () => {
+
+
+
+
+  return `/api/settings/database-backups`
+}
+
+/**
+ * @summary Lists database backups and automatic backup retention metadata.
+ */
+export const listDatabaseBackups = async ( options?: RequestInit): Promise<listDatabaseBackupsResponse> => {
+
+  return orvalFetch<listDatabaseBackupsResponse>(getListDatabaseBackupsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export type createDatabaseBackupNowResponse200 = {
+  data: DatabaseBackupDto
+  status: 200
+}
+
+export type createDatabaseBackupNowResponse400 = {
+  data: ProblemDetails
+  status: 400
+}
+
+export type createDatabaseBackupNowResponseSuccess = (createDatabaseBackupNowResponse200) & {
+  headers: Headers;
+};
+export type createDatabaseBackupNowResponseError = (createDatabaseBackupNowResponse400) & {
+  headers: Headers;
+};
+
+export type createDatabaseBackupNowResponse = (createDatabaseBackupNowResponseSuccess | createDatabaseBackupNowResponseError)
+
+export const getCreateDatabaseBackupNowUrl = () => {
+
+
+
+
+  return `/api/settings/database-backups/now`
+}
+
+/**
+ * @summary Creates a permanent manual database backup.
+ */
+export const createDatabaseBackupNow = async ( options?: RequestInit): Promise<createDatabaseBackupNowResponse> => {
+
+  return orvalFetch<createDatabaseBackupNowResponse>(getCreateDatabaseBackupNowUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+export type restoreDatabaseBackupResponse200 = {
+  data: DatabaseRestoreScheduledResponse
+  status: 200
+}
+
+export type restoreDatabaseBackupResponse400 = {
+  data: ProblemDetails
+  status: 400
+}
+
+export type restoreDatabaseBackupResponse404 = {
+  data: ProblemDetails
+  status: 404
+}
+
+export type restoreDatabaseBackupResponseSuccess = (restoreDatabaseBackupResponse200) & {
+  headers: Headers;
+};
+export type restoreDatabaseBackupResponseError = (restoreDatabaseBackupResponse400 | restoreDatabaseBackupResponse404) & {
+  headers: Headers;
+};
+
+export type restoreDatabaseBackupResponse = (restoreDatabaseBackupResponseSuccess | restoreDatabaseBackupResponseError)
+
+export const getRestoreDatabaseBackupUrl = () => {
+
+
+
+
+  return `/api/settings/database-backups/restore`
+}
+
+/**
+ * @summary Schedules a destructive database restore from a selected backup.
+ */
+export const restoreDatabaseBackup = async (databaseRestoreRequest: DatabaseRestoreRequest, options?: RequestInit): Promise<restoreDatabaseBackupResponse> => {
+
+  return orvalFetch<restoreDatabaseBackupResponse>(getRestoreDatabaseBackupUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      databaseRestoreRequest,)
   }
 );}
 

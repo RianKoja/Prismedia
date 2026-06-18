@@ -19,6 +19,15 @@ public static class ApiProblemCodes {
     /// <summary>Problem code <c>collection_not_found</c>.</summary>
     public const string CollectionNotFound = "collection_not_found";
 
+    /// <summary>Problem code <c>database_backup_invalid</c>.</summary>
+    public const string DatabaseBackupInvalid = "database_backup_invalid";
+
+    /// <summary>Problem code <c>database_backup_not_found</c>.</summary>
+    public const string DatabaseBackupNotFound = "database_backup_not_found";
+
+    /// <summary>Problem code <c>database_restore_invalid</c>.</summary>
+    public const string DatabaseRestoreInvalid = "database_restore_invalid";
+
     /// <summary>Problem code <c>empty_bulk_identify</c>.</summary>
     public const string EmptyBulkIdentify = "empty_bulk_identify";
 

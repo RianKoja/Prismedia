@@ -9,6 +9,7 @@ using Prismedia.Contracts.Entities;
 using Prismedia.Contracts.Media;
 using Prismedia.Contracts.System;
 using Prismedia.Infrastructure;
+using Prismedia.Infrastructure.Database;
 using Prismedia.Infrastructure.Persistence;
 using Prismedia.Infrastructure.Serialization;
 using Prismedia.Infrastructure.Videos;
@@ -126,6 +127,7 @@ if (File.Exists(staticIndexPath)) {
         "The requested Prismedia route was not found.")));
 }
 
+await DatabaseRestoreRunner.ApplyPendingRestoreAsync(app.Services, app.Configuration);
 await PrismediaMigrationRunner.ApplyPrismediaMigrationsAsync(app.Services, app.Configuration);
 
 app.Run();

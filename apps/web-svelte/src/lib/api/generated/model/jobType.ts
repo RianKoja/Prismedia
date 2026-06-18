@@ -29,6 +29,7 @@ export const JobType = {
   'import-metadata': 'import-metadata',
   'refresh-collection': 'refresh-collection',
   'library-maintenance': 'library-maintenance',
+  'database-backup': 'database-backup',
   'refresh-entity': 'refresh-entity',
   'identify-search': 'identify-search',
   'bulk-identify': 'bulk-identify',

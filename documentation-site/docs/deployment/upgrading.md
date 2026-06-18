@@ -84,7 +84,14 @@ Without a `/data` snapshot, rollback after a forward-only migration isn't possib
 
 ## Backups
 
-Prismedia ships no built-in backup tool. What works:
+Prismedia includes database backups in **Settings → Database Backups**:
+
+- One automatic Postgres backup is created per day.
+- Automatic backups are kept for 7 days.
+- **Backup Now** creates a permanent manual backup that is not removed by the 7-day retention window.
+- Restoring a backup is destructive: Prismedia stages the selected backup, restarts, and replaces the current database on startup.
+
+These backups protect Prismedia's database state. For broader rollback safety, especially before upgrades, still keep a host-level `/data` snapshot:
 
 - **Volume snapshot** (ZFS, btrfs, LVM) of `/data` — cheap, instant, the safest option for downgrade. Includes the database, generated assets, plugin state, and the `PRISMEDIA_SECRET` file.
 - **`pg_dump` of the embedded Postgres** — `docker exec` into the container; useful for a portable SQL dump.

@@ -90,6 +90,10 @@ public enum JobType {
     [Code("library-maintenance")]
     LibraryMaintenance,
 
+    /// <summary>Creates a retained automatic database backup.</summary>
+    [Code("database-backup")]
+    DatabaseBackup,
+
     // ── Entity refresh ─────────────────────────────────────────
     /// <summary>Re-runs the processing pipeline for a single entity and its children.</summary>
     [Code("refresh-entity")]

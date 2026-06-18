@@ -20,6 +20,7 @@ import type {
   SettingsGroup as GeneratedSettingsGroup,
   SettingsValuesResponse as GeneratedSettingsValuesResponse,
 } from "$lib/api/generated/model";
+import { DATABASE_BACKUP_STATUS, type DatabaseBackupStatusCode } from "$lib/api/generated/codes";
 import { requestInit, unwrapGenerated, type RequestOptions } from "$lib/api/generated-response";
 import { fetchApi } from "$lib/api/orval-fetch";
 
@@ -180,10 +181,62 @@ export interface TranscodeCacheStatus {
   maxBytes: number;
 }
 
+export interface DatabaseBackup {
+  id: string;
+  fileName: string;
+  backupPath: string;
+  status: DatabaseBackupStatusCode;
+  isManual: boolean;
+  sizeBytes: number | null;
+  createdAt: string;
+  completedAt: string | null;
+  expiresAt: string | null;
+  error: string | null;
+}
+
+export interface DatabaseBackupList {
+  backups: DatabaseBackup[];
+  nextAutomaticBackupAt: string | null;
+  backupDirectory: string;
+  automaticRetentionDays: number;
+  restoreConfirmationText: string;
+}
+
+export interface DatabaseRestoreScheduled {
+  backupId: string;
+  requestedAt: string;
+  restartScheduled: boolean;
+}
+
 function normalizeTranscodeCacheStatus(raw: { usedBytes?: number; maxBytes?: number }): TranscodeCacheStatus {
   return {
     usedBytes: Number(raw?.usedBytes ?? 0),
     maxBytes: Number(raw?.maxBytes ?? 0),
+  };
+}
+
+function normalizeDatabaseBackup(raw: Partial<DatabaseBackup>): DatabaseBackup {
+  return {
+    id: String(raw.id ?? ""),
+    fileName: String(raw.fileName ?? ""),
+    backupPath: String(raw.backupPath ?? ""),
+    status: (typeof raw.status === "string" ? raw.status : DATABASE_BACKUP_STATUS.running) as DatabaseBackupStatusCode,
+    isManual: Boolean(raw.isManual),
+    sizeBytes: raw.sizeBytes == null ? null : Number(raw.sizeBytes),
+    createdAt: String(raw.createdAt ?? ""),
+    completedAt: raw.completedAt == null ? null : String(raw.completedAt),
+    expiresAt: raw.expiresAt == null ? null : String(raw.expiresAt),
+    error: raw.error == null ? null : String(raw.error),
+  };
+}
+
+function normalizeDatabaseBackupList(raw: Partial<DatabaseBackupList>): DatabaseBackupList {
+  return {
+    backups: (raw.backups ?? []).map(normalizeDatabaseBackup),
+    nextAutomaticBackupAt: raw.nextAutomaticBackupAt == null ? null : String(raw.nextAutomaticBackupAt),
+    backupDirectory: String(raw.backupDirectory ?? ""),
+    automaticRetentionDays: Number(raw.automaticRetentionDays ?? 7),
+    restoreConfirmationText: String(raw.restoreConfirmationText ?? ""),
   };
 }
 
@@ -197,6 +250,35 @@ export async function clearTranscodeCache(options?: RequestOptions): Promise<Tra
   return normalizeTranscodeCacheStatus(
     await fetchApi("/settings/transcode-cache/clear", { method: "POST", signal: options?.signal }),
   );
+}
+
+export async function fetchDatabaseBackups(options?: RequestOptions): Promise<DatabaseBackupList> {
+  return normalizeDatabaseBackupList(
+    await fetchApi("/settings/database-backups", { signal: options?.signal }),
+  );
+}
+
+export async function createDatabaseBackup(options?: RequestOptions): Promise<DatabaseBackup> {
+  return normalizeDatabaseBackup(
+    await fetchApi("/settings/database-backups/now", { method: "POST", signal: options?.signal }),
+  );
+}
+
+export async function restoreDatabaseBackup(
+  backupId: string,
+  confirmationText: string,
+  options?: RequestOptions,
+): Promise<DatabaseRestoreScheduled> {
+  const raw = await fetchApi<Partial<DatabaseRestoreScheduled>>("/settings/database-backups/restore", {
+    method: "POST",
+    body: JSON.stringify({ backupId, confirmationText }),
+    signal: options?.signal,
+  });
+  return {
+    backupId: String(raw.backupId ?? backupId),
+    requestedAt: String(raw.requestedAt ?? new Date().toISOString()),
+    restartScheduled: Boolean(raw.restartScheduled),
+  };
 }
 
 export async function fetchLibraryConfig(options?: RequestOptions): Promise<LibraryConfigResponse> {

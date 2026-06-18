@@ -107,6 +107,7 @@ public static class DependencyInjection {
         services.AddTransient<IJobHandler, RefreshCollectionJobHandler>();
         services.AddTransient<IJobHandler, RefreshEntityJobHandler>();
         services.AddTransient<IJobHandler, LibraryMaintenanceJobHandler>();
+        services.AddTransient<IJobHandler, DatabaseBackupJobHandler>();
 
         // Identify
         services.AddSingleton<AutoIdentifyConcurrencyGate>();

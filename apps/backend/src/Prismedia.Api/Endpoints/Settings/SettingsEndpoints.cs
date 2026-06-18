@@ -1,3 +1,5 @@
+using Microsoft.Extensions.Hosting;
+using Prismedia.Application.Backups;
 using Prismedia.Application.Settings;
 using Prismedia.Application.Videos;
 using Prismedia.Contracts.Settings;
@@ -36,6 +38,53 @@ public static class SettingsEndpoints {
             .WithName("ClearTranscodeCache")
             .WithSummary("Clears the on-disk transcode cache.")
             .Produces<TranscodeCacheStatusResponse>();
+
+        group.MapGet("/database-backups", (
+            IDatabaseBackupService backups,
+            CancellationToken cancellationToken) =>
+            backups.ListAsync(cancellationToken))
+            .WithName("ListDatabaseBackups")
+            .WithSummary("Lists database backups and automatic backup retention metadata.")
+            .Produces<DatabaseBackupListResponse>();
+
+        group.MapPost("/database-backups/now", async (
+            IDatabaseBackupService backups,
+            CancellationToken cancellationToken) => {
+            try {
+                return Results.Ok(await backups.CreateManualBackupAsync(cancellationToken));
+            } catch (DatabaseBackupException ex) {
+                return BackupFailure(ex);
+            }
+        })
+            .WithName("CreateDatabaseBackupNow")
+            .WithSummary("Creates a permanent manual database backup.")
+            .Produces<DatabaseBackupDto>()
+            .ProducesProblem(StatusCodes.Status400BadRequest);
+
+        group.MapPost("/database-backups/restore", async (
+            DatabaseRestoreRequest request,
+            IDatabaseBackupService backups,
+            IHostApplicationLifetime lifetime,
+            CancellationToken cancellationToken) => {
+            try {
+                var response = await backups.ScheduleRestoreAsync(
+                    request.BackupId,
+                    request.ConfirmationText,
+                    cancellationToken);
+                _ = Task.Run(async () => {
+                    await Task.Delay(TimeSpan.FromSeconds(1.5), CancellationToken.None);
+                    lifetime.StopApplication();
+                }, CancellationToken.None);
+                return Results.Ok(response);
+            } catch (DatabaseBackupException ex) {
+                return BackupFailure(ex);
+            }
+        })
+            .WithName("RestoreDatabaseBackup")
+            .WithSummary("Schedules a destructive database restore from a selected backup.")
+            .Produces<DatabaseRestoreScheduledResponse>()
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound);
 
         group.MapGet("/", (
             SettingsService settings,
@@ -134,4 +183,9 @@ public static class SettingsEndpoints {
 
     private static IResult InvalidSetting(SettingValidationException ex) =>
         Results.BadRequest(new ApiProblem(ApiProblemCodes.SettingInvalid, ex.Message));
+
+    private static IResult BackupFailure(DatabaseBackupException ex) =>
+        ex.ProblemCode == ApiProblemCodes.DatabaseBackupNotFound
+            ? Results.NotFound(new ApiProblem(ex.ProblemCode, ex.Message))
+            : Results.BadRequest(new ApiProblem(ex.ProblemCode, ex.Message));
 }
