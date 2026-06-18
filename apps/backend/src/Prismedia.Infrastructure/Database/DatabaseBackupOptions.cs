@@ -9,5 +9,7 @@ public sealed record DatabaseBackupOptions(
     string RestoreRequestPath,
     string PgDumpPath,
     string PgRestorePath,
+    string? DockerComposeFilePath,
+    string DockerComposePostgresService,
     int AutomaticRetentionDays,
     TimeSpan AutomaticInterval);

@@ -1,4 +1,5 @@
 import { env } from "$env/dynamic/public";
+import { problemMessage } from "$lib/api/generated-response";
 
 export const API_BASE = env.PUBLIC_API_URL || "/api";
 
@@ -49,8 +50,7 @@ export async function fetchApi<T>(path: string, init?: RequestInit): Promise<T> 
   });
 
   if (!response.ok) {
-    const message = await response.text();
-    throw new Error(message || `API ${response.status}: ${response.statusText}`);
+    throw new Error(await responseErrorMessage(response));
   }
 
   const text = await response.text();
@@ -96,8 +96,7 @@ export async function orvalFetch<TData>(
   });
 
   if (!response.ok) {
-    const message = await response.text();
-    throw new Error(message || `API ${response.status}: ${response.statusText}`);
+    throw new Error(await responseErrorMessage(response));
   }
 
   const text = await response.text();
@@ -114,4 +113,17 @@ export async function orvalFetch<TData>(
     status: response.status,
     headers: response.headers,
   } as TData;
+}
+
+async function responseErrorMessage(response: Response): Promise<string> {
+  const text = await response.text();
+  if (!text) {
+    return `API ${response.status}: ${response.statusText}`;
+  }
+
+  try {
+    return problemMessage(JSON.parse(text)) ?? text;
+  } catch {
+    return problemMessage(text) ?? `API ${response.status}: ${response.statusText}`;
+  }
 }

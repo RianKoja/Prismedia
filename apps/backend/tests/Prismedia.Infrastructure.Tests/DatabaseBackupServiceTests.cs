@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Prismedia.Application.Backups;
@@ -28,6 +29,34 @@ public sealed class DatabaseBackupServiceTests : IDisposable {
         Assert.True(backup.SizeBytes > 0);
         Assert.True(File.Exists(backup.BackupPath));
         Assert.Equal("pg_dump", process.Calls.Single().FileName);
+    }
+
+    [Fact]
+    public async Task ManualBackupFallsBackToDockerComposeWhenPgDumpIsMissing() {
+        await using var db = CreateContext();
+        var process = new DumpProcessExecutor {
+            MissingExecutables = { "pg_dump" }
+        };
+        var service = CreateService(db, process, dockerComposeFilePath: CreateComposeFile());
+
+        var backup = await service.CreateManualBackupAsync(CancellationToken.None);
+
+        Assert.Equal(DatabaseBackupStatus.Completed, backup.Status);
+        Assert.True(File.Exists(backup.BackupPath));
+        Assert.Collection(
+            process.Calls,
+            direct => Assert.Equal("pg_dump", direct.FileName),
+            lookup => {
+                Assert.Equal("docker", lookup.FileName);
+                Assert.Contains("container", lookup.Arguments);
+                Assert.Contains("ls", lookup.Arguments);
+            },
+            fallback => {
+                Assert.Equal("docker", fallback.FileName);
+                Assert.Contains("exec", fallback.Arguments);
+                Assert.Contains("pg_dump", fallback.Arguments);
+                Assert.Equal(backup.BackupPath, fallback.OutputPath);
+            });
     }
 
     [Fact]
@@ -130,13 +159,65 @@ public sealed class DatabaseBackupServiceTests : IDisposable {
         Assert.False(await service.HasPendingRestoreAsync(CancellationToken.None));
     }
 
+    [Fact]
+    public async Task PendingRestoreFallsBackToDockerComposeWhenPgRestoreIsMissing() {
+        await using var db = CreateContext();
+        var backupDir = Path.Combine(_tempDir, "database");
+        Directory.CreateDirectory(backupDir);
+        var path = Path.Combine(backupDir, "manual.dump");
+        await File.WriteAllTextAsync(path, "backup");
+        var backupId = Guid.NewGuid();
+        db.DatabaseBackups.Add(new DatabaseBackupRow {
+            Id = backupId,
+            BackupPath = path,
+            Status = DatabaseBackupStatus.Completed,
+            IsManual = true,
+            CreatedAt = DateTimeOffset.UtcNow.AddMinutes(-1),
+            CompletedAt = DateTimeOffset.UtcNow
+        });
+        await db.SaveChangesAsync();
+        var process = new DumpProcessExecutor {
+            MissingExecutables = { "pg_restore" }
+        };
+        var service = CreateService(db, process, dockerComposeFilePath: CreateComposeFile());
+        await service.ScheduleRestoreAsync(backupId, DatabaseRestoreConfirmation.Text, CancellationToken.None);
+
+        var restored = await service.RunPendingRestoreAsync(CancellationToken.None);
+
+        Assert.True(restored);
+        Assert.False(await service.HasPendingRestoreAsync(CancellationToken.None));
+        Assert.Collection(
+            process.Calls,
+            direct => Assert.Equal("pg_restore", direct.FileName),
+            lookup => {
+                Assert.Equal("docker", lookup.FileName);
+                Assert.Contains("container", lookup.Arguments);
+                Assert.Contains("ls", lookup.Arguments);
+            },
+            copy => {
+                Assert.Equal("docker", copy.FileName);
+                Assert.Contains("cp", copy.Arguments);
+            },
+            restore => {
+                Assert.Equal("docker", restore.FileName);
+                Assert.Contains("pg_restore", restore.Arguments);
+            },
+            cleanup => {
+                Assert.Equal("docker", cleanup.FileName);
+                Assert.Contains("rm", cleanup.Arguments);
+            });
+    }
+
     public void Dispose() {
         if (Directory.Exists(_tempDir)) {
             Directory.Delete(_tempDir, recursive: true);
         }
     }
 
-    private DatabaseBackupService CreateService(PrismediaDbContext db, ProcessExecutor process) =>
+    private DatabaseBackupService CreateService(
+        PrismediaDbContext db,
+        ProcessExecutor process,
+        string? dockerComposeFilePath = null) =>
         new(
             db,
             process,
@@ -146,6 +227,8 @@ public sealed class DatabaseBackupServiceTests : IDisposable {
                 Path.Combine(_tempDir, "database", "restore-request.json"),
                 "pg_dump",
                 "pg_restore",
+                dockerComposeFilePath,
+                "postgres",
                 7,
                 TimeSpan.FromDays(1)),
             NullLogger<DatabaseBackupService>.Instance);
@@ -157,8 +240,16 @@ public sealed class DatabaseBackupServiceTests : IDisposable {
         return new PrismediaDbContext(options);
     }
 
+    private string CreateComposeFile() {
+        var composePath = Path.Combine(_tempDir, "docker-compose.yml");
+        Directory.CreateDirectory(Path.GetDirectoryName(composePath)!);
+        File.WriteAllText(composePath, "services:\n  postgres:\n    image: postgres:16-alpine\n");
+        return composePath;
+    }
+
     private sealed class DumpProcessExecutor : ProcessExecutor {
-        public List<(string FileName, IReadOnlyList<string> Arguments)> Calls { get; } = [];
+        public HashSet<string> MissingExecutables { get; } = new(StringComparer.Ordinal);
+        public List<ProcessCall> Calls { get; } = [];
 
         public override async Task<ProcessExecutionResult> RunAsync(
             string fileName,
@@ -166,7 +257,12 @@ public sealed class DatabaseBackupServiceTests : IDisposable {
             IReadOnlyDictionary<string, string>? environment,
             CancellationToken cancellationToken,
             bool lowPriority = false) {
-            Calls.Add((fileName, arguments.ToArray()));
+            Calls.Add(new ProcessCall(fileName, arguments.ToArray(), OutputPath: null));
+            ThrowIfMissing(fileName);
+
+            if (fileName == "docker" && arguments.Contains("container") && arguments.Contains("ls")) {
+                return new ProcessExecutionResult(0, "postgres-container\n", string.Empty);
+            }
 
             if (fileName == "pg_dump") {
                 var fileIndex = Array.IndexOf(arguments.ToArray(), "--file");
@@ -178,5 +274,34 @@ public sealed class DatabaseBackupServiceTests : IDisposable {
 
             return new ProcessExecutionResult(0, string.Empty, string.Empty);
         }
+
+        public override async Task<ProcessExecutionResult> RunToFileAsync(
+            string fileName,
+            IReadOnlyList<string> arguments,
+            IReadOnlyDictionary<string, string>? environment,
+            string outputPath,
+            CancellationToken cancellationToken,
+            bool lowPriority = false) {
+            Calls.Add(new ProcessCall(fileName, arguments.ToArray(), outputPath));
+            ThrowIfMissing(fileName);
+
+            if (fileName == "docker" && arguments.Contains("pg_dump")) {
+                Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
+                await File.WriteAllTextAsync(outputPath, "docker backup", cancellationToken);
+            }
+
+            return new ProcessExecutionResult(0, string.Empty, string.Empty);
+        }
+
+        private void ThrowIfMissing(string fileName) {
+            if (MissingExecutables.Contains(fileName)) {
+                throw new Win32Exception(2, $"No such file or directory: {fileName}");
+            }
+        }
+
+        public sealed record ProcessCall(
+            string FileName,
+            IReadOnlyList<string> Arguments,
+            string? OutputPath);
     }
 }

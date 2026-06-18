@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -165,33 +166,13 @@ public sealed class DatabaseBackupService(
             logger.LogWarning("Restoring Prismedia database from {BackupPath}.", backupPath);
             NpgsqlConnection.ClearAllPools();
 
-            ProcessExecutionResult result;
             try {
-                result = await processes.RunAsync(
-                    options.PgRestorePath,
-                    [
-                        "--clean",
-                        "--if-exists",
-                        "--no-owner",
-                        "--no-acl",
-                        "--dbname",
-                        DatabaseName(),
-                        backupPath
-                    ],
-                    BuildPostgresEnvironment(),
-                    cancellationToken);
+                await RunPgRestoreAsync(backupPath, cancellationToken);
             } catch (Exception ex) when (ex is not OperationCanceledException) {
                 MoveRestoreRequestAside(ex);
                 throw new DatabaseBackupException(
                     ApiProblemCodes.DatabaseRestoreInvalid,
                     $"Database restore failed: {ex.Message}");
-            }
-
-            if (result.ExitCode != 0) {
-                MoveRestoreRequestAside(new InvalidOperationException(result.StandardError));
-                throw new DatabaseBackupException(
-                    ApiProblemCodes.DatabaseRestoreInvalid,
-                    $"Database restore failed: {TrimProcessError(result.StandardError)}");
             }
 
             File.Delete(options.RestoreRequestPath);
@@ -224,23 +205,7 @@ public sealed class DatabaseBackupService(
             await db.SaveChangesAsync(cancellationToken);
 
             try {
-                var result = await processes.RunAsync(
-                    options.PgDumpPath,
-                    [
-                        "--format=custom",
-                        "--no-owner",
-                        "--no-acl",
-                        "--file",
-                        backupPath,
-                        DatabaseName()
-                    ],
-                    BuildPostgresEnvironment(),
-                    cancellationToken,
-                    lowPriority: !isManual);
-
-                if (result.ExitCode != 0) {
-                    throw new InvalidOperationException(TrimProcessError(result.StandardError));
-                }
+                await RunPgDumpAsync(backupPath, isManual, cancellationToken);
 
                 row.Status = DatabaseBackupStatus.Completed;
                 row.CompletedAt = _timeProvider.GetUtcNow();
@@ -263,6 +228,307 @@ public sealed class DatabaseBackupService(
             BackupGate.Release();
         }
     }
+
+    private async Task RunPgDumpAsync(
+        string backupPath,
+        bool isManual,
+        CancellationToken cancellationToken) {
+        try {
+            var result = await processes.RunAsync(
+                options.PgDumpPath,
+                [
+                    "--format=custom",
+                    "--no-owner",
+                    "--no-acl",
+                    "--file",
+                    backupPath,
+                    DatabaseName()
+                ],
+                BuildPostgresEnvironment(),
+                cancellationToken,
+                lowPriority: !isManual);
+            ThrowIfProcessFailed(result, "pg_dump");
+        } catch (Exception ex) when (IsExecutableMissing(ex)) {
+            if (!CanUseDockerComposePostgresClient()) {
+                throw MissingPostgresClientException(options.PgDumpPath, "PRISMEDIA_PG_DUMP_PATH", ex);
+            }
+
+            logger.LogInformation(
+                "Postgres backup tool {ToolPath} was not found; falling back to Docker Compose Postgres service {ServiceName}.",
+                options.PgDumpPath,
+                options.DockerComposePostgresService);
+            await RunDockerPgDumpAsync(backupPath, isManual, cancellationToken);
+        }
+    }
+
+    private async Task RunPgRestoreAsync(string backupPath, CancellationToken cancellationToken) {
+        try {
+            var result = await processes.RunAsync(
+                options.PgRestorePath,
+                [
+                    "--clean",
+                    "--if-exists",
+                    "--no-owner",
+                    "--no-acl",
+                    "--dbname",
+                    DatabaseName(),
+                    backupPath
+                ],
+                BuildPostgresEnvironment(),
+                cancellationToken);
+            ThrowIfProcessFailed(result, "pg_restore");
+        } catch (Exception ex) when (IsExecutableMissing(ex)) {
+            if (!CanUseDockerComposePostgresClient()) {
+                throw MissingPostgresClientException(options.PgRestorePath, "PRISMEDIA_PG_RESTORE_PATH", ex);
+            }
+
+            logger.LogInformation(
+                "Postgres restore tool {ToolPath} was not found; falling back to Docker Compose Postgres service {ServiceName}.",
+                options.PgRestorePath,
+                options.DockerComposePostgresService);
+            await RunDockerPgRestoreAsync(backupPath, cancellationToken);
+        }
+    }
+
+    private async Task RunDockerPgDumpAsync(
+        string backupPath,
+        bool isManual,
+        CancellationToken cancellationToken) {
+        var containerId = await ResolveDockerPostgresContainerAsync(cancellationToken);
+        var result = await RunDockerToFileAsync(
+            BuildDockerPgDumpArguments(containerId),
+            backupPath,
+            cancellationToken,
+            lowPriority: !isManual);
+        ThrowIfProcessFailed(result, "docker exec pg_dump");
+    }
+
+    private async Task RunDockerPgRestoreAsync(string backupPath, CancellationToken cancellationToken) {
+        var containerId = await ResolveDockerPostgresContainerAsync(cancellationToken);
+        var tempPath = $"/tmp/prismedia-restore-{Guid.NewGuid():N}.dump";
+        var copied = false;
+
+        try {
+            var copyResult = await RunDockerAsync(
+                BuildDockerCopyArguments(containerId, backupPath, tempPath),
+                cancellationToken);
+            ThrowIfProcessFailed(copyResult, "docker cp");
+            copied = true;
+
+            var restoreResult = await RunDockerAsync(
+                BuildDockerPgRestoreArguments(containerId, tempPath),
+                cancellationToken);
+            ThrowIfProcessFailed(restoreResult, "docker exec pg_restore");
+        } finally {
+            if (copied) {
+                await CleanupDockerTempFileAsync(containerId, tempPath);
+            }
+        }
+    }
+
+    private async Task CleanupDockerTempFileAsync(string containerId, string tempPath) {
+        try {
+            var result = await RunDockerAsync(BuildDockerCleanupArguments(containerId, tempPath), CancellationToken.None);
+            if (result.ExitCode != 0) {
+                logger.LogWarning(
+                    "Could not remove temporary database restore file {TempPath}: {Error}",
+                    tempPath,
+                    TrimProcessError(result.StandardError));
+            }
+        } catch (Exception ex) when (ex is not OperationCanceledException) {
+            logger.LogWarning(ex, "Could not remove temporary database restore file {TempPath}.", tempPath);
+        }
+    }
+
+    private async Task<string> ResolveDockerPostgresContainerAsync(CancellationToken cancellationToken) {
+        var result = await RunDockerAsync(BuildDockerContainerListArguments(), cancellationToken);
+        ThrowIfProcessFailed(result, "docker container ls");
+
+        var containers = result.StandardOutput
+            .Split(['\r', '\n'], StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        if (containers.Length == 0) {
+            throw new InvalidOperationException(
+                $"Docker Compose Postgres service '{options.DockerComposePostgresService}' is not running.");
+        }
+
+        if (containers.Length > 1) {
+            logger.LogWarning(
+                "Found {Count} Docker containers for Postgres service {ServiceName}; using {ContainerId}.",
+                containers.Length,
+                options.DockerComposePostgresService,
+                containers[0]);
+        }
+
+        return containers[0];
+    }
+
+    private async Task<ProcessExecutionResult> RunDockerAsync(
+        IReadOnlyList<string> arguments,
+        CancellationToken cancellationToken) {
+        try {
+            return await processes.RunAsync("docker", arguments, null, cancellationToken);
+        } catch (Exception ex) when (IsExecutableMissing(ex)) {
+            throw DockerMissingException(ex);
+        }
+    }
+
+    private async Task<ProcessExecutionResult> RunDockerToFileAsync(
+        IReadOnlyList<string> arguments,
+        string outputPath,
+        CancellationToken cancellationToken,
+        bool lowPriority) {
+        try {
+            return await processes.RunToFileAsync(
+                "docker",
+                arguments,
+                null,
+                outputPath,
+                cancellationToken,
+                lowPriority);
+        } catch (Exception ex) when (IsExecutableMissing(ex)) {
+            throw DockerMissingException(ex);
+        }
+    }
+
+    private IReadOnlyList<string> BuildDockerPgDumpArguments(string containerId) {
+        var arguments = BuildDockerExecArguments(containerId, interactive: true);
+        arguments.Add("pg_dump");
+        arguments.Add("--format=custom");
+        arguments.Add("--no-owner");
+        arguments.Add("--no-acl");
+        AddPostgresUserArgument(arguments);
+        arguments.Add("--dbname");
+        arguments.Add(DatabaseName());
+        return arguments;
+    }
+
+    private IReadOnlyList<string> BuildDockerPgRestoreArguments(string containerId, string tempPath) {
+        var arguments = BuildDockerExecArguments(containerId, interactive: true);
+        arguments.Add("pg_restore");
+        arguments.Add("--clean");
+        arguments.Add("--if-exists");
+        arguments.Add("--no-owner");
+        arguments.Add("--no-acl");
+        AddPostgresUserArgument(arguments);
+        arguments.Add("--dbname");
+        arguments.Add(DatabaseName());
+        arguments.Add(tempPath);
+        return arguments;
+    }
+
+    private IReadOnlyList<string> BuildDockerCopyArguments(string containerId, string backupPath, string tempPath) =>
+        [
+            "cp",
+            backupPath,
+            $"{containerId}:{tempPath}"
+        ];
+
+    private IReadOnlyList<string> BuildDockerCleanupArguments(string containerId, string tempPath) =>
+        [
+            "exec",
+            containerId,
+            "rm",
+            "-f",
+            tempPath
+        ];
+
+    private IReadOnlyList<string> BuildDockerContainerListArguments() =>
+        [
+            "container",
+            "ls",
+            "-q",
+            "--filter",
+            $"label=com.docker.compose.service={options.DockerComposePostgresService}",
+            "--filter",
+            $"label=com.docker.compose.project.config_files={Path.GetFullPath(options.DockerComposeFilePath!)}"
+        ];
+
+    private List<string> BuildDockerExecArguments(string containerId, bool interactive) {
+        var arguments = new List<string> {
+            "exec"
+        };
+        if (interactive) {
+            arguments.Add("-i");
+        }
+
+        foreach (var (key, value) in BuildDockerPostgresEnvironment()) {
+            arguments.Add("--env");
+            arguments.Add($"{key}={value}");
+        }
+
+        arguments.Add(containerId);
+        return arguments;
+    }
+
+    private IReadOnlyDictionary<string, string> BuildDockerPostgresEnvironment() {
+        var env = new Dictionary<string, string>(StringComparer.Ordinal) {
+            ["PGDATABASE"] = DatabaseName()
+        };
+        var direct = BuildPostgresEnvironment();
+        if (direct.TryGetValue("PGUSER", out var username)) {
+            env["PGUSER"] = username;
+        }
+
+        if (direct.TryGetValue("PGPASSWORD", out var password)) {
+            env["PGPASSWORD"] = password;
+        }
+
+        return env;
+    }
+
+    private void AddPostgresUserArgument(List<string> arguments) {
+        var direct = BuildPostgresEnvironment();
+        if (!direct.TryGetValue("PGUSER", out var username) || string.IsNullOrWhiteSpace(username)) {
+            return;
+        }
+
+        arguments.Add("--username");
+        arguments.Add(username);
+    }
+
+    private bool CanUseDockerComposePostgresClient() =>
+        !string.IsNullOrWhiteSpace(options.DockerComposeFilePath) &&
+        !string.IsNullOrWhiteSpace(options.DockerComposePostgresService) &&
+        File.Exists(options.DockerComposeFilePath) &&
+        IsLocalDatabaseHost();
+
+    private bool IsLocalDatabaseHost() {
+        var builder = new NpgsqlConnectionStringBuilder(options.ConnectionString);
+        var hosts = (builder.Host ?? string.Empty)
+            .Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        return hosts.Length == 0 || hosts.All(IsLocalDatabaseHost);
+    }
+
+    private static bool IsLocalDatabaseHost(string host) =>
+        string.Equals(host, "localhost", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(host, "127.0.0.1", StringComparison.Ordinal) ||
+        string.Equals(host, "::1", StringComparison.Ordinal) ||
+        string.Equals(host, "[::1]", StringComparison.Ordinal);
+
+    private static void ThrowIfProcessFailed(ProcessExecutionResult result, string commandName) {
+        if (result.ExitCode != 0) {
+            throw new InvalidOperationException($"{commandName} failed: {TrimProcessError(result.StandardError)}");
+        }
+    }
+
+    private static bool IsExecutableMissing(Exception ex) =>
+        ex is Win32Exception { NativeErrorCode: 2 } ||
+        ex is FileNotFoundException ||
+        ex.Message.Contains("No such file or directory", StringComparison.OrdinalIgnoreCase) &&
+        ex.Message.Contains("start", StringComparison.OrdinalIgnoreCase);
+
+    private static InvalidOperationException MissingPostgresClientException(
+        string toolPath,
+        string configurationKey,
+        Exception innerException) =>
+        new(
+            $"PostgreSQL client tool '{toolPath}' was not found. Install PostgreSQL client tools or set {configurationKey} to the executable path.",
+            innerException);
+
+    private static InvalidOperationException DockerMissingException(Exception innerException) =>
+        new(
+            "Docker Compose fallback could not start because the 'docker' command was not found. Install PostgreSQL client tools or Docker Desktop.",
+            innerException);
 
     private DatabaseBackupDto ToDto(DatabaseBackupRow row) {
         var fileName = Path.GetFileName(row.BackupPath);

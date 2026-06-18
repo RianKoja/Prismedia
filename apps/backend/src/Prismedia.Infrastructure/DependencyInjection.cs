@@ -79,7 +79,7 @@ public static class DependencyInjection {
         RegisterFilesAndOrganization(services);
         RegisterPlayback(services, configuration, cacheDir, mediaToolOptions);
         RegisterRequests(services);
-        RegisterJobsSettingsAndState(services, configuration, dataDir, connectionString);
+        RegisterJobsSettingsAndState(services, configuration, dataDir, connectionString, pathBase);
 
         return services;
     }
@@ -261,7 +261,8 @@ public static class DependencyInjection {
         IServiceCollection services,
         IConfiguration configuration,
         string dataDir,
-        string connectionString) {
+        string connectionString,
+        string pathBase) {
         var backupDir = NormalizePath(configuration["PRISMEDIA_BACKUP_DIR"] ??
             configuration["Prismedia:Backups:Directory"] ??
             Path.Combine(dataDir, "backups", "database"), dataDir);
@@ -271,6 +272,13 @@ public static class DependencyInjection {
                 out var configuredRetentionDays) && configuredRetentionDays > 0
             ? configuredRetentionDays
             : 7;
+        var repoRoot = FindRepoRoot(pathBase);
+        var dockerComposeFilePath = configuration["PRISMEDIA_BACKUP_DOCKER_COMPOSE_FILE"] ??
+            configuration["Prismedia:Backups:DockerComposeFile"] ??
+            (repoRoot is null ? null : Path.Combine(repoRoot, "infra", "docker", "docker-compose.yml"));
+        if (!string.IsNullOrWhiteSpace(dockerComposeFilePath)) {
+            dockerComposeFilePath = NormalizePath(dockerComposeFilePath, pathBase);
+        }
 
         services.AddSingleton(new DatabaseBackupOptions(
             connectionString,
@@ -282,6 +290,10 @@ public static class DependencyInjection {
             configuration["PRISMEDIA_PG_RESTORE_PATH"] ??
             configuration["Prismedia:Backups:PgRestorePath"] ??
             "pg_restore",
+            dockerComposeFilePath,
+            configuration["PRISMEDIA_BACKUP_DOCKER_COMPOSE_POSTGRES_SERVICE"] ??
+            configuration["Prismedia:Backups:DockerComposePostgresService"] ??
+            "postgres",
             retentionDays,
             TimeSpan.FromDays(1)));
         services.AddSingleton<IWorkerHeartbeatStore>(new FileWorkerHeartbeatStore(dataDir));
