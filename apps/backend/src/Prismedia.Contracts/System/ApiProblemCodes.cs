@@ -88,6 +88,12 @@ public static class ApiProblemCodes {
     /// <summary>Problem code <c>invalid_path</c>.</summary>
     public const string InvalidPath = "invalid_path";
 
+    /// <summary>Problem code <c>invalid_playback_event_kind</c>.</summary>
+    public const string InvalidPlaybackEventKind = "invalid_playback_event_kind";
+
+    /// <summary>Problem code <c>invalid_playback_statistics_window</c>.</summary>
+    public const string InvalidPlaybackStatisticsWindow = "invalid_playback_statistics_window";
+
     /// <summary>Problem code <c>invalid_upload</c>.</summary>
     public const string InvalidUpload = "invalid_upload";
 

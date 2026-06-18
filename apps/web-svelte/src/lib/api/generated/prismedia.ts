@@ -81,6 +81,7 @@ import type {
   GetMusicArtistParams,
   GetOrganizePlanParams,
   GetPersonParams,
+  GetPlaybackStatisticsParams,
   GetRequestDetailParams,
   GetSettingValuesParams,
   GetStudioParams,
@@ -159,9 +160,11 @@ import type {
   OrganizePlanRequest,
   OrganizePlanResponse,
   PersonDetail,
+  PlaybackEventCreateRequest,
   PlaybackInfoRequest,
   PlaybackInfoResponse,
   PlaybackSessionRequest,
+  PlaybackStatisticsResponse,
   PlaybackUpdateRequest,
   PluginAuthUpdateRequest,
   PluginProvider,
@@ -3082,6 +3085,56 @@ export const deleteJellyfinUserScopedPlayedItem = async (userId: string,
 
 
 
+export type getPlaybackStatisticsResponse200 = {
+  data: PlaybackStatisticsResponse
+  status: 200
+}
+
+export type getPlaybackStatisticsResponse400 = {
+  data: ApiProblem
+  status: 400
+}
+
+export type getPlaybackStatisticsResponseSuccess = (getPlaybackStatisticsResponse200) & {
+  headers: Headers;
+};
+export type getPlaybackStatisticsResponseError = (getPlaybackStatisticsResponse400) & {
+  headers: Headers;
+};
+
+export type getPlaybackStatisticsResponse = (getPlaybackStatisticsResponseSuccess | getPlaybackStatisticsResponseError)
+
+export const getGetPlaybackStatisticsUrl = (params?: GetPlaybackStatisticsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/playback/statistics?${stringifiedParams}` : `/api/playback/statistics`
+}
+
+/**
+ * @summary Get Playback Statistics.
+ */
+export const getPlaybackStatistics = async (params?: GetPlaybackStatisticsParams, options?: RequestInit): Promise<getPlaybackStatisticsResponse> => {
+
+  return orvalFetch<getPlaybackStatisticsResponse>(getGetPlaybackStatisticsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
 export type getUpdateCheckResponse200 = {
   data: UpdateCheckResponse
   status: 200
@@ -3973,6 +4026,51 @@ export const updateEntityPlayback = async (id: string,
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(
       playbackUpdateRequest,)
+  }
+);}
+
+
+
+export type createEntityPlaybackEventResponse200 = {
+  data: EntityCard
+  status: 200
+}
+
+export type createEntityPlaybackEventResponse404 = {
+  data: ApiProblem
+  status: 404
+}
+
+export type createEntityPlaybackEventResponseSuccess = (createEntityPlaybackEventResponse200) & {
+  headers: Headers;
+};
+export type createEntityPlaybackEventResponseError = (createEntityPlaybackEventResponse404) & {
+  headers: Headers;
+};
+
+export type createEntityPlaybackEventResponse = (createEntityPlaybackEventResponseSuccess | createEntityPlaybackEventResponseError)
+
+export const getCreateEntityPlaybackEventUrl = (id: string,) => {
+
+
+
+
+  return `/api/entities/${id}/playback/events`
+}
+
+/**
+ * @summary Create Entity Playback Event.
+ */
+export const createEntityPlaybackEvent = async (id: string,
+    playbackEventCreateRequest: PlaybackEventCreateRequest, options?: RequestInit): Promise<createEntityPlaybackEventResponse> => {
+
+  return orvalFetch<createEntityPlaybackEventResponse>(getCreateEntityPlaybackEventUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      playbackEventCreateRequest,)
   }
 );}
 

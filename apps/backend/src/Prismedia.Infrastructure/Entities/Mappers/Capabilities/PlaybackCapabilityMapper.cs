@@ -17,6 +17,7 @@ internal sealed class PlaybackCapabilityMapper(PrismediaDbContext db) : IEntityC
         entity.RemoveCapability<CapabilityPlayback>();
         entity.AddCapability(new CapabilityPlayback(new CapabilityPlayback.State(
             row.PlayCount,
+            row.SkipCount,
             TimeSpan.FromSeconds(row.PlayDurationSeconds),
             TimeSpan.FromSeconds(row.ResumeSeconds),
             row.LastPlayedAt,
@@ -40,6 +41,7 @@ internal sealed class PlaybackCapabilityMapper(PrismediaDbContext db) : IEntityC
             db.EntityPlayback.Add(new EntityPlaybackRow {
                 EntityId = entity.Id,
                 PlayCount = playback.PlayCount,
+                SkipCount = playback.SkipCount,
                 PlayDurationSeconds = playback.PlayDuration.TotalSeconds,
                 ResumeSeconds = playback.ResumeTime.TotalSeconds,
                 LastPlayedAt = playback.LastPlayedAt,
@@ -48,6 +50,7 @@ internal sealed class PlaybackCapabilityMapper(PrismediaDbContext db) : IEntityC
             });
         } else {
             existing.PlayCount = playback.PlayCount;
+            existing.SkipCount = playback.SkipCount;
             existing.PlayDurationSeconds = playback.PlayDuration.TotalSeconds;
             existing.ResumeSeconds = playback.ResumeTime.TotalSeconds;
             existing.LastPlayedAt = playback.LastPlayedAt;

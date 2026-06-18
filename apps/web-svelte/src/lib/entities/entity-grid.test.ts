@@ -211,10 +211,10 @@ describe("entity grid helpers", () => {
 
   it("derives a progress fraction from playback and reading-progress capabilities", () => {
     const completed = entityCardToThumbnailCard(card("c-done", "video", "Watched", [
-      { kind: "playback", playCount: 1, playDurationSeconds: 0, resumeSeconds: 0, lastPlayedAt: null, completedAt: "2026-05-01T00:00:00Z" },
+      { kind: "playback", playCount: 1, skipCount: 0, playDurationSeconds: 0, resumeSeconds: 0, lastPlayedAt: null, completedAt: "2026-05-01T00:00:00Z" },
     ]));
     const resuming = entityCardToThumbnailCard(card("c-mid", "video", "Mid", [
-      { kind: "playback", playCount: 0, playDurationSeconds: 0, resumeSeconds: 75, lastPlayedAt: null, completedAt: null },
+      { kind: "playback", playCount: 0, skipCount: 0, playDurationSeconds: 0, resumeSeconds: 75, lastPlayedAt: null, completedAt: null },
       technical(), // 00:02:30 == 150s
     ]));
     const reading = entityCardToThumbnailCard(card("c-book", "book", "Reading", [

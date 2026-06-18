@@ -146,6 +146,13 @@ export const PLAYBACK_MODE = {
 
 export type PlaybackModeCode = (typeof PLAYBACK_MODE)[keyof typeof PLAYBACK_MODE];
 
+export const PLAYBACK_EVENT_KIND = {
+  completed: "completed",
+  skipped: "skipped",
+} as const;
+
+export type PlaybackEventKindCode = (typeof PLAYBACK_EVENT_KIND)[keyof typeof PLAYBACK_EVENT_KIND];
+
 export const MUSIC_PLAYER_REPEAT_MODE = {
   off: "off",
   all: "all",

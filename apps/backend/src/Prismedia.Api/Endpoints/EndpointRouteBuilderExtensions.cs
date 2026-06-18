@@ -25,6 +25,7 @@ public static class EndpointRouteBuilderExtensions {
         routes.MapJellyfinPlaybackEndpoints();
         routes.MapBrowserSessionEndpoints();
         routes.MapMusicPlayerEndpoints();
+        routes.MapPlaybackStatisticsEndpoints();
         routes.MapJobEndpoints();
         routes.MapSettingsEndpoints();
         routes.MapNavLayoutEndpoints();

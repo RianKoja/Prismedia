@@ -16,18 +16,20 @@ public sealed class CapabilityPlayback : EntityCapability {
     /// Single-user playback state for a time-based media entity.
     /// </summary>
     /// <param name="PlayCount">Number of completed or started play sessions recorded for the entity.</param>
+    /// <param name="SkipCount">Number of quick-abandon skip events recorded for the entity.</param>
     /// <param name="PlayDuration">Total accumulated playback duration.</param>
     /// <param name="ResumeTime">Position where playback should resume.</param>
     /// <param name="LastPlayedAt">Timestamp of the most recent playback event.</param>
     /// <param name="CompletedAt">Timestamp when the entity was completed, when applicable.</param>
     public sealed record State(
         int PlayCount,
+        int SkipCount,
         TimeSpan PlayDuration,
         TimeSpan ResumeTime,
         DateTimeOffset? LastPlayedAt,
         DateTimeOffset? CompletedAt) {
         /// <summary>Empty playback state for media that has never been played.</summary>
-        public static State Empty { get; } = new(0, TimeSpan.Zero, TimeSpan.Zero, null, null);
+        public static State Empty { get; } = new(0, 0, TimeSpan.Zero, TimeSpan.Zero, null, null);
     }
 
     /// <summary>Single-user playback state.</summary>
@@ -101,6 +103,17 @@ public sealed class CapabilityPlayback : EntityCapability {
             PlayCount = Value.PlayCount + 1,
             ResumeTime = TimeSpan.Zero,
             CompletedAt = at,
+            LastPlayedAt = at
+        };
+    }
+
+    /// <summary>
+    /// Records a likely skip/quick-abandon event without changing resume or completion state.
+    /// </summary>
+    /// <param name="at">Timestamp of the skip event.</param>
+    public void RecordSkipped(DateTimeOffset at) {
+        Value = Value with {
+            SkipCount = Value.SkipCount + 1,
             LastPlayedAt = at
         };
     }

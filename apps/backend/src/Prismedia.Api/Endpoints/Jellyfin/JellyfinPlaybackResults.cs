@@ -1,6 +1,7 @@
 using Prismedia.Api.Security;
 using Prismedia.Api.Mapping;
 using Prismedia.Application.Entities;
+using Prismedia.Application.Playback;
 using Prismedia.Application.Videos;
 using Prismedia.Contracts.Media;
 using Prismedia.Contracts.Playback;
@@ -114,6 +115,7 @@ internal static class JellyfinPlaybackResults {
     internal static async Task<IResult> MarkPlayedAsync(
         Guid itemId,
         IPlaybackSessionService sessions,
+        IJellyfinAudioPlaybackTracker audioPlayback,
         IEntityReadService entities,
         HttpContext httpContext,
         CancellationToken cancellationToken) {
@@ -122,9 +124,14 @@ internal static class JellyfinPlaybackResults {
         }
 
         var result = await sessions.MarkPlayedAsync(itemId, cancellationToken);
-        return result is null
-            ? Results.NotFound(new ApiProblem(ApiProblemCodes.PlaybackItemNotFound, $"Item '{itemId}' was not found."))
-            : Results.Ok(result.ToContract());
+        if (result is null) {
+            return Results.NotFound(new ApiProblem(ApiProblemCodes.PlaybackItemNotFound, $"Item '{itemId}' was not found."));
+        }
+
+        audioPlayback.ObserveCompleted(new JellyfinAudioPlaybackCompletion(
+            JellyfinAudioPlaybackTracking.ClientKey(httpContext),
+            itemId));
+        return Results.Ok(result.ToContract());
     }
 
     internal static async Task<IResult> MarkUnplayedAsync(

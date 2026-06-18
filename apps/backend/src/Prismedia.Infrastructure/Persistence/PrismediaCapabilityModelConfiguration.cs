@@ -20,12 +20,32 @@ internal static partial class PrismediaModelConfiguration {
             entity.HasKey(row => row.EntityId);
             entity.Property(row => row.EntityId).HasColumnName("entity_id");
             entity.Property(row => row.PlayCount).HasColumnName("play_count");
+            entity.Property(row => row.SkipCount).HasColumnName("skip_count");
             entity.Property(row => row.PlayDurationSeconds).HasColumnName("play_duration_seconds");
             entity.Property(row => row.ResumeSeconds).HasColumnName("resume_seconds");
             entity.Property(row => row.LastPlayedAt).HasColumnName("last_played_at");
             entity.Property(row => row.CompletedAt).HasColumnName("completed_at");
             entity.Property(row => row.UpdatedAt).HasColumnName("updated_at");
             entity.HasOne<EntityRow>().WithOne().HasForeignKey<EntityPlaybackRow>(row => row.EntityId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<EntityPlaybackEventRow>(entity => {
+            entity.ToTable("entity_playback_events");
+            entity.HasKey(row => row.Id);
+            entity.Property(row => row.Id).HasColumnName("id").ValueGeneratedNever();
+            entity.Property(row => row.EntityId).HasColumnName("entity_id");
+            entity.Property(row => row.Kind)
+                .HasColumnName("kind")
+                .HasMaxLength(64)
+                .IsRequired()
+                .HasConversion(value => value.ToCode(), value => value.DecodeAs<PlaybackEventKind>());
+            entity.Property(row => row.OccurredAt).HasColumnName("occurred_at");
+            entity.Property(row => row.PositionSeconds).HasColumnName("position_seconds");
+            entity.Property(row => row.DurationSeconds).HasColumnName("duration_seconds");
+            entity.Property(row => row.CreatedAt).HasColumnName("created_at");
+            entity.HasIndex(row => new { row.EntityId, row.OccurredAt });
+            entity.HasIndex(row => new { row.Kind, row.OccurredAt });
+            entity.HasOne<EntityRow>().WithMany().HasForeignKey(row => row.EntityId).OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<EntityStatRow>(entity => {

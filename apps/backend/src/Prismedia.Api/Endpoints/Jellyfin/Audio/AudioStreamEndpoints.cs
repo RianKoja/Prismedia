@@ -1,4 +1,5 @@
 using Prismedia.Application.Audio;
+using Prismedia.Application.Playback;
 using Prismedia.Contracts.System;
 
 namespace Prismedia.Api.Endpoints;
@@ -44,9 +45,18 @@ internal static class AudioStreamEndpoints {
         Guid itemId,
         IAudioStreamService audio,
         Prismedia.Application.Videos.IVideoSourceService video,
+        HttpContext httpContext,
+        IJellyfinAudioPlaybackTracker playbackTracker,
         CancellationToken cancellationToken) {
         var stream = await audio.GetStreamAsync(itemId, cancellationToken);
         if (stream is not null) {
+            await playbackTracker.ObserveRequestAsync(
+                new JellyfinAudioPlaybackRequest(
+                    JellyfinAudioPlaybackTracking.ClientKey(httpContext),
+                    itemId,
+                    HttpMethods.IsHead(httpContext.Request.Method),
+                    JellyfinAudioPlaybackTracking.IsRangeRequest(httpContext)),
+                cancellationToken);
             return Results.File(File.OpenRead(stream.Path), stream.ContentType, enableRangeProcessing: true);
         }
 
@@ -76,12 +86,22 @@ internal static class AudioStreamEndpoints {
     private static async Task<IResult> StreamAudioAsync(
         Guid itemId,
         IAudioStreamService streams,
+        HttpContext httpContext,
+        IJellyfinAudioPlaybackTracker playbackTracker,
         CancellationToken cancellationToken,
         string? container = null) {
         var stream = await streams.GetStreamAsync(itemId, cancellationToken);
         if (stream is null) {
             return Results.NotFound(new ApiProblem(ApiProblemCodes.JellyfinAudioNotFound, $"Audio stream '{itemId}' was not found."));
         }
+
+        await playbackTracker.ObserveRequestAsync(
+            new JellyfinAudioPlaybackRequest(
+                JellyfinAudioPlaybackTracking.ClientKey(httpContext),
+                itemId,
+                HttpMethods.IsHead(httpContext.Request.Method),
+                JellyfinAudioPlaybackTracking.IsRangeRequest(httpContext)),
+            cancellationToken);
 
         if (!stream.DirectPlayable) {
             return new FfmpegAudioTranscodeResult(stream);

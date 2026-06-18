@@ -71,6 +71,7 @@ public static class EntityCardProjector {
         if (entity.Playback is { } playback) {
             capabilities.Add(new PlaybackCapability(
                 playback.PlayCount,
+                playback.SkipCount,
                 playback.PlayDuration.TotalSeconds,
                 playback.ResumeTime.TotalSeconds,
                 playback.LastPlayedAt,

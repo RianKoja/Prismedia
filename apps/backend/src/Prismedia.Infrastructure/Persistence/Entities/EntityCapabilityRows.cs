@@ -11,11 +11,22 @@ public sealed class EntityDescriptionRow {
 public sealed class EntityPlaybackRow {
     public Guid EntityId { get; set; }
     public int PlayCount { get; set; }
+    public int SkipCount { get; set; }
     public double PlayDurationSeconds { get; set; }
     public double ResumeSeconds { get; set; }
     public DateTimeOffset? LastPlayedAt { get; set; }
     public DateTimeOffset? CompletedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
+}
+
+public sealed class EntityPlaybackEventRow {
+    public Guid Id { get; set; }
+    public Guid EntityId { get; set; }
+    public PlaybackEventKind Kind { get; set; }
+    public DateTimeOffset OccurredAt { get; set; }
+    public double? PositionSeconds { get; set; }
+    public double? DurationSeconds { get; set; }
+    public DateTimeOffset CreatedAt { get; set; }
 }
 
 public sealed class EntityStatRow {

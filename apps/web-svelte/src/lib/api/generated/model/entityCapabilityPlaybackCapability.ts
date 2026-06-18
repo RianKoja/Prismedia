@@ -10,6 +10,8 @@ export interface EntityCapabilityPlaybackCapability {
   kind: EntityCapabilityPlaybackCapabilityKind;
   /** @pattern ^-?(?:0|[1-9]\d*)$ */
   playCount: number | string;
+  /** @pattern ^-?(?:0|[1-9]\d*)$ */
+  skipCount: number | string;
   /** @pattern ^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$ */
   playDurationSeconds: number | string;
   /** @pattern ^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$ */

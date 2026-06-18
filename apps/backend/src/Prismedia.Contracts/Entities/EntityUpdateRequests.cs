@@ -32,6 +32,19 @@ public sealed record PlaybackUpdateRequest(
     bool? Completed);
 
 /// <summary>
+/// Request body for recording an explicit playback-history event.
+/// </summary>
+/// <param name="Kind">Playback event kind to record.</param>
+/// <param name="OccurredAt">Optional timestamp; defaults to the server clock when omitted.</param>
+/// <param name="PositionSeconds">Optional playback position associated with the event.</param>
+/// <param name="DurationSeconds">Optional entity duration associated with the event.</param>
+public sealed record PlaybackEventCreateRequest(
+    PlaybackEventKind Kind,
+    DateTimeOffset? OccurredAt,
+    double? PositionSeconds,
+    double? DurationSeconds);
+
+/// <summary>
 /// Request body for recording non-time progress such as a reading cursor.
 /// </summary>
 /// <param name="CurrentEntityId">Current child entity, such as a chapter identifier.</param>

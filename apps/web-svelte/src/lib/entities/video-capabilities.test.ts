@@ -8,6 +8,7 @@ describe("getPlaybackState", () => {
       {
         kind: "playback",
         playCount: 3,
+        skipCount: 1,
         playDurationSeconds: 120,
         resumeSeconds: 42,
         lastPlayedAt: "2026-05-15T10:00:00Z",
@@ -17,6 +18,7 @@ describe("getPlaybackState", () => {
 
     expect(getPlaybackState(capabilities)).toEqual({
       playCount: 3,
+      skipCount: 1,
       playDurationSeconds: 120,
       resumeSeconds: 42,
       lastPlayedAt: "2026-05-15T10:00:00Z",

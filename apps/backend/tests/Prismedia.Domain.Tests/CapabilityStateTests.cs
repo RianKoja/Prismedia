@@ -108,6 +108,21 @@ public sealed class CapabilityStateTests {
     }
 
     [Fact]
+    public void RecordSkippedIncrementsSkipCountWithoutChangingCompletion() {
+        var playback = new CapabilityPlayback();
+        var completedAt = DateTimeOffset.Parse("2026-05-19T10:00:00Z");
+        var skippedAt = completedAt.AddMinutes(5);
+
+        playback.RecordCompleted(completedAt);
+        playback.RecordSkipped(skippedAt);
+
+        Assert.Equal(1, playback.Value.PlayCount);
+        Assert.Equal(1, playback.Value.SkipCount);
+        Assert.Equal(completedAt, playback.Value.CompletedAt);
+        Assert.Equal(skippedAt, playback.Value.LastPlayedAt);
+    }
+
+    [Fact]
     public void MarkersAddUpdateAndDeleteByIdentifier() {
         var markers = new CapabilityMarkers();
 

@@ -353,6 +353,7 @@ function parseDotnetTimeSpan(value: string | null | undefined): number {
 
 export interface PlaybackState {
   playCount: number;
+  skipCount: number;
   playDurationSeconds: number;
   resumeSeconds: number;
   lastPlayedAt: string | null;
@@ -366,6 +367,7 @@ export function getPlaybackState(
   if (!cap) return null;
   return {
     playCount: positiveNumberValue(cap.playCount) ?? 0,
+    skipCount: positiveNumberValue(cap.skipCount) ?? 0,
     playDurationSeconds: positiveNumberValue(cap.playDurationSeconds) ?? 0,
     resumeSeconds: positiveNumberValue(cap.resumeSeconds) ?? 0,
     lastPlayedAt: cap.lastPlayedAt,

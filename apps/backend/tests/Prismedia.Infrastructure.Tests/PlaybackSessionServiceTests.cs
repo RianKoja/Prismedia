@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Prismedia.Application.Entities;
+using Prismedia.Application.Playback;
 using Prismedia.Application.Videos;
 using Prismedia.Domain.Capabilities;
 using Prismedia.Domain.Entities;
@@ -91,7 +92,7 @@ public sealed class PlaybackSessionServiceTests {
 
     [Fact]
     public async Task CompletedPlaybackEventsIncrementRepeatedAudioPlays() {
-        var state = await RunAsync(
+        var (state, events) = await RunWithEventsAsync(
             async (_, capabilities) => {
                 await capabilities.RecordCompletedPlaybackAsync(AudioTrackId, CancellationToken.None);
                 await capabilities.RecordCompletedPlaybackAsync(AudioTrackId, CancellationToken.None);
@@ -102,6 +103,32 @@ public sealed class PlaybackSessionServiceTests {
         Assert.NotNull(state!.CompletedAt);
         Assert.Equal(TimeSpan.Zero, state.ResumeTime);
         Assert.Equal(2, state.PlayCount);
+        Assert.Equal(2, events.Count(e => e.Kind == PlaybackEventKind.Completed));
+    }
+
+    [Fact]
+    public async Task SkippedPlaybackEventIncrementsSkipCountAndAppendsHistory() {
+        var skippedAt = DateTimeOffset.Parse("2026-06-18T12:00:00Z");
+
+        var (state, events) = await RunWithEventsAsync(
+            async (_, capabilities) => await capabilities.RecordPlaybackEventAsync(
+                AudioTrackId,
+                PlaybackEventKind.Skipped,
+                skippedAt,
+                positionSeconds: 4,
+                durationSeconds: 120,
+                CancellationToken.None),
+            entityId: AudioTrackId,
+            kind: EntityKind.AudioTrack);
+
+        Assert.Equal(0, state!.PlayCount);
+        Assert.Equal(1, state.SkipCount);
+        var evt = Assert.Single(events);
+        Assert.Equal(AudioTrackId, evt.EntityId);
+        Assert.Equal(PlaybackEventKind.Skipped, evt.Kind);
+        Assert.Equal(skippedAt, evt.OccurredAt);
+        Assert.Equal(4, evt.PositionSeconds);
+        Assert.Equal(120, evt.DurationSeconds);
     }
 
     [Fact]
@@ -165,6 +192,15 @@ public sealed class PlaybackSessionServiceTests {
         double? runtimeSeconds = null,
         Guid? entityId = null,
         EntityKind kind = EntityKind.Video) {
+        var (state, _) = await RunWithEventsAsync(act, runtimeSeconds, entityId, kind);
+        return state;
+    }
+
+    private static async Task<(CapabilityPlayback.State? State, IReadOnlyList<PlaybackEventAppend> Events)> RunWithEventsAsync(
+        Func<PlaybackSessionService, EntityCapabilityService, Task> act,
+        double? runtimeSeconds = null,
+        Guid? entityId = null,
+        EntityKind kind = EntityKind.Video) {
         var id = entityId ?? VideoId;
         await using var db = CreateContext();
         db.Entities.Add(new Persistence.Entities.EntityRow {
@@ -184,13 +220,14 @@ public sealed class PlaybackSessionServiceTests {
         await db.SaveChangesAsync();
 
         var repository = new EfEntityRepository(db, EntityMappers.Kinds(db), EntityMappers.Capabilities(db));
-        var capabilities = new EntityCapabilityService(repository);
+        var events = new RecordingPlaybackEventStore();
+        var capabilities = new EntityCapabilityService(repository, events);
         var sessions = new PlaybackSessionService(capabilities, new NoOpTranscodeSessionService());
 
         await act(sessions, capabilities);
 
         var entity = await repository.FindAsync(id, CancellationToken.None);
-        return entity?.GetCapability<CapabilityPlayback>()?.Value;
+        return (entity?.GetCapability<CapabilityPlayback>()?.Value, events.Events);
     }
 
     private static PrismediaDbContext CreateContext() =>
@@ -205,5 +242,16 @@ public sealed class PlaybackSessionServiceTests {
         public Task<int> CancelAllAsync(CancellationToken cancellationToken) => Task.FromResult(0);
         public IReadOnlySet<Guid> LiveItemIds(TimeSpan within) => new HashSet<Guid>();
         public int ReapStaleSessions(TimeSpan ttl) => 0;
+    }
+
+    private sealed class RecordingPlaybackEventStore : IPlaybackEventStore {
+        private readonly List<PlaybackEventAppend> _events = [];
+
+        public IReadOnlyList<PlaybackEventAppend> Events => _events;
+
+        public Task AppendAsync(PlaybackEventAppend entry, CancellationToken cancellationToken) {
+            _events.Add(entry);
+            return Task.CompletedTask;
+        }
     }
 }

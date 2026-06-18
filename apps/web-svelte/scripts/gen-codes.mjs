@@ -27,6 +27,7 @@ const ENUM_EXPORTS = [
   ["JobRunStatus", "JOB_RUN_STATUS", "JobRunStatusCode"],
   ["DatabaseBackupStatus", "DATABASE_BACKUP_STATUS", "DatabaseBackupStatusCode"],
   ["PlaybackMode", "PLAYBACK_MODE", "PlaybackModeCode"],
+  ["PlaybackEventKind", "PLAYBACK_EVENT_KIND", "PlaybackEventKindCode"],
   ["MusicPlayerRepeatMode", "MUSIC_PLAYER_REPEAT_MODE", "MusicPlayerRepeatModeCode"],
   ["MusicPlayerMiniSide", "MUSIC_PLAYER_MINI_SIDE", "MusicPlayerMiniSideCode"],
   ["EntitySubtitleSource", "SUBTITLE_SOURCE", "SubtitleSourceCode"],

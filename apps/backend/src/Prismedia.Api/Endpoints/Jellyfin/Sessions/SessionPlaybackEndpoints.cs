@@ -1,5 +1,6 @@
 using Prismedia.Api.Mapping;
 using Prismedia.Application.Entities;
+using Prismedia.Application.Playback;
 using Prismedia.Application.Videos;
 using Prismedia.Contracts.System;
 using Prismedia.Contracts.Playback;
@@ -12,12 +13,14 @@ internal static class SessionPlaybackEndpoints {
             PlaybackSessionRequest request,
             HttpContext httpContext,
             IPlaybackSessionService sessions,
+            IJellyfinAudioPlaybackTracker audioPlayback,
             IEntityReadService entities,
             CancellationToken cancellationToken) => {
                 if (!await JellyfinPlaybackResults.IsVisibleAsync(request.ItemId, entities, httpContext, cancellationToken)) {
                     return Results.NotFound(new ApiProblem(ApiProblemCodes.PlaybackItemNotFound, $"Item '{request.ItemId}' was not found."));
                 }
 
+                await audioPlayback.ObserveProgressAsync(request.ToJellyfinAudioProgress(httpContext), cancellationToken);
                 await sessions.StartAsync(request.ToApplication(), cancellationToken);
                 return Results.NoContent();
             })
@@ -29,12 +32,14 @@ internal static class SessionPlaybackEndpoints {
             PlaybackSessionRequest request,
             HttpContext httpContext,
             IPlaybackSessionService sessions,
+            IJellyfinAudioPlaybackTracker audioPlayback,
             IEntityReadService entities,
             CancellationToken cancellationToken) => {
                 if (!await JellyfinPlaybackResults.IsVisibleAsync(request.ItemId, entities, httpContext, cancellationToken)) {
                     return Results.NotFound(new ApiProblem(ApiProblemCodes.PlaybackItemNotFound, $"Item '{request.ItemId}' was not found."));
                 }
 
+                await audioPlayback.ObserveProgressAsync(request.ToJellyfinAudioProgress(httpContext), cancellationToken);
                 await sessions.ProgressAsync(request.ToApplication(), cancellationToken);
                 return Results.NoContent();
             })
@@ -46,12 +51,14 @@ internal static class SessionPlaybackEndpoints {
             PlaybackSessionRequest request,
             HttpContext httpContext,
             IPlaybackSessionService sessions,
+            IJellyfinAudioPlaybackTracker audioPlayback,
             IEntityReadService entities,
             CancellationToken cancellationToken) => {
                 if (!await JellyfinPlaybackResults.IsVisibleAsync(request.ItemId, entities, httpContext, cancellationToken)) {
                     return Results.NotFound(new ApiProblem(ApiProblemCodes.PlaybackItemNotFound, $"Item '{request.ItemId}' was not found."));
                 }
 
+                await audioPlayback.ObserveProgressAsync(request.ToJellyfinAudioProgress(httpContext), cancellationToken);
                 await sessions.PingAsync(request.ToApplication(), cancellationToken);
                 return Results.NoContent();
             })
@@ -63,12 +70,14 @@ internal static class SessionPlaybackEndpoints {
             PlaybackSessionRequest request,
             HttpContext httpContext,
             IPlaybackSessionService sessions,
+            IJellyfinAudioPlaybackTracker audioPlayback,
             IEntityReadService entities,
             CancellationToken cancellationToken) => {
                 if (!await JellyfinPlaybackResults.IsVisibleAsync(request.ItemId, entities, httpContext, cancellationToken)) {
                     return Results.NotFound(new ApiProblem(ApiProblemCodes.PlaybackItemNotFound, $"Item '{request.ItemId}' was not found."));
                 }
 
+                await audioPlayback.ObserveProgressAsync(request.ToJellyfinAudioProgress(httpContext), cancellationToken);
                 await sessions.StopAsync(request.ToApplication(), cancellationToken);
                 return Results.NoContent();
             })
@@ -78,4 +87,12 @@ internal static class SessionPlaybackEndpoints {
 
         return routes;
     }
+
+    private static JellyfinAudioPlaybackProgress ToJellyfinAudioProgress(
+        this PlaybackSessionRequest request,
+        HttpContext httpContext) =>
+        new(
+            JellyfinAudioPlaybackTracking.ClientKey(httpContext),
+            request.ItemId,
+            request.PositionTicks);
 }

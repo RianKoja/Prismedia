@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Prismedia.Infrastructure.Serialization;
 using Prismedia.Application.Entities;
+using Prismedia.Application.Playback;
 using Prismedia.Domain.Capabilities;
 using Prismedia.Domain.Entities;
 using Prismedia.Domain.Media;
@@ -117,6 +118,9 @@ public sealed class EntityPatchEndpointTests {
         Assert.Equal(ChapterId, repository.SavedEntity?.Progress?.CurrentEntityId);
         Assert.Equal(23, repository.SavedEntity?.Progress?.Index);
         Assert.NotNull(repository.SavedEntity?.Progress?.CompletedAt);
+        Assert.Contains(
+            factory.Services.GetRequiredService<RecordingPlaybackEventStore>().Events,
+            entry => entry.EntityId == EntityId && entry.Kind == PlaybackEventKind.Completed);
     }
 
     [Fact]
@@ -244,8 +248,11 @@ public sealed class EntityPatchEndpointTests {
             .WithWebHostBuilder(builder => {
                 builder.ConfigureServices(services => {
                     services.AddSingleton(new FakeEntityWriteRepository());
+                    services.AddSingleton(new RecordingPlaybackEventStore());
                     services.AddScoped<IEntityWriteRepository>(provider =>
                         provider.GetRequiredService<FakeEntityWriteRepository>());
+                    services.AddScoped<IPlaybackEventStore>(provider =>
+                        provider.GetRequiredService<RecordingPlaybackEventStore>());
                 });
             })
             .WithTestAuth();
@@ -367,6 +374,15 @@ public sealed class EntityPatchEndpointTests {
 
         public Task SaveAsync(Entity entity, CancellationToken cancellationToken) {
             SavedEntity = entity;
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class RecordingPlaybackEventStore : IPlaybackEventStore {
+        public List<PlaybackEventAppend> Events { get; } = [];
+
+        public Task AppendAsync(PlaybackEventAppend entry, CancellationToken cancellationToken) {
+            Events.Add(entry);
             return Task.CompletedTask;
         }
     }

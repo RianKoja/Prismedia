@@ -3,15 +3,23 @@ using System.Net.Http.Json;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Prismedia.Application.Audio;
 using Prismedia.Application.Entities;
+using Prismedia.Application.Playback;
 using Prismedia.Application.Videos;
 using Prismedia.Contracts.Jellyfin;
 using Prismedia.Contracts.Playback;
+using Prismedia.Domain.Capabilities;
+using Prismedia.Domain.Entities;
+using Prismedia.Domain.Media;
 
 namespace Prismedia.Api.Tests;
 
 public sealed class JellyfinPlaybackEndpointTests : IDisposable {
     private static readonly Guid VideoId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+    private static readonly Guid AudioTrackOneId = Guid.Parse("22222222-2222-2222-2222-222222222222");
+    private static readonly Guid AudioTrackTwoId = Guid.Parse("33333333-3333-3333-3333-333333333333");
     private readonly string _tempDir = Path.Combine(Path.GetTempPath(), $"prismedia-jellyfin-api-{Guid.NewGuid():N}");
 
     public JellyfinPlaybackEndpointTests() {
@@ -208,6 +216,146 @@ public sealed class JellyfinPlaybackEndpointTests : IDisposable {
         Assert.Equal("application/json", response.Content.Headers.ContentType?.MediaType);
     }
 
+    [Theory]
+    [InlineData("/Audio/{id}/universal")]
+    [InlineData("/Audio/{id}/stream")]
+    [InlineData("/Audio/{id}/stream.mp3")]
+    [InlineData("/Items/{id}/File")]
+    [InlineData("/Items/{id}/Download")]
+    public async Task JellyfinAudioRequestForNextTrackWithinTenSecondsRecordsSkip(string routeTemplate) {
+        var clock = new ManualTimeProvider(DateTimeOffset.Parse("2026-06-18T12:00:00Z"));
+        var events = new RecordingPlaybackEventStore();
+        var repository = new PlaybackEntityWriteRepository(AudioTrackOneId, AudioTrackTwoId);
+        using var factory = CreateFactory(
+            audio: new FakeAudioStreamService(CreateAudioFile()),
+            playbackEvents: events,
+            writeRepository: repository,
+            timeProvider: clock);
+        using var client = factory.CreateAuthenticatedClient();
+
+        using var first = await client.GetAsync(AudioRoute(routeTemplate, AudioTrackOneId));
+        clock.Advance(TimeSpan.FromSeconds(9));
+        using var second = await client.GetAsync(AudioRoute(routeTemplate, AudioTrackTwoId));
+
+        Assert.Equal(HttpStatusCode.OK, first.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, second.StatusCode);
+        var evt = Assert.Single(events.Events);
+        Assert.Equal(AudioTrackOneId, evt.EntityId);
+        Assert.Equal(PlaybackEventKind.Skipped, evt.Kind);
+        Assert.Equal(1, repository.Playback(AudioTrackOneId).SkipCount);
+    }
+
+    [Fact]
+    public async Task JellyfinAudioSameItemRangeRetryDoesNotRecordSkip() {
+        var clock = new ManualTimeProvider(DateTimeOffset.Parse("2026-06-18T12:00:00Z"));
+        var events = new RecordingPlaybackEventStore();
+        using var factory = CreateFactory(
+            audio: new FakeAudioStreamService(CreateAudioFile()),
+            playbackEvents: events,
+            writeRepository: new PlaybackEntityWriteRepository(AudioTrackOneId, AudioTrackTwoId),
+            timeProvider: clock);
+        using var client = factory.CreateAuthenticatedClient();
+
+        using var first = await client.GetAsync($"/Audio/{AudioTrackOneId}/universal");
+        clock.Advance(TimeSpan.FromSeconds(4));
+        using var retryRequest = new HttpRequestMessage(HttpMethod.Get, $"/Audio/{AudioTrackOneId}/universal");
+        retryRequest.Headers.Range = new System.Net.Http.Headers.RangeHeaderValue(0, 32);
+        using var retry = await client.SendAsync(retryRequest);
+
+        Assert.Equal(HttpStatusCode.OK, first.StatusCode);
+        Assert.Equal(HttpStatusCode.PartialContent, retry.StatusCode);
+        Assert.Empty(events.Events);
+    }
+
+    [Fact]
+    public async Task JellyfinAudioRequestForNextTrackAfterTenSecondsDoesNotRecordSkip() {
+        var clock = new ManualTimeProvider(DateTimeOffset.Parse("2026-06-18T12:00:00Z"));
+        var events = new RecordingPlaybackEventStore();
+        using var factory = CreateFactory(
+            audio: new FakeAudioStreamService(CreateAudioFile()),
+            playbackEvents: events,
+            writeRepository: new PlaybackEntityWriteRepository(AudioTrackOneId, AudioTrackTwoId),
+            timeProvider: clock);
+        using var client = factory.CreateAuthenticatedClient();
+
+        using var first = await client.GetAsync($"/Audio/{AudioTrackOneId}/universal");
+        clock.Advance(TimeSpan.FromSeconds(11));
+        using var second = await client.GetAsync($"/Audio/{AudioTrackTwoId}/universal");
+
+        Assert.Equal(HttpStatusCode.OK, first.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, second.StatusCode);
+        Assert.Empty(events.Events);
+    }
+
+    [Fact]
+    public async Task JellyfinAudioProgressPastTenSecondsSuppressesRequestSkip() {
+        var clock = new ManualTimeProvider(DateTimeOffset.Parse("2026-06-18T12:00:00Z"));
+        var events = new RecordingPlaybackEventStore();
+        var sessions = new RecordingPlaybackSessionService();
+        using var factory = CreateFactory(
+            audio: new FakeAudioStreamService(CreateAudioFile()),
+            sessions: sessions,
+            playbackEvents: events,
+            writeRepository: new PlaybackEntityWriteRepository(AudioTrackOneId, AudioTrackTwoId),
+            timeProvider: clock);
+        using var client = factory.CreateAuthenticatedClient();
+
+        using var first = await client.GetAsync($"/Audio/{AudioTrackOneId}/universal");
+        using var progress = await client.PostAsJsonAsync("/Sessions/Playing/Progress", new PlaybackSessionRequest {
+            ItemId = AudioTrackOneId,
+            PositionTicks = TimeSpan.FromSeconds(11).Ticks
+        });
+        clock.Advance(TimeSpan.FromSeconds(4));
+        using var second = await client.GetAsync($"/Audio/{AudioTrackTwoId}/universal");
+
+        Assert.Equal(HttpStatusCode.OK, first.StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, progress.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, second.StatusCode);
+        Assert.Empty(events.Events);
+    }
+
+    [Fact]
+    public async Task JellyfinAudioPlayedItemSuppressesRequestSkip() {
+        var clock = new ManualTimeProvider(DateTimeOffset.Parse("2026-06-18T12:00:00Z"));
+        var events = new RecordingPlaybackEventStore();
+        using var factory = CreateFactory(
+            audio: new FakeAudioStreamService(CreateAudioFile()),
+            playbackEvents: events,
+            writeRepository: new PlaybackEntityWriteRepository(AudioTrackOneId, AudioTrackTwoId),
+            timeProvider: clock);
+        using var client = factory.CreateAuthenticatedClient();
+
+        using var first = await client.GetAsync($"/Audio/{AudioTrackOneId}/universal");
+        using var played = await client.PostAsync($"/UserPlayedItems/{AudioTrackOneId:N}", null);
+        clock.Advance(TimeSpan.FromSeconds(4));
+        using var second = await client.GetAsync($"/Audio/{AudioTrackTwoId}/universal");
+
+        Assert.Equal(HttpStatusCode.OK, first.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, played.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, second.StatusCode);
+        Assert.Empty(events.Events);
+    }
+
+    [Fact]
+    public async Task JellyfinAudioDifferentDeviceKeysDoNotCrossCountSkips() {
+        var clock = new ManualTimeProvider(DateTimeOffset.Parse("2026-06-18T12:00:00Z"));
+        var events = new RecordingPlaybackEventStore();
+        using var factory = CreateFactory(
+            audio: new FakeAudioStreamService(CreateAudioFile()),
+            playbackEvents: events,
+            writeRepository: new PlaybackEntityWriteRepository(AudioTrackOneId, AudioTrackTwoId),
+            timeProvider: clock);
+        using var client = factory.CreateClient();
+
+        using var first = await client.SendAsync(DeviceRequest($"/Audio/{AudioTrackOneId}/universal", "device-a"));
+        clock.Advance(TimeSpan.FromSeconds(4));
+        using var second = await client.SendAsync(DeviceRequest($"/Audio/{AudioTrackTwoId}/universal", "device-b"));
+
+        Assert.Equal(HttpStatusCode.OK, first.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, second.StatusCode);
+        Assert.Empty(events.Events);
+    }
+
     public void Dispose() {
         if (Directory.Exists(_tempDir)) {
             Directory.Delete(_tempDir, recursive: true);
@@ -219,21 +367,58 @@ public sealed class JellyfinPlaybackEndpointTests : IDisposable {
         IHlsAssetService? hls = null,
         ITrickplayService? trickplay = null,
         IPlaybackSessionService? sessions = null,
+        IAudioStreamService? audio = null,
         IVideoSourceService? sources = null,
-        ITranscodeSessionService? transcodes = null) {
+        ITranscodeSessionService? transcodes = null,
+        IPlaybackEventStore? playbackEvents = null,
+        IEntityWriteRepository? writeRepository = null,
+        TimeProvider? timeProvider = null) {
         return new WebApplicationFactory<Program>()
             .WithWebHostBuilder(builder => {
                 builder.ConfigureServices(services => {
+                    if (timeProvider is not null) {
+                        services.RemoveAll<TimeProvider>();
+                        services.AddSingleton(timeProvider);
+                    }
+
+                    if (playbackEvents is not null) {
+                        services.RemoveAll<IPlaybackEventStore>();
+                        services.AddSingleton(playbackEvents);
+                    }
+
+                    if (writeRepository is not null) {
+                        services.RemoveAll<IEntityWriteRepository>();
+                        services.AddSingleton(writeRepository);
+                    }
+
                     services.AddSingleton(playback ?? new FakePlaybackInfoService(null));
                     services.AddSingleton(hls ?? new RecordingHlsAssetService(null));
                     services.AddSingleton(trickplay ?? new FakeTrickplayService(null, null));
                     services.AddSingleton(sessions ?? new RecordingPlaybackSessionService());
+                    services.AddSingleton(audio ?? new FakeAudioStreamService(null));
                     services.AddSingleton(sources ?? new FakeVideoSourceService(null));
                     services.AddSingleton(transcodes ?? new RecordingTranscodeSessionService());
                     services.AddSingleton<IEntityReadService, TestAuth.VisibleEntityReadService>();
                 });
             })
             .WithTestAuth();
+    }
+
+    private string CreateAudioFile() {
+        var path = Path.Combine(_tempDir, $"{Guid.NewGuid():N}.mp3");
+        File.WriteAllBytes(path, Enumerable.Range(0, 128).Select(i => (byte)i).ToArray());
+        return path;
+    }
+
+    private static string AudioRoute(string template, Guid id) =>
+        template.Replace("{id}", id.ToString(), StringComparison.Ordinal);
+
+    private static HttpRequestMessage DeviceRequest(string path, string deviceId) {
+        var request = new HttpRequestMessage(HttpMethod.Get, path);
+        request.Headers.Add(
+            JellyfinProtocol.Headers.EmbyAuthorization,
+            $"MediaBrowser Client=\"Prismedia Test\", Device=\"Test\", DeviceId=\"{deviceId}\", Version=\"1.0\", Token=\"{TestAuth.ApiKey}\"");
+        return request;
     }
 
     private sealed class FakePlaybackInfoService : IPlaybackInfoService {
@@ -328,6 +513,19 @@ public sealed class JellyfinPlaybackEndpointTests : IDisposable {
             Task.FromResult(itemId == VideoId ? _tile : null);
     }
 
+    private sealed class FakeAudioStreamService : IAudioStreamService {
+        private readonly string? _path;
+
+        public FakeAudioStreamService(string? path) {
+            _path = path;
+        }
+
+        public Task<AudioStreamPlan?> GetStreamAsync(Guid entityId, CancellationToken cancellationToken) =>
+            Task.FromResult<AudioStreamPlan?>(_path is null
+                ? null
+                : new AudioStreamPlan(_path, "audio/mpeg", DirectPlayable: true, Codec: "mp3", FfmpegPath: "ffmpeg"));
+    }
+
     private sealed class RecordingPlaybackSessionService : IPlaybackSessionService {
         public PlaybackSessionCommand? LastProgress { get; private set; }
         public Guid? LastMarkedPlayed { get; private set; }
@@ -352,6 +550,66 @@ public sealed class JellyfinPlaybackEndpointTests : IDisposable {
         public Task<UserItemDataResult?> MarkUnplayedAsync(Guid itemId, CancellationToken cancellationToken) {
             LastMarkedUnplayed = itemId;
             return Task.FromResult<UserItemDataResult?>(new UserItemDataResult(false));
+        }
+    }
+
+    private sealed class RecordingPlaybackEventStore : IPlaybackEventStore {
+        private readonly List<PlaybackEventAppend> _events = [];
+
+        public IReadOnlyList<PlaybackEventAppend> Events => _events;
+
+        public Task AppendAsync(PlaybackEventAppend entry, CancellationToken cancellationToken) {
+            _events.Add(entry);
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class PlaybackEntityWriteRepository : IEntityWriteRepository {
+        private readonly Dictionary<Guid, Entity> _entities;
+
+        public PlaybackEntityWriteRepository(params Guid[] ids) {
+            _entities = ids.ToDictionary(
+                id => id,
+                id => (Entity)new AudioTrack(id, $"Track {id:N}", embeddedArtist: null, embeddedAlbum: null));
+        }
+
+        public CapabilityPlayback.State Playback(Guid id) =>
+            _entities[id].RequireCapability<CapabilityPlayback>().Value;
+
+        public Task<Entity?> FindAsync(Guid id, CancellationToken cancellationToken) =>
+            Task.FromResult(_entities.GetValueOrDefault(id));
+
+        public Task<Entity?> FindShallowAsync(Guid id, CancellationToken cancellationToken) =>
+            Task.FromResult(_entities.GetValueOrDefault(id));
+
+        public Task<Guid?> FindParentIdAsync(Guid id, CancellationToken cancellationToken) =>
+            Task.FromResult<Guid?>(null);
+
+        public Task<BookProgressPosition?> ResolveBookProgressPositionAsync(
+            Guid bookId,
+            Guid currentEntityId,
+            int index,
+            int total,
+            CancellationToken cancellationToken) =>
+            Task.FromResult<BookProgressPosition?>(null);
+
+        public Task SaveAsync(Entity entity, CancellationToken cancellationToken) {
+            _entities[entity.Id] = entity;
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class ManualTimeProvider : TimeProvider {
+        private DateTimeOffset _now;
+
+        public ManualTimeProvider(DateTimeOffset now) {
+            _now = now;
+        }
+
+        public override DateTimeOffset GetUtcNow() => _now;
+
+        public void Advance(TimeSpan delta) {
+            _now += delta;
         }
     }
 

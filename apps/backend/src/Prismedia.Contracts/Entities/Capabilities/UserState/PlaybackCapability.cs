@@ -6,6 +6,7 @@ namespace Prismedia.Contracts.Entities;
 /// can restore playback where the user left off.
 /// </summary>
 /// <param name="PlayCount">Number of play sessions recorded.</param>
+/// <param name="SkipCount">Number of quick-abandon skip events recorded.</param>
 /// <param name="PlayDurationSeconds">Total accumulated playback duration in seconds.</param>
 /// <param name="ResumeSeconds">Position in seconds where playback should resume.</param>
 /// <param name="LastPlayedAt">Timestamp of the most recent playback event.</param>
@@ -13,6 +14,7 @@ namespace Prismedia.Contracts.Entities;
 [CapabilityKind("playback")]
 public sealed record PlaybackCapability(
     int PlayCount,
+    int SkipCount,
     double PlayDurationSeconds,
     double ResumeSeconds,
     DateTimeOffset? LastPlayedAt,

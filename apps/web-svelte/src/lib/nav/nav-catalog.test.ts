@@ -26,6 +26,9 @@ describe("defaultNavPrefs", () => {
     const video = prefs.sections.find((s) => s.id === "video");
     expect(video?.items).toEqual(["/movies", "/series", "/videos"]);
 
+    const overview = prefs.sections.find((s) => s.id === "overview");
+    expect(overview?.items).toEqual(["/", "/search", "/stats"]);
+
     expect(prefs.mobileFavorites).toEqual(["/files", "/videos", "/galleries", "/people"]);
   });
 });

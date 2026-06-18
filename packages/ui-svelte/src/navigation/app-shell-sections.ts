@@ -5,6 +5,7 @@ export const appShellSections = [
     items: [
       { label: "Dashboard", href: "/", icon: "layout-dashboard" },
       { label: "Search", href: "/search", icon: "search" },
+      { label: "Stats", href: "/stats", icon: "chart-no-axes-combined" },
     ],
   },
   {

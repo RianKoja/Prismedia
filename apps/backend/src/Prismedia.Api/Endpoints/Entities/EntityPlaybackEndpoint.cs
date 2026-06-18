@@ -18,6 +18,23 @@ internal static class EntityPlaybackEndpoint {
             .Produces<EntityCard>()
             .Produces<ApiProblem>(StatusCodes.Status404NotFound);
 
+        group.MapPost("/{id:guid}/playback/events", async (
+            Guid id,
+            PlaybackEventCreateRequest request,
+            EntityCapabilityService capabilities,
+            CancellationToken cancellationToken) =>
+            EntityEndpointResults.ToResult(id, await capabilities.RecordPlaybackEventAsync(
+                id,
+                request.Kind,
+                request.OccurredAt,
+                request.PositionSeconds,
+                request.DurationSeconds,
+                cancellationToken)))
+            .WithName("CreateEntityPlaybackEvent")
+            .WithSummary("Create Entity Playback Event.")
+            .Produces<EntityCard>()
+            .Produces<ApiProblem>(StatusCodes.Status404NotFound);
+
         return group;
     }
 }

@@ -36,11 +36,13 @@ public static class DependencyInjection {
     public static IServiceCollection AddPrismediaApplication(this IServiceCollection services) {
         services.AddScoped<JobService>();
         services.AddScoped<EntityCapabilityService>();
+        services.AddSingleton(TimeProvider.System);
         services.AddScoped<SettingsService>();
         services.AddScoped<NavLayoutService>();
         services.AddScoped<PrismediaSecurityService>();
         services.AddScoped<BrowserSessionService>();
         services.AddScoped<MusicPlayerStateService>();
+        services.AddSingleton<IJellyfinAudioPlaybackTracker, JellyfinAudioPlaybackTracker>();
         services.AddScoped<JellyfinCatalogService>();
         services.AddScoped<OrganizeService>();
         services.AddScoped<FilesService>();

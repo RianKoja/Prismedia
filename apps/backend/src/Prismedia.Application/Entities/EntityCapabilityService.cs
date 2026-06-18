@@ -1,4 +1,5 @@
 using Prismedia.Contracts.Entities;
+using Prismedia.Application.Playback;
 using Prismedia.Domain.Capabilities;
 using Prismedia.Domain.Entities;
 
@@ -16,13 +17,20 @@ namespace Prismedia.Application.Entities;
 /// </summary>
 public sealed class EntityCapabilityService {
     private readonly IEntityWriteRepository _entities;
+    private readonly IPlaybackEventStore _playbackEvents;
+    private readonly TimeProvider _timeProvider;
 
     /// <summary>
     /// Creates the service over the entity write port.
     /// </summary>
     /// <param name="entities">Entity write repository implemented by Infrastructure.</param>
-    public EntityCapabilityService(IEntityWriteRepository entities) {
+    public EntityCapabilityService(
+        IEntityWriteRepository entities,
+        IPlaybackEventStore? playbackEvents = null,
+        TimeProvider? timeProvider = null) {
         _entities = entities;
+        _playbackEvents = playbackEvents ?? NullPlaybackEventStore.Instance;
+        _timeProvider = timeProvider ?? TimeProvider.System;
     }
 
     /// <summary>
@@ -73,15 +81,18 @@ public sealed class EntityCapabilityService {
     /// <param name="durationSeconds">Watched duration delta to accumulate, when reported.</param>
     /// <param name="completed">Explicit completion override; <c>null</c> derives from position.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    public Task<EntityCard?> UpdatePlaybackAsync(
+    public async Task<EntityCard?> UpdatePlaybackAsync(
         Guid id,
         double? resumeSeconds,
         double? durationSeconds,
         bool? completed,
-        CancellationToken cancellationToken) =>
-        MutateAsync(id, entity => {
+        CancellationToken cancellationToken) {
+        PlaybackEventAppend? completedEvent = null;
+        var card = await MutateAsync(id, entity => {
             var playback = entity.GetOrAddCapability(() => new CapabilityPlayback());
-            var now = DateTimeOffset.UtcNow;
+            var now = _timeProvider.GetUtcNow();
+            completedEvent = null;
+            var playCountBefore = playback.Value.PlayCount;
 
             if (durationSeconds is > 0) {
                 playback.AccumulatePlayDuration(TimeSpan.FromSeconds(durationSeconds.Value));
@@ -97,6 +108,9 @@ public sealed class EntityCapabilityService {
 
                 if (watched) {
                     playback.MarkWatched(now);
+                    if (playback.Value.PlayCount > playCountBefore) {
+                        completedEvent = CompletedEvent(entity, now, resumeSeconds, durationSeconds);
+                    }
                 } else {
                     playback.MarkUnwatched(now);
                 }
@@ -118,6 +132,9 @@ public sealed class EntityCapabilityService {
             var fraction = position.TotalSeconds / total.TotalSeconds;
             if (fraction >= WatchedFraction) {
                 playback.RecordCompleted(now);
+                if (playback.Value.PlayCount > playCountBefore) {
+                    completedEvent = CompletedEvent(entity, now, position.TotalSeconds, runtime?.TotalSeconds);
+                }
             } else if (fraction < StartedFraction) {
                 playback.RecordStartOver(now);
             } else {
@@ -127,18 +144,114 @@ public sealed class EntityCapabilityService {
             return true;
         }, cancellationToken);
 
+        if (card is not null && completedEvent is not null) {
+            await _playbackEvents.AppendAsync(completedEvent, cancellationToken);
+        }
+
+        return card;
+    }
+
     /// <summary>
     /// Records a completed playback event from players that report a single end-of-stream signal
     /// instead of continuous position progress.
     /// </summary>
     /// <param name="id">Entity identifier.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    public Task<EntityCard?> RecordCompletedPlaybackAsync(Guid id, CancellationToken cancellationToken) =>
-        MutateAsync(id, entity => {
+    public async Task<EntityCard?> RecordCompletedPlaybackAsync(Guid id, CancellationToken cancellationToken) {
+        var now = _timeProvider.GetUtcNow();
+        PlaybackEventAppend? completedEvent = null;
+        var card = await MutateAsync(id, entity => {
             var playback = entity.GetOrAddCapability(() => new CapabilityPlayback());
-            playback.RecordCompletedPlay(DateTimeOffset.UtcNow);
+            playback.RecordCompletedPlay(now);
+            completedEvent = CompletedEvent(entity, now, positionSeconds: null, durationSeconds: entity.Technical?.Duration?.TotalSeconds);
             return true;
         }, cancellationToken);
+
+        if (card is not null && completedEvent is not null) {
+            await _playbackEvents.AppendAsync(completedEvent, cancellationToken);
+        }
+
+        return card;
+    }
+
+    /// <summary>
+    /// Records an explicit playback-history event and updates the aggregate playback counters.
+    /// </summary>
+    public async Task<EntityCard?> RecordPlaybackEventAsync(
+        Guid id,
+        PlaybackEventKind kind,
+        DateTimeOffset? occurredAt,
+        double? positionSeconds,
+        double? durationSeconds,
+        CancellationToken cancellationToken) =>
+        kind switch {
+            PlaybackEventKind.Completed => await RecordCompletedPlaybackAsync(
+                id,
+                occurredAt ?? _timeProvider.GetUtcNow(),
+                positionSeconds,
+                durationSeconds,
+                cancellationToken),
+            PlaybackEventKind.Skipped => await RecordSkippedPlaybackAsync(
+                id,
+                occurredAt ?? _timeProvider.GetUtcNow(),
+                positionSeconds,
+                durationSeconds,
+                cancellationToken),
+            _ => null
+        };
+
+    /// <summary>
+    /// Records a completed playback event at a caller-supplied timestamp.
+    /// </summary>
+    public async Task<EntityCard?> RecordCompletedPlaybackAsync(
+        Guid id,
+        DateTimeOffset occurredAt,
+        double? positionSeconds,
+        double? durationSeconds,
+        CancellationToken cancellationToken) {
+        PlaybackEventAppend? completedEvent = null;
+        var card = await MutateAsync(id, entity => {
+            var playback = entity.GetOrAddCapability(() => new CapabilityPlayback());
+            playback.RecordCompletedPlay(occurredAt);
+            completedEvent = CompletedEvent(entity, occurredAt, positionSeconds, durationSeconds ?? entity.Technical?.Duration?.TotalSeconds);
+            return true;
+        }, cancellationToken);
+
+        if (card is not null && completedEvent is not null) {
+            await _playbackEvents.AppendAsync(completedEvent, cancellationToken);
+        }
+
+        return card;
+    }
+
+    /// <summary>
+    /// Records a likely skip/quick-abandon event.
+    /// </summary>
+    public async Task<EntityCard?> RecordSkippedPlaybackAsync(
+        Guid id,
+        DateTimeOffset occurredAt,
+        double? positionSeconds,
+        double? durationSeconds,
+        CancellationToken cancellationToken) {
+        PlaybackEventAppend? skippedEvent = null;
+        var card = await MutateAsync(id, entity => {
+            var playback = entity.GetOrAddCapability(() => new CapabilityPlayback());
+            playback.RecordSkipped(occurredAt);
+            skippedEvent = new PlaybackEventAppend(
+                entity.Id,
+                PlaybackEventKind.Skipped,
+                occurredAt,
+                positionSeconds,
+                durationSeconds ?? entity.Technical?.Duration?.TotalSeconds);
+            return true;
+        }, cancellationToken);
+
+        if (card is not null && skippedEvent is not null) {
+            await _playbackEvents.AppendAsync(skippedEvent, cancellationToken);
+        }
+
+        return card;
+    }
 
     /// <summary>
     /// Updates a non-time progress cursor such as the current chapter and page for books.
@@ -161,7 +274,7 @@ public sealed class EntityCapabilityService {
         }
 
         var progress = entity.GetOrAddCapability(() => new CapabilityProgress());
-        var now = DateTimeOffset.UtcNow;
+        var now = _timeProvider.GetUtcNow();
 
         // Explicit "mark unread": clear completion in place, independent of the cursor. Bypasses the
         // forward-only guard so a finished item can be reopened without losing the page position.
@@ -219,11 +332,19 @@ public sealed class EntityCapabilityService {
 
         progress.MoveTo(targetChapterId, unit, normalizedIndex, normalizedTotal, mode, now, normalizedLocation);
 
+        PlaybackEventAppend? completedEvent = null;
         if (completed == true) {
+            var playback = entity.GetOrAddCapability(() => new CapabilityPlayback());
+            playback.RecordCompletedPlay(now);
             progress.MarkCompleted(now);
+            completedEvent = CompletedEvent(entity, now, positionSeconds: null, durationSeconds: null);
         }
 
         await _entities.SaveAsync(entity, cancellationToken);
+        if (completedEvent is not null) {
+            await _playbackEvents.AppendAsync(completedEvent, cancellationToken);
+        }
+
         return EntityCardProjector.ToCard(entity);
     }
 
@@ -291,6 +412,18 @@ public sealed class EntityCapabilityService {
             }
         }
     }
+
+    private static PlaybackEventAppend CompletedEvent(
+        Entity entity,
+        DateTimeOffset occurredAt,
+        double? positionSeconds,
+        double? durationSeconds) =>
+        new(
+            entity.Id,
+            PlaybackEventKind.Completed,
+            occurredAt,
+            positionSeconds,
+            durationSeconds ?? entity.Technical?.Duration?.TotalSeconds);
 
     private async Task<Guid> ResolveProgressOwnerIdAsync(
         Guid requestedId,

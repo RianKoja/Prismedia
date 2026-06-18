@@ -200,7 +200,7 @@ public sealed class JellyfinCatalogServiceTests {
                     new DescriptionCapability("Detail-only description should stay off shelf rows."),
                     new TechnicalCapability(TimeSpan.FromMinutes(42), 1920, 1080, 23.976, 4_000_000, 48_000, 2, "h264", "mkv", "matroska"),
                     new FilesCapability([new Contracts.Entities.EntityFile("source", sourcePath, "video/x-matroska")]),
-                    new PlaybackCapability(0, 0, 60, DateTimeOffset.Parse("2026-06-17T18:42:00Z"), null)
+                    new PlaybackCapability(0, 0, 0, 60, DateTimeOffset.Parse("2026-06-17T18:42:00Z"), null)
                 ],
                 ChildrenByKind = [],
                 Relationships = []

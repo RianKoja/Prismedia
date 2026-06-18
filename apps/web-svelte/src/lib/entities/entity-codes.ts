@@ -4,12 +4,14 @@ import {
   ENTITY_FILE_ROLE,
   ENTITY_KIND,
   ENTITY_KIND_LABELS,
+  PLAYBACK_EVENT_KIND,
   PROPOSAL_KIND,
   RELATIONSHIP_CODE,
   type CapabilityKindCode,
   type CreditRoleCode,
   type EntityFileRoleCode,
   type EntityKindCode,
+  type PlaybackEventKindCode,
   type ProposalKindCode,
   type RelationshipCode,
 } from "$lib/api/generated/codes";
@@ -23,10 +25,19 @@ export {
   ENTITY_FILE_ROLE,
   ENTITY_KIND,
   ENTITY_KIND_LABELS,
+  PLAYBACK_EVENT_KIND,
   PROPOSAL_KIND,
   RELATIONSHIP_CODE,
 };
-export type { CapabilityKindCode, CreditRoleCode, EntityFileRoleCode, EntityKindCode, ProposalKindCode, RelationshipCode };
+export type {
+  CapabilityKindCode,
+  CreditRoleCode,
+  EntityFileRoleCode,
+  EntityKindCode,
+  PlaybackEventKindCode,
+  ProposalKindCode,
+  RelationshipCode,
+};
 
 /**
  * Maps a plugin-proposal kind to the entity kind Prismedia persists it as. Every proposal kind

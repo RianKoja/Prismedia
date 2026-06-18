@@ -1,4 +1,5 @@
 using Prismedia.Application.Entities;
+using Prismedia.Application.Playback;
 using Prismedia.Application.Videos;
 
 namespace Prismedia.Api.Endpoints;
@@ -8,14 +9,16 @@ internal static class UserPlayedItemEndpoints {
         async Task<IResult> markPlayed(
             Guid itemId,
             IPlaybackSessionService sessions,
+            IJellyfinAudioPlaybackTracker audioPlayback,
             IEntityReadService entities,
             HttpContext httpContext,
             CancellationToken cancellationToken) =>
-            await JellyfinPlaybackResults.MarkPlayedAsync(itemId, sessions, entities, httpContext, cancellationToken);
+            await JellyfinPlaybackResults.MarkPlayedAsync(itemId, sessions, audioPlayback, entities, httpContext, cancellationToken);
 
         async Task<IResult> markUnplayed(
             Guid itemId,
             IPlaybackSessionService sessions,
+            IJellyfinAudioPlaybackTracker audioPlayback,
             IEntityReadService entities,
             HttpContext httpContext,
             CancellationToken cancellationToken) =>
@@ -24,18 +27,20 @@ internal static class UserPlayedItemEndpoints {
             Guid userId,
             Guid itemId,
             IPlaybackSessionService sessions,
+            IJellyfinAudioPlaybackTracker audioPlayback,
             IEntityReadService entities,
             HttpContext httpContext,
             CancellationToken cancellationToken) =>
-            await markPlayed(itemId, sessions, entities, httpContext, cancellationToken);
+            await markPlayed(itemId, sessions, audioPlayback, entities, httpContext, cancellationToken);
         async Task<IResult> markUserScopedUnplayed(
             Guid userId,
             Guid itemId,
             IPlaybackSessionService sessions,
+            IJellyfinAudioPlaybackTracker audioPlayback,
             IEntityReadService entities,
             HttpContext httpContext,
             CancellationToken cancellationToken) =>
-            await markUnplayed(itemId, sessions, entities, httpContext, cancellationToken);
+            await markUnplayed(itemId, sessions, audioPlayback, entities, httpContext, cancellationToken);
 
         routes.MapPost("/UserPlayedItems/{itemId:guid}", markPlayed)
             .WithName("PostJellyfinUserPlayedItem")
