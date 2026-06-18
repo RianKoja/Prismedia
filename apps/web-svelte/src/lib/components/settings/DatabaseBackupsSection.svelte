@@ -281,9 +281,14 @@
             value={confirmationText}
             disabled={!selectedBackup || restoring}
             placeholder={backupState?.restoreConfirmationText ?? ""}
+            aria-describedby="database-restore-confirmation-help"
             autocomplete="off"
             oninput={(event) => (confirmationText = event.currentTarget.value)}
           />
+          <p id="database-restore-confirmation-help" class="text-[0.66rem] leading-relaxed text-text-muted">
+            Type <span class="font-mono text-text-primary">{backupState?.restoreConfirmationText ?? "DESTROY AND RESTORE"}</span>
+            exactly to enable restore.
+          </p>
         </label>
         <Button
           type="button"

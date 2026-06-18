@@ -88,6 +88,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - Added a worker status badge to Job Control so stalled queues show when the background worker is offline.
 
 ### Fixed
+- The database restore confirmation field now keeps the required `DESTROY AND RESTORE` phrase visible while you type, so the placeholder no longer disappears with the only copy of the confirmation text.
 - Database Backups can now create and restore backups in the local dev stack even when PostgreSQL client tools are not installed on the host, and Settings now shows API error messages as readable text instead of raw JSON.
 - Swiftfin and other strict Jellyfin clients no longer receive the Prismedia app shell while probing similar-item or malformed image URLs, and playback shelves now include full media source and audio stream details before playback starts.
 - Library scans now treat missing generated asset files as stale instead of complete, so thumbnails and grid images are regenerated after a local cache is cleared or partially rebuilt.
@@ -466,6 +467,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - Removed Stash-compatible perceptual hashing (pHash). Prismedia no longer computes video or image pHashes, the "Perceptual hash (pHash)" generation setting is gone, and fingerprint identify/contribution now relies on MD5 and oshash. The MD5 and OpenSubtitles (oshash) fingerprints are unchanged, and Stash-Box identify and fingerprint submission continue to work with them.
 
 ### Docs
+- Added a Backups & Restore documentation page covering automatic retention, permanent manual backups, backup file storage, destructive restore flow, and when to still take full `/data` snapshots.
 - Added a developer Codebase Flow Map with rendered architecture, request, job, entity, generated-client, identify, playback, and release-readiness diagrams for onboarding and pre-release review.
 - Documented the Request workflow: a new "Requests" page on the documentation site (connecting Radarr/Sonarr/Lidarr, searching with filters and NSFW behavior, already-tracked updates, TMDB/MusicBrainz detail enrichment, and request history with live statuses), a Request Services section in the Settings reference, and a Requests feature section with fresh screenshots in the README.
 - Overhauled the documentation site and README for the current app, restructured into Getting Started, Using Prismedia, Library & Scanning, Jellyfin Clients, Deployment & Security, Developers, Plugins, and Advanced.

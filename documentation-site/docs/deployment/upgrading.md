@@ -1,7 +1,7 @@
 ---
-sidebar_position: 3
+sidebar_position: 4
 title: Upgrading & Rollback
-description: Image channels, version policy, migrations, backups, and how to roll back.
+description: Image channels, version policy, migrations, snapshots, and how to roll back.
 ---
 
 # Upgrading & Rollback
@@ -84,26 +84,21 @@ Without a `/data` snapshot, rollback after a forward-only migration isn't possib
 
 ## Backups
 
-Prismedia includes database backups in **Settings → Database Backups**:
+Prismedia includes database backups in **Settings -> Database Backups**. They are useful restore points for app database state, and **Backup Now** is worth pressing before risky library or metadata changes. See [Backups & Restore](./backups.md) for the full workflow.
 
-- One automatic Postgres backup is created per day.
-- Automatic backups are kept for 7 days.
-- **Backup Now** creates a permanent manual backup that is not removed by the 7-day retention window.
-- Restoring a backup is destructive: Prismedia stages the selected backup, restarts, and replaces the current database on startup.
+For broader rollback safety, especially before upgrades, still keep a host-level `/data` snapshot:
 
-These backups protect Prismedia's database state. For broader rollback safety, especially before upgrades, still keep a host-level `/data` snapshot:
+- **Volume snapshot** (ZFS, btrfs, LVM) of `/data` - cheap, instant, the safest option for downgrade. Includes the database, generated assets, plugin state, and the `PRISMEDIA_SECRET` file.
+- **`pg_dump` of the embedded Postgres** - useful for a portable SQL dump.
+- **`rsync`/`restic` of `/data`** - stop the container first for a consistent copy; Postgres files aren't safe to copy while running.
 
-- **Volume snapshot** (ZFS, btrfs, LVM) of `/data` — cheap, instant, the safest option for downgrade. Includes the database, generated assets, plugin state, and the `PRISMEDIA_SECRET` file.
-- **`pg_dump` of the embedded Postgres** — `docker exec` into the container; useful for a portable SQL dump.
-- **`rsync`/`restic` of `/data`** — stop the container first for a consistent copy; Postgres files aren't safe to copy while running.
-
-Your **media** (`/media`) doesn't need a Prismedia backup — it's read-only as far as Prismedia is concerned and lives wherever you keep it.
+Your **media** (`/media`) doesn't need a Prismedia backup - it's read-only as far as Prismedia is concerned and lives wherever you keep it.
 
 ## Dev image discipline
 
 The `dev` tag is rebuilt on every push to `main` and may carry schema changes that haven't reached a release.
 
-1. A `dev` build can advance the schema. Going back to a release tag afterwards is a **downgrade** — restore a `/data` snapshot.
+1. A `dev` build can advance the schema. Going back to a release tag afterwards is a **downgrade** - restore a `/data` snapshot.
 2. Channel images are promoted manually. Use `latest`/`release` for stable; `dev` for current `main`.
 
 In short: `dev` is fine for testing, not for "leave it running and forget it."

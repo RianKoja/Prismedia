@@ -57,6 +57,7 @@ const sidebars: SidebarsConfig = {
       items: [
         'deployment/authentication',
         'deployment/reverse-proxy',
+        'deployment/backups',
         'deployment/upgrading',
       ],
     },

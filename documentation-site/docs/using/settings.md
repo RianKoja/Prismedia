@@ -74,6 +74,12 @@ Generation settings control background work such as thumbnails, sprites, trickpl
 
 Generated-storage diagnostics help you understand and refresh cached assets under `/data` — thumbnails, sprites, trickplay tiles, HLS renditions, waveform data, plugin artwork, and extracted subtitles.
 
+## Database backups
+
+Database Backups creates one automatic database backup per day, keeps seven days of automatic backups, and lets you create permanent manual restore points with **Backup Now**. Restore is intentionally destructive: choose a completed backup, type `DESTROY AND RESTORE`, and Prismedia replaces the current database on restart.
+
+See [Backups & Restore](../deployment/backups.md) for retention, storage paths, and restore details.
+
 ## Request services
 
 Connect Radarr, Sonarr, and Lidarr instances for the [Request](./requests.md) workflow. Each service needs its URL and API key, and a **required connection test** verifies it and pulls its root folders, quality/metadata profiles, and tags before defaults can be chosen and the service saved. Per-service defaults cover the root folder, quality profile, search-on-request behavior, Arr tags applied to every request, and (Radarr) minimum availability. Multiple instances of the same type are supported; one per type is the default.
