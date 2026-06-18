@@ -16,6 +16,7 @@
   import { fetchPlaybackStatistics } from "$lib/api/playback-statistics";
   import {
     entityReferenceToThumbnailCard,
+    toAspectRatioNumeric,
     type EntityThumbnailCard,
   } from "$lib/entities/entity-thumbnail";
   import {
@@ -70,6 +71,7 @@
     { value: PLAYBACK_EVENT_KIND.completed, label: "Plays" },
     { value: PLAYBACK_EVENT_KIND.skipped, label: "Skips" },
   ];
+  const STATS_THUMBNAIL_HEIGHT_REM = 3.75;
 
   const nsfw = useNsfw();
 
@@ -203,6 +205,11 @@
       title: event.entityTitle,
       thumbnailUrl: coverFor(event),
     });
+  }
+
+  function thumbnailWidth(card: EntityThumbnailCard): string {
+    const ratio = toAspectRatioNumeric(card.aspectRatio);
+    return `${(STATS_THUMBNAIL_HEIGHT_REM * ratio).toFixed(3)}rem`;
   }
 
   function entityHref(entity: Pick<PlaybackStatisticsEntity, "id" | "kind">): string | undefined {
@@ -416,6 +423,7 @@
         <div class="divide-y divide-border-subtle">
           {#each topEntities as item, index (item.id)}
             {@const href = entityHref(item)}
+            {@const thumbnail = topEntityThumbnail(item)}
             <svelte:element
               this={href ? "a" : "div"}
               href={href ?? undefined}
@@ -426,9 +434,9 @@
             >
               <div class="grid grid-cols-[auto_auto] items-center gap-2.5">
                 <span class="w-4 text-right font-mono text-[0.64rem] text-text-disabled">{index + 1}</span>
-                <div class="stats-thumb stats-thumb-ranked">
+                <div class="stats-thumb" style:width={thumbnailWidth(thumbnail)}>
                   <EntityThumbnail
-                    card={topEntityThumbnail(item)}
+                    card={thumbnail}
                     hoverPreviewsEnabled={false}
                     imageLoading="lazy"
                     interactive={false}
@@ -462,6 +470,7 @@
       <div class="divide-y divide-border-subtle">
         {#each recentEvents as event (event.id)}
           {@const href = eventHref(event)}
+          {@const thumbnail = recentEventThumbnail(event)}
           <svelte:element
             this={href ? "a" : "div"}
             href={href ?? undefined}
@@ -470,9 +479,9 @@
               href && "hover:bg-surface-2/60",
             )}
           >
-            <div class="stats-thumb stats-thumb-event">
+            <div class="stats-thumb" style:width={thumbnailWidth(thumbnail)}>
               <EntityThumbnail
-                card={recentEventThumbnail(event)}
+                card={thumbnail}
                 hoverPreviewsEnabled={false}
                 imageLoading="lazy"
                 interactive={false}
@@ -497,30 +506,13 @@
 
 <style>
   .stats-thumb {
-    width: 3.25rem;
+    height: 3.75rem;
+    flex: 0 0 auto;
     min-width: 0;
   }
 
-  .stats-thumb-event {
-    width: 2.75rem;
-  }
-
   .stats-thumb :global(.entity-thumbnail) {
-    border-radius: var(--radius-xs);
-    box-shadow: var(--shadow-well);
-  }
-
-  .stats-thumb :global(.entity-thumbnail .media) {
-    border-radius: var(--radius-xs);
-  }
-
-  @media (max-width: 640px) {
-    .stats-thumb {
-      width: 2.85rem;
-    }
-
-    .stats-thumb-event {
-      width: 2.55rem;
-    }
+    width: 100%;
+    height: 100%;
   }
 </style>

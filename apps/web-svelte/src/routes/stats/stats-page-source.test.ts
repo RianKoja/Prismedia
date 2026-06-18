@@ -13,6 +13,9 @@ describe("stats page source", () => {
   it("renders playback thumbnails through the shared EntityThumbnail component", () => {
     expect(source).toContain("EntityThumbnail");
     expect(source).toContain("entityReferenceToThumbnailCard");
+    expect(source).toContain("toAspectRatioNumeric");
+    expect(source).not.toContain('aspectRatio: "square"');
+    expect(source).not.toContain("placeholder-frame");
     expect(source).not.toContain("{#snippet entityArtwork");
   });
 });
