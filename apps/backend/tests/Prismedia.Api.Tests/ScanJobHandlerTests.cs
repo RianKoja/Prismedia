@@ -212,6 +212,72 @@ public sealed class ScanJobHandlerTests {
     }
 
     [Fact]
+    public async Task VideoScanSkipsAlreadyOrganizedAutoIdentifyRootsWhenUnorganizedOnly() {
+        var root = new LibraryRootData(
+            Guid.Parse("11111111-1111-1111-1111-111111111111"),
+            "/media/videos",
+            "Videos",
+            Enabled: true,
+            Recursive: true,
+            ScanVideos: true,
+            ScanImages: false,
+            ScanAudio: false,
+            ScanBooks: false,
+            IsNsfw: false);
+        var videoId = Guid.Parse("22222222-2222-2222-2222-222222222222");
+        var persistence = new FakeScanPersistence([root]) {
+            Settings = new LibrarySettingsData(
+                AutoGenerateMetadata: false,
+                AutoGenerateOshash: false,
+                AutoGenerateMd5: false,
+                AutoGeneratePreview: false,
+                GenerateTrickplay: false,
+                TrickplayIntervalSeconds: 10,
+                PreviewClipDurationSeconds: 8,
+                ThumbnailQuality: 2,
+                TrickplayQuality: 2,
+                AutoIdentifyEnabled: true,
+                AutoIdentifyKinds: ["video"],
+                AutoIdentifyUnorganizedOnly: true),
+            UpsertedVideoIds = [videoId],
+            AutoIdentifyRootTargets = [new AutoIdentifyRootTarget(videoId, "video", "Sonic X", IsOrganized: true)],
+            DownstreamNeedsById = new Dictionary<Guid, DownstreamNeeds> {
+                [videoId] = new(
+                    NeedsProbe: false,
+                    MissingOshash: false,
+                    MissingMd5: false,
+                    NeedsPreview: false,
+                    NeedsTrickplay: false,
+                    NeedsSubtitleExtraction: false, NeedsGridThumbnail: false)
+            }
+        };
+        var queue = new RecordingJobQueue();
+        var handler = new ScanLibraryJobHandler(
+            NullLogger<ScanLibraryJobHandler>.Instance,
+            new RecordingFileDiscovery(["/media/videos/sonic-x.mkv"]),
+            persistence,
+            persistence,
+            persistence);
+        var job = new JobRunSnapshot(
+            Guid.NewGuid(),
+            JobType.ScanLibrary,
+            JobRunStatus.Running,
+            Progress: 0,
+            Message: null,
+            PayloadJson: $$"""{"libraryRootId":"{{root.Id}}"}""",
+            TargetEntityKind: "library-root",
+            TargetEntityId: root.Id.ToString(),
+            TargetLabel: root.Label,
+            CreatedAt: DateTimeOffset.UtcNow,
+            StartedAt: DateTimeOffset.UtcNow,
+            FinishedAt: null);
+
+        await handler.HandleAsync(new JobContext(job, queue), CancellationToken.None);
+
+        Assert.DoesNotContain(queue.Enqueued, request => request.Type == JobType.AutoIdentify);
+    }
+
+    [Fact]
     public async Task VideoScanSkipsAutoIdentifyWhenRootOptsOut() {
         var root = new LibraryRootData(
             Guid.Parse("11111111-1111-1111-1111-111111111111"),
@@ -1724,6 +1790,72 @@ public sealed class ScanJobHandlerTests {
     }
 
     [Fact]
+    public async Task BookScanSkipsAlreadyOrganizedAutoIdentifyRootsWhenUnorganizedOnly() {
+        var tempRoot = Directory.CreateTempSubdirectory("prismedia-book-auto-skip-");
+        try {
+            var rootPath = tempRoot.FullName;
+            var bookPath = Path.Combine(rootPath, "Sonic X");
+            Directory.CreateDirectory(bookPath);
+            var archivePath = Path.Combine(bookPath, "chapter-001.cbz");
+            CreateZip(archivePath, ["001.jpg"]);
+
+            var root = new LibraryRootData(
+                Guid.Parse("11111111-1111-1111-1111-111111111111"),
+                rootPath,
+                "Comics",
+                Enabled: true,
+                Recursive: true,
+                ScanVideos: false,
+                ScanImages: false,
+                ScanAudio: false,
+                ScanBooks: true,
+                IsNsfw: false);
+            var persistence = new FakeScanPersistence([root]) {
+                Settings = new LibrarySettingsData(
+                    AutoGenerateMetadata: false,
+                    AutoGenerateOshash: false,
+                    AutoGenerateMd5: false,
+                    AutoGeneratePreview: false,
+                    GenerateTrickplay: false,
+                    TrickplayIntervalSeconds: 10,
+                    PreviewClipDurationSeconds: 8,
+                    ThumbnailQuality: 2,
+                    TrickplayQuality: 2,
+                    AutoIdentifyEnabled: true,
+                    AutoIdentifyKinds: ["book"],
+                    AutoIdentifyUnorganizedOnly: true),
+                OrganizedSourcePaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { bookPath }
+            };
+            var queue = new RecordingJobQueue();
+            var handler = new ScanBookJobHandler(
+                NullLogger<ScanBookJobHandler>.Instance,
+                new RecordingFileDiscovery([archivePath]),
+                persistence,
+                persistence,
+                persistence);
+            var job = new JobRunSnapshot(
+                Guid.NewGuid(),
+                JobType.ScanBook,
+                JobRunStatus.Running,
+                Progress: 0,
+                Message: null,
+                PayloadJson: $$"""{"libraryRootId":"{{root.Id}}"}""",
+                TargetEntityKind: "library-root",
+                TargetEntityId: root.Id.ToString(),
+                TargetLabel: root.Label,
+                CreatedAt: DateTimeOffset.UtcNow,
+                StartedAt: DateTimeOffset.UtcNow,
+                FinishedAt: null);
+
+            await handler.HandleAsync(new JobContext(job, queue), CancellationToken.None);
+
+            Assert.DoesNotContain(queue.Enqueued, request => request.Type == JobType.AutoIdentify);
+        } finally {
+            tempRoot.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task BookScanReadsComicInfoForTitlesAndMetadata() {
         var tempRoot = Directory.CreateTempSubdirectory("prismedia-comicinfo-scan-");
         try {
@@ -2111,6 +2243,9 @@ public sealed class ScanJobHandlerTests {
         public IReadOnlyList<Guid> UpsertedVideoIds { get; init; } = [];
         public IReadOnlyDictionary<Guid, DownstreamNeeds> DownstreamNeedsById { get; init; } =
             new Dictionary<Guid, DownstreamNeeds>();
+        public IReadOnlyList<AutoIdentifyRootTarget>? AutoIdentifyRootTargets { get; init; }
+        public IReadOnlySet<string> OrganizedSourcePaths { get; init; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        private readonly HashSet<Guid> _organizedEntityIds = [];
         public List<VideoUpsertItem> UpsertedVideoItems { get; } = [];
         public List<ImageRecord> UpsertedImages { get; } = [];
         public List<GalleryRecord> UpsertedGalleries { get; } = [];
@@ -2299,6 +2434,7 @@ public sealed class ScanJobHandlerTests {
 
         public Task<Guid> UpsertBookAsync(string sourcePath, string title, Guid libraryRootId, bool isNsfw, CancellationToken cancellationToken) {
             var id = IdFor($"book:{sourcePath}");
+            MarkOrganizedIfNeeded(id, sourcePath);
             UpsertedBooks.Add(new BookRecord(id, sourcePath, title, libraryRootId, null, null));
             return Task.FromResult(id);
         }
@@ -2321,6 +2457,7 @@ public sealed class ScanJobHandlerTests {
             int? sortOrder,
             CancellationToken cancellationToken) {
             var id = IdFor($"book:{sourcePath}");
+            MarkOrganizedIfNeeded(id, sourcePath);
             UpsertedBooks.Add(new BookRecord(id, sourcePath, title, libraryRootId, parentBookEntityId, sortOrder));
             return Task.FromResult(id);
         }
@@ -2440,10 +2577,10 @@ public sealed class ScanJobHandlerTests {
         public Task<IReadOnlyDictionary<Guid, DownstreamNeeds>> CheckDownstreamNeedsBatchAsync(IReadOnlyList<Guid> entityIds, CancellationToken cancellationToken) =>
             Task.FromResult(DownstreamNeedsById);
 
-        // The fake models a flat video library: each scanned entity is its own top-level root.
+        // The fake models a flat video library unless a test supplies explicit root metadata.
         public Task<IReadOnlyList<AutoIdentifyRootTarget>> ResolveAutoIdentifyRootsAsync(IReadOnlyList<Guid> entityIds, CancellationToken cancellationToken) =>
             Task.FromResult<IReadOnlyList<AutoIdentifyRootTarget>>(
-                entityIds.Distinct().Select(id => new AutoIdentifyRootTarget(id, "video", "video.mkv")).ToList());
+                AutoIdentifyRootTargets ?? entityIds.Distinct().Select(id => new AutoIdentifyRootTarget(id, "video", "video.mkv")).ToList());
 
         public Task<bool> HasEntityTechnicalAsync(Guid entityId, CancellationToken cancellationToken) =>
             Task.FromResult(false);
@@ -2453,6 +2590,9 @@ public sealed class ScanJobHandlerTests {
 
         public Task<bool> HasEntityFileAsync(Guid entityId, EntityFileRole role, CancellationToken cancellationToken) =>
             Task.FromResult(false);
+
+        public Task<bool> IsEntityOrganizedAsync(Guid entityId, CancellationToken cancellationToken) =>
+            Task.FromResult(_organizedEntityIds.Contains(entityId));
 
         public Task<bool> HasSubtitlesExtractedAsync(Guid entityId, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
@@ -2492,6 +2632,12 @@ public sealed class ScanJobHandlerTests {
 
         public Task<IReadOnlyList<EntityRefreshTarget>> GetEntityTreeAsync(Guid entityId, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
+
+        private void MarkOrganizedIfNeeded(Guid id, string sourcePath) {
+            if (OrganizedSourcePaths.Contains(sourcePath)) {
+                _organizedEntityIds.Add(id);
+            }
+        }
 
         private Guid IdFor(string key) {
             if (_entityIdsBySource.TryGetValue(key, out var id)) {

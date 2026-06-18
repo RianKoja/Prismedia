@@ -335,7 +335,8 @@ public sealed partial class IdentifyPluginService : IIdentifyProviderService {
         HashSet<Guid> visited,
         CancellationToken cancellationToken,
         bool cascadeChildren = true,
-        IIdentifyCascadeSink? sink = null) {
+        IIdentifyCascadeSink? sink = null,
+        bool streamRootProgress = true) {
         if (!visited.Add(entity.Id)) {
             return new IdentifyPluginResponse(false, null, $"Cycle detected while identifying entity '{entity.Id}'.");
         }
@@ -393,7 +394,8 @@ public sealed partial class IdentifyPluginService : IIdentifyProviderService {
             visited,
             cancellationToken,
             cascadeChildren,
-            sink);
+            sink,
+            streamRootProgress);
         visited.Remove(entity.Id);
         return response with { Result = proposal };
     }

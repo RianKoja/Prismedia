@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Prismedia.Application.Jobs;
+using Prismedia.Application.Jobs.Handlers;
 using Prismedia.Application.Jobs.Ports;
 using Prismedia.Application.Plugins;
 using Prismedia.Application.Settings;
@@ -21,8 +22,15 @@ public sealed class AutoIdentifyRunner(
     SettingsService settings,
     IIdentifyProviderService identify,
     PrismediaDbContext db,
-    ILogger<AutoIdentifyRunner> logger) : IAutoIdentifyRunner {
-    public async Task<AutoIdentifyResult> RunAsync(Guid entityId, CancellationToken cancellationToken) {
+    ILogger<AutoIdentifyRunner> logger,
+    AutoIdentifyConcurrencyGate? gate = null) : IAutoIdentifyRunner {
+    public Task<AutoIdentifyResult> RunAsync(Guid entityId, CancellationToken cancellationToken) =>
+        RunAsync(entityId, AutoIdentifyRunOptions.Default, cancellationToken);
+
+    public async Task<AutoIdentifyResult> RunAsync(
+        Guid entityId,
+        AutoIdentifyRunOptions options,
+        CancellationToken cancellationToken) {
         var config = await settings.GetAutoIdentifySettingsAsync(cancellationToken);
         if (!config.Enabled) {
             return new AutoIdentifyResult(false, SkipReason: "auto identify disabled");
@@ -72,23 +80,40 @@ public sealed class AutoIdentifyRunner(
             .Where(provider => provider.Installed && provider.Enabled)
             .Select(provider => provider.Id)
             .ToHashSet(StringComparer.Ordinal);
+        var providerIds = config.Providers
+            .Where(capable.Contains)
+            .ToArray();
+        if (providerIds.Length == 0) {
+            return new AutoIdentifyResult(false, SkipReason: "no capable provider");
+        }
+
+        using var lease = gate?.TryEnterBackground()
+            ?? (gate is null ? null : throw new JobRetryLaterException("Auto identify provider slot busy.", TimeSpan.FromSeconds(5)));
+        using var inactivity = ProgressSensitiveCancellation.Create(options.InactivityTimeout, cancellationToken);
+        var runToken = inactivity?.Token ?? cancellationToken;
+        var progressSink = AutoIdentifyProgressSink.Create(options, inactivity);
 
         // An artist grouping identifies for its own metadata and artwork only. Its albums are
         // independent auto-identify roots, so cascading the artist into them would duplicate and
         // race that per-album work.
         var cascadeChildren = entity.KindCode != EntityKindRegistry.MusicArtist.Code;
 
-        var queriedProvider = false;
-        foreach (var providerId in config.Providers) {
-            cancellationToken.ThrowIfCancellationRequested();
-            if (!capable.Contains(providerId)) {
-                continue;
-            }
+        foreach (var providerId in providerIds) {
+            runToken.ThrowIfCancellationRequested();
 
-            queriedProvider = true;
             IdentifyPluginResponse response;
             try {
-                response = await identify.IdentifyAsync(entityId, providerId, query: null, parentExternalIds: null, hideNsfw: false, cancellationToken, cascadeChildren);
+                response = await identify.IdentifyAsync(
+                    entityId,
+                    providerId,
+                    query: null,
+                    parentExternalIds: null,
+                    hideNsfw: false,
+                    runToken,
+                    cascadeChildren,
+                    progressSink);
+            } catch (OperationCanceledException) {
+                throw;
             } catch (Exception ex) {
                 logger.LogWarning(ex, "AutoIdentify: provider {Provider} failed for entity {EntityId}", providerId, entityId);
                 continue;
@@ -118,8 +143,11 @@ public sealed class AutoIdentifyRunner(
                         new IdentifyQuery(Title: null, Url: null, ExternalIds: candidate.ExternalIds),
                         parentExternalIds: null,
                         hideNsfw: false,
-                        cancellationToken,
-                        cascadeChildren);
+                        runToken,
+                        cascadeChildren,
+                        progressSink);
+                } catch (OperationCanceledException) {
+                    throw;
                 } catch (Exception ex) {
                     logger.LogWarning(ex, "AutoIdentify: provider {Provider} failed to hydrate candidate for entity {EntityId}", providerId, entityId);
                     continue;
@@ -145,17 +173,15 @@ public sealed class AutoIdentifyRunner(
             var fields = SelectAllPresentFields(proposal);
             var images = SelectDefaultImages(proposal);
             var acceptedProposal = AcceptedProposalMarker.MarkTreeOrganized(proposal);
-            var applied = await identify.ApplyAsync(entityId, acceptedProposal, fields, images, cancellationToken);
+            inactivity?.Reset();
+            var applied = await identify.ApplyAsync(entityId, acceptedProposal, fields, images, runToken);
             if (!applied) {
                 continue;
             }
 
-            await MarkOrganizedAsync(entityId, cancellationToken);
+            inactivity?.Reset();
+            await MarkOrganizedAsync(entityId, runToken);
             return new AutoIdentifyResult(true, providerId, proposal.Confidence);
-        }
-
-        if (!queriedProvider) {
-            return new AutoIdentifyResult(false, SkipReason: "no capable provider");
         }
 
         // A completed run that queried providers and applied nothing consumes one of the entity's
@@ -163,7 +189,7 @@ public sealed class AutoIdentifyRunner(
         // provider outages retry the job via JobRetryLaterException and never reach this point.
         entity.AutoIdentifyAttempts += 1;
         entity.UpdatedAt = DateTimeOffset.UtcNow;
-        await db.SaveChangesAsync(cancellationToken);
+        await db.SaveChangesAsync(runToken);
 
         var remaining = AutoIdentifyPolicy.MaxAttemptsPerEntity - entity.AutoIdentifyAttempts;
         return new AutoIdentifyResult(false, SkipReason: remaining > 0
@@ -278,6 +304,68 @@ public sealed class AutoIdentifyRunner(
         }
 
         return images.Count > 0 ? images : null;
+    }
+
+    private sealed class ProgressSensitiveCancellation : IDisposable {
+        private readonly CancellationTokenSource _source;
+        private readonly TimeSpan _timeout;
+
+        private ProgressSensitiveCancellation(TimeSpan timeout, CancellationToken cancellationToken) {
+            _timeout = timeout;
+            _source = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            Reset();
+        }
+
+        public CancellationToken Token => _source.Token;
+
+        public static ProgressSensitiveCancellation? Create(TimeSpan? timeout, CancellationToken cancellationToken) =>
+            timeout is { } value && value > TimeSpan.Zero
+                ? new ProgressSensitiveCancellation(value, cancellationToken)
+                : null;
+
+        public void Reset() {
+            if (!_source.IsCancellationRequested) {
+                _source.CancelAfter(_timeout);
+            }
+        }
+
+        public void Dispose() => _source.Dispose();
+    }
+
+    private sealed class AutoIdentifyProgressSink(
+        AutoIdentifyRunOptions options,
+        ProgressSensitiveCancellation? timeout) : IIdentifyCascadeSink {
+        private int _resolvedSteps;
+        private int _rootChildCount;
+
+        public static AutoIdentifyProgressSink? Create(
+            AutoIdentifyRunOptions options,
+            ProgressSensitiveCancellation? timeout) =>
+            options.ReportProgressAsync is not null || timeout is not null
+                ? new AutoIdentifyProgressSink(options, timeout)
+                : null;
+
+        public async Task OnEntityResolvedAsync(EntityMetadataProposal partialRoot, CancellationToken cancellationToken) {
+            Interlocked.Exchange(ref _rootChildCount, EntityMetadataProposalTraversal.StructuralChildren(partialRoot).Count);
+            await ReportProgressAsync(cancellationToken);
+        }
+
+        public Task OnProgressAsync(CancellationToken cancellationToken) =>
+            ReportProgressAsync(cancellationToken);
+
+        private async Task ReportProgressAsync(CancellationToken cancellationToken) {
+            timeout?.Reset();
+            var steps = Interlocked.Increment(ref _resolvedSteps);
+            if (options.ReportProgressAsync is null) {
+                return;
+            }
+
+            await options.ReportProgressAsync(
+                new AutoIdentifyProgress(steps, Volatile.Read(ref _rootChildCount)),
+                cancellationToken);
+        }
+
+        public Task<bool> IsActiveAsync(CancellationToken cancellationToken) => Task.FromResult(true);
     }
 
     private async Task MarkOrganizedAsync(Guid entityId, CancellationToken cancellationToken) {

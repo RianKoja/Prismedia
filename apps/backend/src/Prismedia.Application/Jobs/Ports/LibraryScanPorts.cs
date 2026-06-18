@@ -176,6 +176,7 @@ public interface IDownstreamNeedsPersistence {
     Task<bool> HasEntityTechnicalAsync(Guid entityId, CancellationToken cancellationToken);
     Task<bool> HasEntityFingerprintAsync(Guid entityId, FingerprintAlgorithm algorithm, CancellationToken cancellationToken);
     Task<bool> HasEntityFileAsync(Guid entityId, EntityFileRole role, CancellationToken cancellationToken);
+    Task<bool> IsEntityOrganizedAsync(Guid entityId, CancellationToken cancellationToken) => Task.FromResult(false);
     Task<bool> HasSubtitlesExtractedAsync(Guid entityId, CancellationToken cancellationToken);
 
     /// <summary>
@@ -196,7 +197,8 @@ public interface IDownstreamNeedsPersistence {
 /// <param name="Id">Root entity identifier.</param>
 /// <param name="KindCode">Root entity kind code.</param>
 /// <param name="Title">Root entity title for job dashboards.</param>
-public sealed record AutoIdentifyRootTarget(Guid Id, string KindCode, string Title);
+/// <param name="IsOrganized">Whether the root is already marked organized.</param>
+public sealed record AutoIdentifyRootTarget(Guid Id, string KindCode, string Title, bool IsOrganized = false);
 
 /// <summary>Writes media processing outputs and source-file metadata for entities.</summary>
 public interface IMediaProcessingStatePersistence {
@@ -318,6 +320,7 @@ public sealed record TrickplayInfoData(
 /// <param name="AutoIdentifyEnabled">Whether scanned media should be auto-identified via enabled plugins.</param>
 /// <param name="AutoIdentifyKinds">Selector kind codes (video, gallery, image, audio, book) auto identify applies to.</param>
 /// <param name="RemoveOrphanTags">Whether scan cleanup should delete tags that nothing references.</param>
+/// <param name="AutoIdentifyUnorganizedOnly">Whether scans should skip auto-identify roots already marked organized.</param>
 public sealed record LibrarySettingsData(
     bool AutoGenerateMetadata,
     bool AutoGenerateOshash,
@@ -330,7 +333,8 @@ public sealed record LibrarySettingsData(
     int TrickplayQuality,
     bool AutoIdentifyEnabled = false,
     IReadOnlyList<string>? AutoIdentifyKinds = null,
-    bool RemoveOrphanTags = false);
+    bool RemoveOrphanTags = false,
+    bool AutoIdentifyUnorganizedOnly = true);
 
 /// <summary>
 /// Describes a video file discovered by a scan and the structural series context inferred from its path.

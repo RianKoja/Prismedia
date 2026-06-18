@@ -45,7 +45,8 @@ public sealed partial class LibraryScanPersistenceService {
             settings.TrickplayQuality,
             autoIdentify.Enabled,
             autoIdentify.EntityKinds,
-            removeOrphanTags);
+            removeOrphanTags,
+            autoIdentify.UnorganizedOnly);
     }
 
     public async Task UpdateRootLastScannedAsync(Guid rootId, CancellationToken cancellationToken) {

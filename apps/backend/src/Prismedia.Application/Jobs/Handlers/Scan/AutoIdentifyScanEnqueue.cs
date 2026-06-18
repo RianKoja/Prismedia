@@ -33,7 +33,7 @@ internal static class AutoIdentifyScanEnqueue {
 
         var roots = await downstreamNeeds.ResolveAutoIdentifyRootsAsync(entityIds, cancellationToken);
         foreach (var root in roots) {
-            var request = RequestFor(settings, root.KindCode, root.Id.ToString(), root.Title);
+            var request = RequestFor(settings, root.KindCode, root.Id.ToString(), root.Title, root.IsOrganized);
             if (request is not null) {
                 await context.EnqueueIfNeededAsync(request, cancellationToken);
             }
@@ -48,12 +48,18 @@ internal static class AutoIdentifyScanEnqueue {
     /// <param name="entityKind">Stable entity kind code; mapped to a media selector kind.</param>
     /// <param name="entityId">Entity to identify.</param>
     /// <param name="label">Human-readable label for job dashboards.</param>
+    /// <param name="isOrganized">Whether the target entity is already organized.</param>
     public static EnqueueJobRequest? RequestFor(
         LibrarySettingsData settings,
         string entityKind,
         string entityId,
-        string label) {
+        string label,
+        bool isOrganized = false) {
         if (!settings.AutoIdentifyEnabled || settings.AutoIdentifyKinds is not { Count: > 0 } kinds) {
+            return null;
+        }
+
+        if (settings.AutoIdentifyUnorganizedOnly && isOrganized) {
             return null;
         }
 
@@ -77,6 +83,7 @@ internal static class AutoIdentifyScanEnqueue {
         LibrarySettingsData settings,
         EntityKind entityKind,
         string entityId,
-        string label) =>
-        RequestFor(settings, entityKind.ToCode(), entityId, label);
+        string label,
+        bool isOrganized = false) =>
+        RequestFor(settings, entityKind.ToCode(), entityId, label, isOrganized);
 }

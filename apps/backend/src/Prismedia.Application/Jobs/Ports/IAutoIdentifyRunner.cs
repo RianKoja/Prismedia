@@ -14,6 +14,20 @@ public interface IAutoIdentifyRunner {
     /// <param name="entityId">Entity to identify.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     Task<AutoIdentifyResult> RunAsync(Guid entityId, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Attempts to auto-identify and fully apply metadata for one entity with job-supplied execution
+    /// options, such as progress-sensitive timeout behavior. Implementations that do not need the
+    /// options can rely on the default forwarding behavior.
+    /// </summary>
+    /// <param name="entityId">Entity to identify.</param>
+    /// <param name="options">Execution options for this run.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    Task<AutoIdentifyResult> RunAsync(
+        Guid entityId,
+        AutoIdentifyRunOptions options,
+        CancellationToken cancellationToken) =>
+        RunAsync(entityId, cancellationToken);
 }
 
 /// <summary>
@@ -27,6 +41,27 @@ public static class AutoIdentifyPolicy {
     /// </summary>
     public const int MaxAttemptsPerEntity = 3;
 }
+
+/// <summary>
+/// Execution options supplied by the job handler to an auto-identify run.
+/// </summary>
+/// <param name="InactivityTimeout">
+/// Optional maximum time the run may spend without observable provider/cascade progress. A long
+/// series may run beyond this total duration as long as children keep resolving.
+/// </param>
+/// <param name="ReportProgressAsync">Optional callback for publishing live job progress.</param>
+public sealed record AutoIdentifyRunOptions(
+    TimeSpan? InactivityTimeout = null,
+    Func<AutoIdentifyProgress, CancellationToken, Task>? ReportProgressAsync = null) {
+    public static AutoIdentifyRunOptions Default { get; } = new();
+}
+
+/// <summary>
+/// Progress observed while a provider is walking an auto-identify proposal tree.
+/// </summary>
+/// <param name="ResolvedSteps">Number of progress callbacks seen for this run.</param>
+/// <param name="RootChildCount">Current number of direct structural root children in the partial proposal.</param>
+public sealed record AutoIdentifyProgress(int ResolvedSteps, int RootChildCount);
 
 /// <summary>
 /// Outcome of an auto-identify attempt for a single entity.

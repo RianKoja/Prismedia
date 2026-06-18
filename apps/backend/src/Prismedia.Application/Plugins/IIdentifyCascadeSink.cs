@@ -20,6 +20,13 @@ public interface IIdentifyCascadeSink {
     Task OnEntityResolvedAsync(EntityMetadataProposal partialRoot, CancellationToken cancellationToken);
 
     /// <summary>
+    /// Called when nested cascade work advances but there is no new root proposal ready to stream yet.
+    /// Implementations can use this as a heartbeat for inactivity timeouts without mutating durable
+    /// proposal state. The default is a no-op so existing durable sinks only persist full root updates.
+    /// </summary>
+    Task OnProgressAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
+    /// <summary>
     /// Reports whether the cascade still has a live destination — i.e. the parent it is streaming into
     /// is still queued and still owned by this cascade run. The cascade checks this before walking each
     /// top-level child and stops the walk when it returns false, so a queue item the user removed (or
