@@ -19,10 +19,7 @@ public sealed class EfPlaybackStatisticsService(PrismediaDbContext db) : IPlayba
     public async Task<PlaybackStatisticsResponse> GetAsync(
         PlaybackStatisticsQuery query,
         CancellationToken cancellationToken) {
-        var rows = await QueryRows(query)
-            .OrderByDescending(row => row.OccurredAt)
-            .ThenByDescending(row => row.EventId)
-            .ToArrayAsync(cancellationToken);
+        var rows = await QueryRows(query).ToArrayAsync(cancellationToken);
 
         var coverByEntity = await LoadCoverPathsAsync(rows.Select(row => row.EntityId).Distinct().ToArray(), cancellationToken);
         var completedCount = rows.Count(row => row.Kind == PlaybackEventKind.Completed);
@@ -93,22 +90,34 @@ public sealed class EfPlaybackStatisticsService(PrismediaDbContext db) : IPlayba
             from evt in events
             join entity in db.Entities.AsNoTracking() on evt.EntityId equals entity.Id
             where !query.HideNsfw || !entity.IsNsfw
-            select new PlaybackStatisticsRow(
-                evt.Id,
+            select new {
+                EventId = evt.Id,
                 evt.EntityId,
-                entity.KindCode,
-                entity.Title,
+                EntityKindCode = entity.KindCode,
+                EntityTitle = entity.Title,
                 evt.Kind,
                 evt.OccurredAt,
                 evt.PositionSeconds,
-                evt.DurationSeconds);
+                evt.DurationSeconds
+            };
 
         if (query.Kind is { } kind) {
             var kindCode = kind.ToCode();
             rows = rows.Where(row => row.EntityKindCode == kindCode);
         }
 
-        return rows;
+        return rows
+            .OrderByDescending(row => row.OccurredAt)
+            .ThenByDescending(row => row.EventId)
+            .Select(row => new PlaybackStatisticsRow(
+                row.EventId,
+                row.EntityId,
+                row.EntityKindCode,
+                row.EntityTitle,
+                row.Kind,
+                row.OccurredAt,
+                row.PositionSeconds,
+                row.DurationSeconds));
     }
 
     private async Task<IReadOnlyDictionary<Guid, string>> LoadCoverPathsAsync(
