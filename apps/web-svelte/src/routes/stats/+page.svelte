@@ -13,6 +13,7 @@
   import { Button, cn } from "@prismedia/ui-svelte";
   import { apiAssetUrl } from "$lib/api/orval-fetch";
   import { fetchPlaybackStatistics } from "$lib/api/playback-statistics";
+  import { entityKindIcon } from "$lib/entities/entity-kind-icons";
   import {
     ENTITY_KIND,
     PLAYBACK_EVENT_KIND,
@@ -174,8 +175,8 @@
 
   function eventTone(kind: string): string {
     return kind === PLAYBACK_EVENT_KIND.skipped
-      ? "border-amber-400/30 bg-amber-400/10 text-amber-100"
-      : "border-emerald-400/30 bg-emerald-400/10 text-emerald-100";
+      ? "border-warning/30 bg-warning-muted/30 text-warning-text"
+      : "border-border-accent bg-accent-950/40 text-text-accent-bright";
   }
 
   function coverFor(entity: Pick<PlaybackStatisticsEntity | PlaybackStatisticsEvent, "coverUrl">): string | undefined {
@@ -201,16 +202,42 @@
   function selectEvent(value: EventFilter) {
     eventFilter = value;
   }
+
+  function hideBrokenImage(event: Event) {
+    const target = event.currentTarget;
+    if (target instanceof HTMLImageElement) target.hidden = true;
+  }
 </script>
+
+{#snippet entityArtwork(kind: string, title: string, cover: string | undefined, compact: boolean)}
+  {@const KindIcon = entityKindIcon(kind)}
+  <div
+    class={cn(
+      "relative grid shrink-0 place-items-center overflow-hidden rounded-xs border border-border-subtle bg-gradient-to-br from-surface-3 to-surface-1 text-text-muted shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]",
+      compact ? "h-11 w-8" : "h-14 w-10",
+    )}
+  >
+    <KindIcon class={cn("relative z-0 opacity-70", compact ? "h-3.5 w-3.5" : "h-4.5 w-4.5")} />
+    {#if cover}
+      <img
+        src={cover}
+        alt=""
+        class="absolute inset-0 z-10 h-full w-full object-cover"
+        loading="lazy"
+        decoding="async"
+        onerror={hideBrokenImage}
+      />
+    {/if}
+  </div>
+{/snippet}
 
 <svelte:head>
   <title>Playback Stats · Prismedia</title>
 </svelte:head>
 
-<div class="space-y-4">
-  <section class="surface-card overflow-hidden rounded-md border-border-subtle">
-    <div class="relative isolate px-4 py-4 sm:px-5">
-      <div class="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_top_left,rgba(242,194,106,0.14),transparent_34%),linear-gradient(135deg,rgba(18,18,22,0.96),rgba(8,8,10,0.98))]"></div>
+<div class="space-y-4 pb-8">
+  <section class="surface-panel overflow-hidden">
+    <div class="border-b border-border-subtle bg-gradient-to-br from-surface-2 via-surface-2 to-surface-1 px-4 py-4 sm:px-5">
       <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div class="min-w-0 space-y-2">
           <div class="flex items-center gap-2 text-mono-sm uppercase tracking-[0.18em] text-accent-300">
@@ -227,8 +254,8 @@
           </p>
         </div>
 
-        <div class="grid gap-2 sm:grid-cols-[auto_auto_auto]">
-          <div class="flex flex-wrap gap-1.5 rounded-sm border border-border-subtle bg-surface-1/70 p-1">
+        <div class="grid gap-2 sm:grid-cols-2">
+          <div class="surface-well flex flex-wrap gap-1.5 p-1">
             {#each TIMEFRAMES as option (option.key)}
               <Button
                 variant={timeframe === option.key ? "primary" : "ghost"}
@@ -241,7 +268,7 @@
             {/each}
           </div>
 
-          <div class="flex flex-wrap gap-1.5 rounded-sm border border-border-subtle bg-surface-1/70 p-1">
+          <div class="surface-well flex flex-wrap gap-1.5 p-1">
             {#each EVENT_FILTERS as option (option.value)}
               <Button
                 variant={eventFilter === option.value ? "primary" : "ghost"}
@@ -255,80 +282,82 @@
           </div>
         </div>
       </div>
+    </div>
 
-      <div class="mt-4 flex gap-1.5 overflow-x-auto pb-1">
-        {#each KIND_FILTERS as option (option.value)}
-          <Button
-            variant={kindFilter === option.value ? "primary" : "secondary"}
-            size="sm"
-            class="h-7 shrink-0 px-2.5"
-            onclick={() => selectKind(option.value)}
-          >
-            {option.label}
-          </Button>
-        {/each}
-      </div>
+    <div class="flex gap-1.5 overflow-x-auto px-4 py-3 sm:px-5">
+      {#each KIND_FILTERS as option (option.value)}
+        <Button
+          variant={kindFilter === option.value ? "primary" : "ghost"}
+          size="sm"
+          class="h-7 shrink-0 px-2.5"
+          onclick={() => selectKind(option.value)}
+        >
+          {option.label}
+        </Button>
+      {/each}
     </div>
   </section>
 
   {#if error}
-    <div class="surface-card rounded-md border-error/30 bg-error-muted/20 px-4 py-3 text-sm text-error-text">
+    <div class="surface-panel border-l-2 border-error px-4 py-3 text-sm text-error-text" role="alert">
       {error}
     </div>
   {/if}
 
-  <section class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-    <article class="surface-card rounded-md border-border-subtle p-4">
-      <div class="flex items-center justify-between text-text-muted">
-        <span class="text-mono-sm uppercase tracking-[0.14em]">Total</span>
-        <Activity class="h-4 w-4" />
+  <section class="surface-panel overflow-hidden">
+    <div class="grid divide-y divide-border-subtle sm:grid-cols-2 sm:divide-x sm:divide-y-0 xl:grid-cols-4">
+      <div class="min-h-[96px] px-4 py-3.5">
+        <div class="flex items-center justify-between text-text-muted">
+          <span class="text-mono-sm uppercase tracking-[0.14em]">Total</span>
+          <Activity class="h-4 w-4" />
+        </div>
+        <div class="mt-2 font-heading text-3xl font-semibold text-text-primary">
+          {loading ? "-" : formatNumber(stats?.totalEvents)}
+        </div>
+        <div class="mt-1 text-sm text-text-muted">Events in range</div>
       </div>
-      <div class="mt-3 text-3xl font-semibold text-text-primary">
-        {loading ? "-" : formatNumber(stats?.totalEvents)}
-      </div>
-      <div class="mt-1 text-sm text-text-muted">Events in range</div>
-    </article>
 
-    <article class="surface-card rounded-md border-border-subtle p-4">
-      <div class="flex items-center justify-between text-text-muted">
-        <span class="text-mono-sm uppercase tracking-[0.14em]">Plays</span>
-        <Eye class="h-4 w-4" />
+      <div class="min-h-[96px] px-4 py-3.5">
+        <div class="flex items-center justify-between text-text-muted">
+          <span class="text-mono-sm uppercase tracking-[0.14em]">Plays</span>
+          <Eye class="h-4 w-4" />
+        </div>
+        <div class="mt-2 font-heading text-3xl font-semibold text-text-accent-bright">
+          {loading ? "-" : formatNumber(stats?.completedCount)}
+        </div>
+        <div class="mt-1 text-sm text-text-muted">Completed events</div>
       </div>
-      <div class="mt-3 text-3xl font-semibold text-emerald-100">
-        {loading ? "-" : formatNumber(stats?.completedCount)}
-      </div>
-      <div class="mt-1 text-sm text-text-muted">Completed playback events</div>
-    </article>
 
-    <article class="surface-card rounded-md border-border-subtle p-4">
-      <div class="flex items-center justify-between text-text-muted">
-        <span class="text-mono-sm uppercase tracking-[0.14em]">Skips</span>
-        <SkipForward class="h-4 w-4" />
+      <div class="min-h-[96px] px-4 py-3.5">
+        <div class="flex items-center justify-between text-text-muted">
+          <span class="text-mono-sm uppercase tracking-[0.14em]">Skips</span>
+          <SkipForward class="h-4 w-4" />
+        </div>
+        <div class="mt-2 font-heading text-3xl font-semibold text-warning-text">
+          {loading ? "-" : formatNumber(stats?.skippedCount)}
+        </div>
+        <div class="mt-1 text-sm text-text-muted">Quick exits</div>
       </div>
-      <div class="mt-3 text-3xl font-semibold text-amber-100">
-        {loading ? "-" : formatNumber(stats?.skippedCount)}
-      </div>
-      <div class="mt-1 text-sm text-text-muted">Fast abandons and explicit skips</div>
-    </article>
 
-    <article class="surface-card rounded-md border-border-subtle p-4">
-      <div class="flex items-center justify-between text-text-muted">
-        <span class="text-mono-sm uppercase tracking-[0.14em]">Items</span>
-        <Trophy class="h-4 w-4" />
+      <div class="min-h-[96px] px-4 py-3.5">
+        <div class="flex items-center justify-between text-text-muted">
+          <span class="text-mono-sm uppercase tracking-[0.14em]">Items</span>
+          <Trophy class="h-4 w-4" />
+        </div>
+        <div class="mt-2 font-heading text-3xl font-semibold text-text-primary">
+          {loading ? "-" : formatNumber(stats?.distinctEntityCount)}
+        </div>
+        <div class="mt-1 text-sm text-text-muted">Distinct entities</div>
       </div>
-      <div class="mt-3 text-3xl font-semibold text-text-primary">
-        {loading ? "-" : formatNumber(stats?.distinctEntityCount)}
-      </div>
-      <div class="mt-1 text-sm text-text-muted">Distinct entities touched</div>
-    </article>
+    </div>
   </section>
 
   {#if loading}
-    <div class="surface-card flex min-h-52 items-center justify-center rounded-md border-border-subtle">
+    <div class="surface-panel flex min-h-52 items-center justify-center">
       <Loader2 class="h-6 w-6 animate-spin text-accent-300" />
     </div>
   {:else if showEmpty}
-    <div class="surface-card flex min-h-52 flex-col items-center justify-center rounded-md border-border-subtle px-4 text-center">
+    <div class="surface-panel flex min-h-52 flex-col items-center justify-center px-4 text-center">
       <History class="h-7 w-7 text-text-muted" />
       <h2 class="mt-3 font-heading text-lg text-text-primary">No playback history yet</h2>
       <p class="mt-1 max-w-md text-sm text-text-muted">
@@ -336,117 +365,112 @@
       </p>
     </div>
   {:else}
-    <section class="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(340px,0.8fr)]">
-      <article class="surface-card rounded-md border-border-subtle p-4">
-        <div class="flex items-center justify-between gap-3">
+    <section class="grid gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(340px,0.75fr)]">
+      <section class="surface-panel overflow-hidden">
+        <div class="flex items-center justify-between gap-3 border-b border-border-subtle px-4 py-3.5">
           <div>
             <h2 class="font-heading text-lg text-text-primary">Daily Activity</h2>
-            <p class="text-sm text-text-muted">Completed and skipped events by day</p>
+            <p class="text-sm text-text-muted">Plays and skips by day</p>
           </div>
           <RotateCcw class="h-4 w-4 text-text-muted" />
         </div>
 
-        <div class="mt-5 flex h-52 items-end gap-1 overflow-x-auto border-b border-border-subtle pb-2">
-          {#each dailyEvents as bucket (bucket.date)}
-            {@const completed = Number(bucket.completedCount)}
-            {@const skipped = Number(bucket.skippedCount)}
-            {@const total = completed + skipped}
-            {@const height = Math.max(4, Math.round((total / maxDailyEvents) * 100))}
-            <div class="group flex min-w-4 flex-1 flex-col items-center justify-end gap-1">
-              <div
-                class="flex w-full max-w-8 flex-col justify-end overflow-hidden rounded-xs border border-border-subtle bg-surface-2"
-                style="height: {height}%"
-                title={`${formatShortDate(bucket.date)}: ${total} events`}
-              >
-                {#if skipped > 0}
-                  <div
-                    class="bg-amber-300/70"
-                    style="height: {Math.max(2, Math.round((skipped / Math.max(1, total)) * height))}%"
-                  ></div>
-                {/if}
-                {#if completed > 0}
-                  <div class="flex-1 bg-accent-300/80"></div>
-                {/if}
+        <div class="px-4 py-4">
+          <div class="flex h-36 items-end gap-1 overflow-x-auto border-b border-border-subtle pb-2 sm:h-40">
+            {#each dailyEvents as bucket (bucket.date)}
+              {@const completed = Number(bucket.completedCount)}
+              {@const skipped = Number(bucket.skippedCount)}
+              {@const total = completed + skipped}
+              {@const height = Math.max(4, Math.round((total / maxDailyEvents) * 100))}
+              <div class="group flex min-w-4 flex-1 flex-col items-center justify-end gap-1">
+                <div
+                  class="flex w-full max-w-8 flex-col justify-end overflow-hidden rounded-xs border border-border-subtle bg-surface-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
+                  style="height: {height}%"
+                  title={`${formatShortDate(bucket.date)}: ${total} events`}
+                >
+                  {#if skipped > 0}
+                    <div
+                      class="bg-warning/80"
+                      style="height: {Math.max(2, Math.round((skipped / Math.max(1, total)) * height))}%"
+                    ></div>
+                  {/if}
+                  {#if completed > 0}
+                    <div class="flex-1 bg-accent-300/85 shadow-[0_0_12px_rgba(242,194,106,0.22)]"></div>
+                  {/if}
+                </div>
               </div>
-            </div>
-          {/each}
-        </div>
+            {/each}
+          </div>
 
-        <div class="mt-3 flex items-center gap-4 text-xs text-text-muted">
-          <span class="inline-flex items-center gap-1.5"><span class="h-2 w-2 rounded-xs bg-accent-300"></span>Plays</span>
-          <span class="inline-flex items-center gap-1.5"><span class="h-2 w-2 rounded-xs bg-amber-300"></span>Skips</span>
+          <div class="mt-3 flex items-center gap-4 text-xs text-text-muted">
+            <span class="inline-flex items-center gap-1.5"><span class="h-2 w-2 rounded-xs bg-accent-300"></span>Plays</span>
+            <span class="inline-flex items-center gap-1.5"><span class="h-2 w-2 rounded-xs bg-warning"></span>Skips</span>
+          </div>
         </div>
-      </article>
+      </section>
 
-      <article class="surface-card rounded-md border-border-subtle p-4">
-        <div class="flex items-center justify-between gap-3">
+      <section class="surface-panel overflow-hidden">
+        <div class="flex items-center justify-between gap-3 border-b border-border-subtle px-4 py-3.5">
           <div>
             <h2 class="font-heading text-lg text-text-primary">Top Entities</h2>
-            <p class="text-sm text-text-muted">Ranked by events in this window</p>
+            <p class="text-sm text-text-muted">Ranked by this window</p>
           </div>
           <Trophy class="h-4 w-4 text-accent-300" />
         </div>
 
-        <div class="mt-4 space-y-2">
+        <div class="divide-y divide-border-subtle">
           {#each topEntities as item, index (item.id)}
             {@const href = entityHref(item)}
             {@const cover = coverFor(item)}
-            <a
+            <svelte:element
+              this={href ? "a" : "div"}
               href={href ?? undefined}
               class={cn(
-                "group flex items-center gap-3 rounded-sm border border-border-subtle bg-surface-1/70 p-2 transition-colors",
-                href ? "hover:border-border-accent hover:bg-surface-2" : "pointer-events-none",
+                "group grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-4 py-3 transition-colors",
+                href && "hover:bg-surface-2/60",
               )}
             >
-              <div class="flex h-14 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xs border border-border-subtle bg-surface-3 text-sm font-semibold text-text-muted">
-                {#if cover}
-                  <img src={cover} alt="" class="h-full w-full object-cover" loading="lazy" />
-                {:else}
-                  {index + 1}
-                {/if}
+              <div class="grid grid-cols-[auto_auto] items-center gap-3">
+                <span class="w-5 text-right font-mono text-[0.68rem] text-text-disabled">{index + 1}</span>
+                {@render entityArtwork(item.kind, item.title, cover, false)}
               </div>
-              <div class="min-w-0 flex-1">
+              <div class="min-w-0">
                 <div class="truncate text-sm font-medium text-text-primary">{item.title}</div>
                 <div class="text-xs text-text-muted">{labelForEntityKind(item.kind)}</div>
               </div>
-              <div class="grid shrink-0 grid-cols-2 gap-2 text-right text-xs">
-                <span class="text-emerald-100">{formatNumber(item.completedCount)}</span>
-                <span class="text-amber-100">{formatNumber(item.skippedCount)}</span>
+              <div class="grid shrink-0 grid-cols-2 gap-3 text-right font-mono text-xs">
+                <span class="text-text-accent-bright">{formatNumber(item.completedCount)}</span>
+                <span class="text-warning-text">{formatNumber(item.skippedCount)}</span>
               </div>
-            </a>
+            </svelte:element>
           {/each}
         </div>
-      </article>
+      </section>
     </section>
 
-    <section class="surface-card rounded-md border-border-subtle p-4">
-      <div class="flex items-center justify-between gap-3">
+    <section class="surface-panel overflow-hidden">
+      <div class="flex items-center justify-between gap-3 border-b border-border-subtle px-4 py-3.5">
         <div>
           <h2 class="font-heading text-lg text-text-primary">Recent Events</h2>
-          <p class="text-sm text-text-muted">Latest timestamped playback history</p>
+          <p class="text-sm text-text-muted">Latest playback history</p>
         </div>
         <Clock3 class="h-4 w-4 text-text-muted" />
       </div>
 
-      <div class="mt-4 divide-y divide-border-subtle">
+      <div class="divide-y divide-border-subtle">
         {#each recentEvents as event (event.id)}
           {@const href = eventHref(event)}
           {@const cover = coverFor(event)}
-          <a
+          <svelte:element
+            this={href ? "a" : "div"}
             href={href ?? undefined}
             class={cn(
-              "flex items-center gap-3 py-2.5 transition-colors",
-              href && "hover:bg-surface-2/50",
+              "grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-4 py-3 transition-colors",
+              href && "hover:bg-surface-2/60",
             )}
           >
-            <div class="flex h-11 w-8 shrink-0 items-center justify-center overflow-hidden rounded-xs border border-border-subtle bg-surface-3 text-xs text-text-muted">
-              {#if cover}
-                <img src={cover} alt="" class="h-full w-full object-cover" loading="lazy" />
-              {:else}
-                <Activity class="h-3.5 w-3.5" />
-              {/if}
-            </div>
-            <div class="min-w-0 flex-1">
+            {@render entityArtwork(event.entityKind, event.entityTitle, cover, true)}
+            <div class="min-w-0">
               <div class="truncate text-sm font-medium text-text-primary">{event.entityTitle}</div>
               <div class="text-xs text-text-muted">
                 {labelForEntityKind(event.entityKind)} · {formatEventTime(event.occurredAt)}
@@ -455,7 +479,7 @@
             <span class={cn("shrink-0 rounded-xs border px-2 py-1 text-xs font-medium", eventTone(event.kind))}>
               {eventLabel(event.kind)}
             </span>
-          </a>
+          </svelte:element>
         {/each}
       </div>
     </section>

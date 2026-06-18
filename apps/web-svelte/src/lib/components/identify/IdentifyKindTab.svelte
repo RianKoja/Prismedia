@@ -10,7 +10,7 @@
   import type { EntityCard } from "$lib/api/entities";
   import IdentifyProviderSelect from "./IdentifyProviderSelect.svelte";
   import { useIdentifyStore } from "./identify-store.svelte";
-  import { entityKindIcon } from "./identify-icons";
+  import { entityKindIcon } from "$lib/entities/entity-kind-icons";
 
   interface Props {
     entityKind: string;

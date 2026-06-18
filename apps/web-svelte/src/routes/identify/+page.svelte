@@ -19,7 +19,7 @@
   import IdentifyReviewChoice from "$lib/components/identify/IdentifyReviewChoice.svelte";
   import IdentifyReviewParent from "$lib/components/identify/IdentifyReviewParent.svelte";
   import IdentifyReviewChild from "$lib/components/identify/IdentifyReviewChild.svelte";
-  import { entityKindIcon } from "$lib/components/identify/identify-icons";
+  import { entityKindIcon } from "$lib/entities/entity-kind-icons";
   import { useAppChrome } from "$lib/stores/app-chrome.svelte";
 
   const store = useIdentifyStore();

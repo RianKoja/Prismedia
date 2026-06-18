@@ -22,7 +22,7 @@
   import { identifyCandidateKey } from "./identify-candidate-card";
   import { supportedProviderId } from "./identify-provider-selection";
   import { providerSeekOrder } from "./identify-provider-seek";
-  import { entityKindIcon } from "./identify-icons";
+  import { entityKindIcon } from "$lib/entities/entity-kind-icons";
   import { aspectRatioForKind, toAspectRatioValue } from "$lib/entities/entity-thumbnail";
   import { useIdentifyStore, type IdentifyQueueItem } from "./identify-store.svelte";
 

@@ -11,7 +11,7 @@
   } from "@lucide/svelte";
   import { cn } from "@prismedia/ui-svelte";
   import { useIdentifyStore } from "./identify-store.svelte";
-  import { entityKindIcon } from "./identify-icons";
+  import { entityKindIcon } from "$lib/entities/entity-kind-icons";
 
   const store = useIdentifyStore();
 
