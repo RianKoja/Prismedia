@@ -10,7 +10,6 @@ test-results/
 .tmp/
 *.log
 .claude/
-.vscode/
 videos/
 
 apps/web-svelte/.svelte-kit/
