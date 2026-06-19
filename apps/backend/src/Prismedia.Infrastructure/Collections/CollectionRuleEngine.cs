@@ -40,6 +40,14 @@ public sealed class CollectionRuleEngine(PrismediaDbContext db) : ICollectionRul
         ["skipCount"] = Kinds(EntityKindRegistry.Video.Code, EntityKindRegistry.AudioTrack.Code),
         ["resolution"] = Kinds(EntityKindRegistry.Video.Code),
         ["videoSeriesId"] = Kinds(EntityKindRegistry.Video.Code),
+        ["libraryRootId"] = Kinds(
+            EntityKindRegistry.Video.Code,
+            EntityKindRegistry.Movie.Code,
+            EntityKindRegistry.VideoSeries.Code,
+            EntityKindRegistry.Gallery.Code,
+            EntityKindRegistry.Image.Code,
+            EntityKindRegistry.Book.Code,
+            EntityKindRegistry.AudioTrack.Code),
         ["galleryType"] = Kinds(EntityKindRegistry.Gallery.Code),
         ["imageCount"] = Kinds(EntityKindRegistry.Gallery.Code),
         ["format"] = Kinds(EntityKindRegistry.Image.Code),
@@ -167,6 +175,7 @@ public sealed class CollectionRuleEngine(PrismediaDbContext db) : ICollectionRul
             "skipCount" => TranslatePlayback("skip_count", condition, ctx),
             "resolution" => TranslateResolution(condition, ctx),
             "videoSeriesId" => TranslateVideoSeries(condition, kindCode, ctx),
+            "libraryRootId" => TranslateLibraryRoot(condition, kindCode, ctx),
             "galleryType" => TranslateGalleryType(condition, kindCode, ctx),
             "imageCount" => TranslateChildCount(condition, kindCode, ctx),
             "format" => TranslateTechnical("format", condition, ctx),
@@ -186,6 +195,9 @@ public sealed class CollectionRuleEngine(PrismediaDbContext db) : ICollectionRul
 
     private static bool FieldAppliesToKind(string field, string kindCode) =>
         !FieldTargetKinds.TryGetValue(field, out var kinds) || kinds.Contains(kindCode);
+
+    private static bool KindEquals(string actual, string expected) =>
+        actual.Equals(expected, StringComparison.OrdinalIgnoreCase);
 
     private static HashSet<string> Kinds(params string[] kindCodes) =>
         new(kindCodes, StringComparer.Ordinal);
@@ -431,6 +443,147 @@ public sealed class CollectionRuleEngine(PrismediaDbContext db) : ICollectionRul
         return TranslateScalar(countExpr, condition.Operator, condition.Value, ctx);
     }
 
+    // ── Library root membership ──
+
+    private static string? TranslateLibraryRoot(CollectionRuleCondition condition, string kindCode, SqlBuildContext ctx) {
+        var existsBuilder = LibraryRootExistsBuilder(kindCode, ctx);
+        return existsBuilder is null
+            ? null
+            : QuantifyLibraryRootMatch(condition, existsBuilder, ctx);
+    }
+
+    private static Func<Func<string, string>, string>? LibraryRootExistsBuilder(string kindCode, SqlBuildContext ctx) {
+        if (KindEquals(kindCode, EntityKindRegistry.Video.Code)) {
+            return rootPredicate => DirectRootExists("video_details", "vd", rootPredicate);
+        }
+
+        if (KindEquals(kindCode, EntityKindRegistry.Gallery.Code)) {
+            return rootPredicate => DirectRootExists("gallery_details", "gd", rootPredicate);
+        }
+
+        if (KindEquals(kindCode, EntityKindRegistry.Book.Code)) {
+            return rootPredicate => DirectRootExists("book_details", "bd", rootPredicate);
+        }
+
+        if (KindEquals(kindCode, EntityKindRegistry.Movie.Code)) {
+            var videoKindParam = ctx.AddParam(EntityKindRegistry.Video.Code, NpgsqlDbType.Text);
+            return rootPredicate => $@"EXISTS (
+                SELECT 1
+                FROM entities movie_video
+                INNER JOIN video_details vd ON vd.entity_id = movie_video.id
+                WHERE movie_video.parent_entity_id = e.id
+                    AND movie_video.kind_code = {videoKindParam}
+                    AND {rootPredicate("vd.library_root_id")}
+            )";
+        }
+
+        if (KindEquals(kindCode, EntityKindRegistry.VideoSeries.Code)) {
+            var videoKindParam = ctx.AddParam(EntityKindRegistry.Video.Code, NpgsqlDbType.Text);
+            return rootPredicate => $@"EXISTS (
+                SELECT 1
+                FROM entities series_video
+                INNER JOIN video_details vd ON vd.entity_id = series_video.id
+                WHERE series_video.kind_code = {videoKindParam}
+                    AND (
+                        series_video.parent_entity_id = e.id
+                        OR EXISTS (
+                            SELECT 1
+                            FROM entities parent_entity
+                            WHERE parent_entity.id = series_video.parent_entity_id
+                                AND parent_entity.parent_entity_id = e.id
+                        )
+                    )
+                    AND {rootPredicate("vd.library_root_id")}
+            )";
+        }
+
+        if (KindEquals(kindCode, EntityKindRegistry.Image.Code) ||
+            KindEquals(kindCode, EntityKindRegistry.AudioTrack.Code)) {
+            return AncestorRootExists;
+        }
+
+        return null;
+    }
+
+    private static string? QuantifyLibraryRootMatch(
+        CollectionRuleCondition condition,
+        Func<Func<string, string>, string> existsBuilder,
+        SqlBuildContext ctx) {
+        static string NonNullRoot(string column) => $"{column} IS NOT NULL";
+
+        if (condition.Operator is "is_null") {
+            return $"NOT ({existsBuilder(NonNullRoot)})";
+        }
+
+        if (condition.Operator is "is_not_null") {
+            return existsBuilder(NonNullRoot);
+        }
+
+        var selectedRoot = BuildSelectedLibraryRootPredicate(condition, ctx);
+        if (selectedRoot is null) return null;
+
+        return condition.Operator switch {
+            "equals" or "in" => existsBuilder(selectedRoot),
+            "not_equals" or "not_in" => $"({existsBuilder(NonNullRoot)} AND NOT ({existsBuilder(selectedRoot)}))",
+            _ => null
+        };
+    }
+
+    private static Func<string, string>? BuildSelectedLibraryRootPredicate(
+        CollectionRuleCondition condition,
+        SqlBuildContext ctx) {
+        if (condition.Operator is not ("equals" or "not_equals" or "in" or "not_in")) {
+            return null;
+        }
+
+        var ids = GetGuidArray(condition.Value);
+        if (ids.Count == 0) {
+            return _ => "false";
+        }
+
+        var parameters = ids.Select(id => ctx.AddParam(id, NpgsqlDbType.Uuid)).ToArray();
+        return column => parameters.Length == 1
+            ? $"{column} = {parameters[0]}"
+            : $"{column} IN ({string.Join(", ", parameters)})";
+    }
+
+    private static string DirectRootExists(
+        string table,
+        string alias,
+        Func<string, string> rootPredicate) =>
+        $@"EXISTS (
+            SELECT 1
+            FROM {table} {alias}
+            WHERE {alias}.entity_id = e.id
+                AND {rootPredicate($"{alias}.library_root_id")}
+        )";
+
+    private static string AncestorRootExists(Func<string, string> rootPredicate) =>
+        $@"EXISTS (
+            SELECT 1
+            FROM entities parent1
+            LEFT JOIN entities parent2 ON parent2.id = parent1.parent_entity_id
+            LEFT JOIN entities parent3 ON parent3.id = parent2.parent_entity_id
+            WHERE parent1.id = e.parent_entity_id
+                AND (
+                    {RootedEntityMatches("parent1.id", "p1", rootPredicate)}
+                    OR {RootedEntityMatches("parent2.id", "p2", rootPredicate)}
+                    OR {RootedEntityMatches("parent3.id", "p3", rootPredicate)}
+                )
+        )";
+
+    private static string RootedEntityMatches(
+        string entityIdExpression,
+        string suffix,
+        Func<string, string> rootPredicate) =>
+        $@"(
+            EXISTS (SELECT 1 FROM video_details vd_{suffix} WHERE vd_{suffix}.entity_id = {entityIdExpression} AND {rootPredicate($"vd_{suffix}.library_root_id")})
+            OR EXISTS (SELECT 1 FROM gallery_details gd_{suffix} WHERE gd_{suffix}.entity_id = {entityIdExpression} AND {rootPredicate($"gd_{suffix}.library_root_id")})
+            OR EXISTS (SELECT 1 FROM book_details bd_{suffix} WHERE bd_{suffix}.entity_id = {entityIdExpression} AND {rootPredicate($"bd_{suffix}.library_root_id")})
+            OR EXISTS (SELECT 1 FROM music_artist_details mad_{suffix} WHERE mad_{suffix}.entity_id = {entityIdExpression} AND {rootPredicate($"mad_{suffix}.library_root_id")})
+            OR EXISTS (SELECT 1 FROM audio_library_details ald_{suffix} WHERE ald_{suffix}.entity_id = {entityIdExpression} AND {rootPredicate($"ald_{suffix}.library_root_id")})
+        )";
+
     // ── Helpers ──
 
     private static string? TranslateDateScalar(string column, string op, JsonElement? value, SqlBuildContext ctx) {
@@ -475,6 +628,27 @@ public sealed class CollectionRuleEngine(PrismediaDbContext db) : ICollectionRul
                 .Select(v => v.GetString()!)
                 .ToList();
         return [];
+    }
+
+    private static IReadOnlyList<Guid> GetGuidArray(JsonElement? value) {
+        if (value is null) return [];
+        if (value.Value.ValueKind == JsonValueKind.String) {
+            return Guid.TryParse(value.Value.GetString(), out var id) ? [id] : [];
+        }
+
+        if (value.Value.ValueKind != JsonValueKind.Array) {
+            return [];
+        }
+
+        var ids = new List<Guid>();
+        foreach (var item in value.Value.EnumerateArray()) {
+            if (item.ValueKind == JsonValueKind.String &&
+                Guid.TryParse(item.GetString(), out var id)) {
+                ids.Add(id);
+            }
+        }
+
+        return ids;
     }
 
     private sealed class SqlBuildContext {

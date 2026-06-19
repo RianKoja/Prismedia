@@ -1,5 +1,6 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
+  import { onMount } from "svelte";
   import {
     Eye,
     FolderPlus,
@@ -18,6 +19,7 @@
   import type { CollectionDetail } from "$lib/api/generated/model";
   import { createCollection, previewCollectionRules, updateCollection } from "$lib/api/collections";
   import { getDescription, isNsfw as hasNsfw } from "$lib/api/capabilities";
+  import { fetchLibraryRoots, type LibraryRoot } from "$lib/api/settings";
   import {
     COLLECTION_RULE_FIELDS,
     EMPTY_COLLECTION_RULE,
@@ -35,6 +37,7 @@
   import TextField from "$lib/components/forms/TextField.svelte";
   import { entityCardToThumbnailCard } from "$lib/entities/entity-grid";
   import type { EntityThumbnailCard } from "$lib/entities/entity-thumbnail";
+  import { useNsfw } from "$lib/nsfw/store.svelte";
   import { useAppChrome } from "$lib/stores/app-chrome.svelte";
   import ConditionBuilder from "./ConditionBuilder.svelte";
 
@@ -46,6 +49,7 @@
   let { collection = null, isNew = false }: Props = $props();
 
   const appChrome = useAppChrome();
+  const nsfw = useNsfw();
   const modes: { value: CollectionMode; label: string; desc: string; icon: Component }[] = [
     { value: "manual", label: "Manual", desc: "Hand-pick and order items", icon: List },
     { value: "dynamic", label: "Dynamic", desc: "Auto-populate from rules", icon: Zap },
@@ -71,18 +75,34 @@
   let previewTotal = $state<number | null>(null);
   let previewByType = $state<Record<string, number>>({});
   let previewCards = $state<EntityThumbnailCard[]>([]);
+  let libraryRoots = $state<LibraryRoot[]>([]);
   let previewToken = 0;
 
   const showRules = $derived(mode === "dynamic" || mode === "hybrid");
   const canSave = $derived(title.trim().length > 0 && !saving);
   const hasConditions = $derived(ruleTree.children.length > 0);
   const rulesReady = $derived(allConditionsRunnable(ruleTree));
+  const libraryOptions = $derived(
+    libraryRoots
+      .filter((root) => root.enabled !== false)
+      .filter((root) => nsfw.mode === "show" || root.isNsfw !== true)
+      .map((root) => ({
+        value: root.id,
+        label: root.label?.trim() || root.path,
+      })),
+  );
   const previewSummary = $derived.by(() => {
     if (!hasConditions) return "Add rules to preview";
     if (!rulesReady) return "Fill in rule values";
     if (previewing && previewCards.length === 0) return "Building preview";
     if (previewTotal === null) return "Ready to preview";
     return `${previewTotal} matching ${previewTotal === 1 ? "item" : "items"}`;
+  });
+
+  onMount(() => {
+    const controller = new AbortController();
+    void loadLibraryRoots(controller.signal);
+    return () => controller.abort();
   });
 
   function isNullaryOperator(op: CollectionOperator): boolean {
@@ -119,6 +139,9 @@
       return !Number.isNaN(new Date(value).getTime());
     }
     if (field.fieldType === "enum") {
+      return typeof value === "string" && value.length > 0;
+    }
+    if (field.fieldType === "library") {
       return typeof value === "string" && value.length > 0;
     }
     return typeof value === "string" || typeof value === "number" || typeof value === "boolean";
@@ -217,6 +240,15 @@
     previewCards = [];
     previewError = null;
     previewing = false;
+  }
+
+  async function loadLibraryRoots(signal?: AbortSignal) {
+    try {
+      libraryRoots = await fetchLibraryRoots({ signal });
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") return;
+      libraryRoots = [];
+    }
   }
 
   function buildRequest(): CollectionWriteRequest {
@@ -484,7 +516,12 @@
         </div>
 
         <div class="p-4">
-          <ConditionBuilder rule={ruleTree} onChange={(next) => (ruleTree = next)} disabled={saving} />
+          <ConditionBuilder
+            rule={ruleTree}
+            {libraryOptions}
+            onChange={(next) => (ruleTree = next)}
+            disabled={saving}
+          />
         </div>
       </div>
 

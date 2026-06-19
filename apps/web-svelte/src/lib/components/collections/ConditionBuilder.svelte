@@ -29,13 +29,19 @@
     type CollectionRuleGroup,
   } from "$lib/collections/models";
 
+  interface CollectionRuleSelectOption {
+    value: string;
+    label: string;
+  }
+
   interface Props {
     rule: CollectionRuleGroup;
     onChange: (rule: CollectionRuleGroup) => void;
     disabled?: boolean;
+    libraryOptions?: CollectionRuleSelectOption[];
   }
 
-  let { rule, onChange, disabled = false }: Props = $props();
+  let { rule, onChange, disabled = false, libraryOptions = [] }: Props = $props();
 
   const entityKinds: { value: CollectionEntityType; label: string; icon: Component }[] = [
     { value: "video", label: "Video", icon: Film },
@@ -57,6 +63,7 @@
     boolean: { icon: ToggleRight, label: "Boolean" },
     enum: { icon: ListChecks, label: "Enum" },
     relation: { icon: Link2, label: "Relation" },
+    library: { icon: FolderOpen, label: "Library" },
   };
 
   const logicOptions: { value: CollectionRuleGroup["operator"]; label: string }[] = [
@@ -389,6 +396,23 @@
                     <option value="" disabled>Select…</option>
                     {#each field.enumValues as enumVal (enumVal)}
                       <option value={enumVal}>{enumVal}</option>
+                    {/each}
+                  </select>
+                  <ChevronDown class="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 h-2.5 w-2.5 text-text-muted" />
+                </div>
+              {:else if field.fieldType === "library"}
+                <div class="relative">
+                  <select
+                    aria-label="Library value"
+                    value={getStringValue(condition.value)}
+                    disabled={disabled || libraryOptions.length === 0}
+                    onchange={(e) =>
+                      updateCondition(i, { value: (e.currentTarget as HTMLSelectElement).value })}
+                    class={controlClasses}
+                  >
+                    <option value="" disabled>{libraryOptions.length > 0 ? "Choose library" : "No visible libraries"}</option>
+                    {#each libraryOptions as option (option.value)}
+                      <option value={option.value}>{option.label}</option>
                     {/each}
                   </select>
                   <ChevronDown class="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 h-2.5 w-2.5 text-text-muted" />

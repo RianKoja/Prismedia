@@ -44,8 +44,12 @@ describe("collection detail route", () => {
     expect(modelsSource).toContain('"playCount"');
     expect(modelsSource).toContain('"skipCount"');
     expect(modelsSource).toContain('"sampleRate"');
+    expect(modelsSource).toContain('"libraryRootId"');
     expect(modelsSource).toContain("\"video-series\"");
     expect(conditionBuilderSource).toContain("value: \"video-series\"");
+    expect(conditionBuilderSource).toContain('aria-label="Library value"');
+    expect(editorSource).toContain("fetchLibraryRoots");
+    expect(editorSource).toContain("nsfw.mode === \"show\"");
   });
 
   it("keeps collection detail metadata focused and prevents collections from nesting in rules", async () => {

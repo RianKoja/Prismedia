@@ -63,7 +63,7 @@ export type CollectionRuleNode = CollectionRuleCondition | CollectionRuleGroup;
 export interface CollectionRuleFieldDef {
   field: string;
   label: string;
-  fieldType: "text" | "number" | "boolean" | "date" | "relation" | "enum";
+  fieldType: "text" | "number" | "boolean" | "date" | "relation" | "enum" | "library";
   entityTypes: CollectionEntityType[];
   enumValues?: string[];
   operators: CollectionOperator[];
@@ -78,6 +78,7 @@ export const COLLECTION_RULE_FIELDS: CollectionRuleFieldDef[] = [
   { field: "tags", label: "Tags", fieldType: "relation", entityTypes: [], operators: ["in", "not_in"] },
   { field: "performers", label: "Performers", fieldType: "relation", entityTypes: [], operators: ["in", "not_in"] },
   { field: "studio", label: "Studio", fieldType: "relation", entityTypes: [], operators: ["in", "not_in", "is_null", "is_not_null"] },
+  { field: "libraryRootId", label: "Library", fieldType: "library", entityTypes: [], operators: ["equals", "not_equals"] },
   { field: "createdAt", label: "Added Date", fieldType: "date", entityTypes: [], operators: ["greater_than", "less_than", "between"] },
   { field: "fileSize", label: "File Size", fieldType: "number", entityTypes: ["video", "image", "audio-track"], operators: ["greater_than", "less_than", "between"] },
   { field: "duration", label: "Duration", fieldType: "number", entityTypes: ["video", "audio-track"], operators: ["greater_than", "less_than", "between", "is_null", "is_not_null"] },

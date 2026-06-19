@@ -29,6 +29,7 @@ public sealed class CollectionCommandService(
         "tags",
         "performers",
         "studio",
+        "libraryRootId",
         "fileSize",
         "duration",
         "height",
@@ -426,7 +427,7 @@ public sealed class CollectionCommandService(
         }
 
         if (condition.Operator is "in" or "not_in") {
-            return ValidateArrayValue(value, out message);
+            return ValidateArrayValue(condition.Field, value, out message);
         }
 
         if (value.ValueKind is JsonValueKind.Object or JsonValueKind.Array) {
@@ -467,7 +468,7 @@ public sealed class CollectionCommandService(
         };
     }
 
-    private static bool ValidateArrayValue(JsonElement value, out string message) {
+    private static bool ValidateArrayValue(string field, JsonElement value, out string message) {
         message = string.Empty;
         if (value.ValueKind != JsonValueKind.Array) {
             message = "Collection rule list value must be an array.";
@@ -481,6 +482,11 @@ public sealed class CollectionCommandService(
             }
         }
 
+        if (field == "libraryRootId" && !value.EnumerateArray().All(IsGuidValue)) {
+            message = "Collection rule library values must be valid IDs.";
+            return false;
+        }
+
         return true;
     }
 
@@ -491,6 +497,8 @@ public sealed class CollectionCommandService(
                 InvalidRule("Collection rule date value must be a valid date.", out message),
             "createdAt" when !IsDateTimeValue(value) =>
                 InvalidRule("Collection rule added-date value must be a valid timestamp.", out message),
+            "libraryRootId" when !IsGuidValue(value) =>
+                InvalidRule("Collection rule library value must be a valid ID.", out message),
             _ => true
         };
     }
@@ -502,6 +510,10 @@ public sealed class CollectionCommandService(
     private static bool IsDateTimeValue(JsonElement value) =>
         value.ValueKind == JsonValueKind.String &&
         DateTimeOffset.TryParse(value.GetString(), CultureInfo.InvariantCulture, DateTimeStyles.None, out _);
+
+    private static bool IsGuidValue(JsonElement value) =>
+        value.ValueKind == JsonValueKind.String &&
+        Guid.TryParse(value.GetString(), out _);
 
     private static bool InvalidRule(string invalidMessage, out string message) {
         message = invalidMessage;

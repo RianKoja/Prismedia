@@ -78,6 +78,7 @@ public sealed class CollectionCommandServiceTests {
     [InlineData("""{"type":"group","operator":"and","children":[{"type":"condition","entityTypes":["collection"],"field":"title","operator":"contains","value":"Rule"}]}""")]
     [InlineData("""{"type":"group","operator":"and","children":[{"type":"condition","entityTypes":[],"field":"unknown","operator":"contains","value":"Rule"}]}""")]
     [InlineData("""{"type":"group","operator":"and","children":[{"type":"condition","entityTypes":[],"field":"title","operator":"between","value":["only-one"]}]}""")]
+    [InlineData("""{"type":"group","operator":"and","children":[{"type":"condition","entityTypes":[],"field":"libraryRootId","operator":"equals","value":"not-a-library-id"}]}""")]
     public async Task CreateAsyncRejectsInvalidRuleTrees(string ruleTreeJson) {
         await using var db = CreateContext();
         var service = CreateService(db);

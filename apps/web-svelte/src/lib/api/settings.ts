@@ -5,6 +5,7 @@ import {
   getLibraryConfig,
   getSetting as getSettingRequest,
   getSettings,
+  listLibraryRoots as listLibraryRootsRequest,
   resetSetting as resetSettingRequest,
   updateLibraryRoot as updateLibraryRootRequest,
   updateSetting as updateSettingRequest,
@@ -307,6 +308,13 @@ export async function fetchLibraryConfig(options?: RequestOptions): Promise<Libr
     settings: normalizeSettingsCatalog(response.settings),
     roots: response.roots,
   };
+}
+
+export async function fetchLibraryRoots(options?: RequestOptions): Promise<LibraryRoot[]> {
+  return unwrapGenerated(
+    await listLibraryRootsRequest(requestInit(options)),
+    "Failed to load library roots",
+  );
 }
 
 export async function browseLibraryPath(

@@ -156,6 +156,71 @@ public sealed class CollectionRuleEngineSqlTests {
     }
 
     [Fact]
+    public void LibraryRuleUsesTypedUuidParameter() {
+        var rootId = Guid.NewGuid();
+        var group = new CollectionRuleGroup {
+            Operator = "and",
+            Children = [
+                new CollectionRuleCondition {
+                    Field = "libraryRootId",
+                    Operator = "equals",
+                    Value = JsonSerializer.SerializeToElement(rootId.ToString("D"))
+                }
+            ]
+        };
+
+        var query = new CollectionRuleEngine(null!).BuildQuery(group, EntityKindRegistry.Video.Code);
+
+        Assert.NotNull(query);
+        Assert.Contains("video_details", query.Value.Sql, StringComparison.Ordinal);
+        Assert.Contains(query.Value.Parameters, parameter =>
+            parameter.NpgsqlDbType == NpgsqlDbType.Uuid &&
+            parameter.Value is Guid value &&
+            value == rootId);
+    }
+
+    [Fact]
+    public void LibraryRuleForSeriesUsesChildVideoRoots() {
+        var group = new CollectionRuleGroup {
+            Operator = "and",
+            Children = [
+                new CollectionRuleCondition {
+                    Field = "libraryRootId",
+                    Operator = "equals",
+                    Value = JsonSerializer.SerializeToElement(Guid.NewGuid().ToString("D"))
+                }
+            ]
+        };
+
+        var query = new CollectionRuleEngine(null!).BuildQuery(group, EntityKindRegistry.VideoSeries.Code);
+
+        Assert.NotNull(query);
+        Assert.Contains("series_video", query.Value.Sql, StringComparison.Ordinal);
+        Assert.Contains("INNER JOIN video_details vd", query.Value.Sql, StringComparison.Ordinal);
+        Assert.Contains("parent_entity.parent_entity_id = e.id", query.Value.Sql, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void LibraryRuleForAudioTracksUsesInheritedRootDetails() {
+        var group = new CollectionRuleGroup {
+            Operator = "and",
+            Children = [
+                new CollectionRuleCondition {
+                    Field = "libraryRootId",
+                    Operator = "equals",
+                    Value = JsonSerializer.SerializeToElement(Guid.NewGuid().ToString("D"))
+                }
+            ]
+        };
+
+        var query = new CollectionRuleEngine(null!).BuildQuery(group, EntityKindRegistry.AudioTrack.Code);
+
+        Assert.NotNull(query);
+        Assert.Contains("FROM entities parent1", query.Value.Sql, StringComparison.Ordinal);
+        Assert.Contains("audio_library_details", query.Value.Sql, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void RestrictedFieldsOnlyBuildSqlForSupportedKindsWhenEntityTypesAreEmpty() {
         var group = new CollectionRuleGroup {
             Operator = "and",
@@ -226,6 +291,7 @@ public sealed class CollectionRuleEngineSqlTests {
             yield return Case("tags", "in", new[] { "Favorite" }, kind);
             yield return Case("performers", "in", new[] { "Performer" }, kind);
             yield return Case("studio", "is_not_null", null, kind);
+            yield return Case("libraryRootId", "equals", Guid.NewGuid().ToString("D"), kind);
             yield return Case("createdAt", "greater_than", "2026-01-01T00:00:00Z", kind);
         }
 
