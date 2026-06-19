@@ -88,6 +88,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - Added a worker status badge to Job Control so stalled queues show when the background worker is offline.
 
 ### Fixed
+- The Artists page now reliably opens as the Prismedia app instead of occasionally showing Jellyfin-compatible JSON when the browser reloads or lands directly on `/artists`.
 - Playback Stats now opens on Plays by default, and its daily activity chart focuses on active days so longer timeframes stay readable.
 - The local audio player now records skipped playback events only for quick first-10-seconds advances, matching Jellyfin-compatible skip inference while still showing real in-app skips in Playback Stats.
 - Playback history now saves aggregate play/skip counters and timestamped history events in the same persistence unit, and long-range Stats queries avoid loading full event details before calculating totals and top items.

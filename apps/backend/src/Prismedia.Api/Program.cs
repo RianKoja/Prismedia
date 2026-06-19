@@ -112,11 +112,15 @@ app.UseStaticFiles(new StaticFileOptions {
 
 app.UsePrismediaApiAuthentication();
 
-app.MapPrismediaEndpoints();
-
 var staticIndexPath = resolvedStaticWebRoot is not null
     ? Path.Combine(resolvedStaticWebRoot, "index.html")
     : Path.Combine(app.Environment.WebRootPath ?? string.Empty, "index.html");
+
+if (File.Exists(staticIndexPath)) {
+    app.UseStaticSpaFallback(staticIndexPath);
+}
+
+app.MapPrismediaEndpoints();
 
 if (File.Exists(staticIndexPath)) {
     app.MapFallback(async () =>

@@ -37,6 +37,20 @@ public sealed class StaticSpaFallbackTests : IDisposable {
     }
 
     [Fact]
+    public async Task LowercaseArtistsNavigationServesSpaShell() {
+        using var client = _factory.CreateAuthenticatedClient();
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/artists");
+        request.Headers.Accept.ParseAdd("text/html");
+
+        using var response = await client.SendAsync(request);
+        var html = await response.Content.ReadAsStringAsync();
+
+        response.EnsureSuccessStatusCode();
+        Assert.Equal("text/html", response.Content.Headers.ContentType?.MediaType);
+        Assert.Contains("Prismedia Static Shell", html);
+    }
+
+    [Fact]
     public async Task ServesGeneratedAssetsWhenCacheDirectoryIsCreatedByStartup() {
         using var factory = new WebApplicationFactory<Program>()
             .WithWebHostBuilder(builder => builder.UseSetting("Prismedia:CacheDir", _cacheRoot))
