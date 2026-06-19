@@ -83,7 +83,11 @@ public sealed class ScanBookJobHandler(
 
             // A book is the top-level root of its volumes/chapters/pages, so identify it directly.
             var bookAutoIdentify = AutoIdentifyScanEnqueue.RequestFor(
-                settings, EntityKind.Book, bookId.ToString(), first.BookTitle);
+                settings,
+                EntityKind.Book,
+                bookId.ToString(),
+                first.BookTitle,
+                await downstreamNeeds.IsEntityOrganizedAsync(bookId, cancellationToken));
             if (bookAutoIdentify is not null)
                 await context.EnqueueIfNeededAsync(bookAutoIdentify, cancellationToken);
 
@@ -287,7 +291,12 @@ public sealed class ScanBookJobHandler(
                 cancellationToken);
         }
 
-        var autoIdentify = AutoIdentifyScanEnqueue.RequestFor(settings, EntityKind.Book, bookId.ToString(), item.Title);
+        var autoIdentify = AutoIdentifyScanEnqueue.RequestFor(
+            settings,
+            EntityKind.Book,
+            bookId.ToString(),
+            item.Title,
+            await downstreamNeeds.IsEntityOrganizedAsync(bookId, cancellationToken));
         if (autoIdentify is not null) {
             await context.EnqueueIfNeededAsync(autoIdentify, cancellationToken);
         }

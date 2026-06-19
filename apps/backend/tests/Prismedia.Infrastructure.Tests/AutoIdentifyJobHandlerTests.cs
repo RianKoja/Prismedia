@@ -8,27 +8,18 @@ namespace Prismedia.Infrastructure.Tests;
 
 public sealed class AutoIdentifyJobHandlerTests {
     [Fact]
-    public async Task HandleAsyncRequeuesImmediatelyWhenAutoIdentifySlotIsBusy() {
-        var runner = new BlockingAutoIdentifyRunner();
+    public async Task HandleAsyncPropagatesProviderSlotBusyFromRunner() {
+        var runner = new BusyAutoIdentifyRunner();
         var handler = new AutoIdentifyJobHandler(
             runner,
-            new AutoIdentifyConcurrencyGate(),
             NullLogger<AutoIdentifyJobHandler>.Instance);
 
-        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-        var first = handler.HandleAsync(new JobContext(CreateJob(Guid.NewGuid()), new NoopJobQueue()), timeout.Token);
-        await runner.WaitForStartedCallsAsync(1, timeout.Token);
-
         var busy = await Assert.ThrowsAsync<JobRetryLaterException>(() =>
-            handler.HandleAsync(new JobContext(CreateJob(Guid.NewGuid()), new NoopJobQueue()), timeout.Token));
+            handler.HandleAsync(new JobContext(CreateJob(Guid.NewGuid()), new NoopJobQueue()), CancellationToken.None));
 
         Assert.Equal("Auto identify provider slot busy.", busy.Message);
         Assert.Equal(TimeSpan.FromSeconds(5), busy.RetryDelay);
-        Assert.Equal(1, runner.MaxActive);
         Assert.Equal(1, runner.StartedCalls);
-
-        runner.ReleaseNext();
-        await first;
     }
 
     [Fact]
@@ -36,14 +27,13 @@ public sealed class AutoIdentifyJobHandlerTests {
         var runner = new BlockingAutoIdentifyRunner();
         var handler = new AutoIdentifyJobHandler(
             runner,
-            new AutoIdentifyConcurrencyGate(),
             NullLogger<AutoIdentifyJobHandler>.Instance,
             TimeSpan.FromMilliseconds(25));
 
         var retry = await Assert.ThrowsAsync<JobRetryLaterException>(() =>
             handler.HandleAsync(new JobContext(CreateJob(Guid.NewGuid()), new NoopJobQueue()), CancellationToken.None));
 
-        Assert.Equal("Auto identify timed out after 0 seconds.", retry.Message);
+        Assert.Equal("Auto identify made no progress for 0 seconds.", retry.Message);
         Assert.Equal(TimeSpan.FromMinutes(1), retry.RetryDelay);
         Assert.Equal(1, runner.StartedCalls);
     }
@@ -63,6 +53,22 @@ public sealed class AutoIdentifyJobHandlerTests {
             StartedAt: DateTimeOffset.UtcNow,
             FinishedAt: null);
 
+    private sealed class BusyAutoIdentifyRunner : IAutoIdentifyRunner {
+        private int _startedCalls;
+        public int StartedCalls => Volatile.Read(ref _startedCalls);
+
+        public Task<AutoIdentifyResult> RunAsync(Guid entityId, CancellationToken cancellationToken) =>
+            RunAsync(entityId, AutoIdentifyRunOptions.Default, cancellationToken);
+
+        public Task<AutoIdentifyResult> RunAsync(
+            Guid entityId,
+            AutoIdentifyRunOptions options,
+            CancellationToken cancellationToken) {
+            Interlocked.Increment(ref _startedCalls);
+            throw new JobRetryLaterException("Auto identify provider slot busy.", TimeSpan.FromSeconds(5));
+        }
+    }
+
     private sealed class BlockingAutoIdentifyRunner : IAutoIdentifyRunner {
         private readonly SemaphoreSlim _release = new(0);
         private int _active;
@@ -72,7 +78,21 @@ public sealed class AutoIdentifyJobHandlerTests {
         public int MaxActive => Volatile.Read(ref _maxActive);
         public int StartedCalls => Volatile.Read(ref _startedCalls);
 
-        public async Task<AutoIdentifyResult> RunAsync(Guid entityId, CancellationToken cancellationToken) {
+        public Task<AutoIdentifyResult> RunAsync(Guid entityId, CancellationToken cancellationToken) =>
+            RunCoreAsync(cancellationToken);
+
+        public async Task<AutoIdentifyResult> RunAsync(
+            Guid entityId,
+            AutoIdentifyRunOptions options,
+            CancellationToken cancellationToken) {
+            using var timeout = options.InactivityTimeout is { } value && value > TimeSpan.Zero
+                ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken)
+                : null;
+            timeout?.CancelAfter(options.InactivityTimeout!.Value);
+            return await RunCoreAsync(timeout?.Token ?? cancellationToken);
+        }
+
+        private async Task<AutoIdentifyResult> RunCoreAsync(CancellationToken cancellationToken) {
             var active = Interlocked.Increment(ref _active);
             TrackMaxActive(active);
             Interlocked.Increment(ref _startedCalls);

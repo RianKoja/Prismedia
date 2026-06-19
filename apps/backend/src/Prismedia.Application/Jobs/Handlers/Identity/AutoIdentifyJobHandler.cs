@@ -12,11 +12,10 @@ namespace Prismedia.Application.Jobs.Handlers;
 /// </summary>
 public sealed class AutoIdentifyJobHandler(
     IAutoIdentifyRunner runner,
-    AutoIdentifyConcurrencyGate gate,
     ILogger<AutoIdentifyJobHandler> logger,
     TimeSpan? identifyTimeout = null) : IJobHandler {
-    private static readonly TimeSpan DefaultIdentifyTimeout = TimeSpan.FromSeconds(90);
-    private readonly TimeSpan _identifyTimeout = identifyTimeout ?? DefaultIdentifyTimeout;
+    private static readonly TimeSpan DefaultIdentifyInactivityTimeout = TimeSpan.FromSeconds(90);
+    private readonly TimeSpan _identifyInactivityTimeout = identifyTimeout ?? DefaultIdentifyInactivityTimeout;
 
     public JobType Type => JobType.AutoIdentify;
 
@@ -26,18 +25,25 @@ public sealed class AutoIdentifyJobHandler(
             return;
         }
 
-        using var lease = gate.TryEnterBackground()
-            ?? throw new JobRetryLaterException("Auto identify provider slot busy.", TimeSpan.FromSeconds(5));
-
         await context.ReportProgressAsync(10, "Identifying", cancellationToken);
-        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeout.CancelAfter(_identifyTimeout);
         AutoIdentifyResult result;
         try {
-            result = await runner.RunAsync(entityId, timeout.Token);
+            result = await runner.RunAsync(
+                entityId,
+                new AutoIdentifyRunOptions(
+                    _identifyInactivityTimeout,
+                    (progress, token) => context.ReportProgressAsync(
+                        progress.Phase == AutoIdentifyProgressPhase.Applying
+                            ? 90
+                            : Math.Min(90, 10 + progress.ResolvedSteps),
+                        progress.Phase == AutoIdentifyProgressPhase.Applying
+                            ? FormatApplyProgressMessage(progress)
+                            : $"Identifying children ({progress.RootChildCount} found)",
+                        token)),
+                cancellationToken);
         } catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested) {
             throw new JobRetryLaterException(
-                $"Auto identify timed out after {_identifyTimeout.TotalSeconds:0} seconds.",
+                $"Auto identify made no progress for {_identifyInactivityTimeout.TotalSeconds:0} seconds.",
                 TimeSpan.FromMinutes(1));
         }
 
@@ -53,4 +59,9 @@ public sealed class AutoIdentifyJobHandler(
             await context.ReportProgressAsync(100, result.SkipReason ?? "No confident match", cancellationToken);
         }
     }
+
+    private static string FormatApplyProgressMessage(AutoIdentifyProgress progress) =>
+        string.IsNullOrWhiteSpace(progress.CurrentTitle)
+            ? "Applying metadata"
+            : $"Applying metadata: {progress.CurrentTitle}";
 }

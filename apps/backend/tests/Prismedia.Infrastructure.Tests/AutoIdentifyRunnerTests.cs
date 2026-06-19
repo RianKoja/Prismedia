@@ -2,6 +2,7 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Prismedia.Application.Jobs;
+using Prismedia.Application.Jobs.Handlers;
 using Prismedia.Application.Jobs.Ports;
 using Prismedia.Application.Plugins;
 using Prismedia.Application.Settings;
@@ -101,6 +102,156 @@ public sealed class AutoIdentifyRunnerTests {
     }
 
     [Fact]
+    public async Task AllowsLongSeriesIdentifyWhenCascadeKeepsMakingProgress() {
+        await using var db = CreateContext();
+        var entityId = await SeedVideoAsync(db, organized: false, kind: "video-series", title: "Long Series");
+        var settings = await ConfigureAsync(db, enabled: true, providers: ["tmdb"], confidencePercent: 90m);
+        var progressReports = new List<AutoIdentifyProgress>();
+        var identify = new FakeIdentifyProvider {
+            ProposalsByProvider = {
+                ["tmdb"] = Proposal("tmdb", confidence: 1m, title: "Long Series", targetKind: ProposalKind.VideoSeries),
+            },
+            OnIdentifyAsync = async (_, providerId, _, sink, cancellationToken) => {
+                Assert.Equal("tmdb", providerId);
+                Assert.NotNull(sink);
+                for (var i = 0; i < 3; i++) {
+                    await Task.Delay(60, cancellationToken);
+                    var partial = Proposal("tmdb", confidence: 1m, title: "Long Series", targetKind: ProposalKind.VideoSeries) with {
+                        Children = Enumerable.Range(0, i + 1)
+                            .Select(index => Proposal("tmdb", confidence: 1m, title: $"Episode {index + 1}", targetKind: ProposalKind.Video))
+                            .ToArray()
+                    };
+                    await sink!.OnEntityResolvedAsync(partial, cancellationToken);
+                }
+
+                return new IdentifyPluginResponse(
+                    true,
+                    Proposal("tmdb", confidence: 1m, title: "Long Series", targetKind: ProposalKind.VideoSeries),
+                    null);
+            }
+        };
+        var runner = new AutoIdentifyRunner(settings, identify, db, NullLogger<AutoIdentifyRunner>.Instance);
+
+        var result = await runner.RunAsync(
+            entityId,
+            new AutoIdentifyRunOptions(
+                TimeSpan.FromMilliseconds(100),
+                (progress, _) => {
+                    progressReports.Add(progress);
+                    return Task.CompletedTask;
+                }),
+            CancellationToken.None);
+
+        Assert.True(result.Applied);
+        Assert.Equal("tmdb", result.Provider);
+        Assert.Equal([1, 2, 3], progressReports.Select(progress => progress.ResolvedSteps));
+        Assert.Single(identify.ApplyCalls);
+    }
+
+    [Fact]
+    public async Task AllowsLongSeriesIdentifyWhenNestedCascadeReportsProgressHeartbeats() {
+        await using var db = CreateContext();
+        var entityId = await SeedVideoAsync(db, organized: false, kind: "video-series", title: "Nested Series");
+        var settings = await ConfigureAsync(db, enabled: true, providers: ["tmdb"], confidencePercent: 90m);
+        var identify = new FakeIdentifyProvider {
+            ProposalsByProvider = {
+                ["tmdb"] = Proposal("tmdb", confidence: 1m, title: "Nested Series", targetKind: ProposalKind.VideoSeries),
+            },
+            OnIdentifyAsync = async (_, _, _, sink, cancellationToken) => {
+                Assert.NotNull(sink);
+                for (var i = 0; i < 3; i++) {
+                    await Task.Delay(60, cancellationToken);
+                    await sink!.OnProgressAsync(cancellationToken);
+                }
+
+                return new IdentifyPluginResponse(
+                    true,
+                    Proposal("tmdb", confidence: 1m, title: "Nested Series", targetKind: ProposalKind.VideoSeries),
+                    null);
+            }
+        };
+        var runner = new AutoIdentifyRunner(settings, identify, db, NullLogger<AutoIdentifyRunner>.Instance);
+
+        var result = await runner.RunAsync(
+            entityId,
+            new AutoIdentifyRunOptions(TimeSpan.FromMilliseconds(100)),
+            CancellationToken.None);
+
+        Assert.True(result.Applied);
+        Assert.Single(identify.ApplyCalls);
+    }
+
+    [Fact]
+    public async Task AllowsLongApplyWhenEachAppliedEntityReportsProgressHeartbeats() {
+        await using var db = CreateContext();
+        var entityId = await SeedVideoAsync(db, organized: false, kind: "video-series", title: "King of the Hill");
+        var settings = await ConfigureAsync(db, enabled: true, providers: ["tmdb"], confidencePercent: 90m);
+        var progressReports = new List<AutoIdentifyProgress>();
+        var identify = new FakeIdentifyProvider {
+            ProposalsByProvider = {
+                ["tmdb"] = Proposal("tmdb", confidence: 1m, title: "King of the Hill", targetKind: ProposalKind.VideoSeries),
+            },
+            OnApplyAsync = async (_, _, _, _, progress, cancellationToken) => {
+                Assert.NotNull(progress);
+                for (var i = 0; i < 3; i++) {
+                    await Task.Delay(60, cancellationToken);
+                    await progress!.ReportEntityAsync(
+                        EntityKind.VideoSeason,
+                        $"Season {i + 1}",
+                        ["King of the Hill", $"Season {i + 1}"],
+                        cancellationToken);
+                }
+
+                return true;
+            }
+        };
+        var runner = new AutoIdentifyRunner(settings, identify, db, NullLogger<AutoIdentifyRunner>.Instance);
+
+        var result = await runner.RunAsync(
+            entityId,
+            new AutoIdentifyRunOptions(
+                TimeSpan.FromMilliseconds(100),
+                (progress, _) => {
+                    progressReports.Add(progress);
+                    return Task.CompletedTask;
+                }),
+            CancellationToken.None);
+
+        Assert.True(result.Applied);
+        Assert.Single(identify.ApplyCalls);
+        Assert.Contains(progressReports, progress =>
+            progress.Phase == AutoIdentifyProgressPhase.Applying &&
+            progress.CurrentTitle == "Season 3");
+    }
+
+    [Fact]
+    public async Task CancelsProviderWhenNoCascadeProgressArrivesBeforeInactivityTimeout() {
+        await using var db = CreateContext();
+        var entityId = await SeedVideoAsync(db, organized: false, kind: "video-series", title: "Stalled Series");
+        var settings = await ConfigureAsync(db, enabled: true, providers: ["tmdb"], confidencePercent: 90m);
+        var identify = new FakeIdentifyProvider {
+            ProposalsByProvider = {
+                ["tmdb"] = Proposal("tmdb", confidence: 1m, title: "Stalled Series", targetKind: ProposalKind.VideoSeries),
+            },
+            OnIdentifyAsync = async (_, _, _, _, cancellationToken) => {
+                await Task.Delay(TimeSpan.FromMilliseconds(200), cancellationToken);
+                return new IdentifyPluginResponse(
+                    true,
+                    Proposal("tmdb", confidence: 1m, title: "Stalled Series", targetKind: ProposalKind.VideoSeries),
+                    null);
+            }
+        };
+        var runner = new AutoIdentifyRunner(settings, identify, db, NullLogger<AutoIdentifyRunner>.Instance);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => runner.RunAsync(
+            entityId,
+            new AutoIdentifyRunOptions(TimeSpan.FromMilliseconds(40)),
+            CancellationToken.None));
+
+        Assert.Empty(identify.ApplyCalls);
+    }
+
+    [Fact]
     public async Task LeavesSearchCandidatesForReviewWhenCandidateConfidenceIsBelowThreshold() {
         await using var db = CreateContext();
         var entityId = await SeedVideoAsync(db, organized: false, kind: "video-series", title: "The Chair Company");
@@ -136,6 +287,46 @@ public sealed class AutoIdentifyRunnerTests {
 
         Assert.False(result.Applied);
         Assert.Equal("already organized", result.SkipReason);
+        Assert.Empty(identify.IdentifyCalls);
+    }
+
+    [Fact]
+    public async Task SkipsOrganizedEntityBeforeWaitingForProviderSlot() {
+        await using var db = CreateContext();
+        var entityId = await SeedVideoAsync(db, organized: true);
+        var settings = await ConfigureAsync(db, enabled: true, providers: ["p1"], confidencePercent: 90m);
+        var identify = new FakeIdentifyProvider {
+            ProposalsByProvider = { ["p1"] = Proposal("p1", confidence: 0.99m, title: "Anything") },
+        };
+        var gate = new AutoIdentifyConcurrencyGate();
+        using var heldSlot = gate.TryEnterBackground();
+        Assert.NotNull(heldSlot);
+        var runner = new AutoIdentifyRunner(settings, identify, db, NullLogger<AutoIdentifyRunner>.Instance, gate);
+
+        var result = await runner.RunAsync(entityId, CancellationToken.None);
+
+        Assert.False(result.Applied);
+        Assert.Equal("already organized", result.SkipReason);
+        Assert.Empty(identify.IdentifyCalls);
+    }
+
+    [Fact]
+    public async Task RequeuesWhenProviderSlotIsBusyAfterCheapSkipsPass() {
+        await using var db = CreateContext();
+        var entityId = await SeedVideoAsync(db, organized: false);
+        var settings = await ConfigureAsync(db, enabled: true, providers: ["p1"], confidencePercent: 90m);
+        var identify = new FakeIdentifyProvider {
+            ProposalsByProvider = { ["p1"] = Proposal("p1", confidence: 0.99m, title: "Anything") },
+        };
+        var gate = new AutoIdentifyConcurrencyGate();
+        using var heldSlot = gate.TryEnterBackground();
+        Assert.NotNull(heldSlot);
+        var runner = new AutoIdentifyRunner(settings, identify, db, NullLogger<AutoIdentifyRunner>.Instance, gate);
+
+        var retry = await Assert.ThrowsAsync<JobRetryLaterException>(() => runner.RunAsync(entityId, CancellationToken.None));
+
+        Assert.Equal("Auto identify provider slot busy.", retry.Message);
+        Assert.Equal(TimeSpan.FromSeconds(5), retry.RetryDelay);
         Assert.Empty(identify.IdentifyCalls);
     }
 
@@ -521,6 +712,8 @@ public sealed class AutoIdentifyRunnerTests {
         public List<bool> CascadeChildrenCalls { get; } = [];
         public List<(IReadOnlyCollection<string> Fields, IReadOnlyDictionary<string, string?>? SelectedImages)> ApplyCalls { get; } = [];
         public List<EntityMetadataProposal> AppliedProposals { get; } = [];
+        public Func<Guid, string, IdentifyQuery?, IIdentifyCascadeSink?, CancellationToken, Task<IdentifyPluginResponse>>? OnIdentifyAsync { get; init; }
+        public Func<Guid, EntityMetadataProposal, IReadOnlyCollection<string>, IReadOnlyDictionary<string, string?>?, IIdentifyApplyProgressReporter?, CancellationToken, Task<bool>>? OnApplyAsync { get; init; }
 
         public Task<IReadOnlyList<PluginProvider>> ListProvidersAsync(string? entityKind, CancellationToken cancellationToken) {
             IReadOnlyList<PluginProvider> result = ProposalsByProvider.Keys
@@ -543,25 +736,29 @@ public sealed class AutoIdentifyRunnerTests {
             return Task.FromResult(result);
         }
 
-        public Task<IdentifyPluginResponse> IdentifyAsync(
+        public async Task<IdentifyPluginResponse> IdentifyAsync(
             Guid entityId, string providerId, IdentifyQuery? query,
             IReadOnlyDictionary<string, string>? parentExternalIds, bool hideNsfw, CancellationToken cancellationToken,
             bool cascadeChildren = true, IIdentifyCascadeSink? sink = null) {
             IdentifyCalls.Add((entityId, providerId, query));
             CascadeChildrenCalls.Add(cascadeChildren);
+            if (OnIdentifyAsync is not null) {
+                return await OnIdentifyAsync(entityId, providerId, query, sink, cancellationToken);
+            }
+
             if (ErrorsByProvider.TryGetValue(providerId, out var error)) {
-                return Task.FromResult(new IdentifyPluginResponse(false, null, error));
+                return new IdentifyPluginResponse(false, null, error);
             }
 
             if (query?.ExternalIds is not null &&
                 query.ExternalIds.TryGetValue(providerId, out var externalId) &&
                 ProposalsByExternalId.TryGetValue($"{providerId}:{externalId}", out var lookupProposal)) {
-                return Task.FromResult(new IdentifyPluginResponse(true, lookupProposal, null));
+                return new IdentifyPluginResponse(true, lookupProposal, null);
             }
 
-            return Task.FromResult(ProposalsByProvider.TryGetValue(providerId, out var proposal)
+            return ProposalsByProvider.TryGetValue(providerId, out var proposal)
                 ? new IdentifyPluginResponse(true, proposal, null)
-                : new IdentifyPluginResponse(false, null, "no result"));
+                : new IdentifyPluginResponse(false, null, "no result");
         }
 
         public Task<bool> ApplyAsync(
@@ -569,10 +766,13 @@ public sealed class AutoIdentifyRunnerTests {
             EntityMetadataProposal proposal,
             IReadOnlyCollection<string> selectedFields,
             IReadOnlyDictionary<string, string?>? selectedImages,
-            CancellationToken cancellationToken) {
+            CancellationToken cancellationToken,
+            IIdentifyApplyProgressReporter? progress = null) {
             ApplyCalls.Add((selectedFields, selectedImages));
             AppliedProposals.Add(proposal);
-            return Task.FromResult(true);
+            return OnApplyAsync is not null
+                ? OnApplyAsync(entityId, proposal, selectedFields, selectedImages, progress, cancellationToken)
+                : Task.FromResult(true);
         }
     }
 }

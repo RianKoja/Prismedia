@@ -14,6 +14,20 @@ public interface IAutoIdentifyRunner {
     /// <param name="entityId">Entity to identify.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     Task<AutoIdentifyResult> RunAsync(Guid entityId, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Attempts to auto-identify and fully apply metadata for one entity with job-supplied execution
+    /// options, such as progress-sensitive timeout behavior. Implementations that do not need the
+    /// options can rely on the default forwarding behavior.
+    /// </summary>
+    /// <param name="entityId">Entity to identify.</param>
+    /// <param name="options">Execution options for this run.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    Task<AutoIdentifyResult> RunAsync(
+        Guid entityId,
+        AutoIdentifyRunOptions options,
+        CancellationToken cancellationToken) =>
+        RunAsync(entityId, cancellationToken);
 }
 
 /// <summary>
@@ -26,6 +40,50 @@ public static class AutoIdentifyPolicy {
     /// provider (disabled, wrong kind, no capable provider) do not consume an attempt.
     /// </summary>
     public const int MaxAttemptsPerEntity = 3;
+}
+
+/// <summary>
+/// Execution options supplied by the job handler to an auto-identify run.
+/// </summary>
+/// <param name="InactivityTimeout">
+/// Optional maximum time the run may spend without observable provider/cascade progress. A long
+/// series may run beyond this total duration as long as children keep resolving.
+/// </param>
+/// <param name="ReportProgressAsync">Optional callback for publishing live job progress.</param>
+public sealed record AutoIdentifyRunOptions(
+    TimeSpan? InactivityTimeout = null,
+    Func<AutoIdentifyProgress, CancellationToken, Task>? ReportProgressAsync = null) {
+    public static AutoIdentifyRunOptions Default { get; } = new();
+}
+
+/// <summary>
+/// Stage of observable progress during an auto-identify run.
+/// </summary>
+public enum AutoIdentifyProgressPhase {
+    /// <summary>The provider is identifying/cascading metadata proposals.</summary>
+    Identifying,
+
+    /// <summary>The accepted proposal is being applied to local entities.</summary>
+    Applying
+}
+
+/// <summary>
+/// Progress observed while a provider is walking an auto-identify proposal tree or applying an accepted proposal.
+/// </summary>
+/// <param name="Phase">Current auto-identify stage.</param>
+/// <param name="ResolvedSteps">Number of progress callbacks seen for this run.</param>
+/// <param name="RootChildCount">Current number of direct structural root children in the partial proposal.</param>
+/// <param name="CurrentTitle">Display title of the entity currently being applied, when in the apply stage.</param>
+/// <param name="CurrentPath">Structural path of the entity currently being applied, when in the apply stage.</param>
+public sealed record AutoIdentifyProgress(
+    AutoIdentifyProgressPhase Phase,
+    int ResolvedSteps,
+    int RootChildCount,
+    string? CurrentTitle = null,
+    IReadOnlyList<string>? CurrentPath = null) {
+    public AutoIdentifyProgress(int resolvedSteps, int rootChildCount)
+        : this(AutoIdentifyProgressPhase.Identifying, resolvedSteps, rootChildCount) {
+    }
 }
 
 /// <summary>

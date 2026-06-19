@@ -22,7 +22,8 @@ public sealed partial class IdentifyPluginService {
         HashSet<Guid> visited,
         CancellationToken cancellationToken,
         bool cascadeChildren = true,
-        IIdentifyCascadeSink? sink = null) {
+        IIdentifyCascadeSink? sink = null,
+        bool streamRootProgress = true) {
         // Bind the children the provider already returned in its own proposal to local entities.
         var boundProviderProposal = await BindLocalStructuralTargetsAsync(providerProposal, entity.Id, cancellationToken);
         var titledProposal = EnsureMeaningfulTitle(boundProviderProposal, entity.Title);
@@ -58,7 +59,7 @@ public sealed partial class IdentifyPluginService {
 
         // Seed the sink with the parent (no local children yet) so the queue item shows it immediately
         // with a stable ProposalId; children stream in one at a time as the cascade resolves each.
-        if (sink is not null) {
+        if (sink is not null && streamRootProgress) {
             await SafeFlushAsync(sink, Root([]), cancellationToken);
         }
 
@@ -96,14 +97,14 @@ public sealed partial class IdentifyPluginService {
                     cautiousStructuralMatching);
                 if (providerChild is not null) {
                     structuralChildren.Add(await HydrateMatchedProviderChildAsync(
-                        child, providerChild, descriptor, auth, ancestorPath, includeNsfw, visited, cancellationToken));
+                        child, providerChild, descriptor, auth, ancestorPath, includeNsfw, visited, cancellationToken, sink));
                 } else if (cautiousStructuralMatching) {
                     structuralChildren.Add(UnmatchedLocalStructuralChild(child, descriptor.Manifest.Name));
                 } else {
                     var childResponse = await IdentifyEntityWithStructuralContextAsync(
                         child.Entity, descriptor, auth, query: null, ancestors: ancestorPath,
                         parentSortOrder: child.SortOrder, includeNsfw, visited, cancellationToken,
-                        cascadeChildren: true, sink: null);
+                        cascadeChildren: true, sink: sink, streamRootProgress: false);
                     if (childResponse.Ok && childResponse.Result?.Patch is not null) {
                         structuralChildren.Add(EnsureStructuralPositions(childResponse.Result, child));
                     } else {
@@ -112,7 +113,11 @@ public sealed partial class IdentifyPluginService {
                 }
 
                 if (sink is not null) {
-                    await SafeFlushAsync(sink, Root(structuralChildren), cancellationToken);
+                    if (streamRootProgress) {
+                        await SafeFlushAsync(sink, Root(structuralChildren), cancellationToken);
+                    } else {
+                        await SafeProgressAsync(sink, cancellationToken);
+                    }
                 }
             }
         }
@@ -271,6 +276,17 @@ public sealed partial class IdentifyPluginService {
         }
     }
 
+    /// <summary>Publishes a progress heartbeat without changing the streamed root proposal.</summary>
+    private static async Task SafeProgressAsync(IIdentifyCascadeSink sink, CancellationToken cancellationToken) {
+        try {
+            await sink.OnProgressAsync(cancellationToken);
+        } catch (OperationCanceledException) {
+            throw;
+        } catch {
+            // Best-effort heartbeat; metadata resolution should continue if a progress sink is flaky.
+        }
+    }
+
     /// <summary>
     /// Hydrates a provider-returned child shell against the local entity. If the local child has its
     /// own supported structural descendants that the provider shell did not fully cover, re-identify
@@ -284,7 +300,8 @@ public sealed partial class IdentifyPluginService {
         IReadOnlyList<IdentifyEntitySnapshot> ancestorPath,
         bool includeNsfw,
         HashSet<Guid> visited,
-        CancellationToken cancellationToken) {
+        CancellationToken cancellationToken,
+        IIdentifyCascadeSink? sink) {
         if (!await HasSupportedStructuralChildrenAsync(child.Entity.Id, descriptor.Manifest, cancellationToken)) {
             return providerChild with { TargetEntityId = child.Entity.Id };
         }
@@ -298,7 +315,9 @@ public sealed partial class IdentifyPluginService {
 
         var childResponse = await IdentifyEntityWithStructuralContextAsync(
             child.Entity, descriptor, auth, query: null, ancestors: ancestorPath,
-            parentSortOrder: child.SortOrder, includeNsfw, visited, cancellationToken);
+            parentSortOrder: child.SortOrder, includeNsfw, visited, cancellationToken,
+            sink: sink,
+            streamRootProgress: false);
         return childResponse.Ok && childResponse.Result?.Patch is not null
             ? EnsureStructuralPositions(childResponse.Result, child) with { TargetEntityId = child.Entity.Id }
             : providerChild with { TargetEntityId = child.Entity.Id };
