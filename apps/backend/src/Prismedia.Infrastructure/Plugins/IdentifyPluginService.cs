@@ -52,7 +52,8 @@ public sealed partial class IdentifyPluginService : IIdentifyProviderService {
         bool hideNsfw,
         CancellationToken cancellationToken,
         bool cascadeChildren = true,
-        IIdentifyCascadeSink? sink = null) {
+        IIdentifyCascadeSink? sink = null,
+        bool hydrateRelationships = true) {
         if (hideNsfw && await _db.Entities.AsNoTracking()
                 .AnyAsync(entity => entity.Id == entityId && entity.IsNsfw, cancellationToken)) {
             return new IdentifyPluginResponse(false, null, $"Entity '{entityId}' was not found.");
@@ -94,7 +95,8 @@ public sealed partial class IdentifyPluginService : IIdentifyProviderService {
             visited: [],
             cancellationToken,
             cascadeChildren,
-            sink);
+            sink,
+            hydrateRelationships);
 
         if (directResult.Ok && directResult.Result?.Patch is not null) {
             return ApplyNsfwPolicies(directResult, providerIsNsfw);
@@ -235,7 +237,8 @@ public sealed partial class IdentifyPluginService : IIdentifyProviderService {
             Query: query,
             Hints: resolvedHints,
             StructuralContext: structuralContext,
-            IncludeNsfw: includeNsfw);
+            IncludeNsfw: includeNsfw,
+            IncludeRelationshipDetails: false);
 
         var response = await _runners.Resolve(descriptor).IdentifyAsync(descriptor, request, cancellationToken);
         return await FallBackToSearchAsync(descriptor, parent, request, resolvedAction, response, cancellationToken);
@@ -337,7 +340,8 @@ public sealed partial class IdentifyPluginService : IIdentifyProviderService {
         CancellationToken cancellationToken,
         bool cascadeChildren = true,
         IIdentifyCascadeSink? sink = null,
-        bool streamRootProgress = true) {
+        bool streamRootProgress = true,
+        bool hydrateRelationships = true) {
         if (!visited.Add(entity.Id)) {
             return new IdentifyPluginResponse(false, null, $"Cycle detected while identifying entity '{entity.Id}'.");
         }
@@ -371,7 +375,8 @@ public sealed partial class IdentifyPluginService : IIdentifyProviderService {
             Query: query ?? new IdentifyQuery(null, null, null),
             Hints: hints,
             StructuralContext: structuralContext,
-            IncludeNsfw: includeNsfw);
+            IncludeNsfw: includeNsfw,
+            IncludeRelationshipDetails: false);
 
         var response = await _runners.Resolve(descriptor).IdentifyAsync(descriptor, request, cancellationToken);
         response = await FallBackToSearchAsync(descriptor, entity, request, resolvedAction, response, cancellationToken);
@@ -396,7 +401,8 @@ public sealed partial class IdentifyPluginService : IIdentifyProviderService {
             cancellationToken,
             cascadeChildren,
             sink,
-            streamRootProgress);
+            streamRootProgress,
+            hydrateRelationships);
         visited.Remove(entity.Id);
         return response with { Result = proposal };
     }

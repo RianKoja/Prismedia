@@ -23,44 +23,83 @@ public sealed partial class IdentifyPluginService {
         CancellationToken cancellationToken,
         bool cascadeChildren = true,
         IIdentifyCascadeSink? sink = null,
-        bool streamRootProgress = true) {
+        bool streamRootProgress = true,
+        bool hydrateRelationships = true) {
         // Bind the children the provider already returned in its own proposal to local entities.
         var boundProviderProposal = await BindLocalStructuralTargetsAsync(providerProposal, entity.Id, cancellationToken);
         var titledProposal = EnsureMeaningfulTitle(boundProviderProposal, entity.Title);
 
-        // Base children for every streamed root: relationships (cast, studios, tags) plus any provider
-        // child that has no local entity yet (e.g. an unscanned season) so it can be materialized.
-        // Crucially we exclude provider children already bound to a LOCAL entity here: those only
-        // appear once the cascade has fully resolved them below, so a child being present in the
-        // streamed proposal reliably means it is done — which is what the review grid keys off. Without
-        // this, a provider that returns its whole tree up front (e.g. MangaDex volumes, a TMDB season)
-        // would show every child as "matched" instantly while the cascade was still resolving their
-        // own children, with no per-child progress.
+        // Relationship proposals can arrive either in the dedicated Relationships collection (newer
+        // plugins) or as relationship-kind child nodes (older plugin shapes). Normalize them into the
+        // relationship lane so the app can stream their hydration exactly like structural children.
+        var baseRelationships = MergeRelationshipProposals(
+            EntityMetadataProposalTraversal.Relationships(titledProposal),
+            RelationshipChildren(titledProposal));
+
+        // Base children for every streamed root: any provider child that has no local entity yet (e.g.
+        // an unscanned season) so it can be materialized. Crucially we exclude provider children already
+        // bound to a LOCAL entity here: those only appear once the cascade has fully resolved them below,
+        // so a child being present in the streamed proposal reliably means it is done — which is what the
+        // review grid keys off. Without this, a provider that returns its whole tree up front (e.g.
+        // MangaDex volumes, a TMDB season) would show every child as "matched" instantly while the cascade
+        // was still resolving their own children, with no per-child progress.
         var baseChildren = (titledProposal.Children ?? [])
             .Where(child =>
-                EntityMetadataProposalTraversal.IsRelationshipKind(child.TargetKind) ||
+                !EntityMetadataProposalTraversal.IsRelationshipKind(child.TargetKind) &&
                 child.TargetEntityId is null)
             .ToArray();
 
-        // Builds the root proposal shape from the children resolved so far — used both for the final
-        // return and for each partial-root the streaming sink publishes. Resolved children that an
-        // unbound provider container carries as shells (a volume's chapters when the book was
-        // scanned flat) are swapped into the container as they resolve, so the reviewed tree shows
-        // the provider's structure with the local matches nested where they belong.
-        EntityMetadataProposal Root(IReadOnlyList<EntityMetadataProposal> structural) {
+        // Builds the root proposal shape from the children and relationships resolved so far — used both
+        // for the final return and for each partial-root the streaming sink publishes. Resolved children
+        // that an unbound provider container carries as shells (a volume's chapters when the book was
+        // scanned flat) are swapped into the container as they resolve, so the reviewed tree shows the
+        // provider's structure with the local matches nested where they belong.
+        EntityMetadataProposal Root(
+            IReadOnlyList<EntityMetadataProposal> structural,
+            IReadOnlyList<EntityMetadataProposal> relationships) {
             var (containers, remaining) = AdoptResolvedChildrenIntoContainers(baseChildren, structural);
             return titledProposal with {
                 TargetKind = entity.KindCode.DecodeAs<ProposalKind>(),
                 TargetEntityId = entity.Id,
                 Children = MergeStructuralChildren(containers, remaining),
-                Relationships = EntityMetadataProposalTraversal.Relationships(titledProposal)
+                Relationships = MergeRelationshipProposals(baseRelationships, relationships)
             };
         }
 
-        // Seed the sink with the parent (no local children yet) so the queue item shows it immediately
-        // with a stable ProposalId; children stream in one at a time as the cascade resolves each.
+        var hydratedRelationships = new List<EntityMetadataProposal>();
+
+        // Seed the sink with the parent (no local children or hydrated relationships yet) so the queue
+        // item shows it immediately with a stable ProposalId; relationships and children stream in one at
+        // a time as the cascade resolves each.
         if (sink is not null && streamRootProgress) {
-            await SafeFlushAsync(sink, Root([]), cancellationToken);
+            await SafeFlushAsync(sink, Root([], hydratedRelationships), cancellationToken);
+        }
+
+        // Hydrate related people/studios/tags incrementally before walking structural children. This
+        // mirrors the child cascade: the review opens with lightweight relationship shells, then each
+        // actor/studio/tag card gains provider detail as it resolves instead of blocking the first view.
+        if (cascadeChildren && hydrateRelationships && baseRelationships.Count > 0) {
+            foreach (var relationship in baseRelationships) {
+                if (sink is not null && !await sink.IsActiveAsync(cancellationToken)) {
+                    break;
+                }
+
+                var hydrated = await HydrateRelationshipProposalAsync(
+                    relationship,
+                    descriptor,
+                    auth,
+                    includeNsfw,
+                    cancellationToken);
+                hydratedRelationships.Add(hydrated);
+
+                if (sink is not null) {
+                    if (streamRootProgress) {
+                        await SafeFlushAsync(sink, Root([], hydratedRelationships), cancellationToken);
+                    } else {
+                        await SafeProgressAsync(sink, cancellationToken);
+                    }
+                }
+            }
         }
 
         // Walk the local structural children and identify each one with this entity's context threaded
@@ -114,7 +153,7 @@ public sealed partial class IdentifyPluginService {
 
                 if (sink is not null) {
                     if (streamRootProgress) {
-                        await SafeFlushAsync(sink, Root(structuralChildren), cancellationToken);
+                        await SafeFlushAsync(sink, Root(structuralChildren, hydratedRelationships), cancellationToken);
                     } else {
                         await SafeProgressAsync(sink, cancellationToken);
                     }
@@ -130,7 +169,7 @@ public sealed partial class IdentifyPluginService {
             ancestorPath,
             includeNsfw,
             cancellationToken);
-        return Root(relocatedChildren);
+        return Root(relocatedChildren, hydratedRelationships);
     }
 
     /// <summary>
@@ -229,10 +268,122 @@ public sealed partial class IdentifyPluginService {
             Query: new IdentifyQuery(null, null, null),
             Hints: new IdentifyMatchHints(container.Patch.ExternalIds, container.Patch.Urls, container.Patch.Title, null),
             StructuralContext: new IdentifyStructuralContext(ancestorPath, container.Patch.Positions),
-            IncludeNsfw: includeNsfw);
+            IncludeNsfw: includeNsfw,
+            IncludeRelationshipDetails: false);
 
         var response = await _runners.Resolve(descriptor).IdentifyAsync(descriptor, request, cancellationToken);
         return response.Ok && response.Result?.Patch is not null ? response.Result : null;
+    }
+
+    private async Task<EntityMetadataProposal> HydrateRelationshipProposalAsync(
+        EntityMetadataProposal relationship,
+        PluginDescriptor descriptor,
+        IReadOnlyDictionary<string, string> auth,
+        bool includeNsfw,
+        CancellationToken cancellationToken) {
+        if (!SupportsKind(descriptor.Manifest, relationship.TargetKind.ToEntityKind().ToCode())) {
+            return relationship;
+        }
+
+        var patch = relationship.Patch;
+        var externalIds = patch.ExternalIds ?? new Dictionary<string, string>();
+        var urls = patch.Urls ?? [];
+        var title = patch.Title?.Trim() ?? relationship.TargetKind.ToEntityKind().ToCode();
+        var action = externalIds.Count > 0
+            ? IdentifyAction.LookupId
+            : urls.Count > 0
+                ? IdentifyAction.LookupUrl
+                : IdentifyAction.Search;
+        var query = action switch {
+            IdentifyAction.LookupId => new IdentifyQuery(null, null, externalIds),
+            IdentifyAction.LookupUrl => new IdentifyQuery(null, urls.FirstOrDefault(), null),
+            _ => new IdentifyQuery(title, null, null)
+        };
+        var request = new IdentifyPluginRequest(
+            ProtocolVersion: 2,
+            Action: action,
+            Auth: auth,
+            Entity: new IdentifyEntitySnapshot(
+                Guid.Empty,
+                relationship.TargetKind.ToEntityKind(),
+                title,
+                externalIds,
+                urls),
+            Query: query,
+            Hints: new IdentifyMatchHints(externalIds, urls, title, null),
+            StructuralContext: null,
+            IncludeNsfw: includeNsfw,
+            IncludeRelationshipDetails: false);
+
+        try {
+            var response = await _runners.Resolve(descriptor).IdentifyAsync(descriptor, request, cancellationToken);
+            if (response.Ok && response.Result?.Patch is not null) {
+                return response.Result with {
+                    TargetEntityId = relationship.TargetEntityId,
+                    // Preserve the shell's id so selection state and card identity remain stable while
+                    // the hydrated relationship replaces the lightweight base node in-place.
+                    ProposalId = relationship.ProposalId
+                };
+            }
+        } catch (OperationCanceledException) {
+            throw;
+        } catch {
+            // Relationship hydration is best-effort: keep the base shell so the root proposal still
+            // applies credits/studio/tags even if one related entity detail lookup fails.
+        }
+
+        return relationship;
+    }
+
+    private static IReadOnlyList<EntityMetadataProposal> RelationshipChildren(EntityMetadataProposal proposal) =>
+        (proposal.Children ?? [])
+            .Where(child => EntityMetadataProposalTraversal.IsRelationshipKind(child.TargetKind))
+            .ToArray();
+
+    private static IReadOnlyList<EntityMetadataProposal> MergeRelationshipProposals(
+        IReadOnlyList<EntityMetadataProposal> baseRelationships,
+        IReadOnlyList<EntityMetadataProposal> hydratedRelationships) {
+        if (baseRelationships.Count == 0) {
+            return NormalizeRelationships(hydratedRelationships);
+        }
+
+        if (hydratedRelationships.Count == 0) {
+            return NormalizeRelationships(baseRelationships);
+        }
+
+        var merged = new List<EntityMetadataProposal>(baseRelationships);
+        foreach (var hydrated in hydratedRelationships) {
+            var index = merged.FindIndex(existing => RelationshipKey(existing) == RelationshipKey(hydrated));
+            if (index >= 0) {
+                merged[index] = hydrated;
+            } else {
+                merged.Add(hydrated);
+            }
+        }
+
+        return NormalizeRelationships(merged);
+    }
+
+    private static IReadOnlyList<EntityMetadataProposal> NormalizeRelationships(
+        IReadOnlyList<EntityMetadataProposal> relationships) =>
+        relationships
+            .GroupBy(RelationshipKey, StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.First())
+            .ToArray();
+
+    private static string RelationshipKey(EntityMetadataProposal relationship) {
+        if (!string.IsNullOrWhiteSpace(relationship.ProposalId)) {
+            return $"proposal:{relationship.ProposalId}";
+        }
+
+        var externalId = relationship.Patch.ExternalIds
+            .OrderBy(pair => pair.Key, StringComparer.OrdinalIgnoreCase)
+            .FirstOrDefault(pair => !string.IsNullOrWhiteSpace(pair.Value));
+        if (!string.IsNullOrWhiteSpace(externalId.Key)) {
+            return $"external:{externalId.Key}:{externalId.Value}";
+        }
+
+        return $"title:{relationship.TargetKind}:{relationship.Patch.Title?.Trim()}";
     }
 
     private static IEnumerable<RelocatableLocalChild> CollectLocalUnmatchedDescendants(

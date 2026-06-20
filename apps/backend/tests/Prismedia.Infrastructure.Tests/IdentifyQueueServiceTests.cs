@@ -174,6 +174,69 @@ public sealed class IdentifyQueueServiceTests : IDisposable {
     }
 
     [Fact]
+    public async Task ResolveCandidateAsyncReturnsBaseProposalThenStreamsRelationshipHydration() {
+        await using var db = CreateContext();
+        var entityId = Guid.Parse("33333333-3333-3333-3333-33333333334a");
+        SeedProvider(db);
+        SeedEntity(db, entityId, "video", "Cast Heavy Movie");
+        await db.SaveChangesAsync();
+        var queue = new RecordingJobQueue();
+        var executor = new RelationshipHydrationProcessExecutor();
+        var service = new IdentifyQueueService(
+            db,
+            CreateIdentifyService(db, executor, _tempRoot),
+            new InMemoryIdentifyApplyProgressStore(),
+            queue);
+        await service.AddAsync(entityId, CancellationToken.None);
+        var search = await SearchToCompletionAsync(
+            service,
+            db,
+            entityId,
+            new IdentifyQueueSearchRequest("tmdb", new IdentifyQuery("Cast Heavy", null, null)),
+            hideNsfw: false,
+            CancellationToken.None);
+        var candidate = Assert.Single(search.Candidates);
+        queue.Enqueued.Clear();
+
+        var item = await service.ResolveCandidateAsync(
+            entityId,
+            new IdentifyQueueCandidateRequest("tmdb", candidate),
+            hideNsfw: false,
+            CancellationToken.None);
+
+        Assert.Equal([
+            "Search:Video:False",
+            "LookupId:Video:False"
+        ], executor.Requests.Select(request => $"{request.Action}:{request.Entity.Kind}:{request.IncludeRelationshipDetails}").ToArray());
+        Assert.Equal("proposal", item.State);
+        Assert.NotNull(item.Proposal);
+        var baseActor = Assert.Single(item.Proposal!.Relationships ?? []);
+        Assert.Equal("Actor Shell", baseActor.Patch.Title);
+        Assert.Null(baseActor.Patch.Description);
+        Assert.True(item.CascadeRunning);
+        Assert.Contains(queue.Enqueued, job => job.Type == JobType.IdentifyCascade);
+        Assert.DoesNotContain(queue.Enqueued, job => job.Type == JobType.IdentifySearch);
+
+        var cascadeJobId = (await db.IdentifyQueueItems.AsNoTracking().SingleAsync(row => row.EntityId == entityId)).CascadeJobId!.Value;
+        await service.RunCascadeAsync(
+            new IdentifyCascadePayload(
+                entityId,
+                "tmdb",
+                new IdentifyQuery(null, null, new Dictionary<string, string> { ["tmdb"] = "movie-1" }),
+                HideNsfw: false),
+            cascadeJobId,
+            isFinalAttempt: true,
+            CancellationToken.None);
+        var hydrated = await service.GetAsync(entityId, CancellationToken.None);
+
+        Assert.NotNull(hydrated?.Proposal);
+        var hydratedActor = Assert.Single(hydrated!.Proposal!.Relationships ?? []);
+        Assert.Equal("Actor Shell", hydratedActor.Patch.Title);
+        Assert.Equal("Hydrated actor biography.", hydratedActor.Patch.Description);
+        Assert.False(hydrated.CascadeRunning);
+    }
+
+    [Fact]
     public async Task ResolveCandidateAsyncDoesNotFallBackToGenericSearchWhenSelectedIdMisses() {
         await using var db = CreateContext();
         var entityId = Guid.Parse("33333333-3333-3333-3333-33333333333b");
@@ -1221,7 +1284,9 @@ public sealed class IdentifyQueueServiceTests : IDisposable {
               ],
               "supports": [
                 { "entityKind": "video", "actions": ["lookup-id", "lookup-url", "search"] },
-                { "entityKind": "video-series", "actions": ["lookup-id", "lookup-url", "search"] }
+                { "entityKind": "video-series", "actions": ["lookup-id", "lookup-url", "search"] },
+                { "entityKind": "person", "actions": ["lookup-id", "lookup-url", "search"] },
+                { "entityKind": "studio", "actions": ["lookup-id", "lookup-url", "search"] }
               ]
             }
             """);
@@ -1800,6 +1865,98 @@ public sealed class IdentifyQueueServiceTests : IDisposable {
                 error = (string?)null
             };
 
+            return new ProcessExecutionResult(0, JsonSerializer.Serialize(wire, JsonOptions), string.Empty);
+        }
+    }
+
+    private sealed class RelationshipHydrationProcessExecutor : ProcessExecutor {
+        public List<IdentifyPluginRequest> Requests { get; } = [];
+
+        public override async Task<ProcessExecutionResult> RunAsync(
+            string fileName,
+            IReadOnlyList<string> arguments,
+            IReadOnlyDictionary<string, string>? environment,
+            CancellationToken cancellationToken, bool lowPriority = false) {
+            var requestJson = await File.ReadAllTextAsync(arguments[1], cancellationToken);
+            var request = JsonSerializer.Deserialize<IdentifyPluginRequest>(requestJson, JsonOptions)!;
+            Requests.Add(request);
+            if (request.Action == IdentifyAction.Search) {
+                var wire = new {
+                    ok = true,
+                    result = new {
+                        type = "candidates",
+                        proposal = (object?)null,
+                        candidates = new[] {
+                            new EntitySearchCandidate(
+                                new Dictionary<string, string> { ["tmdb"] = "movie-1" },
+                                "Cast Heavy Movie (2026)",
+                                2026,
+                                "A movie with lots of actors.",
+                                "https://example.test/cast-heavy.jpg",
+                                9.1m)
+                        }
+                    },
+                    error = (string?)null
+                };
+                return new ProcessExecutionResult(0, JsonSerializer.Serialize(wire, JsonOptions), string.Empty);
+            }
+
+            if (request.Entity.Kind == EntityKind.Person) {
+                return ProposalResponse(new EntityMetadataProposal(
+                    "tmdb:person:actor-1",
+                    "tmdb",
+                    ProposalKind.Person,
+                    1,
+                    "external-id",
+                    EmptyPatch("Actor Shell") with {
+                        Description = "Hydrated actor biography.",
+                        ExternalIds = new Dictionary<string, string> { ["tmdb"] = "actor-1" }
+                    },
+                    [],
+                    [],
+                    [],
+                    Relationships: []));
+            }
+
+            var actorShell = new EntityMetadataProposal(
+                "tmdb:person:actor-1",
+                "tmdb",
+                ProposalKind.Person,
+                null,
+                "cascade",
+                EmptyPatch("Actor Shell") with {
+                    ExternalIds = new Dictionary<string, string> { ["tmdb"] = "actor-1" }
+                },
+                [],
+                [],
+                [],
+                Relationships: []);
+            return ProposalResponse(new EntityMetadataProposal(
+                "tmdb:movie:movie-1",
+                "tmdb",
+                ProposalKind.Video,
+                1,
+                "external-id",
+                EmptyPatch("Cast Heavy Movie identified") with {
+                    ExternalIds = new Dictionary<string, string> { ["tmdb"] = "movie-1" }
+                },
+                [],
+                [],
+                [],
+                TargetEntityId: request.Entity.Id,
+                Relationships: [actorShell]));
+        }
+
+        private static ProcessExecutionResult ProposalResponse(EntityMetadataProposal proposal) {
+            var wire = new {
+                ok = true,
+                result = new {
+                    type = "proposal",
+                    proposal,
+                    candidates = Array.Empty<object>()
+                },
+                error = (string?)null
+            };
             return new ProcessExecutionResult(0, JsonSerializer.Serialize(wire, JsonOptions), string.Empty);
         }
     }

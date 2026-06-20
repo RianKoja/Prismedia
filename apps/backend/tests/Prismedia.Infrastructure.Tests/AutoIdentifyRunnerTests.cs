@@ -739,7 +739,7 @@ public sealed class AutoIdentifyRunnerTests {
         public async Task<IdentifyPluginResponse> IdentifyAsync(
             Guid entityId, string providerId, IdentifyQuery? query,
             IReadOnlyDictionary<string, string>? parentExternalIds, bool hideNsfw, CancellationToken cancellationToken,
-            bool cascadeChildren = true, IIdentifyCascadeSink? sink = null) {
+            bool cascadeChildren = true, IIdentifyCascadeSink? sink = null, bool hydrateRelationships = true) {
             IdentifyCalls.Add((entityId, providerId, query));
             CascadeChildrenCalls.Add(cascadeChildren);
             if (OnIdentifyAsync is not null) {

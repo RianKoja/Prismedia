@@ -258,7 +258,8 @@ public sealed class IdentifyQueueService : IIdentifyQueueService {
             parentExternalIds: null,
             hideNsfw,
             cancellationToken,
-            cascadeChildren: false);
+            cascadeChildren: false,
+            hydrateRelationships: false);
         if (!response.Ok) {
             throw new InvalidOperationException(response.Error ?? "Selected identify candidate could not be resolved.");
         }
@@ -286,7 +287,7 @@ public sealed class IdentifyQueueService : IIdentifyQueueService {
         row.UpdatedAt = DateTimeOffset.UtcNow;
         row.CompletedAt = null;
 
-        await EnqueueCascadeIfNeededAsync(row, entity, provider, query, hideNsfw, isForeground: true, cancellationToken);
+        await EnqueueCascadeIfNeededAsync(row, entity, provider, query, proposal, hideNsfw, isForeground: true, cancellationToken);
         await _db.SaveChangesAsync(cancellationToken);
         return MapRow(row, entity);
     }
@@ -485,7 +486,8 @@ public sealed class IdentifyQueueService : IIdentifyQueueService {
                 parentExternalIds: null,
                 hideNsfw,
                 cancellationToken,
-                cascadeChildren: false);
+                cascadeChildren: false,
+                hydrateRelationships: false);
         } catch (OperationCanceledException) {
             throw;
         } catch (Exception ex) {
@@ -517,7 +519,7 @@ public sealed class IdentifyQueueService : IIdentifyQueueService {
             row.CandidatesJson = null;
             row.ProposalJson = JsonSerializer.Serialize(response.Result, JsonOptions);
             await EnqueueCascadeIfNeededAsync(
-                row, entity, provider, query, hideNsfw, isForeground, cancellationToken);
+                row, entity, provider, query, response.Result, hideNsfw, isForeground, cancellationToken);
         } else if (response.Result?.Candidates is { Count: > 0 } candidates) {
             row.State = IdentifyQueueState.Search;
             row.Error = null;
@@ -647,25 +649,27 @@ public sealed class IdentifyQueueService : IIdentifyQueueService {
     }
 
     /// <summary>
-    /// Enqueues a background cascade to stream the entity's full child tree onto the seeded proposal,
-    /// when the entity is an identify container that actually has local structural children to walk.
+    /// Enqueues a background cascade to stream the entity's full child tree and related entity details
+    /// onto the seeded proposal when there is deferred work to walk.
     /// </summary>
     private async Task EnqueueCascadeIfNeededAsync(
         IdentifyQueueItemRow row,
         EntityRow entity,
         string provider,
         IdentifyQuery? query,
+        EntityMetadataProposal proposal,
         bool hideNsfw,
         bool isForeground,
         CancellationToken cancellationToken) {
-        if (!EntityKindRegistry.EnumeratesIdentifyChildren(entity.KindCode)) {
-            return;
+        var needsStructuralCascade = false;
+        if (EntityKindRegistry.EnumeratesIdentifyChildren(entity.KindCode)) {
+            needsStructuralCascade = await _db.Entities
+                .AsNoTracking()
+                .AnyAsync(child => child.ParentEntityId == entity.Id, cancellationToken);
         }
 
-        var hasChildren = await _db.Entities
-            .AsNoTracking()
-            .AnyAsync(child => child.ParentEntityId == entity.Id, cancellationToken);
-        if (!hasChildren) {
+        var needsRelationshipCascade = await HasHydratableRelationshipsAsync(provider, proposal, cancellationToken);
+        if (!needsStructuralCascade && !needsRelationshipCascade) {
             return;
         }
 
@@ -681,6 +685,44 @@ public sealed class IdentifyQueueService : IIdentifyQueueService {
                 Lane: isForeground ? JobRunLane.ForegroundIdentify : null),
             cancellationToken);
         row.CascadeJobId = job.Id;
+    }
+
+    private async Task<bool> HasHydratableRelationshipsAsync(
+        string provider,
+        EntityMetadataProposal proposal,
+        CancellationToken cancellationToken) {
+        var relationships = EntityMetadataProposalTraversal.Relationships(proposal)
+            .Concat((proposal.Children ?? []).Where(child => EntityMetadataProposalTraversal.IsRelationshipKind(child.TargetKind)))
+            .ToArray();
+        if (relationships.Length == 0) {
+            return false;
+        }
+
+        var supportByKind = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+        foreach (var relationship in relationships) {
+            var patch = relationship.Patch;
+            var hasLookupInput =
+                (patch.ExternalIds?.Count ?? 0) > 0 ||
+                (patch.Urls?.Count ?? 0) > 0 ||
+                !string.IsNullOrWhiteSpace(patch.Title);
+            if (!hasLookupInput) {
+                continue;
+            }
+
+            var kindCode = relationship.TargetKind.ToEntityKind().ToCode();
+            if (!supportByKind.TryGetValue(kindCode, out var supportsKind)) {
+                var providers = await _identify.ListProvidersAsync(kindCode, cancellationToken);
+                supportsKind = providers.Any(candidate =>
+                    candidate.Id.Equals(provider, StringComparison.OrdinalIgnoreCase) && candidate.Enabled);
+                supportByKind[kindCode] = supportsKind;
+            }
+
+            if (supportsKind) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>Cancels the in-flight cascade job for a row, if any, and clears its marker.</summary>

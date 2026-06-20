@@ -63,6 +63,10 @@ public sealed record IdentifyQuery(
 /// <param name="Hints">ID-first lookup hints derived from existing entity metadata.</param>
 /// <param name="StructuralContext">Structural parent and position context for child-aware identify.</param>
 /// <param name="IncludeNsfw">Whether plugin lookups may include adult upstream results for this request.</param>
+/// <param name="IncludeRelationshipDetails">
+/// Whether plugins should eagerly hydrate related entity proposals (people, studios, tags) before
+/// returning. Prismedia can set this to false when it will stream relationship hydration itself.
+/// </param>
 public sealed record IdentifyPluginRequest(
     int ProtocolVersion,
     IdentifyAction Action,
@@ -71,7 +75,8 @@ public sealed record IdentifyPluginRequest(
     IdentifyQuery Query,
     IdentifyMatchHints Hints,
     IdentifyStructuralContext? StructuralContext = null,
-    bool IncludeNsfw = false);
+    bool IncludeNsfw = false,
+    bool IncludeRelationshipDetails = true);
 
 /// <summary>
 /// Request body for identifying one entity with a provider.

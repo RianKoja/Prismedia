@@ -25,6 +25,11 @@ public interface IIdentifyProviderService {
     /// Optional streaming sink invoked with the growing root proposal after each top-level child
     /// resolves, so a long cascade can publish partial results. Only the root level flushes.
     /// </param>
+    /// <param name="hydrateRelationships">
+    /// When true (default), related entity proposals such as cast, studios, and tags are hydrated in
+    /// the same streaming pass as children. When false the seed proposal returns relationship shells
+    /// immediately and a queue cascade can hydrate them later.
+    /// </param>
     Task<IdentifyPluginResponse> IdentifyAsync(
         Guid entityId,
         string providerId,
@@ -33,7 +38,8 @@ public interface IIdentifyProviderService {
         bool hideNsfw,
         CancellationToken cancellationToken,
         bool cascadeChildren = true,
-        IIdentifyCascadeSink? sink = null);
+        IIdentifyCascadeSink? sink = null,
+        bool hydrateRelationships = true);
 
     /// <summary>Applies selected metadata proposal fields to an entity.</summary>
     Task<bool> ApplyAsync(
