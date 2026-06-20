@@ -31,6 +31,11 @@ public sealed class ScanBookJobHandler(
 
     protected override IReadOnlyList<MediaCategory> ScanCategories => [MediaCategory.ComicArchive, MediaCategory.Book];
 
+    protected override Task OnNoFileChangesAsync(
+        JobContext context, LibraryRootData root, CancellationToken cancellationToken) =>
+        AutoIdentifyScanEnqueue.EnqueueExistingRootsForUnchangedScanAsync(
+            context, Roots, downstreamNeeds, root, ScanCategories, cancellationToken);
+
     protected override async Task ScanRootCoreAsync(JobContext context, LibraryRootData root, CancellationToken cancellationToken) {
         logger.LogInformation("ScanBook: discovering archives in {Path}", root.Path);
         var excludedPaths = await Roots.GetExcludedPathsForRootAsync(root.Id, cancellationToken);

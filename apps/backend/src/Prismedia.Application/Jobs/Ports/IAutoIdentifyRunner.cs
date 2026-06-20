@@ -39,7 +39,7 @@ public static class AutoIdentifyPolicy {
     /// is excluded from auto identify and left for manual identification. Runs that never reach a
     /// provider (disabled, wrong kind, no capable provider) do not consume an attempt.
     /// </summary>
-    public const int MaxAttemptsPerEntity = 3;
+    public const int MaxAttemptsPerEntity = 5;
 }
 
 /// <summary>

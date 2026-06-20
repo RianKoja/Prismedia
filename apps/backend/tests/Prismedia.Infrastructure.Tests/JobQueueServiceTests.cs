@@ -343,6 +343,66 @@ public sealed class JobQueueServiceTests {
     }
 
     [Fact]
+    public async Task ClaimNextProcessesMusicArtistAutoIdentifyBeforeAudioLibraryAutoIdentify() {
+        await using var db = CreateContext();
+        var service = new JobQueueService(db);
+        var now = DateTimeOffset.UtcNow;
+        var album = NewJobRun(
+            JobType.AutoIdentify,
+            JobRunStatus.Queued,
+            now.AddMinutes(-10),
+            targetEntityKind: EntityKindRegistry.AudioLibrary.Code,
+            priority: JobPriorities.AutoIdentify);
+        var artist = NewJobRun(
+            JobType.AutoIdentify,
+            JobRunStatus.Queued,
+            now,
+            targetEntityKind: EntityKindRegistry.MusicArtist.Code,
+            priority: JobPriorities.AutoIdentify);
+        db.JobRuns.AddRange(album, artist);
+        await db.SaveChangesAsync();
+
+        var claimed = await service.ClaimNextAsync("worker-1", CancellationToken.None);
+
+        Assert.NotNull(claimed);
+        Assert.Equal(artist.Id, claimed.Id);
+    }
+
+    [Fact]
+    public async Task ClaimNextWaitsForDeferredMusicArtistBeforeAudioLibraryAutoIdentify() {
+        await using var db = CreateContext();
+        var service = new JobQueueService(db);
+        var now = DateTimeOffset.UtcNow;
+        var album = NewJobRun(
+            JobType.AutoIdentify,
+            JobRunStatus.Queued,
+            now.AddMinutes(-10),
+            targetEntityKind: EntityKindRegistry.AudioLibrary.Code,
+            priority: JobPriorities.AutoIdentify);
+        var deferredArtist = NewJobRun(
+            JobType.AutoIdentify,
+            JobRunStatus.Queued,
+            now.AddMinutes(5),
+            targetEntityKind: EntityKindRegistry.MusicArtist.Code,
+            priority: JobPriorities.AutoIdentify);
+        db.JobRuns.AddRange(album, deferredArtist);
+        await db.SaveChangesAsync();
+
+        var blocked = await service.ClaimNextAsync("worker-1", CancellationToken.None);
+
+        Assert.Null(blocked);
+
+        deferredArtist.Status = JobRunStatus.Completed;
+        deferredArtist.FinishedAt = now;
+        await db.SaveChangesAsync();
+
+        var claimed = await service.ClaimNextAsync("worker-1", CancellationToken.None);
+
+        Assert.NotNull(claimed);
+        Assert.Equal(album.Id, claimed.Id);
+    }
+
+    [Fact]
     public async Task ClaimNextClaimsPreviewBeforeAutoIdentifyEvenWithLowerPreviewPriority() {
         await using var db = CreateContext();
         var service = new JobQueueService(db);

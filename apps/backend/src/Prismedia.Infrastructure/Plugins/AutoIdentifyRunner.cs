@@ -87,6 +87,11 @@ public sealed class AutoIdentifyRunner(
             return new AutoIdentifyResult(false, SkipReason: "no capable provider");
         }
 
+        var parentExternalIds = await LoadParentExternalIdsForContextAsync(
+            entity.KindCode,
+            entity.ParentEntityId,
+            cancellationToken);
+
         using var lease = gate?.TryEnterBackground()
             ?? (gate is null ? null : throw new JobRetryLaterException("Auto identify provider slot busy.", TimeSpan.FromSeconds(5)));
         using var inactivity = ProgressSensitiveCancellation.Create(options.InactivityTimeout, cancellationToken);
@@ -107,7 +112,7 @@ public sealed class AutoIdentifyRunner(
                     entityId,
                     providerId,
                     query: null,
-                    parentExternalIds: null,
+                    parentExternalIds,
                     hideNsfw: false,
                     runToken,
                     cascadeChildren,
@@ -131,7 +136,7 @@ public sealed class AutoIdentifyRunner(
 
             var proposal = response.Result;
             if (proposal.Patch is null && proposal.Candidates is { Count: > 0 } candidates) {
-                var candidate = SelectConfidentCandidate(candidates, config.ConfidenceThreshold);
+                var candidate = SelectConfidentCandidate(candidates, config.ConfidenceThreshold, entity.Title);
                 if (candidate is null) {
                     continue;
                 }
@@ -141,7 +146,7 @@ public sealed class AutoIdentifyRunner(
                         entityId,
                         providerId,
                         new IdentifyQuery(Title: null, Url: null, ExternalIds: candidate.ExternalIds),
-                        parentExternalIds: null,
+                        parentExternalIds,
                         hideNsfw: false,
                         runToken,
                         cascadeChildren,
@@ -198,30 +203,128 @@ public sealed class AutoIdentifyRunner(
     }
 
     /// <summary>
+    /// Loads external IDs from an already-identified parent artist so album auto-identify can resolve
+    /// inside the artist context instead of searching every matching album title globally.
+    /// </summary>
+    private async Task<IReadOnlyDictionary<string, string>?> LoadParentExternalIdsForContextAsync(
+        string kindCode,
+        Guid? parentEntityId,
+        CancellationToken cancellationToken) {
+        // Artist-parented albums are auto-identify roots, but the provider should still be able to
+        // constrain album lookup by the already-identified artist MBID/IDs when available.
+        if (parentEntityId is not { } parentId || kindCode != EntityKindRegistry.AudioLibrary.Code) {
+            return null;
+        }
+
+        var rows = await db.EntityExternalIds.AsNoTracking()
+            .Where(externalId => externalId.EntityId == parentId)
+            .Select(externalId => new { externalId.Provider, externalId.Value })
+            .ToListAsync(cancellationToken);
+        if (rows.Count == 0) {
+            return null;
+        }
+
+        return rows
+            .GroupBy(row => row.Provider, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.Last().Value, StringComparer.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
     /// Picks a single provider-ranked search candidate only when the provider supplied an explicit
     /// confidence score that meets the user's auto-apply threshold.
     /// </summary>
     private static EntitySearchCandidate? SelectConfidentCandidate(
         IReadOnlyList<EntitySearchCandidate> candidates,
-        double threshold) {
+        double threshold,
+        string queryTitle) {
         var ranked = candidates
-            .Where(candidate => candidate.ExternalIds.Count > 0 && candidate.Confidence is not null)
+            .Where(candidate => candidate.ExternalIds.Count > 0)
             .Select(candidate => new {
                 Candidate = candidate,
-                Confidence = NormalizeConfidence(candidate.Confidence!.Value)
+                Confidence = CandidateConfidence(candidate, queryTitle)
             })
-            .OrderByDescending(row => row.Confidence)
+            .Where(row => row.Confidence is not null)
+            .OrderByDescending(row => row.Confidence!.Value)
             .ToArray();
 
-        if (ranked.Length == 0 || ranked[0].Confidence < threshold) {
+        if (ranked.Length == 0 || ranked[0].Confidence!.Value < threshold) {
             return null;
         }
 
-        if (ranked.Length > 1 && ranked[1].Confidence >= threshold) {
+        if (ranked.Length > 1 && ranked[1].Confidence!.Value >= threshold) {
             return null;
         }
 
         return ranked[0].Candidate;
+    }
+
+    private static double? CandidateConfidence(EntitySearchCandidate candidate, string queryTitle) {
+        if (candidate.Confidence is { } confidence) {
+            return NormalizeConfidence(confidence);
+        }
+
+        return ExactTitleCandidateConfidence(candidate, queryTitle);
+    }
+
+    private static double? ExactTitleCandidateConfidence(EntitySearchCandidate candidate, string queryTitle) {
+        var query = NormalizeCandidateTitle(queryTitle);
+        var candidateTitle = NormalizeCandidateTitle(candidate.Title);
+        if (query.TitleKey.Length == 0 || candidateTitle.TitleKey.Length == 0 ||
+            !string.Equals(query.TitleKey, candidateTitle.TitleKey, StringComparison.Ordinal)) {
+            return null;
+        }
+
+        var candidateYear = candidate.Year ?? candidateTitle.Year;
+        if (query.Year is { } queryYear && candidateYear is { } year && year != queryYear) {
+            return null;
+        }
+
+        return 1d;
+    }
+
+    private static (string TitleKey, int? Year) NormalizeCandidateTitle(string? value) {
+        if (string.IsNullOrWhiteSpace(value)) {
+            return (string.Empty, null);
+        }
+
+        var title = value.Trim();
+        int? year = null;
+        if (TryStripTrailingYear(title, out var stripped, out var parsedYear)) {
+            title = stripped;
+            year = parsedYear;
+        }
+
+        var tokens = title.ToLowerInvariant()
+            .Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)
+            .Select(token => new string(token.Where(char.IsLetterOrDigit).ToArray()))
+            .Where(token => token.Length > 0);
+        return (string.Join(' ', tokens), year);
+    }
+
+    private static bool TryStripTrailingYear(string title, out string stripped, out int year) {
+        stripped = title;
+        year = 0;
+        if (title.Length < 6) {
+            return false;
+        }
+
+        var close = title[^1];
+        var open = close switch {
+            ')' => '(',
+            ']' => '[',
+            _ => '\0'
+        };
+        if (open == '\0' || title[^6] != open) {
+            return false;
+        }
+
+        var yearText = title.Substring(title.Length - 5, 4);
+        if (!yearText.All(char.IsDigit) || !int.TryParse(yearText, out year)) {
+            return false;
+        }
+
+        stripped = title[..^6].TrimEnd();
+        return stripped.Length > 0;
     }
 
     /// <summary>

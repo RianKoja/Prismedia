@@ -25,6 +25,11 @@ public sealed class ScanAudioJobHandler(
 
     protected override IReadOnlyList<MediaCategory> ScanCategories => [MediaCategory.Audio];
 
+    protected override Task OnNoFileChangesAsync(
+        JobContext context, LibraryRootData root, CancellationToken cancellationToken) =>
+        AutoIdentifyScanEnqueue.EnqueueExistingRootsForUnchangedScanAsync(
+            context, Roots, downstreamNeeds, root, ScanCategories, cancellationToken);
+
     protected override async Task ScanRootCoreAsync(JobContext context, LibraryRootData root, CancellationToken cancellationToken) {
         logger.LogInformation("ScanAudio: discovering audio files in {Path}", root.Path);
         var excludedPaths = await Roots.GetExcludedPathsForRootAsync(root.Id, cancellationToken);

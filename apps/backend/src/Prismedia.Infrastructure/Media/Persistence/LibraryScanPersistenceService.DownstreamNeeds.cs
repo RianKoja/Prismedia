@@ -205,6 +205,59 @@ public sealed partial class LibraryScanPersistenceService {
         return detail?.SubtitlesExtractedAt is not null;
     }
 
+    public async Task<IReadOnlyList<AutoIdentifyRootTarget>> ResolveAutoIdentifyRootsForLibraryRootAsync(
+        Guid libraryRootId,
+        IReadOnlyList<MediaCategory> scanCategories,
+        CancellationToken cancellationToken) {
+        if (scanCategories.Count == 0) return [];
+
+        var categories = scanCategories.ToHashSet();
+        var entityIds = new List<Guid>();
+
+        if (categories.Contains(MediaCategory.Video)) {
+            var videoIds = await _db.VideoDetails.AsNoTracking()
+                .Where(detail => detail.LibraryRootId == libraryRootId)
+                .Select(detail => detail.EntityId)
+                .ToListAsync(cancellationToken);
+            entityIds.AddRange(videoIds);
+        }
+
+        if (categories.Contains(MediaCategory.Image)) {
+            var galleryIds = await _db.GalleryDetails.AsNoTracking()
+                .Where(detail => detail.LibraryRootId == libraryRootId)
+                .Select(detail => detail.EntityId)
+                .ToListAsync(cancellationToken);
+            entityIds.AddRange(galleryIds);
+        }
+
+        if (categories.Contains(MediaCategory.Audio)) {
+            // Preserve the full-scan queue ordering: artists first, then albums. When an artist
+            // identifies successfully, later album jobs can use the saved artist external IDs as
+            // provider context.
+            var artistIds = await _db.MusicArtistDetails.AsNoTracking()
+                .Where(detail => detail.LibraryRootId == libraryRootId)
+                .Select(detail => detail.EntityId)
+                .ToListAsync(cancellationToken);
+            entityIds.AddRange(artistIds);
+
+            var albumIds = await _db.AudioLibraryDetails.AsNoTracking()
+                .Where(detail => detail.LibraryRootId == libraryRootId)
+                .Select(detail => detail.EntityId)
+                .ToListAsync(cancellationToken);
+            entityIds.AddRange(albumIds);
+        }
+
+        if (categories.Contains(MediaCategory.ComicArchive) || categories.Contains(MediaCategory.Book)) {
+            var bookIds = await _db.BookDetails.AsNoTracking()
+                .Where(detail => detail.LibraryRootId == libraryRootId)
+                .Select(detail => detail.EntityId)
+                .ToListAsync(cancellationToken);
+            entityIds.AddRange(bookIds);
+        }
+
+        return await ResolveAutoIdentifyRootsAsync(entityIds.Distinct().ToList(), cancellationToken);
+    }
+
     public async Task<IReadOnlyList<AutoIdentifyRootTarget>> ResolveAutoIdentifyRootsAsync(
         IReadOnlyList<Guid> entityIds, CancellationToken cancellationToken) {
         if (entityIds.Count == 0) return [];

@@ -2140,6 +2140,59 @@ public sealed class ScanJobHandlerTests {
         Assert.Equal(2, snapshots.ApplyCount);
     }
 
+    [Fact]
+    public async Task SnapshotNoChangeScanStillQueuesPendingAutoIdentifyRoots() {
+        var root = new LibraryRootData(
+            Guid.Parse("11111111-1111-1111-1111-111111111111"),
+            "/media/videos", "Videos",
+            Enabled: true, Recursive: true,
+            ScanVideos: true, ScanImages: false, ScanAudio: false, ScanBooks: false, IsNsfw: false);
+        var videoId = Guid.Parse("22222222-2222-2222-2222-222222222222");
+        var persistence = new FakeScanPersistence([root]) {
+            Settings = new LibrarySettingsData(
+                AutoGenerateMetadata: false,
+                AutoGenerateOshash: false,
+                AutoGenerateMd5: false,
+                AutoGeneratePreview: false,
+                GenerateTrickplay: false,
+                TrickplayIntervalSeconds: 10,
+                PreviewClipDurationSeconds: 8,
+                ThumbnailQuality: 2,
+                TrickplayQuality: 2,
+                AutoIdentifyEnabled: true,
+                AutoIdentifyKinds: ["video"]),
+            UpsertedVideoIds = [videoId],
+            AutoIdentifyRootTargets = [new AutoIdentifyRootTarget(videoId, "video", "movie.mkv")],
+            DownstreamNeedsById = new Dictionary<Guid, DownstreamNeeds> {
+                [videoId] = new(
+                    NeedsProbe: false,
+                    MissingOshash: false,
+                    MissingMd5: false,
+                    NeedsPreview: false,
+                    NeedsTrickplay: false,
+                    NeedsSubtitleExtraction: false, NeedsGridThumbnail: false)
+            }
+        };
+        var snapshots = new FakeScanSnapshotStore();
+        var discovery = new RecordingFileDiscovery(["/media/videos/movie.mkv"]);
+        var handler = new ScanLibraryJobHandler(
+            NullLogger<ScanLibraryJobHandler>.Instance,
+            discovery,
+            persistence,
+            persistence,
+            persistence,
+            snapshots);
+        var job = SingleRootScanJob(root);
+
+        await handler.HandleAsync(new JobContext(job, new RecordingJobQueue()), CancellationToken.None);
+        var secondQueue = new RecordingJobQueue();
+
+        await handler.HandleAsync(new JobContext(job, secondQueue), CancellationToken.None);
+
+        var request = Assert.Single(secondQueue.Enqueued, request => request.Type == JobType.AutoIdentify);
+        Assert.Equal(videoId.ToString(), request.TargetEntityId);
+    }
+
     private static JobRunSnapshot SingleRootScanJob(LibraryRootData root) =>
         new(
             Guid.NewGuid(),
@@ -2581,6 +2634,12 @@ public sealed class ScanJobHandlerTests {
         public Task<IReadOnlyList<AutoIdentifyRootTarget>> ResolveAutoIdentifyRootsAsync(IReadOnlyList<Guid> entityIds, CancellationToken cancellationToken) =>
             Task.FromResult<IReadOnlyList<AutoIdentifyRootTarget>>(
                 AutoIdentifyRootTargets ?? entityIds.Distinct().Select(id => new AutoIdentifyRootTarget(id, "video", "video.mkv")).ToList());
+
+        public Task<IReadOnlyList<AutoIdentifyRootTarget>> ResolveAutoIdentifyRootsForLibraryRootAsync(
+            Guid libraryRootId,
+            IReadOnlyList<MediaCategory> scanCategories,
+            CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<AutoIdentifyRootTarget>>(AutoIdentifyRootTargets ?? []);
 
         public Task<bool> HasEntityTechnicalAsync(Guid entityId, CancellationToken cancellationToken) =>
             Task.FromResult(false);

@@ -75,6 +75,8 @@ public sealed class JobQueueService : IJobQueueService {
     ];
 
     private static readonly string AutoIdentifyJobTypeCode = JobType.AutoIdentify.ToCode();
+    private static readonly string MusicArtistKindCode = EntityKindRegistry.MusicArtist.Code;
+    private static readonly string AudioLibraryKindCode = EntityKindRegistry.AudioLibrary.Code;
 
     public async Task<JobRunSnapshot> EnqueueAsync(JobType type, CancellationToken cancellationToken) {
         return await EnqueueAsync(new EnqueueJobRequest(type), cancellationToken);
@@ -302,6 +304,7 @@ public sealed class JobQueueService : IJobQueueService {
 
         var now = DateTimeOffset.UtcNow;
         var autoIdentifyBlocked = await HasPendingAutoIdentifyPrerequisiteAsync(cancellationToken);
+        var audioLibraryAutoIdentifyBlocked = await HasPendingMusicArtistAutoIdentifyAsync(cancellationToken);
 
         if (_db.Database.IsRelational()) {
             var claimed = lane is null
@@ -317,6 +320,7 @@ public sealed class JobQueueService : IJobQueueService {
                         SELECT id FROM job_runs
                         WHERE status = 'queued' AND available_at <= {0}
                           AND ({3} = FALSE OR type <> {4})
+                          AND ({5} = FALSE OR type <> {4} OR COALESCE(target_entity_kind, '') <> {6})
                         ORDER BY priority DESC, CASE WHEN lane = {2} THEN 1 ELSE 0 END DESC, available_at, created_at
                         LIMIT 1
                         FOR UPDATE SKIP LOCKED
@@ -327,7 +331,9 @@ public sealed class JobQueueService : IJobQueueService {
                     workerId,
                     JobRunLane.ForegroundIdentify.ToCode(),
                     autoIdentifyBlocked,
-                    AutoIdentifyJobTypeCode).ToListAsync(cancellationToken)
+                    AutoIdentifyJobTypeCode,
+                    audioLibraryAutoIdentifyBlocked,
+                    AudioLibraryKindCode).ToListAsync(cancellationToken)
                 : await _db.Database.SqlQueryRaw<Guid>(
                     """
                     UPDATE job_runs
@@ -340,6 +346,7 @@ public sealed class JobQueueService : IJobQueueService {
                         SELECT id FROM job_runs
                         WHERE status = 'queued' AND available_at <= {0} AND lane = {2}
                           AND ({3} = FALSE OR type <> {4})
+                          AND ({5} = FALSE OR type <> {4} OR COALESCE(target_entity_kind, '') <> {6})
                         ORDER BY priority DESC, available_at, created_at
                         LIMIT 1
                         FOR UPDATE SKIP LOCKED
@@ -350,7 +357,9 @@ public sealed class JobQueueService : IJobQueueService {
                     workerId,
                     lane.Value.ToCode(),
                     autoIdentifyBlocked,
-                    AutoIdentifyJobTypeCode).ToListAsync(cancellationToken);
+                    AutoIdentifyJobTypeCode,
+                    audioLibraryAutoIdentifyBlocked,
+                    AudioLibraryKindCode).ToListAsync(cancellationToken);
 
             if (claimed.Count == 0) {
                 return null;
@@ -364,6 +373,10 @@ public sealed class JobQueueService : IJobQueueService {
             .Where(job => job.Status == JobRunStatus.Queued && job.AvailableAt <= now);
         if (autoIdentifyBlocked) {
             query = query.Where(job => job.Type != JobType.AutoIdentify);
+        }
+
+        if (audioLibraryAutoIdentifyBlocked) {
+            query = query.Where(job => job.Type != JobType.AutoIdentify || job.TargetEntityKind != AudioLibraryKindCode);
         }
 
         if (lane is not null) {
@@ -394,6 +407,13 @@ public sealed class JobQueueService : IJobQueueService {
     private Task<bool> HasPendingAutoIdentifyPrerequisiteAsync(CancellationToken cancellationToken) =>
         _db.JobRuns.AsNoTracking().AnyAsync(job =>
             AutoIdentifyPrerequisiteJobTypes.Contains(job.Type) &&
+            (job.Status == JobRunStatus.Queued || job.Status == JobRunStatus.Running),
+            cancellationToken);
+
+    private Task<bool> HasPendingMusicArtistAutoIdentifyAsync(CancellationToken cancellationToken) =>
+        _db.JobRuns.AsNoTracking().AnyAsync(job =>
+            job.Type == JobType.AutoIdentify &&
+            job.TargetEntityKind == MusicArtistKindCode &&
             (job.Status == JobRunStatus.Queued || job.Status == JobRunStatus.Running),
             cancellationToken);
 

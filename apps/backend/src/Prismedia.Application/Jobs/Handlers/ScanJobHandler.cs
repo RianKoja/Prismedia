@@ -107,6 +107,7 @@ public abstract class ScanJobHandler(
             logger.LogInformation(
                 "{JobType}: no file changes in {Label} ({Count} files), skipping detailed scan",
                 scanKind, root.Label, current.Count);
+            await OnNoFileChangesAsync(context, root, cancellationToken);
             return;
         }
 
@@ -157,6 +158,15 @@ public abstract class ScanJobHandler(
 
     /// <summary>Discovers files, creates/updates entities, and enqueues downstream jobs for one root.</summary>
     protected abstract Task ScanRootCoreAsync(JobContext context, LibraryRootData root, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Runs when the incremental snapshot proves no media files changed and the detailed scan is
+    /// skipped. Subclasses can enqueue cheap metadata-only follow-up work that does not require
+    /// re-upserting the media tree.
+    /// </summary>
+    protected virtual Task OnNoFileChangesAsync(
+        JobContext context, LibraryRootData root, CancellationToken cancellationToken) =>
+        Task.CompletedTask;
 
     /// <summary>
     /// Removes source-backed media that is no longer covered by any configured library root. This

@@ -32,6 +32,60 @@ internal static class AutoIdentifyScanEnqueue {
         }
 
         var roots = await downstreamNeeds.ResolveAutoIdentifyRootsAsync(entityIds, cancellationToken);
+        await EnqueueRootTargetsAsync(context, settings, roots, cancellationToken);
+    }
+
+    /// <summary>
+    /// Queues auto-identify for roots already persisted under a library root when an incremental scan
+    /// skips the detailed pass because no files changed.
+    /// </summary>
+    public static async Task EnqueueExistingRootsForUnchangedScanAsync(
+        JobContext context,
+        ILibraryScanRootPersistence roots,
+        IDownstreamNeedsPersistence downstreamNeeds,
+        LibraryRootData root,
+        IReadOnlyList<MediaCategory> scanCategories,
+        CancellationToken cancellationToken) {
+        var settings = await roots.GetSettingsAsync(cancellationToken);
+        if (!root.AutoIdentify) {
+            settings = settings with { AutoIdentifyEnabled = false };
+        }
+
+        await EnqueueExistingRootsForRootAsync(
+            context,
+            settings,
+            downstreamNeeds,
+            root.Id,
+            scanCategories,
+            cancellationToken);
+    }
+
+    /// <summary>
+    /// Queues auto-identify for existing roots in a library root without re-running a full scan.
+    /// </summary>
+    public static async Task EnqueueExistingRootsForRootAsync(
+        JobContext context,
+        LibrarySettingsData settings,
+        IDownstreamNeedsPersistence downstreamNeeds,
+        Guid libraryRootId,
+        IReadOnlyList<MediaCategory> scanCategories,
+        CancellationToken cancellationToken) {
+        if (!settings.AutoIdentifyEnabled || settings.AutoIdentifyKinds is not { Count: > 0 } || scanCategories.Count == 0) {
+            return;
+        }
+
+        var roots = await downstreamNeeds.ResolveAutoIdentifyRootsForLibraryRootAsync(
+            libraryRootId,
+            scanCategories,
+            cancellationToken);
+        await EnqueueRootTargetsAsync(context, settings, roots, cancellationToken);
+    }
+
+    private static async Task EnqueueRootTargetsAsync(
+        JobContext context,
+        LibrarySettingsData settings,
+        IReadOnlyList<AutoIdentifyRootTarget> roots,
+        CancellationToken cancellationToken) {
         foreach (var root in roots) {
             var request = RequestFor(settings, root.KindCode, root.Id.ToString(), root.Title, root.IsOrganized);
             if (request is not null) {

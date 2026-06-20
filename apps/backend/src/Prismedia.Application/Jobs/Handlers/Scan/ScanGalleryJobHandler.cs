@@ -23,6 +23,11 @@ public sealed class ScanGalleryJobHandler(
 
     protected override IReadOnlyList<MediaCategory> ScanCategories => [MediaCategory.Image];
 
+    protected override Task OnNoFileChangesAsync(
+        JobContext context, LibraryRootData root, CancellationToken cancellationToken) =>
+        AutoIdentifyScanEnqueue.EnqueueExistingRootsForUnchangedScanAsync(
+            context, Roots, downstreamNeeds, root, ScanCategories, cancellationToken);
+
     protected override async Task ScanRootCoreAsync(JobContext context, LibraryRootData root, CancellationToken cancellationToken) {
         logger.LogInformation("ScanGallery: discovering images in {Path}", root.Path);
         var excludedPaths = await Roots.GetExcludedPathsForRootAsync(root.Id, cancellationToken);

@@ -102,6 +102,114 @@ public sealed class AutoIdentifyRunnerTests {
     }
 
     [Fact]
+    public async Task HydratesAndAppliesSingleExactUnscoredSearchCandidate() {
+        await using var db = CreateContext();
+        var entityId = await SeedVideoAsync(
+            db,
+            organized: false,
+            kind: EntityKindRegistry.MusicArtist.Code,
+            title: "NateWantsToBattle");
+        var settings = await ConfigureAsync(db, enabled: true, providers: ["musicbrainz"], confidencePercent: 90m);
+        var identify = new FakeIdentifyProvider {
+            ProposalsByProvider = {
+                ["musicbrainz"] = CandidateShell(
+                    "musicbrainz",
+                    "2918ce08-196e-408b-b3cb-4ccbefe62c3a",
+                    "NateWantsToBattle",
+                    confidence: null,
+                    targetKind: ProposalKind.MusicArtist,
+                    year: 1989),
+            },
+            ProposalsByExternalId = {
+                ["musicbrainz:2918ce08-196e-408b-b3cb-4ccbefe62c3a"] = Proposal(
+                    "musicbrainz",
+                    confidence: 0.95m,
+                    title: "NateWantsToBattle",
+                    targetKind: ProposalKind.MusicArtist),
+            },
+            SupportedKindsByProvider = {
+                ["musicbrainz"] = [EntityKindRegistry.MusicArtist.Code],
+            },
+        };
+        var runner = new AutoIdentifyRunner(settings, identify, db, NullLogger<AutoIdentifyRunner>.Instance);
+
+        var result = await runner.RunAsync(entityId, CancellationToken.None);
+
+        Assert.True(result.Applied);
+        Assert.Equal(2, identify.IdentifyCalls.Count);
+        Assert.Equal("2918ce08-196e-408b-b3cb-4ccbefe62c3a", identify.IdentifyCalls[1].Query?.ExternalIds?["musicbrainz"]);
+        Assert.Single(identify.ApplyCalls);
+    }
+
+    [Fact]
+    public async Task HydratesYearSuffixedAlbumCandidateWhenProviderOmitsConfidence() {
+        await using var db = CreateContext();
+        var entityId = await SeedVideoAsync(
+            db,
+            organized: false,
+            kind: EntityKindRegistry.AudioLibrary.Code,
+            title: "Diddy Kong Racing Theme (2014)");
+        var settings = await ConfigureAsync(db, enabled: true, providers: ["musicbrainz"], confidencePercent: 90m);
+        var identify = new FakeIdentifyProvider {
+            ProposalsByProvider = {
+                ["musicbrainz"] = CandidateShell(
+                    "musicbrainz",
+                    "12e5490e-d1ab-4397-8830-dec3c4c74962",
+                    "Diddy Kong Racing Theme",
+                    confidence: null,
+                    targetKind: ProposalKind.AudioLibrary,
+                    year: 2014),
+            },
+            ProposalsByExternalId = {
+                ["musicbrainz:12e5490e-d1ab-4397-8830-dec3c4c74962"] = Proposal(
+                    "musicbrainz",
+                    confidence: 0.9m,
+                    title: "Diddy Kong Racing Theme",
+                    targetKind: ProposalKind.AudioLibrary),
+            },
+            SupportedKindsByProvider = {
+                ["musicbrainz"] = [EntityKindRegistry.AudioLibrary.Code],
+            },
+        };
+        var runner = new AutoIdentifyRunner(settings, identify, db, NullLogger<AutoIdentifyRunner>.Instance);
+
+        var result = await runner.RunAsync(entityId, CancellationToken.None);
+
+        Assert.True(result.Applied);
+        Assert.Equal(2, identify.IdentifyCalls.Count);
+        Assert.Single(identify.ApplyCalls);
+    }
+
+    [Fact]
+    public async Task DoesNotAutoHydrateAmbiguousUnscoredSearchCandidates() {
+        await using var db = CreateContext();
+        var entityId = await SeedVideoAsync(
+            db,
+            organized: false,
+            kind: EntityKindRegistry.MusicArtist.Code,
+            title: "Don McLean");
+        var settings = await ConfigureAsync(db, enabled: true, providers: ["musicbrainz"], confidencePercent: 90m);
+        var identify = new FakeIdentifyProvider {
+            ProposalsByProvider = {
+                ["musicbrainz"] = CandidateShells(
+                    "musicbrainz",
+                    ("fa19ee38-c2a9-4ed1-9b24-a18100cf9db3", "Don McLean", (decimal?)null, 1945),
+                    ("18836d7a-2c12-4d62-9d6e-d25776d2887c", "Don McLean", (decimal?)null, null)),
+            },
+            SupportedKindsByProvider = {
+                ["musicbrainz"] = [EntityKindRegistry.MusicArtist.Code],
+            },
+        };
+        var runner = new AutoIdentifyRunner(settings, identify, db, NullLogger<AutoIdentifyRunner>.Instance);
+
+        var result = await runner.RunAsync(entityId, CancellationToken.None);
+
+        Assert.False(result.Applied);
+        Assert.Single(identify.IdentifyCalls);
+        Assert.Empty(identify.ApplyCalls);
+    }
+
+    [Fact]
     public async Task AllowsLongSeriesIdentifyWhenCascadeKeepsMakingProgress() {
         await using var db = CreateContext();
         var entityId = await SeedVideoAsync(db, organized: false, kind: "video-series", title: "Long Series");
@@ -451,6 +559,48 @@ public sealed class AutoIdentifyRunnerTests {
     }
 
     [Fact]
+    public async Task PassesIdentifiedArtistExternalIdsWhenAutoIdentifyingParentedAlbum() {
+        await using var db = CreateContext();
+        var artistId = await SeedVideoAsync(
+            db,
+            organized: true,
+            kind: EntityKindRegistry.MusicArtist.Code,
+            title: "The Beatles");
+        db.EntityExternalIds.Add(new EntityExternalIdRow {
+            Id = Guid.NewGuid(),
+            EntityId = artistId,
+            Provider = "musicbrainz",
+            Value = "artist-mbid",
+            CreatedAt = DateTimeOffset.UtcNow,
+            UpdatedAt = DateTimeOffset.UtcNow,
+        });
+        await db.SaveChangesAsync();
+        var albumId = await SeedVideoAsync(
+            db,
+            organized: false,
+            parentId: artistId,
+            kind: EntityKindRegistry.AudioLibrary.Code,
+            title: "Abbey Road");
+        var settings = await ConfigureAsync(db, enabled: true, providers: ["musicbrainz"], confidencePercent: 90m);
+        var identify = new FakeIdentifyProvider {
+            ProposalsByProvider = {
+                ["musicbrainz"] = Proposal("musicbrainz", confidence: 0.95m, title: "Abbey Road", targetKind: ProposalKind.AudioLibrary),
+            },
+            SupportedKindsByProvider = {
+                ["musicbrainz"] = [EntityKindRegistry.AudioLibrary.Code],
+            },
+        };
+        var runner = new AutoIdentifyRunner(settings, identify, db, NullLogger<AutoIdentifyRunner>.Instance);
+
+        var result = await runner.RunAsync(albumId, CancellationToken.None);
+
+        Assert.True(result.Applied);
+        var externalIds = Assert.Single(identify.ParentExternalIdsCalls);
+        Assert.NotNull(externalIds);
+        Assert.Equal("artist-mbid", externalIds!["musicbrainz"]);
+    }
+
+    [Fact]
     public async Task AppliesMusicArtistWithoutCascadingIntoItsAlbumRoots() {
         await using var db = CreateContext();
         var artistId = await SeedVideoAsync(
@@ -632,29 +782,42 @@ public sealed class AutoIdentifyRunnerTests {
         string provider,
         string externalId,
         string title,
-        decimal? confidence) =>
+        decimal? confidence,
+        ProposalKind targetKind = ProposalKind.VideoSeries,
+        int? year = 2025) =>
+        CandidateShells(provider, [(externalId, title, confidence, year)], targetKind);
+
+    private static EntityMetadataProposal CandidateShells(
+        string provider,
+        params (string ExternalId, string Title, decimal? Confidence, int? Year)[] candidates) =>
+        CandidateShells(provider, candidates, ProposalKind.VideoSeries);
+
+    private static EntityMetadataProposal CandidateShells(
+        string provider,
+        (string ExternalId, string Title, decimal? Confidence, int? Year)[] candidates,
+        ProposalKind targetKind) =>
         new(
             ProposalId: null!,
             Provider: provider,
-            TargetKind: ProposalKind.VideoSeries,
+            TargetKind: targetKind,
             Confidence: null,
             MatchReason: null,
             Patch: null!,
             Images: [],
             Children: [],
-            Candidates: [
-                new EntitySearchCandidate(
-                    new Dictionary<string, string> { [provider] = externalId },
-                    title,
-                    Year: 2025,
+            Candidates: candidates
+                .Select(candidate => new EntitySearchCandidate(
+                    new Dictionary<string, string> { [provider] = candidate.ExternalId },
+                    candidate.Title,
+                    candidate.Year,
                     Overview: null,
                     PosterUrl: null,
                     Popularity: null,
-                    CandidateId: $"{provider}:tv:{externalId}",
+                    CandidateId: $"{provider}:search:{candidate.ExternalId}",
                     Source: provider,
-                    Confidence: confidence,
-                    MatchReason: "title-search")
-            ],
+                    Confidence: candidate.Confidence,
+                    MatchReason: candidate.Confidence is null ? null : "title-search"))
+                .ToArray(),
             Relationships: []);
 
     private static async Task<Guid> SeedVideoAsync(
@@ -709,6 +872,7 @@ public sealed class AutoIdentifyRunnerTests {
         /// <summary>Optional manifest-style declared kinds per provider; providers absent here match any kind.</summary>
         public Dictionary<string, string[]> SupportedKindsByProvider { get; } = new(StringComparer.Ordinal);
         public List<(Guid EntityId, string Provider, IdentifyQuery? Query)> IdentifyCalls { get; } = [];
+        public List<IReadOnlyDictionary<string, string>?> ParentExternalIdsCalls { get; } = [];
         public List<bool> CascadeChildrenCalls { get; } = [];
         public List<(IReadOnlyCollection<string> Fields, IReadOnlyDictionary<string, string?>? SelectedImages)> ApplyCalls { get; } = [];
         public List<EntityMetadataProposal> AppliedProposals { get; } = [];
@@ -741,6 +905,7 @@ public sealed class AutoIdentifyRunnerTests {
             IReadOnlyDictionary<string, string>? parentExternalIds, bool hideNsfw, CancellationToken cancellationToken,
             bool cascadeChildren = true, IIdentifyCascadeSink? sink = null, bool hydrateRelationships = true) {
             IdentifyCalls.Add((entityId, providerId, query));
+            ParentExternalIdsCalls.Add(parentExternalIds);
             CascadeChildrenCalls.Add(cascadeChildren);
             if (OnIdentifyAsync is not null) {
                 return await OnIdentifyAsync(entityId, providerId, query, sink, cancellationToken);

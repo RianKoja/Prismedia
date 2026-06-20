@@ -37,6 +37,11 @@ public sealed class ScanLibraryJobHandler(
 
     protected override IReadOnlyList<MediaCategory> ScanCategories => [MediaCategory.Video];
 
+    protected override Task OnNoFileChangesAsync(
+        JobContext context, LibraryRootData root, CancellationToken cancellationToken) =>
+        AutoIdentifyScanEnqueue.EnqueueExistingRootsForUnchangedScanAsync(
+            context, Roots, downstreamNeeds, root, ScanCategories, cancellationToken);
+
     protected override async Task ScanRootCoreAsync(
         JobContext context, LibraryRootData root, CancellationToken cancellationToken) {
         var timer = new JobPhaseTimer();
