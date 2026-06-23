@@ -1,5 +1,6 @@
 using Prismedia.Api.Jellyfin;
 using Prismedia.Contracts.Media;
+using Prismedia.Contracts.Opds;
 
 namespace Prismedia.Api;
 
@@ -32,6 +33,7 @@ internal static class StaticSpaFallback {
         if (path.StartsWith("/api", StringComparison.OrdinalIgnoreCase) ||
             path.StartsWith("/assets", StringComparison.OrdinalIgnoreCase) ||
             path.StartsWith("/openapi", StringComparison.OrdinalIgnoreCase) ||
+            request.Path.StartsWithSegments(OpdsProtocol.Prefix) ||
             JellyfinRoutes.IsJellyfinRequest(path)) {
             return false;
         }

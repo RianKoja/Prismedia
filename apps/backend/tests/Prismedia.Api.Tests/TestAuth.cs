@@ -12,11 +12,14 @@ namespace Prismedia.Api.Tests;
 internal static class TestAuth {
     internal const string ApiKey = "bava-cada-dafa";
 
-    internal static WebApplicationFactory<Program> WithTestAuth(this WebApplicationFactory<Program> factory) =>
+    internal static WebApplicationFactory<Program> WithTestAuth(
+        this WebApplicationFactory<Program> factory,
+        bool allowNsfw = false,
+        bool allowSfw = true) =>
         factory.WithWebHostBuilder(builder => {
             builder.ConfigureServices(services => {
                 services.RemoveAll<ISecurityPersistence>();
-                services.AddSingleton<ISecurityPersistence, FakeSecurityPersistence>();
+                services.AddSingleton<ISecurityPersistence>(new FakeSecurityPersistence(allowSfw, allowNsfw));
             });
         });
 
@@ -83,7 +86,10 @@ internal static class TestAuth {
         private static readonly Guid ProfileId = Guid.Parse("88888888-8888-8888-8888-888888888888");
         private readonly Dictionary<string, JellyfinSession> _sessions = new(StringComparer.Ordinal);
         private string _apiKey = ApiKey;
-        private JellyfinProfile _profile = Profile(DateTimeOffset.UtcNow);
+        private JellyfinProfile _profile;
+
+        public FakeSecurityPersistence(bool allowSfw, bool allowNsfw) =>
+            _profile = Profile(DateTimeOffset.UtcNow, allowSfw, allowNsfw);
 
         public Task<AppSecurityState> EnsureSecurityAsync(Func<string> keyFactory, CancellationToken cancellationToken) =>
             Task.FromResult(State());
@@ -184,7 +190,7 @@ internal static class TestAuth {
             return new AppSecurityState(1, ServerId, _apiKey, true, now, now, now, now);
         }
 
-        private static JellyfinProfile Profile(DateTimeOffset now) =>
-            new(ProfileId, "Prismedia", "Prismedia", true, false, true, null, now, now);
+        private static JellyfinProfile Profile(DateTimeOffset now, bool allowSfw, bool allowNsfw) =>
+            new(ProfileId, "Prismedia", "Prismedia", allowSfw, allowNsfw, true, null, now, now);
     }
 }

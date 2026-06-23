@@ -37,6 +37,7 @@ const sidebars: SidebarsConfig = {
         'library/videos',
         'library/images-galleries',
         'library/books',
+        'library/opds',
         'library/audio',
       ],
     },

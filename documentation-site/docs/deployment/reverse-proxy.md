@@ -1,20 +1,20 @@
 ---
 sidebar_position: 2
 title: Reverse Proxy & Auth Middleware
-description: Run Prismedia behind a proxy and keep Jellyfin clients working through SSO.
+description: Run Prismedia behind a proxy and keep Jellyfin and OPDS clients working through SSO.
 ---
 
 # Reverse Proxy & Auth Middleware
 
-Prismedia listens on a single port (`8008`) and serves the web app, `/api/*`, and the Jellyfin-compatible routes from it. Putting it behind a reverse proxy (Caddy, Nginx, Traefik) for TLS is straightforward. The wrinkle is **auth middleware** — Authelia, Authentik, or any forward-auth SSO.
+Prismedia listens on a single port (`8008`) and serves the web app, `/api/*`, Jellyfin-compatible routes, and the OPDS catalog from it. Putting it behind a reverse proxy (Caddy, Nginx, Traefik) for TLS is straightforward. The wrinkle is **auth middleware** — Authelia, Authentik, or any forward-auth SSO.
 
-## The problem with SSO and Jellyfin clients
+## The problem with SSO and client apps
 
-SSO middleware protects a site by redirecting unauthenticated requests to a login page and setting a session cookie. That works for browsers, but **Jellyfin client apps (Infuse, Manet, …) cannot complete an interactive browser login.** They authenticate to Prismedia directly with their own token (the API key → session token flow).
+SSO middleware protects a site by redirecting unauthenticated requests to a login page and setting a session cookie. That works for browsers, but **Jellyfin client apps (Infuse, Manet, …) and OPDS reader apps cannot complete an interactive browser login.** They authenticate to Prismedia directly with their own token or Basic Auth.
 
-So if your SSO covers the Jellyfin routes, clients get redirected to a login page instead of an API response, and they fail to connect.
+So if your SSO covers the Jellyfin or OPDS routes, clients get redirected to a login page instead of an API response, and they fail to connect.
 
-**The fix:** exclude the entire Jellyfin route surface from the SSO middleware. Those routes are already protected by Prismedia's own token authentication, so bypassing the proxy's SSO does not expose them — a caller still needs a valid Prismedia API key / session token. See [Authentication & API Keys](./authentication.md).
+**The fix:** exclude the entire Jellyfin route surface and `/opds` from the SSO middleware. Those routes are already protected by Prismedia's own authentication, so bypassing the proxy's SSO does not expose them — a caller still needs a valid Prismedia API key, session token, or OPDS Basic Auth credentials. See [Authentication & API Keys](./authentication.md).
 
 ## Routes to bypass
 
@@ -37,6 +37,7 @@ Exclude these route surfaces from your auth middleware:
 /Branding
 /QuickConnect
 /DisplayPreferences
+/opds
 ```
 
 Also leave `/api/health` reachable for health checks.
@@ -48,10 +49,10 @@ Clients do **not** request these paths the way you might expect:
 - **Prefixes** — some clients prefix every request with `/emby` or `/jellyfin` (`/emby/Users/AuthenticateByName`).
 - **Query strings** — music clients (e.g. Manet) query collection roots directly, like `/Artists?Recursive=true`. Authelia and most forward-auth proxies match the regex against the **path *and* the query string**, so a pattern ending in `(/.*)?$` will **not** match `/Artists?...` (the `?` isn't a `/`). The request falls through to your `one_factor` rule and the client gets a 401/redirect. Video clients hide this because they query `/Users/{id}/Items?...`, where the extra path segments let `.*` absorb the query — so video works while music fails.
 
-The Authelia and Authentik examples below handle all three: `(?i)` for casing, an optional `(/emby|/jellyfin)?` prefix, and `([/?].*)?$` so the bypass continues past a `/` **or** a `?`. Keep all three.
+The Authelia and Authentik examples below handle all three for Jellyfin routes: `(?i)` for casing, an optional `(/emby|/jellyfin)?` prefix, and `([/?].*)?$` so the bypass continues past a `/` **or** a `?`. OPDS uses its own `/opds([/?].*)?$` rule for the same query-string reason.
 :::
 
-You can keep SSO on the **web app** (the SPA at `/` and `/api/*`) if you want browser users to authenticate through your IdP first — that does not affect Jellyfin clients, which only use the prefixes above. (Note the web app already authenticates itself with a cookie once it loads; SSO simply gates who can reach it.)
+You can keep SSO on the **web app** (the SPA at `/` and `/api/*`) if you want browser users to authenticate through your IdP first — that does not affect Jellyfin or OPDS clients, which use the bypassed prefixes above. (Note the web app already authenticates itself with a cookie once it loads; SSO simply gates who can reach it.)
 
 ## Forward standard proxy headers
 
@@ -66,7 +67,7 @@ Authelia decides per-request via access-control rules. Put a `bypass` rule for t
 access_control:
   default_policy: deny
   rules:
-    # Jellyfin clients authenticate to Prismedia directly — bypass SSO for them.
+    # Jellyfin and OPDS clients authenticate to Prismedia directly — bypass SSO for them.
     # (?i)              = case-insensitive (clients send lowercase /users/...).
     # (/emby|/jellyfin)? = tolerate clients that prefix every request.
     # ([/?].*)?$        = allow a sub-path OR a query string right after the
@@ -93,6 +94,7 @@ access_control:
         - '(?i)^(/emby|/jellyfin)?/Branding([/?].*)?$'
         - '(?i)^(/emby|/jellyfin)?/QuickConnect([/?].*)?$'
         - '(?i)^(/emby|/jellyfin)?/DisplayPreferences([/?].*)?$'
+        - '(?i)^/opds([/?].*)?$'
         - '(?i)^/api/health$'
 
     # Everything else (web app + /api) requires login.
@@ -106,7 +108,7 @@ After editing the rules, **restart the Authelia container** (`docker restart aut
 
 ## Authentik
 
-In the Authentik **Proxy Provider** for Prismedia, add the Jellyfin prefixes to **Unauthenticated Paths** (regular expressions, one per line). Requests matching them skip the forward-auth check:
+In the Authentik **Proxy Provider** for Prismedia, add the Jellyfin prefixes and OPDS path to **Unauthenticated Paths** (regular expressions, one per line). Requests matching them skip the forward-auth check:
 
 ```text
 (?i)^(/emby|/jellyfin)?/System
@@ -125,6 +127,7 @@ In the Authentik **Proxy Provider** for Prismedia, add the Jellyfin prefixes to 
 (?i)^(/emby|/jellyfin)?/Branding
 (?i)^(/emby|/jellyfin)?/QuickConnect
 (?i)^(/emby|/jellyfin)?/DisplayPreferences
+(?i)^/opds([/?].*)?$
 (?i)^/api/health$
 ```
 
@@ -132,7 +135,7 @@ Keep the web app and `/api/*` authenticated by the provider as usual.
 
 ## Traefik / Nginx note
 
-If you use Traefik forward-auth or Nginx `auth_request`, apply the same principle: route the Jellyfin prefixes to Prismedia **without** the auth middleware attached (a separate router/location block), and keep the middleware on the catch-all router that serves the SPA and `/api`.
+If you use Traefik forward-auth or Nginx `auth_request`, apply the same principle: route the Jellyfin prefixes and `/opds` to Prismedia **without** the auth middleware attached (a separate router/location block), and keep the middleware on the catch-all router that serves the SPA and `/api`.
 
 ## Verifying
 
@@ -150,6 +153,12 @@ curl -i https://prismedia.example.com/emby/System/Info/Public
 # The one that catches music clients: a collection root WITH a query string.
 # This must also reach Prismedia (401/JSON), not redirect to login.
 curl -i 'https://prismedia.example.com/Artists?Recursive=true&Limit=1'
+
+# OPDS without credentials should reach Prismedia and return 401 with a Basic challenge.
+curl -i https://prismedia.example.com/opds
+
+# OPDS with Prismedia credentials should return an Atom feed, not an SSO page.
+curl -i -u "Prismedia:$PRISMEDIA_API_KEY" https://prismedia.example.com/opds
 ```
 
-If you get an HTML login page (or a `302`/`303` to your IdP) instead of a JSON or `401` response from Prismedia, the bypass isn't matching — re-check the path patterns, and on Authelia confirm you restarted the container after editing the rules. Then add the server in a client per [Connecting Infuse & Manet](../jellyfin/clients.md).
+If you get an HTML login page (or a `302`/`303` to your IdP) instead of a JSON, Atom, or `401` response from Prismedia, the bypass isn't matching — re-check the path patterns, and on Authelia confirm you restarted the container after editing the rules. Then add the server in a client per [Connecting Infuse & Manet](../jellyfin/clients.md) or [OPDS Reader Apps](../library/opds.md).

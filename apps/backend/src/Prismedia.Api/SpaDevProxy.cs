@@ -1,13 +1,14 @@
 using Prismedia.Api.Jellyfin;
 using Prismedia.Contracts.Media;
+using Prismedia.Contracts.Opds;
 
 namespace Prismedia.Api;
 
 /// <summary>
 /// Development-only middleware that proxies non-API requests to the Vite dev
 /// server so the .NET API can serve everything on a single port (8008) while
-/// Svelte still gets full HMR. API, asset, and OpenAPI routes pass through
-/// to the normal .NET pipeline.
+/// Svelte still gets full HMR. Backend-owned routes pass through to the normal
+/// .NET pipeline.
 /// </summary>
 public static class SpaDevProxy {
     private static readonly string[] ApiPrefixes =
@@ -100,6 +101,10 @@ public static class SpaDevProxy {
             if (path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) {
                 return true;
             }
+        }
+
+        if (requestPath.StartsWithSegments(OpdsProtocol.Prefix)) {
+            return true;
         }
 
         return JellyfinRoutes.IsJellyfinRequest(path);

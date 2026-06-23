@@ -60,6 +60,11 @@ public sealed class EfEntityFileContentService(PrismediaDbContext db) : IEntityF
             ".wmv" => MediaContentTypes.VideoWmv,
             ".flv" => MediaContentTypes.VideoFlv,
             ".ts" or ".m2ts" => MediaContentTypes.VideoMp2t,
+            ".epub" => MediaContentTypes.Epub,
+            ".pdf" => MediaContentTypes.Pdf,
+            ".cbz" => MediaContentTypes.ComicBookZip,
+            ".cbr" => MediaContentTypes.ComicBookRar,
+            ".zip" => MediaContentTypes.Zip,
             _ => MediaContentTypes.OctetStream,
         };
 }

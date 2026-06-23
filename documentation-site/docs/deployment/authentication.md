@@ -1,7 +1,7 @@
 ---
 sidebar_position: 1
 title: Authentication & API Keys
-description: How Prismedia authenticates the web app, API calls, and Jellyfin clients.
+description: How Prismedia authenticates the web app, API calls, Jellyfin clients, and OPDS readers.
 ---
 
 # Authentication & API Keys
@@ -25,6 +25,7 @@ The key is required for:
 
 - **`/api/*` routes** (except `/api/health`, which is public for health checks).
 - **Jellyfin-compatible routes**, where a profile signs in using the key as its password and then uses a session token. See [Jellyfin Profiles](../jellyfin/profiles.md).
+- **`/opds` routes**, where reader apps can use Basic Auth, API key headers/query parameters, or Jellyfin session tokens.
 
 ### Supplying the key
 
@@ -42,6 +43,22 @@ Jellyfin clients additionally use the standard `X-Emby-Authorization` (with `Tok
 ```bash
 curl -H "X-Prismedia-Api-Key: $PRISMEDIA_API_KEY" \
   http://localhost:8008/api/library/stats
+```
+
+### OPDS Basic Auth
+
+Many ebook and comic readers expect HTTP Basic Auth. For `/opds`, Prismedia accepts:
+
+| Field | Value |
+| --- | --- |
+| Username | A Jellyfin-compatible profile username, such as `Prismedia`. |
+| Password | The Prismedia API key. |
+
+That creates the same Jellyfin-compatible profile identity used by other client apps. Profile NSFW permissions apply to OPDS feeds, covers, and downloads. API-key-only OPDS requests are conservative and hide NSFW content.
+
+```bash
+curl -u "Prismedia:$PRISMEDIA_API_KEY" \
+  http://localhost:8008/opds
 ```
 
 ### Rate limiting
@@ -67,6 +84,8 @@ GET  /Items/{id}/Images/...          (artwork is anonymous, like real Jellyfin)
 
 Everything else under `/api/*` and the Jellyfin route prefixes requires a valid key or session token.
 
+All `/opds` routes require authentication and return a Basic Auth challenge when credentials are missing.
+
 ## The encryption secret (`PRISMEDIA_SECRET`)
 
 Plugin credentials (for example a TMDB API key) are encrypted at rest with **AES-256-GCM**, using a key derived from `PRISMEDIA_SECRET`.
@@ -86,4 +105,5 @@ If `PRISMEDIA_SECRET` changes and the old value is gone (the env var changed *an
 ## See also
 
 - [Jellyfin Profiles, API Key & NSFW Servers](../jellyfin/profiles.md)
+- [OPDS Reader Apps](../library/opds.md)
 - [Reverse Proxy & Auth Middleware](./reverse-proxy.md)

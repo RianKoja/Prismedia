@@ -1,7 +1,9 @@
+using System.Text;
 using System.Net;
 using Prismedia.Api.Jellyfin;
 using Prismedia.Application.Security;
 using Prismedia.Contracts.Jellyfin;
+using Prismedia.Contracts.Opds;
 using Prismedia.Contracts.System;
 
 namespace Prismedia.Api.Security;
@@ -48,16 +50,46 @@ internal static class PrismediaAuthentication {
                 return;
             }
 
+            var security = context.RequestServices.GetRequiredService<PrismediaSecurityService>();
+            var bucket = BucketFor(context);
+            var isJellyfin = IsJellyfinRequest(context.Request.Path);
+            var isOpds = IsOpdsRequest(context.Request.Path);
+
+            if (isOpds && TryExtractBasicCredentials(context.Request, out var username, out var password)) {
+                var basicResult = await security.AuthenticateJellyfinProfileAsync(
+                    username,
+                    password,
+                    new JellyfinClientIdentity("OPDS", context.Request.Headers.UserAgent.FirstOrDefault(), null, null),
+                    BucketFor(context, username),
+                    context.RequestAborted);
+                if (basicResult.IsThrottled) {
+                    await WriteThrottledAsync(context);
+                    return;
+                }
+
+                if (!basicResult.Succeeded ||
+                    basicResult.Profile is null ||
+                    basicResult.Session is null ||
+                    basicResult.AccessToken is null) {
+                    await WriteUnauthorizedAsync(context, ApiProblemCodes.InvalidApiKey);
+                    return;
+                }
+
+                context.Items[AuthContextKey] = new PrismediaAuthContext(
+                    PrismediaAuthKind.JellyfinSession,
+                    basicResult.AccessToken,
+                    new JellyfinSessionResolution(basicResult.Session, basicResult.Profile));
+                await next();
+                return;
+            }
+
             var token = ExtractToken(context.Request);
             if (string.IsNullOrWhiteSpace(token)) {
                 await WriteUnauthorizedAsync(context, ApiProblemCodes.MissingApiKey);
                 return;
             }
 
-            var security = context.RequestServices.GetRequiredService<PrismediaSecurityService>();
-            var bucket = BucketFor(context);
-            var isJellyfin = IsJellyfinRequest(context.Request.Path);
-            if (isJellyfin) {
+            if (isJellyfin || isOpds) {
                 var session = await security.ResolveJellyfinSessionAsync(token, context.RequestAborted);
                 if (session is not null) {
                     context.Items[AuthContextKey] = new PrismediaAuthContext(
@@ -135,6 +167,7 @@ internal static class PrismediaAuthentication {
         if (path.StartsWith("/api", StringComparison.OrdinalIgnoreCase) ||
             path.StartsWith("/assets", StringComparison.OrdinalIgnoreCase) ||
             path.StartsWith("/openapi", StringComparison.OrdinalIgnoreCase) ||
+            IsOpdsRequest(request.Path) ||
             IsJellyfinRequest(request.Path)) {
             return false;
         }
@@ -201,6 +234,10 @@ internal static class PrismediaAuthentication {
             return true;
         }
 
+        if (IsOpdsRequest(path)) {
+            return true;
+        }
+
         if (!IsJellyfinRequest(path)) {
             return false;
         }
@@ -210,6 +247,9 @@ internal static class PrismediaAuthentication {
 
     private static bool IsJellyfinRequest(PathString requestPath) =>
         JellyfinRoutes.IsJellyfinRequest(requestPath.Value ?? string.Empty);
+
+    private static bool IsOpdsRequest(PathString requestPath) =>
+        requestPath.StartsWithSegments(OpdsProtocol.Prefix);
 
     private static bool IsPublicJellyfinRoute(HttpRequest request) {
         var path = request.Path.Value ?? string.Empty;
@@ -262,6 +302,42 @@ internal static class PrismediaAuthentication {
         return values.GetValueOrDefault(JellyfinProtocol.AuthFields.Token);
     }
 
+    private static bool TryExtractBasicCredentials(
+        HttpRequest request,
+        out string? username,
+        out string? password) {
+        username = null;
+        password = null;
+        var header = request.Headers.Authorization.FirstOrDefault();
+        if (string.IsNullOrWhiteSpace(header)) {
+            return false;
+        }
+
+        var trimmed = header.Trim();
+        if (!trimmed.StartsWith(OpdsProtocol.BasicScheme + " ", StringComparison.OrdinalIgnoreCase)) {
+            return false;
+        }
+
+        var encoded = trimmed[(OpdsProtocol.BasicScheme.Length + 1)..].Trim();
+        if (string.IsNullOrWhiteSpace(encoded)) {
+            return false;
+        }
+
+        try {
+            var decoded = Encoding.UTF8.GetString(Convert.FromBase64String(encoded));
+            var separator = decoded.IndexOf(':');
+            if (separator <= 0) {
+                return false;
+            }
+
+            username = decoded[..separator];
+            password = decoded[(separator + 1)..];
+            return true;
+        } catch (FormatException) {
+            return false;
+        }
+    }
+
     private static IReadOnlyDictionary<string, string> ParseJellyfinHeaderValues(HttpRequest request) {
         var header = request.Headers.Authorization.FirstOrDefault();
         if (string.IsNullOrWhiteSpace(header)) {
@@ -300,6 +376,10 @@ internal static class PrismediaAuthentication {
 
     private static async Task WriteUnauthorizedAsync(HttpContext context, string code) {
         context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+        if (IsOpdsRequest(context.Request.Path)) {
+            context.Response.Headers.WWWAuthenticate = OpdsProtocol.BasicChallenge;
+        }
+
         await context.Response.WriteAsJsonAsync(new ApiProblem(code, "Authentication is required."), context.RequestAborted);
     }
 

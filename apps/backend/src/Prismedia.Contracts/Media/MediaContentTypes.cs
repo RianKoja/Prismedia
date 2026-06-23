@@ -109,4 +109,13 @@ public static class MediaContentTypes {
 
     /// <summary>PDF document.</summary>
     public const string Pdf = "application/pdf";
+
+    /// <summary>CBZ comic book archive.</summary>
+    public const string ComicBookZip = "application/vnd.comicbook+zip";
+
+    /// <summary>CBR comic book archive.</summary>
+    public const string ComicBookRar = "application/vnd.comicbook-rar";
+
+    /// <summary>ZIP archive.</summary>
+    public const string Zip = "application/zip";
 }

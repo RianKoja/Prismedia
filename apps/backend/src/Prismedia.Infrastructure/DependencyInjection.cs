@@ -9,6 +9,7 @@ using Prismedia.Application.Files;
 using Prismedia.Application.Jobs;
 using Prismedia.Application.Jobs.Ports;
 using Prismedia.Application.Organization;
+using Prismedia.Application.Opds;
 using Prismedia.Application.Settings;
 using Prismedia.Application.Health;
 using Prismedia.Application.Jellyfin;
@@ -31,6 +32,7 @@ using Prismedia.Infrastructure.Media.Persistence;
 using Prismedia.Infrastructure.Media.Processing;
 using Prismedia.Infrastructure.Media.Sidecars;
 using Prismedia.Infrastructure.Organization;
+using Prismedia.Infrastructure.Opds;
 using Prismedia.Infrastructure.Persistence;
 using Prismedia.Infrastructure.Plugins;
 using Prismedia.Infrastructure.Playback;
@@ -224,6 +226,7 @@ public static class DependencyInjection {
                 provider.GetRequiredService<PrismediaDbContext>(),
                 new EntityImageAssetStorageOptions(cacheDir),
                 provider.GetRequiredService<IGridThumbnailService>()));
+        services.AddScoped<IOpdsCatalogService, EfOpdsCatalogService>();
     }
 
     private static void RegisterFilesAndOrganization(IServiceCollection services) {
