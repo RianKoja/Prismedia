@@ -80,10 +80,14 @@ public sealed partial class LibraryScanPersistenceService {
             return;
         }
 
+        var shouldMarkAncestors = ShouldMarkAutoIdentifyAncestors(child, parentId);
         child.ParentEntityId = parentId;
         child.SortOrder = sortOrder;
         child.UpdatedAt = now;
 
+        if (shouldMarkAncestors) {
+            await MarkAutoIdentifyAncestorsUnorganizedAsync(parentId, now, cancellationToken);
+        }
     }
 
     private async Task ClearStructuralChildLinkAsync(
@@ -182,6 +186,44 @@ public sealed partial class LibraryScanPersistenceService {
         return await _db.Entities
             .FirstOrDefaultAsync(entity => entity.Id == entityId.Value && entity.KindCode == kindCode, cancellationToken);
     }
+
+    private bool ShouldMarkAutoIdentifyAncestors(EntityRow child, Guid? parentId) =>
+        parentId is not null &&
+        (_db.Entry(child).State == EntityState.Added || child.ParentEntityId != parentId);
+
+    private async Task MarkAutoIdentifyAncestorsUnorganizedAsync(
+        Guid? parentId,
+        DateTimeOffset now,
+        CancellationToken cancellationToken) {
+        if (parentId is null) {
+            return;
+        }
+
+        var current = parentId.Value;
+        var guard = 0;
+        while (guard++ < 64) {
+            var ancestor = await FindMutableEntityAsync(current, cancellationToken);
+            if (ancestor is null ||
+                string.Equals(ancestor.KindCode, EntityKindRegistry.MusicArtist.Code, StringComparison.OrdinalIgnoreCase)) {
+                return;
+            }
+
+            if (ancestor.IsOrganized) {
+                ancestor.IsOrganized = false;
+                ancestor.UpdatedAt = now;
+            }
+
+            if (ancestor.ParentEntityId is not { } next) {
+                return;
+            }
+
+            current = next;
+        }
+    }
+
+    private async Task<EntityRow?> FindMutableEntityAsync(Guid entityId, CancellationToken cancellationToken) =>
+        _db.Entities.Local.FirstOrDefault(row => row.Id == entityId)
+        ?? await _db.Entities.FirstOrDefaultAsync(row => row.Id == entityId, cancellationToken);
 
     private async Task<int> RemoveStaleEntitiesBySourcePath(
         List<Guid> candidateIds, IReadOnlySet<string> validPaths, CancellationToken cancellationToken) {

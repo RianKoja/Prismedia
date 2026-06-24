@@ -292,11 +292,15 @@ public sealed partial class LibraryScanPersistenceService {
                 UpdatedAt = now
             });
         } else {
+            var shouldMarkAncestors = ShouldMarkAutoIdentifyAncestors(existingSeasonRow, seriesId);
             existingSeasonRow.Title = season.Title;
             existingSeasonRow.ParentEntityId = seriesId;
             existingSeasonRow.SortOrder = season.SeasonNumber;
             existingSeasonRow.UpdatedAt = now;
             if (isNsfw) existingSeasonRow.IsNsfw = true;
+            if (shouldMarkAncestors) {
+                await MarkAutoIdentifyAncestorsUnorganizedAsync(seriesId, now, cancellationToken);
+            }
         }
 
         await EnsureEntityFileAsync(seasonId, EntityFileRole.Source, season.FolderPath, sizeBytes: null, now, cancellationToken);

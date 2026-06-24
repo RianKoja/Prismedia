@@ -71,11 +71,15 @@ public sealed partial class LibraryScanPersistenceService {
             var updatedAt = DateTimeOffset.UtcNow;
             var tracked = await _db.Entities.FindAsync([existing.Id], cancellationToken);
             if (tracked is not null) {
+                var shouldMarkAncestors = ShouldMarkAutoIdentifyAncestors(tracked, galleryEntityId);
                 tracked.Title = title;
                 tracked.ParentEntityId = galleryEntityId;
                 tracked.SortOrder = galleryEntityId is null ? null : sortOrder;
                 tracked.UpdatedAt = updatedAt;
                 if (isNsfw) tracked.IsNsfw = true;
+                if (shouldMarkAncestors) {
+                    await MarkAutoIdentifyAncestorsUnorganizedAsync(galleryEntityId, updatedAt, cancellationToken);
+                }
             }
 
             await _db.SaveChangesAsync(cancellationToken);
@@ -143,11 +147,16 @@ public sealed partial class LibraryScanPersistenceService {
         if (existing is not null) {
             var tracked = await _db.Entities.FindAsync([existing.Id], cancellationToken);
             if (tracked is not null) {
+                var updatedAt = DateTimeOffset.UtcNow;
+                var shouldMarkAncestors = ShouldMarkAutoIdentifyAncestors(tracked, parentGalleryEntityId);
                 tracked.Title = title;
                 tracked.ParentEntityId = parentGalleryEntityId;
                 tracked.SortOrder = sortOrder;
-                tracked.UpdatedAt = DateTimeOffset.UtcNow;
+                tracked.UpdatedAt = updatedAt;
                 if (isNsfw) tracked.IsNsfw = true;
+                if (shouldMarkAncestors) {
+                    await MarkAutoIdentifyAncestorsUnorganizedAsync(parentGalleryEntityId, updatedAt, cancellationToken);
+                }
             }
 
             var detail = await _db.GalleryDetails.FindAsync([existing.Id], cancellationToken);
@@ -169,6 +178,7 @@ public sealed partial class LibraryScanPersistenceService {
             CreatedAt = now,
             UpdatedAt = now
         });
+        await MarkAutoIdentifyAncestorsUnorganizedAsync(parentGalleryEntityId, now, cancellationToken);
 
         return id;
     }
@@ -202,6 +212,7 @@ public sealed partial class LibraryScanPersistenceService {
             var updatedAt = DateTimeOffset.UtcNow;
             var tracked = await _db.Entities.FindAsync([existing.Id], cancellationToken);
             if (tracked is not null) {
+                var shouldMarkAncestors = ShouldMarkAutoIdentifyAncestors(tracked, audioLibraryId);
                 if (!tracked.IsOrganized) {
                     tracked.Title = title;
                 }
@@ -209,6 +220,9 @@ public sealed partial class LibraryScanPersistenceService {
                 tracked.SortOrder = audioLibraryId is null ? null : sortOrder;
                 tracked.UpdatedAt = updatedAt;
                 if (isNsfw) tracked.IsNsfw = true;
+                if (shouldMarkAncestors) {
+                    await MarkAutoIdentifyAncestorsUnorganizedAsync(audioLibraryId, updatedAt, cancellationToken);
+                }
             }
 
             await EnsureAudioTrackDetailAsync(existing.Id, sectionLabel, sectionOrder, cancellationToken);
@@ -229,6 +243,7 @@ public sealed partial class LibraryScanPersistenceService {
             CreatedAt = now,
             UpdatedAt = now
         });
+        await MarkAutoIdentifyAncestorsUnorganizedAsync(audioLibraryId, now, cancellationToken);
 
         return id;
     }
@@ -268,13 +283,18 @@ public sealed partial class LibraryScanPersistenceService {
         if (existing is not null) {
             var tracked = await _db.Entities.FindAsync([existing.Id], cancellationToken);
             if (tracked is not null) {
+                var updatedAt = DateTimeOffset.UtcNow;
+                var shouldMarkAncestors = ShouldMarkAutoIdentifyAncestors(tracked, parentEntityId);
                 if (!tracked.IsOrganized) {
                     tracked.Title = title;
                 }
                 tracked.ParentEntityId = parentEntityId;
                 tracked.SortOrder = sortOrder;
-                tracked.UpdatedAt = DateTimeOffset.UtcNow;
+                tracked.UpdatedAt = updatedAt;
                 if (isNsfw) tracked.IsNsfw = true;
+                if (shouldMarkAncestors) {
+                    await MarkAutoIdentifyAncestorsUnorganizedAsync(parentEntityId, updatedAt, cancellationToken);
+                }
             }
 
             var detail = await _db.AudioLibraryDetails.FindAsync([existing.Id], cancellationToken);
@@ -296,6 +316,7 @@ public sealed partial class LibraryScanPersistenceService {
             CreatedAt = now,
             UpdatedAt = now
         });
+        await MarkAutoIdentifyAncestorsUnorganizedAsync(parentEntityId, now, cancellationToken);
 
         return id;
     }
@@ -487,9 +508,13 @@ public sealed partial class LibraryScanPersistenceService {
                 continue;
             }
 
+            var shouldMarkAncestors = ShouldMarkAutoIdentifyAncestors(child, seriesId);
             child.ParentEntityId = seriesId;
             child.SortOrder = sortOrder;
             child.UpdatedAt = now;
+            if (shouldMarkAncestors) {
+                await MarkAutoIdentifyAncestorsUnorganizedAsync(seriesId, now, cancellationToken);
+            }
         }
     }
 
@@ -521,11 +546,16 @@ public sealed partial class LibraryScanPersistenceService {
         if (existing is not null) {
             var tracked = await _db.Entities.FindAsync([existing.Id], cancellationToken);
             if (tracked is not null) {
+                var updatedAt = DateTimeOffset.UtcNow;
+                var shouldMarkAncestors = ShouldMarkAutoIdentifyAncestors(tracked, parentBookEntityId);
                 tracked.Title = title;
                 tracked.ParentEntityId = parentBookEntityId;
                 tracked.SortOrder = sortOrder;
-                tracked.UpdatedAt = DateTimeOffset.UtcNow;
+                tracked.UpdatedAt = updatedAt;
                 if (isNsfw) tracked.IsNsfw = true;
+                if (shouldMarkAncestors) {
+                    await MarkAutoIdentifyAncestorsUnorganizedAsync(parentBookEntityId, updatedAt, cancellationToken);
+                }
             }
             var detail = await _db.BookDetails.FindAsync([existing.Id], cancellationToken);
             if (detail is not null) {
@@ -552,6 +582,7 @@ public sealed partial class LibraryScanPersistenceService {
             CreatedAt = now,
             UpdatedAt = now
         });
+        await MarkAutoIdentifyAncestorsUnorganizedAsync(parentBookEntityId, now, cancellationToken);
 
         await _db.SaveChangesAsync(cancellationToken);
         return id;

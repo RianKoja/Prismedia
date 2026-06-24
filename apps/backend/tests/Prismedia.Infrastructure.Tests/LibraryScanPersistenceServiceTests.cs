@@ -477,6 +477,63 @@ public sealed class LibraryScanPersistenceServiceTests {
     }
 
     [Fact]
+    public async Task UpsertVideosBatchMarksOrganizedSeriesChainUnorganizedWhenNewEpisodeIsDiscovered() {
+        await using var db = CreateContext();
+        var seriesId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+        var seasonId = Guid.Parse("22222222-2222-2222-2222-222222222222");
+        var rootId = Guid.Parse("33333333-3333-3333-3333-333333333333");
+        var now = DateTimeOffset.UtcNow;
+        db.Entities.AddRange(
+            new EntityRow {
+                Id = seriesId,
+                KindCode = EntityKindRegistry.VideoSeries.Code,
+                Title = "The Chair Company",
+                IsOrganized = true,
+                CreatedAt = now,
+                UpdatedAt = now
+            },
+            new EntityRow {
+                Id = seasonId,
+                KindCode = EntityKindRegistry.VideoSeason.Code,
+                Title = "Season 1",
+                ParentEntityId = seriesId,
+                SortOrder = 1,
+                IsOrganized = true,
+                CreatedAt = now,
+                UpdatedAt = now
+            });
+        db.EntityFiles.Add(new EntityFileRow {
+            Id = Guid.NewGuid(),
+            EntityId = seriesId,
+            Role = EntityFileRole.Source,
+            Path = "/media/The Chair Company",
+            CreatedAt = now,
+            UpdatedAt = now
+        });
+        await db.SaveChangesAsync();
+
+        var service = new LibraryScanPersistenceService(db);
+        var ids = await service.UpsertVideosBatchAsync([
+            new VideoUpsertItem(
+                "/media/The Chair Company/Season 1/The Chair Company - S01E02.mkv",
+                "The man upstairs",
+                rootId,
+                IsNsfw: false,
+                new VideoSeriesScanInfo("/media/The Chair Company", "The Chair Company"),
+                new VideoSeasonScanInfo("/media/The Chair Company/Season 1", "Season 1", 1),
+                EpisodeNumber: 2,
+                AbsoluteEpisodeNumber: null)
+        ], CancellationToken.None);
+
+        var episodeId = Assert.Single(ids);
+        Assert.False((await db.Entities.FindAsync([seriesId]))!.IsOrganized);
+        Assert.False((await db.Entities.FindAsync([seasonId]))!.IsOrganized);
+        var root = Assert.Single(await service.ResolveAutoIdentifyRootsAsync([episodeId], CancellationToken.None));
+        Assert.Equal(seriesId, root.Id);
+        Assert.False(root.IsOrganized);
+    }
+
+    [Fact]
     public async Task UpsertVideosBatchMaterializesMovieHierarchy() {
         await using var db = CreateContext();
         var rootId = Guid.Parse("33333333-3333-3333-3333-333333333333");
@@ -850,6 +907,87 @@ public sealed class LibraryScanPersistenceServiceTests {
         Assert.True(rescannedTrack.IsNsfw);
         Assert.Equal("Disc 1", detail.SectionLabel);
         Assert.Equal(1, detail.SectionOrder);
+    }
+
+    [Fact]
+    public async Task UpsertAudioTrackLeavesOrganizedAlbumAloneWhenExistingTrackIsRescanned() {
+        await using var db = CreateContext();
+        var service = new LibraryScanPersistenceService(db);
+        var albumId = await service.UpsertAudioLibraryAsync(
+            "/media/audio/Album",
+            "Album",
+            Guid.NewGuid(),
+            parentEntityId: null,
+            sortOrder: 0,
+            isNsfw: false,
+            CancellationToken.None);
+        var trackId = await service.UpsertAudioTrackAsync(
+            "/media/audio/Album/song.flac",
+            "song",
+            albumId,
+            sortOrder: 0,
+            sectionLabel: null,
+            sectionOrder: 0,
+            isNsfw: false,
+            CancellationToken.None);
+        var album = await db.Entities.FindAsync([albumId]);
+        album!.IsOrganized = true;
+        await db.SaveChangesAsync();
+
+        var rescannedId = await service.UpsertAudioTrackAsync(
+            "/media/audio/Album/song.flac",
+            "song",
+            albumId,
+            sortOrder: 0,
+            sectionLabel: null,
+            sectionOrder: 0,
+            isNsfw: false,
+            CancellationToken.None);
+
+        Assert.Equal(trackId, rescannedId);
+        Assert.True((await db.Entities.FindAsync([albumId]))!.IsOrganized);
+    }
+
+    [Fact]
+    public async Task UpsertAudioTrackMarksOrganizedAlbumUnorganizedWhenNewTrackIsDiscovered() {
+        await using var db = CreateContext();
+        var service = new LibraryScanPersistenceService(db);
+        var artistId = await service.UpsertMusicArtistAsync(
+            "/media/audio/Artist",
+            "Artist",
+            Guid.NewGuid(),
+            sortOrder: 0,
+            isNsfw: false,
+            CancellationToken.None);
+        var albumId = await service.UpsertAudioLibraryAsync(
+            "/media/audio/Artist/Album",
+            "Album",
+            Guid.NewGuid(),
+            artistId,
+            sortOrder: 0,
+            isNsfw: false,
+            CancellationToken.None);
+        var artist = await db.Entities.FindAsync([artistId]);
+        var album = await db.Entities.FindAsync([albumId]);
+        artist!.IsOrganized = true;
+        album!.IsOrganized = true;
+        await db.SaveChangesAsync();
+
+        var trackId = await service.UpsertAudioTrackAsync(
+            "/media/audio/Artist/Album/new-song.flac",
+            "new-song",
+            albumId,
+            sortOrder: 1,
+            sectionLabel: null,
+            sectionOrder: 0,
+            isNsfw: false,
+            CancellationToken.None);
+
+        Assert.False((await db.Entities.FindAsync([albumId]))!.IsOrganized);
+        Assert.True((await db.Entities.FindAsync([artistId]))!.IsOrganized);
+        var root = Assert.Single(await service.ResolveAutoIdentifyRootsAsync([trackId], CancellationToken.None));
+        Assert.Equal(albumId, root.Id);
+        Assert.False(root.IsOrganized);
     }
 
     [Fact]
