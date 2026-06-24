@@ -292,6 +292,9 @@ public sealed class EfOpdsCatalogService(
                   (detail.Format == BookFormat.Epub ||
                    detail.Format == BookFormat.Pdf ||
                    detail.Format == BookFormat.ImageArchive) &&
+                  !db.Entities.AsNoTracking().Any(child =>
+                      child.ParentEntityId == entity.Id &&
+                      child.KindCode == BookKindCode) &&
                   (!hideNsfw ||
                    (!entity.IsNsfw &&
                     (root == null || !root.IsNsfw) &&

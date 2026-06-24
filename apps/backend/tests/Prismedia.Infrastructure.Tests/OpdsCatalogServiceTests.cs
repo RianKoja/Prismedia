@@ -132,6 +132,54 @@ public sealed class OpdsCatalogServiceTests : IDisposable {
     }
 
     [Fact]
+    public async Task AcquisitionFeedsExcludeBookSeriesContainersButSeriesNavigationUsesThem() {
+        await using var db = CreateContext();
+        SeedCatalog(db);
+        var seriesId = Guid.Parse("19191919-1919-1919-1919-191919191919");
+        var firstBookId = Guid.Parse("20202020-2020-2020-2020-202020202020");
+        var secondBookId = Guid.Parse("21212121-2121-2121-2121-212121212121");
+        var seriesDirectory = Path.Combine(_tempDir, "song-series");
+        Directory.CreateDirectory(seriesDirectory);
+        var firstPath = Path.Combine(seriesDirectory, "first.epub");
+        var secondPath = Path.Combine(seriesDirectory, "second.epub");
+        await File.WriteAllTextAsync(firstPath, "first");
+        await File.WriteAllTextAsync(secondPath, "second");
+        db.Entities.AddRange(
+            Entity(seriesId, EntityKindRegistry.Book.Code, "A Song of Ice and Fire", false),
+            Entity(firstBookId, EntityKindRegistry.Book.Code, "A Game of Thrones", false, seriesId),
+            Entity(secondBookId, EntityKindRegistry.Book.Code, "A Clash of Kings", false, seriesId));
+        db.BookDetails.AddRange(
+            BookDetail(seriesId, VisibleRootId),
+            BookDetail(firstBookId, VisibleRootId),
+            BookDetail(secondBookId, VisibleRootId));
+        db.EntityFiles.AddRange(
+            Source(seriesId, seriesDirectory, null),
+            Source(firstBookId, firstPath, MediaContentTypes.Epub),
+            Source(secondBookId, secondPath, MediaContentTypes.Epub));
+        await db.SaveChangesAsync();
+        var service = CreateService(db);
+
+        var library = await service.ListLibraryBooksAsync(VisibleRootId, hideNsfw: true, new OpdsPageRequest(1, 50), CancellationToken.None);
+        var series = await service.ListSeriesAsync(hideNsfw: true, new OpdsPageRequest(1, 50), CancellationToken.None);
+        var seriesBooks = await service.ListSeriesBooksAsync(seriesId, hideNsfw: true, new OpdsPageRequest(1, 50), CancellationToken.None);
+        var parentDetail = await service.GetBookAsync(seriesId, hideNsfw: true, CancellationToken.None);
+        var parentDownload = await service.GetBookDownloadAsync(seriesId, hideNsfw: true, CancellationToken.None);
+
+        Assert.NotNull(library);
+        Assert.DoesNotContain(library.Items, book => book.Id == seriesId);
+        Assert.Contains(library.Items, book => book.Id == firstBookId);
+        Assert.Contains(library.Items, book => book.Id == secondBookId);
+        var seriesEntry = Assert.Single(series.Items, entry => entry.Id == seriesId);
+        Assert.Equal(2, seriesEntry.VisibleBookCount);
+        Assert.NotNull(seriesBooks);
+        Assert.DoesNotContain(seriesBooks.Items, book => book.Id == seriesId);
+        Assert.Contains(seriesBooks.Items, book => book.Id == firstBookId);
+        Assert.Contains(seriesBooks.Items, book => book.Id == secondBookId);
+        Assert.Null(parentDetail);
+        Assert.Null(parentDownload);
+    }
+
+    [Fact]
     public async Task CatalogUsesSharedThumbnailRepresentativeAsOpdsCover() {
         await using var db = CreateContext();
         SeedCatalog(db);

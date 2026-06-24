@@ -90,6 +90,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - Added a worker status badge to Job Control so stalled queues show when the background worker is offline.
 
 ### Fixed
+- OPDS library/acquisition feeds no longer list book-series folder containers as downloadable books; series folders remain available through OPDS Series and show their individual books there.
 - OPDS catalog entries now use the same representative thumbnail logic as the main library grid for covers, so folder-backed comics expose their first visible page thumbnail as the OPDS cover image.
 - The Artists page now reliably opens as the Prismedia app instead of occasionally showing Jellyfin-compatible JSON when the browser reloads or lands directly on `/artists`.
 - Playback Stats now opens on Plays by default, and its daily activity chart focuses on active days so longer timeframes stay readable.
