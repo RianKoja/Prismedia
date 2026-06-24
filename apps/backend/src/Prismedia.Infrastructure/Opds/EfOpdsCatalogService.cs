@@ -1,8 +1,9 @@
 using Microsoft.EntityFrameworkCore;
+using Prismedia.Application.Entities;
 using Prismedia.Application.Opds;
+using Prismedia.Contracts.Entities;
 using Prismedia.Contracts.Media;
 using Prismedia.Domain.Entities;
-using Prismedia.Infrastructure.Entities;
 using Prismedia.Infrastructure.Media.Processing;
 using Prismedia.Infrastructure.Persistence;
 using Prismedia.Infrastructure.Persistence.Entities;
@@ -16,7 +17,8 @@ namespace Prismedia.Infrastructure.Opds;
 /// </summary>
 public sealed class EfOpdsCatalogService(
     PrismediaDbContext db,
-    AssetPathService assets) : IOpdsCatalogService {
+    AssetPathService assets,
+    IEntityReadService entityReadService) : IOpdsCatalogService {
     private static readonly string BookKindCode = EntityKindRegistry.Book.Code;
     private static readonly string PersonKindCode = EntityKindRegistry.Person.Code;
     private static readonly string CollectionKindCode = EntityKindRegistry.Collection.Code;
@@ -24,7 +26,6 @@ public sealed class EfOpdsCatalogService(
     private static readonly string CastRelationshipCode = RelationshipKind.Cast.ToCode();
     private static readonly string CreditsRelationshipCode = RelationshipKind.Credits.ToCode();
     private static readonly string TagsRelationshipCode = RelationshipKind.Tags.ToCode();
-    private static readonly EntityFileRole[] CoverRoles = [.. EntityCoverSelection.CoverRoles, EntityFileRole.GridThumbnail];
 
     public async Task<int> CountVisibleBooksAsync(bool hideNsfw, CancellationToken cancellationToken) =>
         await VisibleBooksQuery(hideNsfw).CountAsync(cancellationToken);
@@ -271,13 +272,7 @@ public sealed class EfOpdsCatalogService(
             return null;
         }
 
-        var files = await db.EntityFiles.AsNoTracking()
-            .Where(file => file.EntityId == bookId && CoverRoles.Contains(file.Role))
-            .ToArrayAsync(cancellationToken);
-        var selected = EntityCoverSelection.Select(files.Where(file => file.Role != EntityFileRole.GridThumbnail)) ??
-            files.FirstOrDefault(file => file.Role == EntityFileRole.GridThumbnail);
-
-        return selected is null ? null : ToFileContent(selected);
+        return await ResolveThumbnailCoverFileAsync(bookId, hideNsfw, cancellationToken);
     }
 
     private IQueryable<VisibleBookRow> VisibleBooksQuery(bool hideNsfw) {
@@ -589,7 +584,7 @@ public sealed class EfOpdsCatalogService(
             .ToDictionaryAsync(description => description.EntityId, description => description.Value, cancellationToken);
         var authorsByBook = await AuthorsByBookAsync(ids, hideNsfw, cancellationToken);
         var categoriesByBook = await CategoriesByBookAsync(ids, hideNsfw, cancellationToken);
-        var coversByBook = await CoversByBookAsync(ids, cancellationToken);
+        var coversByBook = await CoversByBookAsync(ids, hideNsfw, cancellationToken);
 
         return rows
             .Select(row => {
@@ -669,25 +664,15 @@ public sealed class EfOpdsCatalogService(
 
     private async Task<IReadOnlyDictionary<Guid, CoverProjection>> CoversByBookAsync(
         IReadOnlyCollection<Guid> ids,
+        bool hideNsfw,
         CancellationToken cancellationToken) {
-        var rows = await db.EntityFiles.AsNoTracking()
-            .Where(file => ids.Contains(file.EntityId) && CoverRoles.Contains(file.Role))
-            .ToArrayAsync(cancellationToken);
-
-        return rows
-            .GroupBy(file => file.EntityId)
-            .Select(group => {
-                var cover = EntityCoverSelection.Select(group.Where(file => file.Role != EntityFileRole.GridThumbnail));
-                var thumbnail = group.FirstOrDefault(file => file.Role == EntityFileRole.GridThumbnail) ?? cover;
-                return new {
-                    EntityId = group.Key,
-                    Cover = cover is not null && HasUsableFilePath(cover.Path)
-                        ? MimeForPath(cover.Path, cover.MimeType)
-                        : null,
-                    Thumbnail = thumbnail is not null && HasUsableFilePath(thumbnail.Path)
-                        ? MimeForPath(thumbnail.Path, thumbnail.MimeType)
-                        : null
-                };
+        var thumbnails = await entityReadService.GetThumbnailsAsync(ids.ToArray(), hideNsfw, cancellationToken);
+        return thumbnails.Items
+            .Select(thumbnail => new {
+                EntityId = thumbnail.Id,
+                Cover = ContentTypeForThumbnailPath(PreferredOpdsCoverPath(thumbnail)),
+                Thumbnail = ContentTypeForThumbnailPath(thumbnail.CoverThumbUrl) ??
+                    ContentTypeForThumbnailPath(PreferredOpdsCoverPath(thumbnail))
             })
             .Where(item => item.Cover is not null || item.Thumbnail is not null)
             .ToDictionary(
@@ -695,19 +680,40 @@ public sealed class EfOpdsCatalogService(
                 item => new CoverProjection(item.Cover, item.Thumbnail));
     }
 
-    private OpdsFileContent? ToFileContent(EntityFileRow file) {
-        var path = ResolveFilePath(file.Path);
-        if (path is null) {
+    private async Task<OpdsFileContent?> ResolveThumbnailCoverFileAsync(
+        Guid bookId,
+        bool hideNsfw,
+        CancellationToken cancellationToken) {
+        var thumbnail = (await entityReadService.GetThumbnailsAsync([bookId], hideNsfw, cancellationToken))
+            .Items
+            .FirstOrDefault();
+        var path = PreferredOpdsCoverPath(thumbnail);
+        if (string.IsNullOrWhiteSpace(path)) {
+            return null;
+        }
+
+        var resolved = ResolveFilePath(path);
+        if (resolved is null || !File.Exists(resolved)) {
             return null;
         }
 
         return new OpdsFileContent(
-            file.EntityId,
-            file.Role,
-            path,
-            MimeForPath(file.Path, file.MimeType),
-            Path.GetFileName(path));
+            bookId,
+            EntityFileRole.Thumbnail,
+            resolved,
+            MimeForPath(path, null),
+            Path.GetFileName(resolved));
     }
+
+    private string? ContentTypeForThumbnailPath(string? path) =>
+        !string.IsNullOrWhiteSpace(path) && HasUsableFilePath(path)
+            ? MimeForPath(path, null)
+            : null;
+
+    private static string? PreferredOpdsCoverPath(EntityThumbnail? thumbnail) =>
+        !string.IsNullOrWhiteSpace(thumbnail?.CoverUrl)
+            ? thumbnail.CoverUrl
+            : thumbnail?.CoverThumbUrl;
 
     private bool HasUsableFilePath(string path) =>
         ResolveFilePath(path) is { } resolved && File.Exists(resolved);

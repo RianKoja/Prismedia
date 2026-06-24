@@ -2,6 +2,9 @@ using Microsoft.EntityFrameworkCore;
 using Prismedia.Application.Opds;
 using Prismedia.Contracts.Media;
 using Prismedia.Domain.Entities;
+using Prismedia.Infrastructure.Entities;
+using Prismedia.Infrastructure.Entities.Mappers;
+using Prismedia.Infrastructure.Entities.Thumbnails;
 using Prismedia.Infrastructure.Media.Processing;
 using Prismedia.Infrastructure.Opds;
 using Prismedia.Infrastructure.Persistence;
@@ -128,14 +131,76 @@ public sealed class OpdsCatalogServiceTests : IDisposable {
         Assert.Equal(MediaContentTypes.ImageJpeg, cover.ContentType);
     }
 
+    [Fact]
+    public async Task CatalogUsesSharedThumbnailRepresentativeAsOpdsCover() {
+        await using var db = CreateContext();
+        SeedCatalog(db);
+        var bookId = Guid.Parse("16161616-1616-1616-1616-161616161616");
+        var chapterId = Guid.Parse("17171717-1717-1717-1717-171717171717");
+        var pageId = Guid.Parse("18181818-1818-1818-1818-181818181818");
+        var comicDirectory = Path.Combine(_tempDir, "representative-comic");
+        Directory.CreateDirectory(comicDirectory);
+        await File.WriteAllTextAsync(Path.Combine(comicDirectory, "001.jpg"), "page");
+        var pageThumbPath = Path.Combine(_tempDir, "cache", "book-pages", pageId.ToString(), "thumb.jpg");
+        Directory.CreateDirectory(Path.GetDirectoryName(pageThumbPath)!);
+        await File.WriteAllTextAsync(pageThumbPath, "thumbnail");
+        var now = DateTimeOffset.UtcNow;
+        var chapter = Entity(chapterId, EntityKindRegistry.BookChapter.Code, "Chapter 1", false, bookId);
+        chapter.SortOrder = 0;
+        var page = Entity(pageId, EntityKindRegistry.BookPage.Code, "Page 1", false, chapterId);
+        page.SortOrder = 0;
+        db.Entities.AddRange(
+            Entity(bookId, EntityKindRegistry.Book.Code, "Representative Comic", false),
+            chapter,
+            page);
+        db.BookDetails.Add(new BookDetailRow {
+            EntityId = bookId,
+            BookType = BookType.Comic,
+            Format = BookFormat.ImageArchive,
+            LibraryRootId = VisibleRootId
+        });
+        db.EntityFiles.AddRange(
+            Source(bookId, comicDirectory, null),
+            new EntityFileRow {
+                Id = Guid.NewGuid(),
+                EntityId = pageId,
+                Role = EntityFileRole.Thumbnail,
+                Path = AssetPathService.BookPageThumbnailUrl(pageId),
+                MimeType = MediaContentTypes.ImageJpeg,
+                CreatedAt = now,
+                UpdatedAt = now
+            });
+        await db.SaveChangesAsync();
+        var service = CreateService(db);
+
+        var recent = await service.ListRecentAsync(hideNsfw: true, new OpdsPageRequest(1, 50), CancellationToken.None);
+        var entry = Assert.Single(recent.Items, book => book.Id == bookId);
+        var cover = await service.GetBookCoverAsync(bookId, hideNsfw: true, CancellationToken.None);
+
+        Assert.Equal(MediaContentTypes.ImageJpeg, entry.CoverContentType);
+        Assert.Equal(MediaContentTypes.ImageJpeg, entry.ThumbnailContentType);
+        Assert.NotNull(cover);
+        Assert.Equal(pageThumbPath, cover.Path);
+        Assert.Equal(MediaContentTypes.ImageJpeg, cover.ContentType);
+    }
+
     public void Dispose() {
         if (Directory.Exists(_tempDir)) {
             Directory.Delete(_tempDir, recursive: true);
         }
     }
 
-    private EfOpdsCatalogService CreateService(PrismediaDbContext db) =>
-        new(db, new AssetPathService(_tempDir, Path.Combine(_tempDir, "cache")));
+    private EfOpdsCatalogService CreateService(PrismediaDbContext db) {
+        var assets = new AssetPathService(_tempDir, Path.Combine(_tempDir, "cache"));
+        var repository = new EfEntityRepository(db, EntityMappers.Kinds(db), EntityMappers.Capabilities(db));
+        var entityReadService = new EfEntityReadService(
+            db,
+            repository,
+            EntityMappers.Kinds(db),
+            ThumbnailContributors.For(db),
+            assets);
+        return new EfOpdsCatalogService(db, assets, entityReadService);
+    }
 
     private static PrismediaDbContext CreateContext() =>
         new(new DbContextOptionsBuilder<PrismediaDbContext>()
