@@ -23,6 +23,12 @@ describe("stats page source", () => {
     expect(source).not.toContain("max-w-9 flex-col");
   });
 
+  it("keeps the header picker wells sized to their options", () => {
+    expect(source).toContain('class="flex max-w-full flex-wrap gap-1.5 lg:justify-end"');
+    expect(source).toContain('class="surface-well flex w-fit max-w-full flex-wrap gap-1 p-0.5"');
+    expect(source).not.toContain('class="grid gap-2 sm:grid-cols-2"');
+  });
+
   it("hydrates playback thumbnails through the shared thumbnail pipeline", () => {
     expect(source).toContain("EntityThumbnail");
     expect(source).toContain("fetchEntityThumbnails");

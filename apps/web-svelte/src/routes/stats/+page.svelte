@@ -348,8 +348,8 @@
           </p>
         </div>
 
-        <div class="grid gap-2 sm:grid-cols-2">
-          <div class="surface-well flex flex-wrap gap-1.5 p-1">
+        <div class="flex max-w-full flex-wrap gap-1.5 lg:justify-end">
+          <div class="surface-well flex w-fit max-w-full flex-wrap gap-1 p-0.5">
             {#each TIMEFRAMES as option (option.key)}
               <Button
                 variant={timeframe === option.key ? "primary" : "ghost"}
@@ -362,7 +362,7 @@
             {/each}
           </div>
 
-          <div class="surface-well flex flex-wrap gap-1.5 p-1">
+          <div class="surface-well flex w-fit max-w-full flex-wrap gap-1 p-0.5">
             {#each EVENT_FILTERS as option (option.value)}
               <Button
                 variant={eventFilter === option.value ? "primary" : "ghost"}

@@ -64,16 +64,16 @@ public sealed class EntityCapabilityService {
     /// <summary>Fraction of the runtime below which an item is treated as not started.</summary>
     private const double StartedFraction = 0.05;
 
-    /// <summary>Fraction of the runtime at or above which an item is treated as watched.</summary>
-    private const double WatchedFraction = 0.90;
+    /// <summary>Fraction of a video runtime at or above which the item is treated as watched.</summary>
+    private const double VideoWatchedFraction = 0.95;
 
     /// <summary>
     /// Updates the entity's playback capability using Jellyfin-compatible thresholds so the
     /// native player and Jellyfin clients (e.g. Infuse) converge on identical state for the
     /// same inputs. When <paramref name="completed"/> is <c>null</c> (the normal progress/stop
-    /// path) the watched/resume decision is derived from <paramref name="resumeSeconds"/>
-    /// relative to the entity's known runtime: at or above <see cref="WatchedFraction"/> the
-    /// item is completed (and the play count incremented), below <see cref="StartedFraction"/>
+    /// path) video/movie watched state is derived from <paramref name="resumeSeconds"/>
+    /// relative to the entity's known runtime: at or above <see cref="VideoWatchedFraction"/>
+    /// the item is completed (and the play count incremented), below <see cref="StartedFraction"/>
     /// it is treated as a fresh start, and in between the position is stored for resume.
     /// </summary>
     /// <param name="id">Entity identifier.</param>
@@ -129,7 +129,7 @@ public sealed class EntityCapabilityService {
             }
 
             var fraction = position.TotalSeconds / total.TotalSeconds;
-            if (fraction >= WatchedFraction) {
+            if (CanDeriveVideoCompletion(entity) && fraction >= VideoWatchedFraction) {
                 playback.RecordCompleted(now);
                 if (playback.Value.PlayCount > playCountBefore) {
                     completedEvent = CompletedEvent(entity, now, position.TotalSeconds, runtime?.TotalSeconds);
@@ -428,6 +428,9 @@ public sealed class EntityCapabilityService {
             occurredAt,
             positionSeconds,
             durationSeconds ?? entity.Technical?.Duration?.TotalSeconds);
+
+    private static bool CanDeriveVideoCompletion(Entity entity) =>
+        entity.Kind is EntityKind.Video or EntityKind.Movie;
 
     private async Task<Guid> ResolveProgressOwnerIdAsync(
         Guid requestedId,

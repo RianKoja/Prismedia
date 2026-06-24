@@ -20,6 +20,7 @@ namespace Prismedia.Infrastructure.Tests;
 /// </summary>
 public sealed class PlaybackSessionServiceTests {
     private static readonly Guid VideoId = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+    private static readonly Guid MovieId = Guid.Parse("cccccccc-cccc-cccc-cccc-cccccccccccc");
     private static readonly Guid AudioTrackId = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
 
     [Fact]
@@ -50,7 +51,8 @@ public sealed class PlaybackSessionServiceTests {
     }
 
     [Theory]
-    [InlineData(95, true, 1)]   // >= 90% completes and counts
+    [InlineData(95, true, 1)]   // >= 95% completes and counts
+    [InlineData(94, false, 0)]  // credits-friendly, but not completed yet
     [InlineData(50, false, 0)]  // mid-watch stores a resume point only
     [InlineData(2, false, 0)]   // < 5% is treated as not started
     public async Task ProgressThresholdsDeriveCompletion(int percent, bool expectCompleted, int expectPlayCount) {
@@ -66,9 +68,52 @@ public sealed class PlaybackSessionServiceTests {
 
         Assert.Equal(expectCompleted, state!.CompletedAt is not null);
         Assert.Equal(expectPlayCount, state.PlayCount);
-        if (percent is >= 5 and < 90) {
+        if (percent is >= 5 and < 95) {
             Assert.True(state.ResumeTime > TimeSpan.Zero);
         }
+    }
+
+    [Theory]
+    [InlineData(EntityKind.Video)]
+    [InlineData(EntityKind.Movie)]
+    public async Task VideoAndMovieProgressAtNinetyFivePercentDerivesCompletion(EntityKind kind) {
+        const double runtimeSeconds = 1000;
+        var id = kind == EntityKind.Movie ? MovieId : VideoId;
+
+        var state = await RunAsync(
+            async (_, capabilities) => await capabilities.UpdatePlaybackAsync(
+                id,
+                resumeSeconds: runtimeSeconds * 0.95,
+                durationSeconds: null,
+                completed: null,
+                CancellationToken.None),
+            runtimeSeconds,
+            id,
+            kind);
+
+        Assert.NotNull(state!.CompletedAt);
+        Assert.Equal(1, state.PlayCount);
+        Assert.Equal(TimeSpan.Zero, state.ResumeTime);
+    }
+
+    [Fact]
+    public async Task AudioTrackProgressAtNinetyFivePercentDoesNotDeriveCompletion() {
+        const double runtimeSeconds = 1000;
+
+        var state = await RunAsync(
+            async (_, capabilities) => await capabilities.UpdatePlaybackAsync(
+                AudioTrackId,
+                resumeSeconds: runtimeSeconds * 0.95,
+                durationSeconds: null,
+                completed: null,
+                CancellationToken.None),
+            runtimeSeconds,
+            AudioTrackId,
+            EntityKind.AudioTrack);
+
+        Assert.Null(state!.CompletedAt);
+        Assert.Equal(0, state.PlayCount);
+        Assert.Equal(TimeSpan.FromSeconds(950), state.ResumeTime);
     }
 
     [Fact]
