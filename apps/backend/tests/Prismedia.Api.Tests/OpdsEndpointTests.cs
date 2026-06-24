@@ -130,6 +130,31 @@ public sealed class OpdsEndpointTests : IDisposable {
     }
 
     [Fact]
+    public async Task OpdsLinksUseForwardedOriginForProxyRequests() {
+        using var factory = CreateFactory();
+        using var client = factory.CreateClient();
+        using var request = new HttpRequestMessage(HttpMethod.Get, OpdsProtocol.Routes.Recent);
+        request.Headers.Authorization = Basic(TestAuth.ApiKey);
+        request.Headers.Host = "127.0.0.1:8008";
+        request.Headers.Add("X-Forwarded-Proto", "https");
+        request.Headers.Add("X-Forwarded-Host", "prismedia.example.com");
+
+        using var response = await client.SendAsync(request);
+        var document = await ReadXmlAsync(response);
+        var hrefs = document.Descendants(Atom("link"))
+            .Select(link => (string?)link.Attribute("href"))
+            .Where(href => href is not null)
+            .Cast<string>()
+            .ToArray();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotEmpty(hrefs);
+        Assert.All(hrefs, href => Assert.StartsWith("https://prismedia.example.com/", href, StringComparison.Ordinal));
+        Assert.Contains(hrefs, href => href.Contains("/cover", StringComparison.Ordinal));
+        Assert.Contains(hrefs, href => href.Contains("/download", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task DirectCoverAndDownloadLinksRequireAuthorizationAndStreamWhenAuthorized() {
         using var factory = CreateFactory();
         using var anonymous = factory.CreateClient();

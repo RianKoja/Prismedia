@@ -801,12 +801,23 @@ public static class OpdsEndpoints {
         }
 
         return UriHelper.BuildAbsolute(
-            request.Scheme,
-            request.Host,
+            ForwardedScheme(request),
+            ForwardedHost(request),
             request.PathBase,
             path,
             pairs.Count == 0 ? QueryString.Empty : QueryString.Create(pairs));
     }
+
+    private static string ForwardedScheme(HttpRequest request) =>
+        FirstForwardedValue(request.Headers["X-Forwarded-Proto"]) ?? request.Scheme;
+
+    private static HostString ForwardedHost(HttpRequest request) =>
+        HostString.FromUriComponent(FirstForwardedValue(request.Headers["X-Forwarded-Host"]) ?? request.Host.ToUriComponent());
+
+    private static string? FirstForwardedValue(IEnumerable<string?> values) =>
+        values
+            .SelectMany(value => (value ?? "").Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+            .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
 
     private static IReadOnlyList<KeyValuePair<string, string?>> QueryPairs(params (string Key, string? Value)[] pairs) =>
         pairs
