@@ -18,6 +18,34 @@ If Prismedia is behind HTTPS, use the public HTTPS origin instead:
 https://prismedia.example.com/opds
 ```
 
+## Quick setup in a third-party reader
+
+Use these settings in any app that supports OPDS 1.x / OPDS 1.2 catalogs:
+
+| Reader field | Value |
+| --- | --- |
+| Catalog type | OPDS, OPDS 1.x, or Atom OPDS. |
+| Server / catalog URL | `https://prismedia.example.com/opds` or `http://your-prismedia-host:8008/opds`. |
+| Authentication | HTTP Basic Auth, if the app asks. |
+| Username | A Jellyfin-compatible Prismedia profile username, for example `Prismedia`. |
+| Password | The Prismedia API key from **Settings -> API Access**. |
+
+After saving the catalog, browse **Libraries**, **Recently Added**, **Authors**, or **Series**. Series navigation groups child books; library acquisition feeds only show the individual downloadable books.
+
+:::tip Apps that do not resend credentials for covers/downloads
+Some OPDS clients authenticate the catalog request but then fetch cover or download links without the `Authorization` header. If covers or downloads fail while the catalog loads, put the Prismedia API key query parameter on the catalog URL:
+
+```text
+https://prismedia.example.com/opds?ApiKey=YOUR_API_KEY
+```
+
+Prismedia will carry that existing API-key query parameter into OPDS cover and acquisition links. Treat the full URL as a secret.
+:::
+
+:::note Books must be in a book-scanning library
+A directory only appears in OPDS after it is configured as a Prismedia library root with **Scan books** enabled and the library scan has completed. Video-only, audio-only, image-only, disabled, or unsupported-format roots are excluded from OPDS.
+:::
+
 ## What the catalog includes
 
 The root catalog links to:
@@ -75,6 +103,16 @@ OPDS uses the same Jellyfin-compatible profile visibility rules as client apps:
 - Direct book detail, cover, and download routes enforce the same visibility checks as feeds.
 
 Hidden books do not contribute authors, tags, collections, series, counts, covers, search results, or acquisition links.
+
+## Troubleshooting reader setup
+
+| Symptom | Check |
+| --- | --- |
+| The app shows an SSO login page or cannot add the catalog. | Bypass proxy/forward-auth for `/opds([/?].*)?$` and retry. A request without OPDS credentials should return Prismedia `401`, not an IdP HTML page. |
+| The catalog authenticates but shows no books. | Confirm the source directory is a Prismedia library root with **Scan books** enabled, the root is enabled, the scan completed, and the files are EPUB/PDF/CBZ/CBR-compatible. |
+| Covers or downloads fail but browsing works. | Use Basic Auth if available. If the reader still drops auth on linked resources, add `?ApiKey=YOUR_API_KEY` to the OPDS base URL. |
+| A reader still shows old entries after a fix or rescan. | Refresh/re-sync the OPDS catalog in the app, or remove and re-add the OPDS server. Many readers cache feeds aggressively. |
+| NSFW items are missing. | Use a Jellyfin-compatible profile that allows NSFW content. API-key-only catalog requests intentionally hide NSFW content. |
 
 ## Reverse proxies
 
