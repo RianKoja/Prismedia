@@ -273,7 +273,6 @@
           cards={seasonCards}
           prefsKey={`series-${series?.id}-seasons`}
           initialSortBy="position"
-          selectable={false}
           emptyTitle="No seasons"
           emptyMessage="This series has no seasons."
         />
@@ -290,7 +289,6 @@
         <EntityGrid
           cards={childSeriesCards}
           prefsKey={`series-${series?.id}-children`}
-          selectable={false}
           emptyTitle="No sub-series"
           emptyMessage="This series has no sub-series."
         />
@@ -307,7 +305,6 @@
           cards={videoCards}
           prefsKey={`series-${series?.id}-videos`}
           initialSortBy="position"
-          selectable={false}
           emptyTitle={hasSeasons ? "No specials" : "No episodes"}
           emptyMessage="No loose videos in this series."
         />

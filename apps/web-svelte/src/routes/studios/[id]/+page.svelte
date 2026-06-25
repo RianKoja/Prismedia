@@ -168,7 +168,6 @@
         <EntityGrid
           cards={relatedCards}
           prefsKey={`studio-${studio?.id}-content`}
-          selectable={false}
           emptyTitle="No content"
           emptyMessage="No content linked to this studio."
         />

@@ -271,7 +271,6 @@
         <div class="linked-grid">
           <EntityGrid
             cards={linkedCards}
-            selectable={false}
             scrollMaxHeight={null}
             initialPageSize={100}
             minScale={3}

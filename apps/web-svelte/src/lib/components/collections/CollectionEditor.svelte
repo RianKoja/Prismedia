@@ -549,7 +549,6 @@
         loading={previewing && previewCards.length === 0}
         pageSizeOptions={[24, 48, 96]}
         prefsKey="collection-rule-preview"
-        selectable={false}
         showPagination={previewCards.length > 0}
       />
     </section>

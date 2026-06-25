@@ -354,7 +354,6 @@
         <EntityGrid
           cards={subLibraryCards}
           prefsKey={`audio-${library?.id}-children`}
-          selectable={false}
           emptyTitle="No sub-libraries"
           emptyMessage="No sub-libraries in this collection."
         />

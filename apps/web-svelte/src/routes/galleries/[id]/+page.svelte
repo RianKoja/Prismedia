@@ -309,7 +309,6 @@
         <EntityGrid
           cards={galleryChildren}
           prefsKey={`gallery-${gallery?.id}-children`}
-          selectable={false}
           emptyTitle="No sub-galleries"
           emptyMessage="This gallery has no sub-galleries."
         />
@@ -325,7 +324,6 @@
         <EntityGrid
           cards={imageChildren}
           prefsKey={`gallery-${gallery?.id}-images`}
-          selectable={false}
           initialMediaWall
           enableFeedView
           onCardActivate={openImageLightbox}

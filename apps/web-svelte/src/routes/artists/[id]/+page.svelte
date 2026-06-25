@@ -252,7 +252,6 @@
         <EntityGrid
           cards={albumCards}
           prefsKey={`artist-${artist?.id}-albums`}
-          selectable={false}
           emptyTitle="No albums"
           emptyMessage="No albums for this artist."
         />

@@ -198,7 +198,6 @@
         <EntityGrid
           cards={relatedCards}
           prefsKey={`person-${person?.id}-appearances`}
-          selectable={false}
           emptyTitle="No appearances"
           emptyMessage="No content linked to this person."
         />

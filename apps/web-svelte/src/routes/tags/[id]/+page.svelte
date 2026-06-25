@@ -158,7 +158,6 @@
         <EntityGrid
           cards={relatedCards}
           prefsKey={`tag-${tag?.id}-content`}
-          selectable={false}
           emptyTitle="No content"
           emptyMessage="No content tagged with this tag."
         />

@@ -458,7 +458,6 @@
           <EntityGrid
             cards={itemCards}
             prefsKey={`collection-${collection?.id}-items`}
-            selectable={canManuallyCurate}
             bulkActions={itemBulkActions}
             emptyTitle="Empty collection"
             emptyMessage="This collection has no items."
