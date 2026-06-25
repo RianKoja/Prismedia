@@ -22,6 +22,10 @@ public sealed class AppSettingsRegistryTests {
             definition.Type == SettingValueType.Integer &&
             definition.Constraints?.Min == 1 &&
             definition.Constraints?.Max == 32);
+        Assert.Contains(definitions, definition =>
+            definition.Key == AppSettingKeys.CollectionsAutoRefreshEnabled &&
+            definition.Type == SettingValueType.Boolean &&
+            definition.DefaultValue.GetBoolean());
 
         foreach (var definition in definitions) {
             var validated = definition.Validate(definition.DefaultValue);
@@ -93,16 +97,19 @@ public sealed class AppSettingsRegistryTests {
             new Dictionary<string, JsonElement> {
                 [AppSettingKeys.ScanAutoScanEnabled] = JsonSerializer.SerializeToElement(true),
                 [AppSettingKeys.ScanIntervalMinutes] = JsonSerializer.SerializeToElement(15),
+                [AppSettingKeys.CollectionsAutoRefreshEnabled] = JsonSerializer.SerializeToElement(false),
                 [AppSettingKeys.PlaybackAudioPreferredLanguages] =
                     JsonSerializer.SerializeToElement(new[] { "ja", "jpn" }),
             },
             CancellationToken.None);
 
         var scan = await service.GetScanSettingsAsync(CancellationToken.None);
+        var collections = await service.GetCollectionRefreshSettingsAsync(CancellationToken.None);
         var playback = await service.GetPlaybackSettingsAsync(CancellationToken.None);
 
         Assert.True(scan.AutoScanEnabled);
         Assert.Equal(15, scan.IntervalMinutes);
+        Assert.False(collections.AutoRefreshEnabled);
         Assert.Equal(["ja", "jpn"], playback.AudioPreferredLanguages);
     }
 

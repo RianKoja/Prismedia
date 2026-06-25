@@ -79,6 +79,17 @@ import type {
   GetJellyfinVideoVariantPlaylistParams,
   GetMovieParams,
   GetMusicArtistParams,
+  GetOpdsAuthorBooksParams,
+  GetOpdsAuthorsParams,
+  GetOpdsCollectionBooksParams,
+  GetOpdsCollectionsParams,
+  GetOpdsLibrariesParams,
+  GetOpdsLibraryBooksParams,
+  GetOpdsRecentParams,
+  GetOpdsSeriesBooksParams,
+  GetOpdsSeriesParams,
+  GetOpdsTagBooksParams,
+  GetOpdsTagsParams,
   GetOrganizePlanParams,
   GetPersonParams,
   GetPlaybackStatisticsParams,
@@ -186,6 +197,7 @@ import type {
   ResolveIdentifyQueueCandidateParams,
   SaveIdentifyQueueProposalRequest,
   SearchIdentifyQueueItemParams,
+  SearchOpdsBooksParams,
   SearchRequestsParams,
   SettingDescriptor,
   SettingUpdateRequest,
@@ -392,6 +404,888 @@ export const getVideoSeason = async (id: string,
     params?: GetVideoSeasonParams, options?: RequestInit): Promise<getVideoSeasonResponse> => {
 
   return orvalFetch<getVideoSeasonResponse>(getGetVideoSeasonUrl(id,seasonId,params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export type getOpdsRootResponse200 = {
+  data: void
+  status: 200
+}
+
+export type getOpdsRootResponseSuccess = (getOpdsRootResponse200) & {
+  headers: Headers;
+};
+;
+
+export type getOpdsRootResponse = (getOpdsRootResponseSuccess)
+
+export const getGetOpdsRootUrl = () => {
+
+
+
+
+  return `/opds`
+}
+
+/**
+ * @summary Gets the OPDS navigation root catalog.
+ */
+export const getOpdsRoot = async ( options?: RequestInit): Promise<getOpdsRootResponse> => {
+
+  return orvalFetch<getOpdsRootResponse>(getGetOpdsRootUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export type getOpdsCatalogResponse200 = {
+  data: void
+  status: 200
+}
+
+export type getOpdsCatalogResponseSuccess = (getOpdsCatalogResponse200) & {
+  headers: Headers;
+};
+;
+
+export type getOpdsCatalogResponse = (getOpdsCatalogResponseSuccess)
+
+export const getGetOpdsCatalogUrl = () => {
+
+
+
+
+  return `/opds/catalog`
+}
+
+/**
+ * @summary Gets the OPDS navigation root catalog.
+ */
+export const getOpdsCatalog = async ( options?: RequestInit): Promise<getOpdsCatalogResponse> => {
+
+  return orvalFetch<getOpdsCatalogResponse>(getGetOpdsCatalogUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export type getOpdsRecentResponse200 = {
+  data: void
+  status: 200
+}
+
+export type getOpdsRecentResponse400 = {
+  data: ApiProblem
+  status: 400
+}
+
+export type getOpdsRecentResponseSuccess = (getOpdsRecentResponse200) & {
+  headers: Headers;
+};
+export type getOpdsRecentResponseError = (getOpdsRecentResponse400) & {
+  headers: Headers;
+};
+
+export type getOpdsRecentResponse = (getOpdsRecentResponseSuccess | getOpdsRecentResponseError)
+
+export const getGetOpdsRecentUrl = (params?: GetOpdsRecentParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/opds/recent?${stringifiedParams}` : `/opds/recent`
+}
+
+/**
+ * @summary Lists recently added OPDS books and comics.
+ */
+export const getOpdsRecent = async (params?: GetOpdsRecentParams, options?: RequestInit): Promise<getOpdsRecentResponse> => {
+
+  return orvalFetch<getOpdsRecentResponse>(getGetOpdsRecentUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export type getOpdsLibrariesResponse200 = {
+  data: void
+  status: 200
+}
+
+export type getOpdsLibrariesResponse400 = {
+  data: ApiProblem
+  status: 400
+}
+
+export type getOpdsLibrariesResponseSuccess = (getOpdsLibrariesResponse200) & {
+  headers: Headers;
+};
+export type getOpdsLibrariesResponseError = (getOpdsLibrariesResponse400) & {
+  headers: Headers;
+};
+
+export type getOpdsLibrariesResponse = (getOpdsLibrariesResponseSuccess | getOpdsLibrariesResponseError)
+
+export const getGetOpdsLibrariesUrl = (params?: GetOpdsLibrariesParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/opds/libraries?${stringifiedParams}` : `/opds/libraries`
+}
+
+/**
+ * @summary Lists OPDS book library roots.
+ */
+export const getOpdsLibraries = async (params?: GetOpdsLibrariesParams, options?: RequestInit): Promise<getOpdsLibrariesResponse> => {
+
+  return orvalFetch<getOpdsLibrariesResponse>(getGetOpdsLibrariesUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export type getOpdsLibraryBooksResponse200 = {
+  data: void
+  status: 200
+}
+
+export type getOpdsLibraryBooksResponse400 = {
+  data: ApiProblem
+  status: 400
+}
+
+export type getOpdsLibraryBooksResponse404 = {
+  data: ApiProblem
+  status: 404
+}
+
+export type getOpdsLibraryBooksResponseSuccess = (getOpdsLibraryBooksResponse200) & {
+  headers: Headers;
+};
+export type getOpdsLibraryBooksResponseError = (getOpdsLibraryBooksResponse400 | getOpdsLibraryBooksResponse404) & {
+  headers: Headers;
+};
+
+export type getOpdsLibraryBooksResponse = (getOpdsLibraryBooksResponseSuccess | getOpdsLibraryBooksResponseError)
+
+export const getGetOpdsLibraryBooksUrl = (libraryId: string,
+    params?: GetOpdsLibraryBooksParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/opds/libraries/${libraryId}?${stringifiedParams}` : `/opds/libraries/${libraryId}`
+}
+
+/**
+ * @summary Lists OPDS books in one library.
+ */
+export const getOpdsLibraryBooks = async (libraryId: string,
+    params?: GetOpdsLibraryBooksParams, options?: RequestInit): Promise<getOpdsLibraryBooksResponse> => {
+
+  return orvalFetch<getOpdsLibraryBooksResponse>(getGetOpdsLibraryBooksUrl(libraryId,params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export type getOpdsAuthorsResponse200 = {
+  data: void
+  status: 200
+}
+
+export type getOpdsAuthorsResponse400 = {
+  data: ApiProblem
+  status: 400
+}
+
+export type getOpdsAuthorsResponseSuccess = (getOpdsAuthorsResponse200) & {
+  headers: Headers;
+};
+export type getOpdsAuthorsResponseError = (getOpdsAuthorsResponse400) & {
+  headers: Headers;
+};
+
+export type getOpdsAuthorsResponse = (getOpdsAuthorsResponseSuccess | getOpdsAuthorsResponseError)
+
+export const getGetOpdsAuthorsUrl = (params?: GetOpdsAuthorsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/opds/authors?${stringifiedParams}` : `/opds/authors`
+}
+
+/**
+ * @summary Lists OPDS authors with visible books.
+ */
+export const getOpdsAuthors = async (params?: GetOpdsAuthorsParams, options?: RequestInit): Promise<getOpdsAuthorsResponse> => {
+
+  return orvalFetch<getOpdsAuthorsResponse>(getGetOpdsAuthorsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export type getOpdsAuthorBooksResponse200 = {
+  data: void
+  status: 200
+}
+
+export type getOpdsAuthorBooksResponse400 = {
+  data: ApiProblem
+  status: 400
+}
+
+export type getOpdsAuthorBooksResponse404 = {
+  data: ApiProblem
+  status: 404
+}
+
+export type getOpdsAuthorBooksResponseSuccess = (getOpdsAuthorBooksResponse200) & {
+  headers: Headers;
+};
+export type getOpdsAuthorBooksResponseError = (getOpdsAuthorBooksResponse400 | getOpdsAuthorBooksResponse404) & {
+  headers: Headers;
+};
+
+export type getOpdsAuthorBooksResponse = (getOpdsAuthorBooksResponseSuccess | getOpdsAuthorBooksResponseError)
+
+export const getGetOpdsAuthorBooksUrl = (authorId: string,
+    params?: GetOpdsAuthorBooksParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/opds/authors/${authorId}?${stringifiedParams}` : `/opds/authors/${authorId}`
+}
+
+/**
+ * @summary Lists OPDS books for one author.
+ */
+export const getOpdsAuthorBooks = async (authorId: string,
+    params?: GetOpdsAuthorBooksParams, options?: RequestInit): Promise<getOpdsAuthorBooksResponse> => {
+
+  return orvalFetch<getOpdsAuthorBooksResponse>(getGetOpdsAuthorBooksUrl(authorId,params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export type getOpdsSeriesResponse200 = {
+  data: void
+  status: 200
+}
+
+export type getOpdsSeriesResponse400 = {
+  data: ApiProblem
+  status: 400
+}
+
+export type getOpdsSeriesResponseSuccess = (getOpdsSeriesResponse200) & {
+  headers: Headers;
+};
+export type getOpdsSeriesResponseError = (getOpdsSeriesResponse400) & {
+  headers: Headers;
+};
+
+export type getOpdsSeriesResponse = (getOpdsSeriesResponseSuccess | getOpdsSeriesResponseError)
+
+export const getGetOpdsSeriesUrl = (params?: GetOpdsSeriesParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/opds/series?${stringifiedParams}` : `/opds/series`
+}
+
+/**
+ * @summary Lists OPDS series with visible books.
+ */
+export const getOpdsSeries = async (params?: GetOpdsSeriesParams, options?: RequestInit): Promise<getOpdsSeriesResponse> => {
+
+  return orvalFetch<getOpdsSeriesResponse>(getGetOpdsSeriesUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export type getOpdsSeriesBooksResponse200 = {
+  data: void
+  status: 200
+}
+
+export type getOpdsSeriesBooksResponse400 = {
+  data: ApiProblem
+  status: 400
+}
+
+export type getOpdsSeriesBooksResponse404 = {
+  data: ApiProblem
+  status: 404
+}
+
+export type getOpdsSeriesBooksResponseSuccess = (getOpdsSeriesBooksResponse200) & {
+  headers: Headers;
+};
+export type getOpdsSeriesBooksResponseError = (getOpdsSeriesBooksResponse400 | getOpdsSeriesBooksResponse404) & {
+  headers: Headers;
+};
+
+export type getOpdsSeriesBooksResponse = (getOpdsSeriesBooksResponseSuccess | getOpdsSeriesBooksResponseError)
+
+export const getGetOpdsSeriesBooksUrl = (seriesId: string,
+    params?: GetOpdsSeriesBooksParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/opds/series/${seriesId}?${stringifiedParams}` : `/opds/series/${seriesId}`
+}
+
+/**
+ * @summary Lists OPDS books in one series.
+ */
+export const getOpdsSeriesBooks = async (seriesId: string,
+    params?: GetOpdsSeriesBooksParams, options?: RequestInit): Promise<getOpdsSeriesBooksResponse> => {
+
+  return orvalFetch<getOpdsSeriesBooksResponse>(getGetOpdsSeriesBooksUrl(seriesId,params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export type getOpdsCollectionsResponse200 = {
+  data: void
+  status: 200
+}
+
+export type getOpdsCollectionsResponse400 = {
+  data: ApiProblem
+  status: 400
+}
+
+export type getOpdsCollectionsResponseSuccess = (getOpdsCollectionsResponse200) & {
+  headers: Headers;
+};
+export type getOpdsCollectionsResponseError = (getOpdsCollectionsResponse400) & {
+  headers: Headers;
+};
+
+export type getOpdsCollectionsResponse = (getOpdsCollectionsResponseSuccess | getOpdsCollectionsResponseError)
+
+export const getGetOpdsCollectionsUrl = (params?: GetOpdsCollectionsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/opds/collections?${stringifiedParams}` : `/opds/collections`
+}
+
+/**
+ * @summary Lists OPDS collections with visible books.
+ */
+export const getOpdsCollections = async (params?: GetOpdsCollectionsParams, options?: RequestInit): Promise<getOpdsCollectionsResponse> => {
+
+  return orvalFetch<getOpdsCollectionsResponse>(getGetOpdsCollectionsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export type getOpdsCollectionBooksResponse200 = {
+  data: void
+  status: 200
+}
+
+export type getOpdsCollectionBooksResponse400 = {
+  data: ApiProblem
+  status: 400
+}
+
+export type getOpdsCollectionBooksResponse404 = {
+  data: ApiProblem
+  status: 404
+}
+
+export type getOpdsCollectionBooksResponseSuccess = (getOpdsCollectionBooksResponse200) & {
+  headers: Headers;
+};
+export type getOpdsCollectionBooksResponseError = (getOpdsCollectionBooksResponse400 | getOpdsCollectionBooksResponse404) & {
+  headers: Headers;
+};
+
+export type getOpdsCollectionBooksResponse = (getOpdsCollectionBooksResponseSuccess | getOpdsCollectionBooksResponseError)
+
+export const getGetOpdsCollectionBooksUrl = (collectionId: string,
+    params?: GetOpdsCollectionBooksParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/opds/collections/${collectionId}?${stringifiedParams}` : `/opds/collections/${collectionId}`
+}
+
+/**
+ * @summary Lists OPDS books in one collection.
+ */
+export const getOpdsCollectionBooks = async (collectionId: string,
+    params?: GetOpdsCollectionBooksParams, options?: RequestInit): Promise<getOpdsCollectionBooksResponse> => {
+
+  return orvalFetch<getOpdsCollectionBooksResponse>(getGetOpdsCollectionBooksUrl(collectionId,params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export type getOpdsTagsResponse200 = {
+  data: void
+  status: 200
+}
+
+export type getOpdsTagsResponse400 = {
+  data: ApiProblem
+  status: 400
+}
+
+export type getOpdsTagsResponseSuccess = (getOpdsTagsResponse200) & {
+  headers: Headers;
+};
+export type getOpdsTagsResponseError = (getOpdsTagsResponse400) & {
+  headers: Headers;
+};
+
+export type getOpdsTagsResponse = (getOpdsTagsResponseSuccess | getOpdsTagsResponseError)
+
+export const getGetOpdsTagsUrl = (params?: GetOpdsTagsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/opds/tags?${stringifiedParams}` : `/opds/tags`
+}
+
+/**
+ * @summary Lists OPDS tags with visible books.
+ */
+export const getOpdsTags = async (params?: GetOpdsTagsParams, options?: RequestInit): Promise<getOpdsTagsResponse> => {
+
+  return orvalFetch<getOpdsTagsResponse>(getGetOpdsTagsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export type getOpdsTagBooksResponse200 = {
+  data: void
+  status: 200
+}
+
+export type getOpdsTagBooksResponse400 = {
+  data: ApiProblem
+  status: 400
+}
+
+export type getOpdsTagBooksResponse404 = {
+  data: ApiProblem
+  status: 404
+}
+
+export type getOpdsTagBooksResponseSuccess = (getOpdsTagBooksResponse200) & {
+  headers: Headers;
+};
+export type getOpdsTagBooksResponseError = (getOpdsTagBooksResponse400 | getOpdsTagBooksResponse404) & {
+  headers: Headers;
+};
+
+export type getOpdsTagBooksResponse = (getOpdsTagBooksResponseSuccess | getOpdsTagBooksResponseError)
+
+export const getGetOpdsTagBooksUrl = (tagId: string,
+    params?: GetOpdsTagBooksParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/opds/tags/${tagId}?${stringifiedParams}` : `/opds/tags/${tagId}`
+}
+
+/**
+ * @summary Lists OPDS books for one tag.
+ */
+export const getOpdsTagBooks = async (tagId: string,
+    params?: GetOpdsTagBooksParams, options?: RequestInit): Promise<getOpdsTagBooksResponse> => {
+
+  return orvalFetch<getOpdsTagBooksResponse>(getGetOpdsTagBooksUrl(tagId,params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export type searchOpdsBooksResponse200 = {
+  data: void
+  status: 200
+}
+
+export type searchOpdsBooksResponse400 = {
+  data: ApiProblem
+  status: 400
+}
+
+export type searchOpdsBooksResponseSuccess = (searchOpdsBooksResponse200) & {
+  headers: Headers;
+};
+export type searchOpdsBooksResponseError = (searchOpdsBooksResponse400) & {
+  headers: Headers;
+};
+
+export type searchOpdsBooksResponse = (searchOpdsBooksResponseSuccess | searchOpdsBooksResponseError)
+
+export const getSearchOpdsBooksUrl = (params?: SearchOpdsBooksParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/opds/search?${stringifiedParams}` : `/opds/search`
+}
+
+/**
+ * @summary Searches OPDS books and comics.
+ */
+export const searchOpdsBooks = async (params?: SearchOpdsBooksParams, options?: RequestInit): Promise<searchOpdsBooksResponse> => {
+
+  return orvalFetch<searchOpdsBooksResponse>(getSearchOpdsBooksUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export type getOpdsBookResponse200 = {
+  data: void
+  status: 200
+}
+
+export type getOpdsBookResponse404 = {
+  data: ApiProblem
+  status: 404
+}
+
+export type getOpdsBookResponseSuccess = (getOpdsBookResponse200) & {
+  headers: Headers;
+};
+export type getOpdsBookResponseError = (getOpdsBookResponse404) & {
+  headers: Headers;
+};
+
+export type getOpdsBookResponse = (getOpdsBookResponseSuccess | getOpdsBookResponseError)
+
+export const getGetOpdsBookUrl = (bookId: string,) => {
+
+
+
+
+  return `/opds/books/${bookId}`
+}
+
+/**
+ * @summary Gets one OPDS book entry.
+ */
+export const getOpdsBook = async (bookId: string, options?: RequestInit): Promise<getOpdsBookResponse> => {
+
+  return orvalFetch<getOpdsBookResponse>(getGetOpdsBookUrl(bookId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export type downloadOpdsBookResponse200 = {
+  data: void
+  status: 200
+}
+
+export type downloadOpdsBookResponse206 = {
+  data: void
+  status: 206
+}
+
+export type downloadOpdsBookResponse404 = {
+  data: ApiProblem
+  status: 404
+}
+
+export type downloadOpdsBookResponseSuccess = (downloadOpdsBookResponse200 | downloadOpdsBookResponse206) & {
+  headers: Headers;
+};
+export type downloadOpdsBookResponseError = (downloadOpdsBookResponse404) & {
+  headers: Headers;
+};
+
+export type downloadOpdsBookResponse = (downloadOpdsBookResponseSuccess | downloadOpdsBookResponseError)
+
+export const getDownloadOpdsBookUrl = (bookId: string,) => {
+
+
+
+
+  return `/opds/books/${bookId}/download`
+}
+
+/**
+ * @summary Downloads one OPDS book source file.
+ */
+export const downloadOpdsBook = async (bookId: string, options?: RequestInit): Promise<downloadOpdsBookResponse> => {
+
+  return orvalFetch<downloadOpdsBookResponse>(getDownloadOpdsBookUrl(bookId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export type getOpdsBookCoverResponse200 = {
+  data: void
+  status: 200
+}
+
+export type getOpdsBookCoverResponse206 = {
+  data: void
+  status: 206
+}
+
+export type getOpdsBookCoverResponse404 = {
+  data: ApiProblem
+  status: 404
+}
+
+export type getOpdsBookCoverResponseSuccess = (getOpdsBookCoverResponse200 | getOpdsBookCoverResponse206) & {
+  headers: Headers;
+};
+export type getOpdsBookCoverResponseError = (getOpdsBookCoverResponse404) & {
+  headers: Headers;
+};
+
+export type getOpdsBookCoverResponse = (getOpdsBookCoverResponseSuccess | getOpdsBookCoverResponseError)
+
+export const getGetOpdsBookCoverUrl = (bookId: string,) => {
+
+
+
+
+  return `/opds/books/${bookId}/cover`
+}
+
+/**
+ * @summary Streams one OPDS book cover image.
+ */
+export const getOpdsBookCover = async (bookId: string, options?: RequestInit): Promise<getOpdsBookCoverResponse> => {
+
+  return orvalFetch<getOpdsBookCoverResponse>(getGetOpdsBookCoverUrl(bookId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export type getOpdsOpenSearchResponse200 = {
+  data: void
+  status: 200
+}
+
+export type getOpdsOpenSearchResponseSuccess = (getOpdsOpenSearchResponse200) & {
+  headers: Headers;
+};
+;
+
+export type getOpdsOpenSearchResponse = (getOpdsOpenSearchResponseSuccess)
+
+export const getGetOpdsOpenSearchUrl = () => {
+
+
+
+
+  return `/opds/opensearch.xml`
+}
+
+/**
+ * @summary Gets the OPDS OpenSearch descriptor.
+ */
+export const getOpdsOpenSearch = async ( options?: RequestInit): Promise<getOpdsOpenSearchResponse> => {
+
+  return orvalFetch<getOpdsOpenSearchResponse>(getGetOpdsOpenSearchUrl(),
   {
     ...options,
     method: 'GET'

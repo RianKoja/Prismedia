@@ -13,6 +13,12 @@ public interface ICollectionRefreshPersistence {
     Task<CollectionRefreshData?> GetDynamicCollectionAsync(Guid collectionEntityId, CancellationToken cancellationToken);
 
     /// <summary>
+    /// Lists every dynamic or hybrid collection that has a rule tree and can be refreshed by
+    /// the scheduled aggregate collection refresh job.
+    /// </summary>
+    Task<IReadOnlyList<CollectionRefreshData>> ListDynamicCollectionsAsync(CancellationToken cancellationToken);
+
+    /// <summary>
     /// Atomically replaces all dynamic items in a collection with the given resolved items,
     /// preserving any manual items, and updates the collection's item count and refresh timestamp.
     /// </summary>

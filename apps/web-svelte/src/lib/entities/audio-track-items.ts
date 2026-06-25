@@ -2,6 +2,12 @@ import type { AudioTrackDetail, EntityThumbnail } from "$lib/api/generated/model
 import { getCapability } from "$lib/api/capabilities";
 import type { AudioTrackListItemDto } from "$lib/entities/media-view-models";
 
+export interface EntityThumbnailTrackItemOptions {
+  sectionLabel?: string | null;
+  sectionKey?: string | null;
+  libraryId?: string | null;
+}
+
 function parseDurationString(value: string | null | undefined): number | null {
   if (!value) return null;
   const match = /^-?(?:(\d+)\.)?(\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?$/.exec(value);
@@ -36,6 +42,7 @@ function toNumber(value: number | string | null | undefined): number | null {
 export function entityThumbnailToTrackItem(
   thumb: EntityThumbnail,
   libraryId: string | null,
+  options: EntityThumbnailTrackItemOptions = {},
 ): AudioTrackListItemDto {
   const durationMeta = thumb.meta.find((m) => m.icon === "duration");
   const codecMeta = thumb.meta.find((m) => m.icon === "audio");
@@ -57,9 +64,10 @@ export function entityThumbnailToTrackItem(
     embeddedArtist: null,
     embeddedAlbum: null,
     trackNumber: toNumber(thumb.sortOrder) ?? null,
-    sectionLabel: sectionMeta?.label ?? null,
+    sectionLabel: options.sectionLabel ?? sectionMeta?.label ?? null,
+    sectionKey: options.sectionKey ?? null,
     waveformPath: null,
-    libraryId,
+    libraryId: options.libraryId ?? libraryId,
     sortOrder: toNumber(thumb.sortOrder) ?? 0,
     studioId: null,
     performers: [],
@@ -98,6 +106,7 @@ export function audioTrackDetailToListItem(detail: AudioTrackDetail): AudioTrack
     embeddedAlbum: detail.embeddedAlbum ?? null,
     trackNumber: toNumber(detail.sortOrder) ?? null,
     sectionLabel: null,
+    sectionKey: null,
     waveformPath: waveformFile?.path ?? null,
     libraryId: detail.parentEntityId ?? null,
     sortOrder: toNumber(detail.sortOrder) ?? 0,

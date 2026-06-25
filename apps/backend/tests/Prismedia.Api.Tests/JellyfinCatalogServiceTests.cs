@@ -56,6 +56,27 @@ public sealed class JellyfinCatalogServiceTests {
     }
 
     [Fact]
+    public async Task UserViewsReturnAudioCollectionsAsPlaylists() {
+        var collectionId = Guid.NewGuid();
+        var trackId = Guid.NewGuid();
+        var entities = new FakeEntityReadService();
+        entities.ListByKind["collection"] = [Thumb(collectionId, EntityKind.Collection, "Mixtape", coverUrl: "/assets/library/mixtape.jpg")];
+        var collections = new FakeCollections();
+        collections.Items[collectionId] = [
+            CollectionItem(collectionId, Thumb(trackId, EntityKind.AudioTrack, "Opening Track"))
+        ];
+        var catalog = new JellyfinCatalogService(entities, collections);
+
+        var views = await catalog.GetUserViewsWithArtworkAsync(ServerId, hideNsfw: false, CancellationToken.None);
+
+        var collection = Assert.Single(views.Items, view => view.Id == collectionId);
+        Assert.Equal(JellyfinProtocol.ItemTypes.Playlist, collection.Type);
+        Assert.Equal(JellyfinProtocol.MediaTypes.Audio, collection.MediaType);
+        Assert.Null(collection.CollectionType);
+        Assert.True(collection.IsFolder);
+    }
+
+    [Fact]
     public async Task UserViewsReturnNoCollectionRowsWhenThereAreNoVisibleCollections() {
         var hiddenCollectionId = Guid.NewGuid();
         var entities = new FakeEntityReadService();
@@ -765,6 +786,38 @@ public sealed class JellyfinCatalogServiceTests {
     }
 
     [Fact]
+    public async Task BrowsingAudioCollectionFlattensAlbumMembersToPlaylistTracks() {
+        var collectionId = Guid.NewGuid();
+        var artistId = Guid.NewGuid();
+        var albumId = Guid.NewGuid();
+        var trackId = Guid.NewGuid();
+        var entities = new FakeEntityReadService();
+        entities.Cards[collectionId] = Card(collectionId, EntityKind.Collection, "Mixtape", parentId: null, children: []);
+        entities.Cards[artistId] = MusicCard(artistId, EntityKind.MusicArtist, "A Band", parentId: null, children: []);
+        entities.Cards[albumId] = MusicCard(albumId, EntityKind.AudioLibrary, "First Album", parentId: artistId,
+            children: [new EntityGroup(EntityKind.AudioTrack, "Tracks", [MusicThumb(trackId, EntityKind.AudioTrack, "Opening Track", albumId, sortOrder: 0)])]);
+        var collections = new FakeCollections();
+        collections.Items[collectionId] = [
+            CollectionItem(collectionId, Thumb(albumId, EntityKind.AudioLibrary, "First Album", parentId: artistId))
+        ];
+        var catalog = new JellyfinCatalogService(entities, collections);
+
+        var result = await catalog.GetItemsAsync(
+            Query(parentId: collectionId),
+            ServerId,
+            hideNsfw: false,
+            CancellationToken.None);
+
+        var track = Assert.Single(result.Items);
+        Assert.Equal(trackId, track.Id);
+        Assert.Equal(JellyfinProtocol.ItemTypes.Audio, track.Type);
+        Assert.Equal(collectionId, track.ParentId);
+        Assert.Equal("First Album", track.Album);
+        Assert.Equal(albumId, track.AlbumId);
+        Assert.Equal("A Band", track.AlbumArtist);
+    }
+
+    [Fact]
     public async Task BrowsingAlbumAdvertisesAlbumArtworkForTracksBeforeLogoFallback() {
         var artistId = Guid.NewGuid();
         var albumId = Guid.NewGuid();
@@ -902,6 +955,17 @@ public sealed class JellyfinCatalogServiceTests {
             IsFavorite: false,
             IsNsfw: isNsfw,
             IsOrganized: true);
+
+    private static CollectionItemDetail CollectionItem(Guid collectionId, EntityThumbnail entity) =>
+        new(
+            Guid.NewGuid(),
+            collectionId,
+            entity.Kind,
+            entity.Id,
+            CollectionItemSource.Manual,
+            0,
+            DateTimeOffset.UtcNow,
+            entity);
 
     private static JsonDocument ToJsonDocument<T>(T value) =>
         JsonDocument.Parse(JsonSerializer.Serialize(value, JellyfinJson));
@@ -1045,12 +1109,16 @@ public sealed class JellyfinCatalogServiceTests {
 
     private sealed class FakeCollections : ICollectionItemReadService {
         public Dictionary<Guid, string> Covers { get; } = new();
+        public Dictionary<Guid, IReadOnlyList<CollectionItemDetail>> Items { get; } = new();
 
         public Task<CollectionItemsResponse> ListItemsAsync(
             Guid collectionId,
             bool hideNsfw,
             CancellationToken cancellationToken) =>
-            Task.FromResult(new CollectionItemsResponse([]));
+            Task.FromResult(new CollectionItemsResponse(
+                (Items.GetValueOrDefault(collectionId) ?? [])
+                .Where(item => !hideNsfw || !item.Entity.IsNsfw)
+                .ToArray()));
 
         public Task<IReadOnlyDictionary<Guid, string>> ResolveCoverPathsAsync(
             IReadOnlyList<Guid> collectionIds,

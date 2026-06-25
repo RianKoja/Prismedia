@@ -59,6 +59,7 @@
   import MetadataCardGrid from "$lib/components/MetadataCardGrid.svelte";
   import EntityTagChips from "./EntityTagChips.svelte";
   import EntityCastAndCrewSection from "./EntityCastAndCrewSection.svelte";
+  import EntityActionButton from "./EntityActionButton.svelte";
   import MarkdownEditor from "$lib/components/forms/MarkdownEditor.svelte";
   import EntityPicker from "$lib/components/forms/EntityPicker.svelte";
   import CreditsEditor from "$lib/components/forms/CreditsEditor.svelte";
@@ -1230,80 +1231,63 @@
               <div class="action-group">
                 {#if canEdit}
                   {#if isEditingActiveTab}
-                    <button
-                      type="button"
-                      class="entity-action-button entity-action-button-active"
-                      onclick={cancelEdit}
+                    <EntityActionButton
+                      label="Editing"
+                      icon={PencilOff}
+                      active
                       disabled={savingEdit}
-                      aria-label={cancelEditActionLabel}
-                    >
-                      <PencilOff class="h-3.5 w-3.5" />
-                      <span class="entity-action-button-label">Editing</span>
-                    </button>
+                      ariaLabel={cancelEditActionLabel}
+                      onClick={cancelEdit}
+                    />
                   {:else}
-                    <button
-                      type="button"
-                      class="entity-action-button"
-                      onclick={() => startEdit(activeTab ?? undefined)}
-                      aria-label={editActionLabel}
-                    >
-                      <Pencil class="h-3.5 w-3.5" />
-                      <span class="entity-action-button-label">Edit</span>
-                    </button>
+                    <EntityActionButton
+                      label="Edit"
+                      icon={Pencil}
+                      ariaLabel={editActionLabel}
+                      onClick={() => startEdit(activeTab ?? undefined)}
+                    />
                   {/if}
                 {/if}
                 {#each visibleActionButtons as action (action.id)}
-                  {@const ActionIcon = action.icon}
                   {#if action.href && !action.disabled}
-                    <a
-                      class={[
-                        "entity-action-button",
-                        action.active && "entity-action-button-active",
-                        action.variant === "primary" && "entity-action-button-primary",
-                        action.variant === "danger" && "entity-action-button-danger",
-                      ]}
+                    <EntityActionButton
+                      label={action.label}
+                      icon={action.icon}
                       href={action.href}
-                      aria-label={action.ariaLabel ?? action.label}
+                      active={action.active}
+                      variant={action.variant ?? "default"}
+                      iconClass={action.iconClass}
+                      iconFill={action.iconFill}
+                      ariaLabel={action.ariaLabel ?? action.label}
                       title={action.title ?? action.ariaLabel ?? action.label}
-                    >
-                      <ActionIcon class={action.iconClass ?? "h-3.5 w-3.5"} fill={action.iconFill} />
-                      <span class="entity-action-button-label">{action.label}</span>
-                    </a>
+                    />
                   {:else if action.disabled && action.disabledHint}
                     <span class="entity-action-flyout-host">
-                      <button
-                        type="button"
-                        class={[
-                          "entity-action-button",
-                          "entity-action-button-muted",
-                          action.variant === "danger" && "entity-action-button-danger",
-                        ]}
-                        aria-disabled="true"
-                        aria-label={action.ariaLabel ?? action.label}
-                        onclick={() => void action.onClick?.()}
-                      >
-                        <ActionIcon class={action.iconClass ?? "h-3.5 w-3.5"} fill={action.iconFill} />
-                        <span class="entity-action-button-label">{action.label}</span>
-                      </button>
+                      <EntityActionButton
+                        label={action.label}
+                        icon={action.icon}
+                        muted
+                        ariaDisabled
+                        variant={action.variant ?? "default"}
+                        iconClass={action.iconClass}
+                        iconFill={action.iconFill}
+                        ariaLabel={action.ariaLabel ?? action.label}
+                      />
                       <span class="entity-action-flyout" role="tooltip">{action.disabledHint}</span>
                     </span>
                   {:else}
-                    <button
-                      type="button"
-                      class={[
-                        "entity-action-button",
-                        action.active && "entity-action-button-active",
-                        action.variant === "primary" && "entity-action-button-primary",
-                        action.variant === "danger" && "entity-action-button-danger",
-                      ]}
+                    <EntityActionButton
+                      label={action.label}
+                      icon={action.icon}
+                      active={action.active}
+                      variant={action.variant ?? "default"}
                       disabled={action.disabled}
-                      aria-label={action.ariaLabel ?? action.label}
+                      iconClass={action.iconClass}
+                      iconFill={action.iconFill}
+                      ariaLabel={action.ariaLabel ?? action.label}
                       title={action.title ?? action.ariaLabel ?? action.label}
-                      onclick={() => void action.onClick?.()}
-                    >
-                      <ActionIcon class={action.iconClass ?? "h-3.5 w-3.5"} fill={action.iconFill} />
-                      <span class="entity-action-button-label">{action.label}</span>
-                    </button>
+                      onClick={action.onClick}
+                    />
                   {/if}
                 {/each}
 

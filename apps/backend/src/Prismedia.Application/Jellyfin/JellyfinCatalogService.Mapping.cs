@@ -229,6 +229,20 @@ public sealed partial class JellyfinCatalogService {
         };
     }
 
+    private static JellyfinBaseItemDto AsPlaylistCollection(
+        JellyfinBaseItemDto item,
+        int? trackCount = null) =>
+        item with {
+            Type = JellyfinProtocol.ItemTypes.Playlist,
+            CollectionType = null,
+            MediaType = JellyfinProtocol.MediaTypes.Audio,
+            LocationType = "FileSystem",
+            IsFolder = true,
+            ChildCount = trackCount ?? item.ChildCount,
+            RecursiveItemCount = trackCount ?? item.RecursiveItemCount,
+            PrimaryImageAspectRatio = 1.0
+        };
+
     private static JellyfinBaseItemDto VirtualFolder(
         Guid id,
         string name,

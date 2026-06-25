@@ -26,6 +26,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - Added EPUB and PDF scanning plus built-in readers with paged or continuous layouts, zoom, search, table of contents/outline support, links, downloads, and saved reading progress.
 - Added configurable sidebar and mobile navigation sections, with rename, reorder, hide, collapse, reset, pinned mobile destinations, and server-saved layout preferences.
 - Added dynamic and hybrid collections, including rule previews, media-specific filters, library-root filters, watched/progress filters, and collection cover modes.
+- Added audio-capable collections that can act like playlists when they include artists, albums, or tracks, including a reusable Audio tab and Jellyfin playlist exposure for compatible clients.
+- Added automatic hourly collection refresh, enabled by default, so dynamic collection rules stay current without a manual refresh.
 - Added durable Identify queues, bulk identify, provider seeking, auto identify settings, cascade child matching, live apply progress, and review screens for movies, shows, seasons, episodes, books, music, galleries, people, studios, and tags.
 - Added first-class editing for metadata, credits, roles, characters, studios, tags, links, dates, provider IDs, ratings, classification, poster/header artwork, and related entities across detail pages.
 - Added operational controls for background jobs, worker status, transcode cache limits, file uploads from the Files tab, reversible scan exclusions, API access profiles, and centralized app settings.

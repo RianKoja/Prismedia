@@ -11,6 +11,11 @@ public sealed record VisibilitySettings(string DefaultMode, bool LanAutoEnable);
 public sealed record ScanSettings(bool AutoScanEnabled, int IntervalMinutes);
 
 /// <summary>
+/// Recurring collection refresh scheduling settings.
+/// </summary>
+public sealed record CollectionRefreshSettings(bool AutoRefreshEnabled);
+
+/// <summary>
 /// Auto-identify settings that drive plugin-based identification during library scans.
 /// </summary>
 /// <param name="Enabled">Whether scanned media is auto-identified through enabled plugins.</param>

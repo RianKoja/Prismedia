@@ -17,8 +17,7 @@ public sealed class RefreshCollectionJobHandler(
     public async Task HandleAsync(JobContext context, CancellationToken cancellationToken) {
         var collectionId = ParseEntityId(context.Job.TargetEntityId);
         if (collectionId is null) {
-            logger.LogWarning("RefreshCollection: no target entity ID provided");
-            await context.ReportProgressAsync(100, "No collection ID", cancellationToken);
+            await RefreshAllAsync(context, cancellationToken);
             return;
         }
 
@@ -29,19 +28,63 @@ public sealed class RefreshCollectionJobHandler(
             return;
         }
 
-        await context.ReportProgressAsync(10, "Evaluating rules", cancellationToken);
+        await RefreshOneAsync(collection, context, cancellationToken);
+    }
+
+    private async Task RefreshAllAsync(JobContext context, CancellationToken cancellationToken) {
+        var collections = await persistence.ListDynamicCollectionsAsync(cancellationToken);
+        if (collections.Count == 0) {
+            await context.ReportProgressAsync(100, "No dynamic collections to refresh", cancellationToken);
+            return;
+        }
+
+        var refreshed = 0;
+        var resolved = 0;
+        for (var index = 0; index < collections.Count; index++) {
+            var collection = collections[index];
+            var progress = Math.Clamp((int)Math.Floor(index / (double)collections.Count * 95), 0, 95);
+            await context.ReportProgressAsync(progress, $"Refreshing {collection.Title}", cancellationToken);
+            var count = await RefreshOneAsync(collection, context, cancellationToken, reportProgress: false);
+            refreshed++;
+            resolved += count;
+        }
+
+        logger.LogInformation(
+            "RefreshCollection: refreshed {CollectionCount} dynamic collection(s) with {ItemCount} resolved item(s)",
+            refreshed, resolved);
+
+        await context.ReportProgressAsync(
+            100,
+            $"Refreshed {refreshed} collections with {resolved} items",
+            cancellationToken);
+    }
+
+    private async Task<int> RefreshOneAsync(
+        CollectionRefreshData collection,
+        JobContext context,
+        CancellationToken cancellationToken,
+        bool reportProgress = true) {
+        if (reportProgress) {
+            await context.ReportProgressAsync(10, "Evaluating rules", cancellationToken);
+        }
 
         var matches = await ruleEngine.EvaluateAsync(collection.RuleTreeJson, cancellationToken);
 
-        await context.ReportProgressAsync(50, $"Resolved {matches.Count} entities, updating membership", cancellationToken);
+        if (reportProgress) {
+            await context.ReportProgressAsync(50, $"Resolved {matches.Count} entities, updating membership", cancellationToken);
+        }
 
-        await persistence.RefreshCollectionItemsAsync(collectionId.Value, matches, cancellationToken);
+        await persistence.RefreshCollectionItemsAsync(collection.EntityId, matches, cancellationToken);
 
         logger.LogInformation(
             "RefreshCollection: updated {Title} with {Count} dynamic items",
             collection.Title, matches.Count);
 
-        await context.ReportProgressAsync(100, $"Refreshed with {matches.Count} items", cancellationToken);
+        if (reportProgress) {
+            await context.ReportProgressAsync(100, $"Refreshed with {matches.Count} items", cancellationToken);
+        }
+
+        return matches.Count;
     }
 
     private static Guid? ParseEntityId(string? value) =>

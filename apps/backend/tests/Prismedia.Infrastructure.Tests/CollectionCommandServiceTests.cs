@@ -203,21 +203,27 @@ public sealed class CollectionCommandServiceTests {
     }
 
     [Fact]
-    public async Task AddItemsAsyncAllowsSeriesButRejectsNestedCollections() {
+    public async Task AddItemsAsyncAllowsAudioContainersButRejectsNestedCollections() {
         await using var db = CreateContext();
         var collectionId = SeedCollection(db, "Manual");
         var seriesId = SeedEntity(db, EntityKindRegistry.VideoSeries.Code, "The Chair Company");
+        var artistId = SeedEntity(db, EntityKindRegistry.MusicArtist.Code, "A Band");
+        var albumId = SeedEntity(db, EntityKindRegistry.AudioLibrary.Code, "A Record");
         var nestedCollectionId = SeedCollection(db, "Nested");
         await db.SaveChangesAsync();
         var service = CreateService(db);
 
         var added = await service.AddItemsAsync(
             collectionId,
-            new CollectionAddItemsRequest([new CollectionItemReference(EntityKind.VideoSeries, seriesId)]),
+            new CollectionAddItemsRequest([
+                new CollectionItemReference(EntityKind.VideoSeries, seriesId),
+                new CollectionItemReference(EntityKind.MusicArtist, artistId),
+                new CollectionItemReference(EntityKind.AudioLibrary, albumId),
+            ]),
             CancellationToken.None);
 
         Assert.Equal(CollectionCommandStatus.Succeeded, added.Status);
-        Assert.Equal(seriesId, Assert.Single(db.CollectionItemDetails).ItemEntityId);
+        Assert.Equal([seriesId, artistId, albumId], db.CollectionItemDetails.OrderBy(row => row.SortOrder).Select(row => row.ItemEntityId).ToArray());
 
         var rejected = await service.AddItemsAsync(
             collectionId,
@@ -439,6 +445,9 @@ public sealed class CollectionCommandServiceTests {
             Guid collectionEntityId,
             CancellationToken cancellationToken) =>
             Task.FromResult<CollectionRefreshData?>(null);
+
+        public Task<IReadOnlyList<CollectionRefreshData>> ListDynamicCollectionsAsync(CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<CollectionRefreshData>>([]);
 
         public Task RefreshCollectionItemsAsync(
             Guid collectionEntityId,

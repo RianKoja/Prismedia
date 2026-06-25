@@ -117,7 +117,7 @@ public sealed partial class JellyfinCatalogService {
         CancellationToken cancellationToken) {
         var collections = await FetchAllOfKindAsync(CollectionsLibraryView.Kind, visibility, cancellationToken);
         collections = await FillCollectionCoversAsync(collections, visibility, cancellationToken);
-        return collections.Select(item => MapThumbnail(item, serverId)).ToArray();
+        return await MapCollectionThumbnailsAsync(collections, serverId, visibility, cancellationToken);
     }
 
     /// <summary>
@@ -277,6 +277,10 @@ public sealed partial class JellyfinCatalogService {
         ItemContext? context,
         JellyfinContentVisibility visibility,
         CancellationToken cancellationToken) {
+        if (detail.Kind == EntityKind.Collection) {
+            return await MapCollectionDetailAsync(detail, serverId, context, visibility, cancellationToken);
+        }
+
         if (detail.Kind != EntityKind.Movie) {
             return MapCard(detail, serverId, context);
         }
@@ -373,7 +377,9 @@ public sealed partial class JellyfinCatalogService {
                 viewItems = await FillCollectionCoversAsync(viewItems, visibility, cancellationToken);
             }
 
-            var mapped = await MapPlaybackShelfItemsAsync(viewItems, serverId, visibility, cancellationToken);
+            var mapped = view.Id == CollectionsViewId
+                ? await MapCollectionThumbnailsAsync(viewItems, serverId, visibility, cancellationToken)
+                : await MapPlaybackShelfItemsAsync(viewItems, serverId, visibility, cancellationToken);
             return new JellyfinQueryResult<JellyfinBaseItemDto>(mapped, viewResponse.TotalCount, 0);
         }
 
@@ -676,6 +682,7 @@ public sealed partial class JellyfinCatalogService {
                 thumbnails = thumbnails.Where(item => item.ParentEntityId is null).ToArray();
             } else if (view.Id == CollectionsViewId) {
                 thumbnails = await FillCollectionCoversAsync(thumbnails, visibility, cancellationToken);
+                return await MapCollectionThumbnailsAsync(thumbnails, serverId, visibility, cancellationToken);
             }
 
             return thumbnails.Select(item => MapThumbnail(item, serverId)).ToArray();
@@ -698,6 +705,10 @@ public sealed partial class JellyfinCatalogService {
 
         if (parent.Kind == EntityKind.Collection) {
             var items = await _collections.ListItemsAsync(parentId, visibility.HideNsfw, cancellationToken);
+            if (IsAudioCapableCollection(items.Items)) {
+                return await CollectionPlaylistChildrenAsync(items.Items, parentId, serverId, visibility, cancellationToken);
+            }
+
             return items.Items
                 .Where(item => visibility.Allows(item.Entity))
                 .Select(item => MapCollectionItem(item, serverId, parentId))
@@ -1175,6 +1186,136 @@ public sealed partial class JellyfinCatalogService {
                 : item)
             .ToArray();
     }
+
+    private async Task<JellyfinBaseItemDto> MapCollectionThumbnailAsync(
+        EntityThumbnail item,
+        string serverId,
+        JellyfinContentVisibility visibility,
+        CancellationToken cancellationToken) {
+        var dto = MapThumbnail(item, serverId);
+        var collectionItems = await _collections.ListItemsAsync(item.Id, visibility.HideNsfw, cancellationToken);
+        return IsAudioCapableCollection(collectionItems.Items)
+            ? AsPlaylistCollection(dto)
+            : dto;
+    }
+
+    private async Task<IReadOnlyList<JellyfinBaseItemDto>> MapCollectionThumbnailsAsync(
+        IReadOnlyList<EntityThumbnail> items,
+        string serverId,
+        JellyfinContentVisibility visibility,
+        CancellationToken cancellationToken) {
+        var mapped = new List<JellyfinBaseItemDto>(items.Count);
+        foreach (var item in items) {
+            mapped.Add(await MapCollectionThumbnailAsync(item, serverId, visibility, cancellationToken));
+        }
+
+        return mapped;
+    }
+
+    private async Task<JellyfinBaseItemDto> MapCollectionDetailAsync(
+        IEntityCard item,
+        string serverId,
+        ItemContext? context,
+        JellyfinContentVisibility visibility,
+        CancellationToken cancellationToken) {
+        var dto = MapCard(item, serverId, context);
+        var collectionItems = await _collections.ListItemsAsync(item.Id, visibility.HideNsfw, cancellationToken);
+        if (!IsAudioCapableCollection(collectionItems.Items)) {
+            return dto;
+        }
+
+        var tracks = await CollectionPlaylistChildrenAsync(collectionItems.Items, item.Id, serverId, visibility, cancellationToken);
+        return AsPlaylistCollection(dto, tracks.Count);
+    }
+
+    private async Task<IReadOnlyList<JellyfinBaseItemDto>> CollectionPlaylistChildrenAsync(
+        IReadOnlyList<CollectionItemDetail> items,
+        Guid collectionId,
+        string serverId,
+        JellyfinContentVisibility visibility,
+        CancellationToken cancellationToken) {
+        var result = new List<JellyfinBaseItemDto>();
+        foreach (var item in items) {
+            if (!visibility.Allows(item.Entity)) {
+                continue;
+            }
+
+            if (item.Entity.Kind == EntityKind.AudioTrack) {
+                var context = await TrackContextForThumbnailAsync(item.Entity, visibility, cancellationToken);
+                result.Add(MapThumbnail(item.Entity, serverId, collectionId, context));
+            } else if (item.Entity.Kind == EntityKind.AudioLibrary) {
+                result.AddRange(await CollectionAlbumTracksAsync(item.Entity.Id, collectionId, serverId, visibility, cancellationToken));
+            } else if (item.Entity.Kind == EntityKind.MusicArtist) {
+                result.AddRange(await CollectionArtistTracksAsync(item.Entity.Id, collectionId, serverId, visibility, cancellationToken));
+            }
+        }
+
+        return result;
+    }
+
+    private async Task<IReadOnlyList<JellyfinBaseItemDto>> CollectionArtistTracksAsync(
+        Guid artistId,
+        Guid collectionId,
+        string serverId,
+        JellyfinContentVisibility visibility,
+        CancellationToken cancellationToken) {
+        var artist = await GetVisibleCardAsync(artistId, visibility, cancellationToken);
+        if (artist is null || artist.Kind != EntityKind.MusicArtist) {
+            return [];
+        }
+
+        var result = new List<JellyfinBaseItemDto>();
+        var albums = artist.ChildrenByKind
+            .SelectMany(group => VisibleEntities(group.Entities, visibility))
+            .Where(child => child.Kind == EntityKind.AudioLibrary)
+            .OrderBy(child => child.SortOrder ?? int.MaxValue)
+            .ThenBy(child => child.Title, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        foreach (var album in albums) {
+            result.AddRange(await CollectionAlbumTracksAsync(album.Id, collectionId, serverId, visibility, cancellationToken));
+        }
+
+        return result;
+    }
+
+    private async Task<IReadOnlyList<JellyfinBaseItemDto>> CollectionAlbumTracksAsync(
+        Guid albumId,
+        Guid collectionId,
+        string serverId,
+        JellyfinContentVisibility visibility,
+        CancellationToken cancellationToken) {
+        var album = await GetVisibleCardAsync(albumId, visibility, cancellationToken);
+        if (album is null || album.Kind != EntityKind.AudioLibrary) {
+            return [];
+        }
+
+        var context = await ParentContextForAsync(album, visibility, cancellationToken);
+        return album.ChildrenByKind
+            .SelectMany(group => VisibleEntities(group.Entities, visibility))
+            .Where(child => child.Kind == EntityKind.AudioTrack)
+            .OrderBy(child => child.SortOrder ?? int.MaxValue)
+            .ThenBy(child => child.Title, StringComparer.OrdinalIgnoreCase)
+            .Select(track => MapThumbnail(track, serverId, collectionId, context))
+            .ToArray();
+    }
+
+    private async Task<ItemContext?> TrackContextForThumbnailAsync(
+        EntityThumbnail track,
+        JellyfinContentVisibility visibility,
+        CancellationToken cancellationToken) {
+        if (track.ParentEntityId is not { } albumId) {
+            return null;
+        }
+
+        var album = await GetVisibleCardAsync(albumId, visibility, cancellationToken);
+        return album?.Kind == EntityKind.AudioLibrary
+            ? await ParentContextForAsync(album, visibility, cancellationToken)
+            : null;
+    }
+
+    private static bool IsAudioCapableCollection(IReadOnlyList<CollectionItemDetail> items) =>
+        items.Any(item => item.Entity.Kind is EntityKind.AudioTrack or EntityKind.AudioLibrary or EntityKind.MusicArtist);
 
     private static JellyfinBaseItemDto? MapCollectionItem(CollectionItemDetail item, string serverId, Guid collectionId) =>
         item.Entity.Kind is EntityKind.Video or EntityKind.Movie or EntityKind.VideoSeries or EntityKind.VideoSeason

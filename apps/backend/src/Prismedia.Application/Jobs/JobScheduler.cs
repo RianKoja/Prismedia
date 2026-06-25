@@ -23,6 +23,7 @@ public sealed class JobScheduler(
         while (!stoppingToken.IsCancellationRequested) {
             try {
                 await ScheduleRecurringScansAsync(stoppingToken);
+                await ScheduleRecurringCollectionRefreshAsync(stoppingToken);
                 await ScheduleRecurringBackupsAsync(stoppingToken);
             } catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) {
                 break;
@@ -117,8 +118,37 @@ public sealed class JobScheduler(
             new EnqueueJobRequest(
                 JobType.DatabaseBackup,
                 TargetLabel: "Daily database backup",
-                Priority: -100),
+            Priority: -100),
             cancellationToken);
+    }
+
+    internal async Task ScheduleRecurringCollectionRefreshAsync(CancellationToken cancellationToken) {
+        await using var scope = scopeFactory.CreateAsyncScope();
+        var settings = scope.ServiceProvider.GetRequiredService<SettingsService>();
+        var collectionSettings = await settings.GetCollectionRefreshSettingsAsync(cancellationToken);
+        if (!collectionSettings.AutoRefreshEnabled) {
+            return;
+        }
+
+        var now = (timeProvider ?? TimeProvider.System).GetUtcNow();
+        var windowStart = GetWindowStart(now, TimeSpan.FromHours(1));
+        if (now - windowStart >= CheckInterval) {
+            return;
+        }
+
+        var queue = scope.ServiceProvider.GetRequiredService<IJobQueueService>();
+        if (await queue.HasPendingAsync(JobType.RefreshCollection, null, cancellationToken)) {
+            return;
+        }
+
+        await queue.EnqueueAsync(
+            new EnqueueJobRequest(
+                JobType.RefreshCollection,
+                TargetLabel: "Hourly collection refresh",
+                Priority: 0),
+            cancellationToken);
+
+        logger.LogInformation("Scheduled hourly collection refresh job.");
     }
 
     private static DateTimeOffset GetWindowStart(DateTimeOffset now, TimeSpan interval) {

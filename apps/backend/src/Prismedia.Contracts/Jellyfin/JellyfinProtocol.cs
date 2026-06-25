@@ -96,6 +96,9 @@ public static class JellyfinProtocol {
         /// <summary>Collection / box set.</summary>
         public const string BoxSet = "BoxSet";
 
+        /// <summary>Manual playlist.</summary>
+        public const string Playlist = "Playlist";
+
         /// <summary>Performer / cast or crew member.</summary>
         public const string Person = "Person";
 
@@ -189,5 +192,8 @@ public static class JellyfinProtocol {
 
         /// <summary>Music library.</summary>
         public const string Music = "music";
+
+        /// <summary>Playlists library.</summary>
+        public const string Playlists = "playlists";
     }
 }

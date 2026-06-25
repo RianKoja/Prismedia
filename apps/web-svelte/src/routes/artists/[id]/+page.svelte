@@ -3,7 +3,7 @@
   import { page } from "$app/state";
   import { Disc3, Info, Play, Shuffle, SlidersHorizontal, Users } from "@lucide/svelte";
   import EntityDetailSkeleton from "$lib/components/entities/EntityDetailSkeleton.svelte";
-  import { fetchMusicArtist, fetchAudioLibrary, type MusicArtistDetail } from "$lib/api/media";
+  import { fetchMusicArtist, type MusicArtistDetail } from "$lib/api/media";
   import {
     updateEntityRating,
     updateEntityFlags,
@@ -18,13 +18,12 @@
   import { entityCardToDetailCard, type EntityDetailCardFull, type EntityDetailCredit, type EntityDetailTag } from "$lib/entities/entity-detail";
   import { CREDIT_ROLE } from "$lib/entities/entity-codes";
   import { resolveEntityHref } from "$lib/entities/entity-routes";
-  import type { AudioTrackListItemDto } from "$lib/entities/media-view-models";
   import {
     fetchOrderedEntityThumbnails,
     hydrateStandardRelationshipCards,
     thumbnailsToCards,
   } from "$lib/entities/entity-relationship-thumbnails";
-  import { entityThumbnailToTrackItem } from "$lib/entities/audio-track-items";
+  import { collectLibraryTracks } from "$lib/entities/audio-track-collections";
   import type { EntityThumbnailCard } from "$lib/entities/entity-thumbnail";
   import { useAudioPlayback, type PlaybackContext } from "$lib/stores/audio-playback.svelte";
   import EntityDetail, {
@@ -120,27 +119,13 @@
     };
   }
 
-  /** Walk a library and all of its nested sub-libraries, collecting ordered track items. */
-  async function collectLibraryTracks(libraryId: string): Promise<AudioTrackListItemDto[]> {
-    const detail = await fetchAudioLibrary(libraryId).catch(() => null);
-    if (!detail) return [];
-    const trackGroup = detail.childrenByKind.find((g) => g.kind === "audio-track");
-    const tracks = (trackGroup?.entities ?? [])
-      .map((thumb) => entityThumbnailToTrackItem(thumb, detail.id))
-      .sort((a, b) => a.sortOrder - b.sortOrder);
-    const subLibIds = detail.childrenByKind
-      .filter((g) => g.kind === "audio-library")
-      .flatMap((g) => g.entities.map((e) => e.id));
-    const subTracks = (await Promise.all(subLibIds.map(collectLibraryTracks))).flat();
-    return [...tracks, ...subTracks];
-  }
-
   async function playArtist(shuffle: boolean) {
     if (queueBusy || albumCards.length === 0) return;
     queueBusy = true;
     try {
       const albumIds = albumCards.map((c) => c.entity.id);
-      const tracks = (await Promise.all(albumIds.map(collectLibraryTracks))).flat();
+      const tracks = (await Promise.all(albumIds.map((id) => collectLibraryTracks(id))))
+        .flatMap((result) => result.tracks);
       if (tracks.length === 0) return;
       playback.play(tracks, shuffle ? undefined : tracks[0].id, artistContext(), { shuffle });
     } finally {

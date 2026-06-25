@@ -173,6 +173,14 @@ public sealed partial class SettingsService {
     }
 
     /// <summary>
+    /// Returns recurring collection refresh settings.
+    /// </summary>
+    public async Task<CollectionRefreshSettings> GetCollectionRefreshSettingsAsync(CancellationToken cancellationToken) {
+        var values = await GetValueMapAsync([AppSettingKeys.CollectionsAutoRefreshEnabled], cancellationToken);
+        return new CollectionRefreshSettings(GetBoolean(values, AppSettingKeys.CollectionsAutoRefreshEnabled));
+    }
+
+    /// <summary>
     /// Returns auto-identify settings used to drive plugin identification during scans.
     /// The stored confidence threshold is a 0–100 percentage and is returned here as a 0–1 fraction.
     /// </summary>

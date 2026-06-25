@@ -9,6 +9,7 @@ namespace Prismedia.Application.Settings;
 public static class AppSettingsRegistry {
     private const string Visibility = "visibility";
     private const string Scan = "scan";
+    private const string Collections = "collections";
     private const string Taxonomy = "taxonomy";
     private const string AutoIdentify = "autoIdentify";
     private const string Generation = "generation";
@@ -87,6 +88,17 @@ public static class AppSettingsRegistry {
                 min: 5,
                 max: 1440,
                 step: 5),
+
+            Boolean(
+                AppSettingKeys.CollectionsAutoRefreshEnabled,
+                Collections,
+                "Collections",
+                "Control recurring collection refresh jobs.",
+                21,
+                "Auto Refresh Collections",
+                "When on, Prismedia queues an hourly job at the top of the hour to evaluate dynamic collection rules and update collection membership.",
+                true,
+                10),
 
             Boolean(
                 AppSettingKeys.TaxonomyRemoveOrphanTags,

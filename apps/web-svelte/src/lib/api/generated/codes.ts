@@ -351,6 +351,7 @@ export const SETTING_KEYS = {
   autoIdentifyEntityKinds: "autoIdentify.entityKinds",
   autoIdentifyProviders: "autoIdentify.providers",
   autoIdentifyUnorganizedOnly: "autoIdentify.unorganizedOnly",
+  collectionsAutoRefreshEnabled: "collections.autoRefreshEnabled",
   generationAutoGenerateMd5: "generation.autoGenerateMd5",
   generationAutoGenerateMetadata: "generation.autoGenerateMetadata",
   generationAutoGenerateOshash: "generation.autoGenerateOshash",

@@ -10,6 +10,8 @@ public static class AppSettingKeys {
     public const string ScanAutoScanEnabled = "scan.autoScanEnabled";
     public const string ScanIntervalMinutes = "scan.intervalMinutes";
 
+    public const string CollectionsAutoRefreshEnabled = "collections.autoRefreshEnabled";
+
     public const string AutoIdentifyEnabled = "autoIdentify.enabled";
     public const string AutoIdentifyProviders = "autoIdentify.providers";
     public const string AutoIdentifyEntityKinds = "autoIdentify.entityKinds";

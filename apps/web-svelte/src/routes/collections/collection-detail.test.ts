@@ -9,6 +9,23 @@ describe("collection detail route", () => {
     expect(source).toContain("<EntityGrid");
   });
 
+  it("reuses album audio controls and track list for audio-capable collections", async () => {
+    const source = await readFile("src/routes/collections/[id]/+page.svelte", "utf8");
+    const audioTrackListSource = await readFile("src/lib/components/AudioTrackList.svelte", "utf8");
+    const helperSource = await readFile("src/lib/entities/audio-track-collections.ts", "utf8");
+
+    expect(source).toContain("collectCollectionAudioTracks");
+    expect(source).toContain("activeBodyTab");
+    expect(source).toContain("<AudioTrackList");
+    expect(source).toContain("<EntityActionButton");
+    expect(source).toContain('variant="primary"');
+    expect(source).toContain("Play All");
+    expect(source).toContain("Shuffle");
+    expect(source).toContain("playback.play(audioTrackItems");
+    expect(audioTrackListSource).toContain("sectionKey");
+    expect(helperSource).toContain("groupByAlbum");
+  });
+
   it("owns create and edit routes instead of linking to a missing shell fallback", async () => {
     const indexSource = await readFile("src/routes/collections/+page.svelte", "utf8");
     const newRoute = await readFile("src/routes/collections/new/+page.svelte", "utf8");
@@ -45,8 +62,12 @@ describe("collection detail route", () => {
     expect(modelsSource).toContain('"skipCount"');
     expect(modelsSource).toContain('"sampleRate"');
     expect(modelsSource).toContain('"libraryRootId"');
-    expect(modelsSource).toContain("\"video-series\"");
-    expect(conditionBuilderSource).toContain("value: \"video-series\"");
+    expect(modelsSource).toContain("ENTITY_KIND.videoSeries");
+    expect(modelsSource).toContain("ENTITY_KIND.audioLibrary");
+    expect(modelsSource).toContain("ENTITY_KIND.musicArtist");
+    expect(conditionBuilderSource).toContain("ENTITY_KIND.videoSeries");
+    expect(conditionBuilderSource).toContain("ENTITY_KIND.audioLibrary");
+    expect(conditionBuilderSource).toContain("ENTITY_KIND.musicArtist");
     expect(conditionBuilderSource).toContain('aria-label="Library value"');
     expect(editorSource).toContain("fetchLibraryRoots");
     expect(editorSource).toContain("nsfw.mode === \"show\"");

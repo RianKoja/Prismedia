@@ -74,6 +74,7 @@ export interface AudioTrackListItemDto {
   embeddedAlbum: string | null;
   trackNumber: number | null;
   sectionLabel: string | null;
+  sectionKey?: string | null;
   waveformPath: string | null;
   libraryId: string | null;
   sortOrder: number;

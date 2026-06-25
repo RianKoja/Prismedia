@@ -43,14 +43,17 @@
   // stable overall position for each row.
   const sections = $derived.by(() => {
     const groups: {
+      key: string;
+      sectionKey: string | null;
       label: string | null;
       rows: { track: AudioTrackListItemDto; globalIndex: number; numberInSection: number }[];
     }[] = [];
     tracks.forEach((track, globalIndex) => {
       const label = track.sectionLabel ?? null;
+      const sectionKey = track.sectionKey ?? label;
       let group = groups[groups.length - 1];
-      if (!group || group.label !== label) {
-        group = { label, rows: [] };
+      if (!group || group.sectionKey !== sectionKey) {
+        group = { key: `${groups.length}:${sectionKey ?? "__main__"}`, sectionKey, label, rows: [] };
         groups.push(group);
       }
       group.rows.push({ track, globalIndex, numberInSection: group.rows.length + 1 });
@@ -72,7 +75,7 @@
     <span></span>
   </div>
 
-  {#each sections as section (section.label ?? "__main__")}
+  {#each sections as section (section.key)}
     {#if hasSections && section.label}
       <div
         class="border-b border-border-subtle bg-surface-raised/40 px-4 py-1.5 font-mono text-[0.65rem] font-semibold uppercase tracking-widest text-text-disabled"

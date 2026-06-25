@@ -167,7 +167,9 @@ describe("EntityDetail", () => {
     expect(source).toContain("z-index: 2;");
     expect(source).toContain("--detail-slideout-inset: 5px;");
     expect(source).toContain("margin-inline: var(--detail-slideout-inset);");
-    expect(source).toContain("entity-action-button-label");
+    expect(source).toContain("EntityActionButton");
+    const actionButtonSource = readFileSync("src/lib/components/entities/EntityActionButton.svelte", "utf8");
+    expect(actionButtonSource).toContain("entity-action-button-label");
     expect(appStyles).toContain(".entity-action-button {");
     expect(appStyles).toContain(".entity-action-button-label {");
     expect(appStyles).toContain("width: 1.9rem;");

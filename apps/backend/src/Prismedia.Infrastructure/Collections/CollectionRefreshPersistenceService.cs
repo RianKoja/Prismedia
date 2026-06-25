@@ -35,6 +35,23 @@ public sealed class CollectionRefreshPersistenceService(PrismediaDbContext db) :
             row.RuleTreeJson);
     }
 
+    public async Task<IReadOnlyList<CollectionRefreshData>> ListDynamicCollectionsAsync(CancellationToken cancellationToken) {
+        var rows = await (
+            from detail in db.CollectionDetails.AsNoTracking()
+            join entity in db.Entities.AsNoTracking() on detail.EntityId equals entity.Id
+            where (detail.Mode == CollectionMode.Dynamic || detail.Mode == CollectionMode.Hybrid) &&
+                  detail.RuleTreeJson != null
+            orderby entity.Title, entity.Id
+            select new CollectionRefreshData(
+                detail.EntityId,
+                entity.Title,
+                detail.Mode,
+                detail.RuleTreeJson!))
+            .ToArrayAsync(cancellationToken);
+
+        return rows;
+    }
+
     public async Task RefreshCollectionItemsAsync(
         Guid collectionEntityId,
         IReadOnlyList<CollectionRuleMatch> resolvedItems,

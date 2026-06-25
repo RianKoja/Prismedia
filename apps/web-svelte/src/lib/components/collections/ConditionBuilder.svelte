@@ -4,6 +4,7 @@
     Calendar,
     ChevronDown,
     Clapperboard,
+    Disc3,
     Film,
     FolderOpen,
     Hash,
@@ -11,6 +12,7 @@
     Images,
     Link2,
     ListChecks,
+    MicVocal,
     Music,
     Plus,
     ToggleRight,
@@ -28,6 +30,7 @@
     type CollectionRuleFieldDef,
     type CollectionRuleGroup,
   } from "$lib/collections/models";
+  import { ENTITY_KIND } from "$lib/entities/entity-codes";
 
   interface CollectionRuleSelectOption {
     value: string;
@@ -44,13 +47,15 @@
   let { rule, onChange, disabled = false, libraryOptions = [] }: Props = $props();
 
   const entityKinds: { value: CollectionEntityType; label: string; icon: Component }[] = [
-    { value: "video", label: "Video", icon: Film },
-    { value: "movie", label: "Movie", icon: Clapperboard },
-    { value: "video-series", label: "Series", icon: FolderOpen },
-    { value: "gallery", label: "Gallery", icon: Images },
-    { value: "image", label: "Image", icon: ImageIcon },
-    { value: "book", label: "Book", icon: BookOpen },
-    { value: "audio-track", label: "Audio", icon: Music },
+    { value: ENTITY_KIND.video, label: "Video", icon: Film },
+    { value: ENTITY_KIND.movie, label: "Movie", icon: Clapperboard },
+    { value: ENTITY_KIND.videoSeries, label: "Series", icon: FolderOpen },
+    { value: ENTITY_KIND.gallery, label: "Gallery", icon: Images },
+    { value: ENTITY_KIND.image, label: "Image", icon: ImageIcon },
+    { value: ENTITY_KIND.book, label: "Book", icon: BookOpen },
+    { value: ENTITY_KIND.musicArtist, label: "Artist", icon: MicVocal },
+    { value: ENTITY_KIND.audioLibrary, label: "Album", icon: Disc3 },
+    { value: ENTITY_KIND.audioTrack, label: "Track", icon: Music },
   ];
 
   const fieldTypeMeta: Record<

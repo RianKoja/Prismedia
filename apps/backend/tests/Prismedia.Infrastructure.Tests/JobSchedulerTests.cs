@@ -88,6 +88,57 @@ public sealed class JobSchedulerTests {
         Assert.Empty(queue.Enqueued);
     }
 
+    [Fact]
+    public async Task ScheduleRecurringCollectionRefreshAsyncQueuesUntargetedRefreshOnHourBoundary() {
+        var settings = new SchedulerSettingsPersistence([]);
+        var queue = new SchedulerJobQueue();
+        await using var provider = CreateProvider(settings, queue);
+        var scheduler = CreateScheduler(provider, new DateTimeOffset(2026, 5, 30, 11, 0, 15, TimeSpan.Zero));
+
+        await scheduler.ScheduleRecurringCollectionRefreshAsync(CancellationToken.None);
+
+        var request = Assert.Single(queue.Enqueued);
+        Assert.Equal(JobType.RefreshCollection, request.Type);
+        Assert.Null(request.TargetEntityId);
+        Assert.Equal("Hourly collection refresh", request.TargetLabel);
+    }
+
+    [Fact]
+    public async Task ScheduleRecurringCollectionRefreshAsyncSkipsAwayFromHourBoundary() {
+        var settings = new SchedulerSettingsPersistence([]);
+        var queue = new SchedulerJobQueue();
+        await using var provider = CreateProvider(settings, queue);
+        var scheduler = CreateScheduler(provider, new DateTimeOffset(2026, 5, 30, 11, 12, 0, TimeSpan.Zero));
+
+        await scheduler.ScheduleRecurringCollectionRefreshAsync(CancellationToken.None);
+
+        Assert.Empty(queue.Enqueued);
+    }
+
+    [Fact]
+    public async Task ScheduleRecurringCollectionRefreshAsyncSkipsWhenDisabled() {
+        var settings = new SchedulerSettingsPersistence([], collectionAutoRefreshEnabled: false);
+        var queue = new SchedulerJobQueue();
+        await using var provider = CreateProvider(settings, queue);
+        var scheduler = CreateScheduler(provider, new DateTimeOffset(2026, 5, 30, 11, 0, 15, TimeSpan.Zero));
+
+        await scheduler.ScheduleRecurringCollectionRefreshAsync(CancellationToken.None);
+
+        Assert.Empty(queue.Enqueued);
+    }
+
+    [Fact]
+    public async Task ScheduleRecurringCollectionRefreshAsyncSkipsWhenRefreshIsAlreadyPending() {
+        var settings = new SchedulerSettingsPersistence([]);
+        var queue = new SchedulerJobQueue(hasPendingRefresh: true);
+        await using var provider = CreateProvider(settings, queue);
+        var scheduler = CreateScheduler(provider, new DateTimeOffset(2026, 5, 30, 11, 0, 15, TimeSpan.Zero));
+
+        await scheduler.ScheduleRecurringCollectionRefreshAsync(CancellationToken.None);
+
+        Assert.Empty(queue.Enqueued);
+    }
+
     private static ServiceProvider CreateProvider(
         ISettingsPersistence settings,
         IJobQueueService queue) {
@@ -122,7 +173,9 @@ public sealed class JobSchedulerTests {
             UpdatedAt: now);
     }
 
-    private sealed class SchedulerSettingsPersistence(IEnumerable<LibraryRoot> roots) : ISettingsPersistence {
+    private sealed class SchedulerSettingsPersistence(
+        IEnumerable<LibraryRoot> roots,
+        bool collectionAutoRefreshEnabled = true) : ISettingsPersistence {
         private readonly List<LibraryRoot> _roots = roots.ToList();
 
         public IReadOnlyList<LibraryRoot> Roots => _roots;
@@ -131,6 +184,7 @@ public sealed class JobSchedulerTests {
             Task.FromResult<IReadOnlyDictionary<string, string>>(new Dictionary<string, string> {
                 [AppSettingKeys.ScanAutoScanEnabled] = JsonSerializer.Serialize(true),
                 [AppSettingKeys.ScanIntervalMinutes] = JsonSerializer.Serialize(60),
+                [AppSettingKeys.CollectionsAutoRefreshEnabled] = JsonSerializer.Serialize(collectionAutoRefreshEnabled),
             });
 
         public Task SaveSettingOverrideAsync(string key, string valueJson, CancellationToken cancellationToken) =>
@@ -170,11 +224,11 @@ public sealed class JobSchedulerTests {
             Task.FromResult(false);
     }
 
-    private sealed class SchedulerJobQueue : IJobQueueService {
+    private sealed class SchedulerJobQueue(bool hasPendingRefresh = false) : IJobQueueService {
         public List<EnqueueJobRequest> Enqueued { get; } = [];
 
         public Task<bool> HasPendingAsync(JobType type, string? targetEntityId, CancellationToken cancellationToken) =>
-            Task.FromResult(false);
+            Task.FromResult(type == JobType.RefreshCollection && hasPendingRefresh);
 
         public Task<JobRunSnapshot> EnqueueAsync(EnqueueJobRequest request, CancellationToken cancellationToken) {
             Enqueued.Add(request);

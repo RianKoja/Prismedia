@@ -15,6 +15,8 @@ public sealed class Collection : Entity {
         EntityKind.Gallery,
         EntityKind.Image,
         EntityKind.Book,
+        EntityKind.MusicArtist,
+        EntityKind.AudioLibrary,
         EntityKind.AudioTrack,
     ];
 

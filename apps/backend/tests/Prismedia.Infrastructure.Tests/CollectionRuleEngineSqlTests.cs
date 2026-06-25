@@ -279,6 +279,8 @@ public sealed class CollectionRuleEngineSqlTests {
             EntityKindRegistry.Gallery.Code,
             EntityKindRegistry.Image.Code,
             EntityKindRegistry.Book.Code,
+            EntityKindRegistry.MusicArtist.Code,
+            EntityKindRegistry.AudioLibrary.Code,
             EntityKindRegistry.AudioTrack.Code,
         };
 

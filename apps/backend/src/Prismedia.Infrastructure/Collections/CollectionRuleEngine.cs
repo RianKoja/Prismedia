@@ -23,7 +23,17 @@ public sealed class CollectionRuleEngine(PrismediaDbContext db) : ICollectionRul
     };
 
     private static readonly EntityKind[] TargetKinds =
-        [EntityKind.Video, EntityKind.Movie, EntityKind.VideoSeries, EntityKind.Gallery, EntityKind.Image, EntityKind.Book, EntityKind.AudioTrack];
+        [
+            EntityKind.Video,
+            EntityKind.Movie,
+            EntityKind.VideoSeries,
+            EntityKind.Gallery,
+            EntityKind.Image,
+            EntityKind.Book,
+            EntityKind.MusicArtist,
+            EntityKind.AudioLibrary,
+            EntityKind.AudioTrack
+        ];
 
     private static readonly Dictionary<string, HashSet<string>> FieldTargetKinds = new(StringComparer.Ordinal) {
         ["fileSize"] = Kinds(EntityKindRegistry.Video.Code, EntityKindRegistry.Image.Code, EntityKindRegistry.AudioTrack.Code),
@@ -47,6 +57,8 @@ public sealed class CollectionRuleEngine(PrismediaDbContext db) : ICollectionRul
             EntityKindRegistry.Gallery.Code,
             EntityKindRegistry.Image.Code,
             EntityKindRegistry.Book.Code,
+            EntityKindRegistry.MusicArtist.Code,
+            EntityKindRegistry.AudioLibrary.Code,
             EntityKindRegistry.AudioTrack.Code),
         ["galleryType"] = Kinds(EntityKindRegistry.Gallery.Code),
         ["imageCount"] = Kinds(EntityKindRegistry.Gallery.Code),
@@ -497,7 +509,20 @@ public sealed class CollectionRuleEngine(PrismediaDbContext db) : ICollectionRul
             )";
         }
 
+        if (KindEquals(kindCode, EntityKindRegistry.MusicArtist.Code)) {
+            var audioLibraryKindParam = ctx.AddParam(EntityKindRegistry.AudioLibrary.Code, NpgsqlDbType.Text);
+            return rootPredicate => $@"EXISTS (
+                SELECT 1
+                FROM entities artist_album
+                INNER JOIN audio_library_details ald ON ald.entity_id = artist_album.id
+                WHERE artist_album.parent_entity_id = e.id
+                    AND artist_album.kind_code = {audioLibraryKindParam}
+                    AND {rootPredicate("ald.library_root_id")}
+            )";
+        }
+
         if (KindEquals(kindCode, EntityKindRegistry.Image.Code) ||
+            KindEquals(kindCode, EntityKindRegistry.AudioLibrary.Code) ||
             KindEquals(kindCode, EntityKindRegistry.AudioTrack.Code)) {
             return AncestorRootExists;
         }

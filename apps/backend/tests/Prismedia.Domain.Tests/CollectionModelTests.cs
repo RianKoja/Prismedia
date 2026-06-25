@@ -45,6 +45,9 @@ public sealed class CollectionModelTests {
         Assert.False(dynamic.CanEditManualMembership);
         Assert.True(Collection.CanContain(EntityKind.VideoSeries));
         Assert.True(Collection.CanContain(EntityKind.Movie));
+        Assert.True(Collection.CanContain(EntityKind.MusicArtist));
+        Assert.True(Collection.CanContain(EntityKind.AudioLibrary));
+        Assert.True(Collection.CanContain(EntityKind.AudioTrack));
         Assert.False(Collection.CanContain(EntityKind.Collection));
     }
 
