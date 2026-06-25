@@ -55,6 +55,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - Fixed mobile and touch interactions across navigation, library menus, thumbnail scrubbing, lightboxes, readers, detail heroes, forms, buttons, flyouts, and narrow-screen wrapping.
 - Fixed image, gallery, animated-image, feed, and lightbox behavior so inline clips, GIF/APNG files, portrait media, previews, preload, and aspect ratios render correctly.
 - Fixed sub-view grids so albums, galleries, series sections, linked content, and collection previews expose the same selection and Add to Collection controls as main library grids.
+- Fixed collection grid cards so they inherit member artwork on list pages, matching detail-page covers.
 - Fixed dynamic collection rules, previews, saved edits, smart collection queries, random sorting, page-level grids, tag/person/studio references, and orphan cleanup controls.
 
 ### Removed

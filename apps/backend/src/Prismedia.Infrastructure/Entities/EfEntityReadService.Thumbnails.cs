@@ -18,7 +18,8 @@ public sealed partial class EfEntityReadService {
         IReadOnlyList<EntityRow> rows,
         bool hideNsfw,
         bool enforceLibraryVisibility,
-        CancellationToken cancellationToken) {
+        CancellationToken cancellationToken,
+        bool resolveCollectionArtwork = true) {
         if (rows.Count == 0) {
             return [];
         }
@@ -62,6 +63,12 @@ public sealed partial class EfEntityReadService {
             .GroupBy(file => file.EntityId)
             .ToDictionary(group => group.Key, group => group.First().Path);
         var hoverImagesByEntity = await ProjectHoverImagesAsync(rows, hideNsfw, enforceLibraryVisibility, cancellationToken);
+        var collectionRowsNeedingArtwork = rows
+            .Where(row => row.KindCode == EntityKindRegistry.Collection.Code && !coverByEntity.ContainsKey(row.Id))
+            .ToArray();
+        var collectionArtworkByEntity = resolveCollectionArtwork
+            ? await ProjectCollectionArtworkAsync(collectionRowsNeedingArtwork, hideNsfw, enforceLibraryVisibility, cancellationToken)
+            : new Dictionary<Guid, CollectionArtwork>();
         var technicalByEntity = await _db.EntityTechnical.AsNoTracking()
             .Where(technical => ids.Contains(technical.EntityId))
             .ToDictionaryAsync(technical => technical.EntityId, cancellationToken);
@@ -128,6 +135,13 @@ public sealed partial class EfEntityReadService {
                 row.KindCode == EntityKindRegistry.AudioTrack.Code &&
                 row.ParentEntityId is { } albumId) {
                 coverUrl = coverByAlbumParent.GetValueOrDefault(albumId);
+            }
+
+            if (coverUrl is null &&
+                row.KindCode == EntityKindRegistry.Collection.Code &&
+                collectionArtworkByEntity.TryGetValue(row.Id, out var collectionArtwork)) {
+                coverUrl = collectionArtwork.CoverUrl ?? collectionArtwork.HoverImages.FirstOrDefault()?.Path;
+                hoverImages = collectionArtwork.HoverImages;
             }
 
             if (coverUrl is null && UsesRepresentativeCover(row.KindCode) && hoverImages.Count > 0) {
@@ -218,6 +232,160 @@ public sealed partial class EfEntityReadService {
                     .ThenByDescending(row => row.PlayCount)
                     .ThenByDescending(row => row.ResumeSeconds)
                     .First());
+    }
+
+    private async Task<IReadOnlyDictionary<Guid, CollectionArtwork>> ProjectCollectionArtworkAsync(
+        IReadOnlyList<EntityRow> rows,
+        bool hideNsfw,
+        bool enforceLibraryVisibility,
+        CancellationToken cancellationToken) {
+        var collectionIds = rows
+            .Where(row => row.KindCode == EntityKindRegistry.Collection.Code)
+            .Select(row => row.Id)
+            .Distinct()
+            .ToArray();
+        if (collectionIds.Length == 0) {
+            return new Dictionary<Guid, CollectionArtwork>();
+        }
+
+        var detailsByCollection = await _db.CollectionDetails.AsNoTracking()
+            .Where(detail => collectionIds.Contains(detail.EntityId))
+            .ToDictionaryAsync(detail => detail.EntityId, cancellationToken);
+        var visibleMembers = await LoadVisibleCollectionMembersAsync(
+            collectionIds,
+            hideNsfw,
+            enforceLibraryVisibility,
+            cancellationToken);
+        var sampledMembersByCollection = visibleMembers
+            .GroupBy(row => row.CollectionEntityId)
+            .ToDictionary(
+                group => group.Key,
+                group => PickSpread(group.ToArray(), MaxHoverImages));
+        var representativeByCollection = ResolveCollectionRepresentatives(
+            collectionIds,
+            detailsByCollection,
+            visibleMembers);
+        var thumbnailIds = representativeByCollection.Values
+            .Concat(sampledMembersByCollection.Values.SelectMany(members => members.Select(member => member.ItemEntityId)))
+            .Distinct()
+            .ToArray();
+        if (thumbnailIds.Length == 0) {
+            return new Dictionary<Guid, CollectionArtwork>();
+        }
+
+        var thumbnailRows = await LoadVisibleThumbnailRowsAsync(
+            thumbnailIds,
+            hideNsfw,
+            enforceLibraryVisibility,
+            cancellationToken);
+        var thumbnails = await ProjectThumbnailsAsync(
+            thumbnailRows,
+            hideNsfw,
+            enforceLibraryVisibility,
+            cancellationToken,
+            resolveCollectionArtwork: false);
+        var thumbnailsById = thumbnails.ToDictionary(thumbnail => thumbnail.Id);
+
+        return collectionIds
+            .Select(collectionId => ProjectCollectionArtwork(
+                collectionId,
+                detailsByCollection.GetValueOrDefault(collectionId),
+                representativeByCollection,
+                sampledMembersByCollection,
+                thumbnailsById))
+            .Where(pair => pair.Value.HasArtwork)
+            .ToDictionary(pair => pair.Key, pair => pair.Value);
+    }
+
+    private async Task<IReadOnlyList<CollectionMemberRow>> LoadVisibleCollectionMembersAsync(
+        IReadOnlyCollection<Guid> collectionIds,
+        bool hideNsfw,
+        bool enforceLibraryVisibility,
+        CancellationToken cancellationToken) {
+        var visibleEntities = _db.Entities.AsNoTracking();
+        if (enforceLibraryVisibility) {
+            visibleEntities = ApplyEnabledLibraryVisibility(visibleEntities);
+        }
+        visibleEntities = ApplyNsfwVisibility(visibleEntities, hideNsfw);
+
+        return await (
+            from item in _db.CollectionItemDetails.AsNoTracking()
+            join entity in visibleEntities on item.ItemEntityId equals entity.Id
+            where collectionIds.Contains(item.CollectionEntityId)
+            orderby item.CollectionEntityId, item.SortOrder, entity.Title, item.Id
+            select new CollectionMemberRow(item.CollectionEntityId, item.ItemEntityId))
+            .ToArrayAsync(cancellationToken);
+    }
+
+    private async Task<IReadOnlyList<EntityRow>> LoadVisibleThumbnailRowsAsync(
+        IReadOnlyCollection<Guid> thumbnailIds,
+        bool hideNsfw,
+        bool enforceLibraryVisibility,
+        CancellationToken cancellationToken) {
+        var query = _db.Entities.AsNoTracking()
+            .Where(entity => thumbnailIds.Contains(entity.Id));
+        if (enforceLibraryVisibility) {
+            query = ApplyEnabledLibraryVisibility(query);
+        }
+        query = ApplyNsfwVisibility(query, hideNsfw);
+        return await query.ToArrayAsync(cancellationToken);
+    }
+
+    private static IReadOnlyDictionary<Guid, Guid> ResolveCollectionRepresentatives(
+        IReadOnlyCollection<Guid> collectionIds,
+        IReadOnlyDictionary<Guid, CollectionDetailRow> detailsByCollection,
+        IReadOnlyList<CollectionMemberRow> visibleMembers) {
+        var firstMemberByCollection = visibleMembers
+            .GroupBy(row => row.CollectionEntityId)
+            .ToDictionary(group => group.Key, group => group.First().ItemEntityId);
+        var representatives = new Dictionary<Guid, Guid>();
+        foreach (var collectionId in collectionIds) {
+            if (detailsByCollection.TryGetValue(collectionId, out var detail) &&
+                detail.CoverItemEntityId is { } coverItemId) {
+                representatives[collectionId] = coverItemId;
+                continue;
+            }
+
+            if (firstMemberByCollection.TryGetValue(collectionId, out var memberId)) {
+                representatives[collectionId] = memberId;
+            }
+        }
+
+        return representatives;
+    }
+
+    private static KeyValuePair<Guid, CollectionArtwork> ProjectCollectionArtwork(
+        Guid collectionId,
+        CollectionDetailRow? detail,
+        IReadOnlyDictionary<Guid, Guid> representativeByCollection,
+        IReadOnlyDictionary<Guid, IReadOnlyList<CollectionMemberRow>> sampledMembersByCollection,
+        IReadOnlyDictionary<Guid, EntityThumbnail> thumbnailsById) {
+        var coverUrl = representativeByCollection.TryGetValue(collectionId, out var representativeId) &&
+            thumbnailsById.TryGetValue(representativeId, out var representative)
+                ? representative.CoverUrl
+                : null;
+        IReadOnlyList<EntityThumbnailHoverImage> hoverImages = detail?.CoverMode == CollectionCoverMode.Item
+            ? []
+            : ProjectCollectionHoverImages(collectionId, sampledMembersByCollection, thumbnailsById);
+
+        return new KeyValuePair<Guid, CollectionArtwork>(
+            collectionId,
+            new CollectionArtwork(coverUrl, hoverImages));
+    }
+
+    private static IReadOnlyList<EntityThumbnailHoverImage> ProjectCollectionHoverImages(
+        Guid collectionId,
+        IReadOnlyDictionary<Guid, IReadOnlyList<CollectionMemberRow>> sampledMembersByCollection,
+        IReadOnlyDictionary<Guid, EntityThumbnail> thumbnailsById) {
+        if (!sampledMembersByCollection.TryGetValue(collectionId, out var members)) {
+            return [];
+        }
+
+        return members
+            .Select(member => thumbnailsById.GetValueOrDefault(member.ItemEntityId))
+            .Where(thumbnail => thumbnail?.CoverUrl is not null)
+            .Select(thumbnail => new EntityThumbnailHoverImage(thumbnail!.Id, thumbnail.Title, thumbnail.CoverUrl!))
+            .ToArray();
     }
 
     /// <summary>
@@ -490,4 +658,12 @@ public sealed partial class EfEntityReadService {
         kindCode == EntityKindRegistry.Gallery.Code ||
         kindCode == EntityKindRegistry.VideoSeries.Code ||
         kindCode == EntityKindRegistry.VideoSeason.Code;
+
+    private sealed record CollectionArtwork(
+        string? CoverUrl,
+        IReadOnlyList<EntityThumbnailHoverImage> HoverImages) {
+        public bool HasArtwork => CoverUrl is not null || HoverImages.Count > 0;
+    }
+
+    private sealed record CollectionMemberRow(Guid CollectionEntityId, Guid ItemEntityId);
 }
