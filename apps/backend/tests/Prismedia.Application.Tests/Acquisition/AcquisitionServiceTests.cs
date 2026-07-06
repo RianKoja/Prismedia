@@ -37,7 +37,8 @@ public sealed class AcquisitionServiceTests {
 
         Assert.Equal([(RecordedClientId, ClientItemId, true)], harness.Downloads.Removals);
         Assert.True(harness.Store.Deleted);
-        Assert.Equal([WantedEntityId], harness.Wanted.DeletedEntities);
+        // Removing a download is pipeline cleanup, not a give-up: the wanted placeholder stays.
+        Assert.Empty(harness.Wanted.DeletedEntities);
         var entry = Assert.Single(harness.History.Entries);
         Assert.Equal(AcquisitionHistoryEvent.Removed, entry.Event);
         Assert.Equal("Removed by user.", entry.Message);
@@ -65,7 +66,7 @@ public sealed class AcquisitionServiceTests {
 
         Assert.Empty(harness.Downloads.Removals);
         Assert.True(harness.Store.Deleted);
-        Assert.Equal([WantedEntityId], harness.Wanted.DeletedEntities);
+        Assert.Empty(harness.Wanted.DeletedEntities);
         var entry = Assert.Single(harness.History.Entries);
         Assert.Equal(AcquisitionHistoryEvent.Removed, entry.Event);
         Assert.Equal("Removed by user.", entry.Message);
@@ -79,7 +80,7 @@ public sealed class AcquisitionServiceTests {
 
         Assert.Equal([(DefaultClientId, ClientItemId, true)], harness.Downloads.Removals);
         Assert.True(harness.Store.Deleted);
-        Assert.Equal([WantedEntityId], harness.Wanted.DeletedEntities);
+        Assert.Empty(harness.Wanted.DeletedEntities);
     }
 
     private static AcquisitionTransferInfo TransferInfo(Guid? downloadClientConfigId) =>
@@ -152,6 +153,7 @@ public sealed class AcquisitionServiceTests {
             Task.FromResult<AcquisitionTransferInfo?>(acquisitionId == AcquisitionId ? transfer : null);
 
         public Task<AcquisitionSummary> CreateAsync(AcquisitionMetadata metadata, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<IReadOnlyList<Guid>> ListStaleSearchingAsync(TimeSpan olderThan, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<IReadOnlyList<AcquisitionSummary>> ListAsync(CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<AcquisitionSearchInput?> GetSearchInputAsync(Guid id, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<AcquisitionStatus?> GetStatusAsync(Guid id, CancellationToken cancellationToken) => throw new NotSupportedException();

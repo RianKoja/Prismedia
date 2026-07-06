@@ -27,6 +27,7 @@ public sealed class JobScheduler(
                 await ScheduleRecurringBackupsAsync(stoppingToken);
                 await ScheduleAcquisitionMonitorAsync(stoppingToken);
                 await ScheduleMonitoredSearchAsync(stoppingToken);
+                await RecoverStuckSearchesAsync(stoppingToken);
                 await ScheduleRecycleBinCleanupAsync(stoppingToken);
             } catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) {
                 break;
@@ -201,6 +202,43 @@ public sealed class JobScheduler(
         await queue.EnqueueAsync(
             new EnqueueJobRequest(JobType.AcquisitionMonitor, TargetLabel: "Monitor acquisition downloads"),
             cancellationToken);
+    }
+
+    /// <summary>
+    /// How long an acquisition may sit in Searching before it is treated as stuck. Generous enough for a
+    /// slow multi-indexer pass, short enough that a search killed mid-flight (worker restart, cancelled
+    /// job) doesn't read as searching forever.
+    /// </summary>
+    private static readonly TimeSpan StuckSearchTimeout = TimeSpan.FromMinutes(5);
+
+    /// <summary>
+    /// Fails acquisitions stuck in Searching with no live search job. A search whose worker died mid-run
+    /// keeps its Searching status forever (the exception path never ran), so the item looks busy while
+    /// nothing is happening. Marking it Failed is safe even on a false positive: Failed is searchable, so
+    /// a search job that is merely delayed re-enters Searching when it actually runs, and monitored items
+    /// are re-searched by the monitored-search sweep on its own schedule.
+    /// </summary>
+    internal async Task RecoverStuckSearchesAsync(CancellationToken cancellationToken) {
+        await using var scope = scopeFactory.CreateAsyncScope();
+        var acquisitions = scope.ServiceProvider.GetRequiredService<Acquisition.IAcquisitionStore>();
+        var stale = await acquisitions.ListStaleSearchingAsync(StuckSearchTimeout, cancellationToken);
+        if (stale.Count == 0) {
+            return;
+        }
+
+        var queue = scope.ServiceProvider.GetRequiredService<IJobQueueService>();
+        foreach (var acquisitionId in stale) {
+            if (await queue.HasPendingAsync(JobType.AcquisitionSearch, acquisitionId.ToString(), cancellationToken)) {
+                continue;
+            }
+
+            await acquisitions.SetStatusAsync(
+                acquisitionId,
+                AcquisitionStatus.Failed,
+                "The search was interrupted or timed out; run the search again.",
+                cancellationToken);
+            logger.LogWarning("Recovered acquisition {AcquisitionId} stuck in Searching with no live search job.", acquisitionId);
+        }
     }
 
     internal async Task ScheduleRecycleBinCleanupAsync(CancellationToken cancellationToken) {

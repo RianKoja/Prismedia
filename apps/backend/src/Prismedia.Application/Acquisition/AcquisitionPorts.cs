@@ -305,6 +305,12 @@ public interface IAcquisitionStore {
     /// <summary>True when any acquisition still has an in-flight transfer; gates scheduling the monitor job.</summary>
     Task<bool> HasActiveTransfersAsync(CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Lists acquisitions that have sat in <see cref="AcquisitionStatus.Searching"/> for longer than
+    /// <paramref name="olderThan"/> — candidates for stuck-search recovery when no search job is live.
+    /// </summary>
+    Task<IReadOnlyList<Guid>> ListStaleSearchingAsync(TimeSpan olderThan, CancellationToken cancellationToken);
+
     /// <summary>Updates a transfer's progress, raw state, and on-disk content path.</summary>
     Task UpdateTransferAsync(Guid transferId, double progress, string? state, string? contentPath, CancellationToken cancellationToken);
 

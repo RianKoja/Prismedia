@@ -452,6 +452,15 @@ public sealed class EfAcquisitionStore(PrismediaDbContext db, IAcquisitionHistor
             select transfer.Id).AnyAsync(cancellationToken);
     }
 
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<Guid>> ListStaleSearchingAsync(TimeSpan olderThan, CancellationToken cancellationToken) {
+        var cutoff = DateTimeOffset.UtcNow - olderThan;
+        return await db.Acquisitions.AsNoTracking()
+            .Where(row => row.Status == AcquisitionStatus.Searching && row.UpdatedAt < cutoff)
+            .Select(row => row.Id)
+            .ToArrayAsync(cancellationToken);
+    }
+
     public async Task UpdateTransferAsync(Guid transferId, double progress, string? state, string? contentPath, CancellationToken cancellationToken) {
         var row = await db.DownloadTransfers.FirstOrDefaultAsync(transfer => transfer.Id == transferId, cancellationToken);
         if (row is null) {

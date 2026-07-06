@@ -351,11 +351,14 @@ public static class DependencyInjection {
         services.AddScoped<IAcquisitionBlocklistStore, EfAcquisitionBlocklistStore>();
         services.AddScoped<IAcquisitionHistoryStore, EfAcquisitionHistoryStore>();
         services.AddScoped<IMonitorStore, EfMonitorStore>();
-        services.AddScoped(_ => new ProwlarrIndexerClient(new HttpClient()));
+        // Explicit indexer timeouts: a hung indexer must fail the search (which surfaces per-indexer in
+        // the outcome) rather than pin the whole search job. Prowlarr gets longer because one call fans
+        // out across every indexer it aggregates; direct Torznab/Newznab calls hit a single tracker.
+        services.AddScoped(_ => new ProwlarrIndexerClient(new HttpClient { Timeout = TimeSpan.FromSeconds(100) }));
         services.AddScoped<IIndexerSearchClient>(provider => provider.GetRequiredService<ProwlarrIndexerClient>());
-        services.AddScoped(_ => new TorznabIndexerClient(new HttpClient()));
+        services.AddScoped(_ => new TorznabIndexerClient(new HttpClient { Timeout = TimeSpan.FromSeconds(60) }));
         services.AddScoped<IIndexerSearchClient>(provider => provider.GetRequiredService<TorznabIndexerClient>());
-        services.AddScoped(_ => new NewznabIndexerClient(new HttpClient()));
+        services.AddScoped(_ => new NewznabIndexerClient(new HttpClient { Timeout = TimeSpan.FromSeconds(60) }));
         services.AddScoped<IIndexerSearchClient>(provider => provider.GetRequiredService<NewznabIndexerClient>());
         services.AddScoped<IIndexerSearchClientFactory, IndexerSearchClientFactory>();
         // UseCookies=false keeps the default handler from swallowing qBittorrent's Set-Cookie SID,
