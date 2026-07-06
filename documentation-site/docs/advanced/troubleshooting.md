@@ -73,14 +73,14 @@ For a per-video override, use the player's subtitle button.
 ## Jellyfin client can't connect or sign in
 
 - Use the LAN **IP and port 8008**, not `localhost`, from other devices.
-- Sign in with a **Jellyfin profile** username and the **API key** as the password (Settings → API Access). There are no per-user passwords.
+- Sign in with your Prismedia **username and password** (accounts are managed in Settings → Users). Upgraded from pre-2.0? Migrated accounts keep the previous server API key as their password until it's changed.
 - If everything signed out at once, the API key was **regenerated** (which invalidates sessions) — sign in again.
 - Behind a reverse proxy/SSO, the Jellyfin routes must **bypass** the proxy auth. See [Reverse Proxy & Auth Middleware](../deployment/reverse-proxy.md).
 - More client tips: [Connecting Infuse & Manet](../jellyfin/clients.md).
 
 ## Plugin credentials lost after an update
 
-Plugin credentials are encrypted with `PRISMEDIA_SECRET`, which the container auto-generates and persists to `/data/.prismedia-secret`. Credentials survive container recreation **as long as `/data` persists**. They only become unreadable if that secret is lost — for example a wiped `/data`, or changing an explicitly-set `PRISMEDIA_SECRET`. Back up `/data` and, if you set `PRISMEDIA_SECRET` yourself, keep it stable. See [Authentication & API Keys](../deployment/authentication.md).
+Plugin credentials are encrypted with `PRISMEDIA_SECRET`, which the container auto-generates and persists to `/data/.prismedia-secret`. Credentials survive container recreation **as long as `/data` persists**. They only become unreadable if that secret is lost — for example a wiped `/data`, or changing an explicitly-set `PRISMEDIA_SECRET`. Back up `/data` and, if you set `PRISMEDIA_SECRET` yourself, keep it stable. See [Authentication & User Accounts](../deployment/authentication.md).
 
 ## Jobs are stuck "running" forever
 

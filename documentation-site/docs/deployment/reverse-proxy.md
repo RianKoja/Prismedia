@@ -14,7 +14,9 @@ SSO middleware protects a site by redirecting unauthenticated requests to a logi
 
 So if your SSO covers the Jellyfin or OPDS routes, clients get redirected to a login page instead of an API response, and they fail to connect.
 
-**The fix:** exclude the entire Jellyfin route surface and `/opds` from the SSO middleware. Those routes are already protected by Prismedia's own authentication, so bypassing the proxy's SSO does not expose them — a caller still needs a valid Prismedia API key, session token, or OPDS Basic Auth credentials. See [Authentication & API Keys](./authentication.md).
+**The fix:** exclude the entire Jellyfin route surface and `/opds` from the SSO middleware. Those routes are already protected by Prismedia's own authentication, so bypassing the proxy's SSO does not expose them — a caller still needs a valid Prismedia username and password or session token. See [Authentication & User Accounts](./authentication.md).
+
+Since Prismedia has real per-user accounts with its own login page, you may not need SSO middleware in front of it at all — a plain TLS reverse proxy is enough for most setups.
 
 ## Routes to bypass
 
@@ -158,7 +160,7 @@ curl -i 'https://prismedia.example.com/Artists?Recursive=true&Limit=1'
 curl -i https://prismedia.example.com/opds
 
 # OPDS with Prismedia credentials should return an Atom feed, not an SSO page.
-curl -i -u "Prismedia:$PRISMEDIA_API_KEY" https://prismedia.example.com/opds
+curl -i -u "your-username:your-password" https://prismedia.example.com/opds
 ```
 
 If you get an HTML login page (or a `302`/`303` to your IdP) instead of a JSON, Atom, or `401` response from Prismedia, the bypass isn't matching — re-check the path patterns, and on Authelia confirm you restarted the container after editing the rules. Then add the server in a client per [Connecting Infuse & Manet](../jellyfin/clients.md) or [OPDS Reader Apps](../library/opds.md).

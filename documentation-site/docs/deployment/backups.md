@@ -6,7 +6,7 @@ description: How Prismedia creates database backups, keeps retention, and perfor
 
 # Backups & Restore
 
-Prismedia includes database backups from **Settings -> Database Backups**. They protect Prismedia's Postgres application state: media entities, settings, jobs, playback progress, Jellyfin profiles, request history, plugin state, and other database-backed records.
+Prismedia includes database backups from **Settings -> Database Backups**. They protect Prismedia's Postgres application state: media entities, settings, jobs, playback progress, user accounts, request history, plugin state, and other database-backed records.
 
 They do **not** copy your media files. Your `/media` mount should already live on your own storage and backup plan.
 
@@ -93,4 +93,4 @@ Failed backup attempts appear in the Settings card with their error. Fix the too
 ## See also
 
 - [Upgrading & Rollback](./upgrading.md)
-- [Authentication & API Keys](./authentication.md)
+- [Authentication & User Accounts](./authentication.md)

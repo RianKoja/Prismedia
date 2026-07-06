@@ -27,19 +27,19 @@ Use these settings in any app that supports OPDS 1.x / OPDS 1.2 catalogs:
 | Catalog type | OPDS, OPDS 1.x, or Atom OPDS. |
 | Server / catalog URL | `https://prismedia.example.com/opds` or `http://your-prismedia-host:8008/opds`. |
 | Authentication | HTTP Basic Auth, if the app asks. |
-| Username | A Jellyfin-compatible Prismedia profile username, for example `Prismedia`. |
-| Password | The Prismedia API key from **Settings -> API Access**. |
+| Username | Your Prismedia username. |
+| Password | Your Prismedia password. |
 
 After saving the catalog, browse **Libraries**, **Recently Added**, **Authors**, or **Series**. Series navigation groups child books; library acquisition feeds only show the individual downloadable books.
 
 :::tip Apps that do not resend credentials for covers/downloads
-Some OPDS clients authenticate the catalog request but then fetch cover or download links without the `Authorization` header. If covers or downloads fail while the catalog loads, put the Prismedia API key query parameter on the catalog URL:
+Some OPDS clients authenticate the catalog request but then fetch cover or download links without the `Authorization` header. If covers or downloads fail while the catalog loads, put a session token query parameter on the catalog URL (get one by signing in with `POST /api/auth/login` — see [Authentication & User Accounts](../deployment/authentication.md#direct-api-access)):
 
 ```text
-https://prismedia.example.com/opds?ApiKey=YOUR_API_KEY
+https://prismedia.example.com/opds?ApiKey=YOUR_SESSION_TOKEN
 ```
 
-Prismedia will carry that existing API-key query parameter into OPDS cover and acquisition links. Treat the full URL as a secret.
+Prismedia will carry that existing token query parameter into OPDS cover and acquisition links. Treat the full URL as a secret.
 :::
 
 :::note Books must be in a book-scanning library
@@ -81,25 +81,25 @@ Most reader apps should use HTTP Basic Auth:
 
 | Field | Value |
 | --- | --- |
-| Username | A Jellyfin-compatible profile username, such as `Prismedia`. |
-| Password | The Prismedia API key from **Settings -> API Access**. |
+| Username | Your Prismedia username. |
+| Password | Your Prismedia password. |
 
-OPDS also accepts the same API key and Jellyfin-compatible token transports documented in [Authentication & API Keys](../deployment/authentication.md):
+OPDS also accepts the same session-token transports documented in [Authentication & User Accounts](../deployment/authentication.md):
 
-- `X-Prismedia-Api-Key: <key>`
-- `Authorization: Bearer <api-key-or-session-token>`
+- `Authorization: Bearer <token>`
+- `X-Prismedia-Api-Key: <token>`
 - Jellyfin token headers
-- `?ApiKey=<key>` or `?api_key=<key>`
+- `?ApiKey=<token>` or `?api_key=<token>`
 
-Some reader apps drop auth headers when they fetch covers or acquisition links. If that happens, configure the app to include the API key query parameter on the OPDS base URL, for example `https://prismedia.example.com/opds?ApiKey=...`. Treat URLs containing API keys as secrets.
+Some reader apps drop auth headers when they fetch covers or acquisition links. If that happens, configure the app to include a session-token query parameter on the OPDS base URL, for example `https://prismedia.example.com/opds?ApiKey=...`. Treat URLs containing tokens as secrets.
 
 ## NSFW filtering
 
-OPDS uses the same Jellyfin-compatible profile visibility rules as client apps:
+OPDS uses the same per-user visibility rules as client apps:
 
-- Profiles without NSFW permission only see SFW books and SFW navigation metadata.
-- Profiles with NSFW permission can see NSFW books if the library is otherwise available.
-- API-key-only OPDS requests are conservative and hide NSFW content.
+- Users without NSFW permission only see SFW books and SFW navigation metadata.
+- Users with NSFW permission can see NSFW books if the library is otherwise available.
+- Per-user library access applies: a member only sees books from libraries they have been granted.
 - Direct book detail, cover, and download routes enforce the same visibility checks as feeds.
 
 Hidden books do not contribute authors, tags, collections, series, counts, covers, search results, or acquisition links.
@@ -110,9 +110,9 @@ Hidden books do not contribute authors, tags, collections, series, counts, cover
 | --- | --- |
 | The app shows an SSO login page or cannot add the catalog. | Bypass proxy/forward-auth for `/opds([/?].*)?$` and retry. A request without OPDS credentials should return Prismedia `401`, not an IdP HTML page. |
 | The catalog authenticates but shows no books. | Confirm the source directory is a Prismedia library root with **Scan books** enabled, the root is enabled, the scan completed, and the files are EPUB/PDF/CBZ/CBR-compatible. |
-| Covers or downloads fail but browsing works. | Use Basic Auth if available. If the reader still drops auth on linked resources, add `?ApiKey=YOUR_API_KEY` to the OPDS base URL. |
+| Covers or downloads fail but browsing works. | Use Basic Auth if available. If the reader still drops auth on linked resources, add `?ApiKey=YOUR_SESSION_TOKEN` to the OPDS base URL. |
 | A reader still shows old entries after a fix or rescan. | Refresh/re-sync the OPDS catalog in the app, or remove and re-add the OPDS server. Many readers cache feeds aggressively. |
-| NSFW items are missing. | Use a Jellyfin-compatible profile that allows NSFW content. API-key-only catalog requests intentionally hide NSFW content. |
+| NSFW items are missing. | Sign in as a user whose account allows NSFW content. |
 
 ## Reverse proxies
 

@@ -69,7 +69,9 @@ Most installs need **no** environment variables. The container generates everyth
 
 | Variable | Default | Use |
 | --- | --- | --- |
-| `PRISMEDIA_SECRET` | Auto-generated, persisted to `/data/.prismedia-secret` | Encryption key for plugin credentials (e.g. provider API keys) stored at rest. The container creates and persists one automatically, so it survives container recreation as long as `/data` persists. Set it explicitly only if you want to control or rotate the key yourself. See [Authentication & API Keys](../deployment/authentication.md). |
+| `PRISMEDIA_SECRET` | Auto-generated, persisted to `/data/.prismedia-secret` | Encryption key for plugin credentials (e.g. provider API keys) stored at rest. The container creates and persists one automatically, so it survives container recreation as long as `/data` persists. Set it explicitly only if you want to control or rotate the key yourself. See [Authentication & User Accounts](../deployment/authentication.md). |
+| `PRISMEDIA_RECOVERY_PASSWORD` | Unset | Locked out? Set to reset (or create) an enabled administrator's password on boot, sign back in, then unset. See [Password recovery](../deployment/authentication.md#password-recovery). |
+| `PRISMEDIA_RECOVERY_USERNAME` | `admin` | The account `PRISMEDIA_RECOVERY_PASSWORD` resets or creates. |
 | `ASPNETCORE_URLS` | `http://0.0.0.0:8008` | Override the in-container listen address/port. |
 | `PRISMEDIA_HLS_TRANSCODER` | `auto` | Force a transcoder profile (`auto`, `software`, hardware encoders). See [HLS Streaming](../developers/hls-streaming.md). |
 | `PRISMEDIA_VAAPI_DEVICE` | `/dev/dri/renderD128` | VAAPI render node for hardware transcoding. |
@@ -80,11 +82,9 @@ There is no `PUBLIC_ORIGIN` variable. When Prismedia runs behind a reverse proxy
 
 `DATABASE_URL`, `PRISMEDIA_DATA_DIR`, and `PRISMEDIA_CACHE_DIR` are managed by the unified image's entrypoint and point at the embedded PostgreSQL and the `/data` volume. You only set these when running the API/worker outside the unified image (see [Contributing](../developers/contributing.md)).
 
-## API access
+## User accounts
 
-By default the app is open on your LAN — anyone who can reach `http://host:8008` can use the web UI. The browser app authenticates itself automatically with a same-origin, HttpOnly cookie, so normal use is frictionless.
-
-The **`/api/*` routes and the Jellyfin-compatible routes require a key.** A human-typeable API key is generated on first boot and shown in **Settings → API Access**, where you can reveal, copy, or regenerate it. You need it for external API calls and for signing in from Jellyfin clients. See [Authentication & API Keys](../deployment/authentication.md).
+The first visit to `http://host:8008` shows a **setup wizard** that creates your administrator account and signs you in — complete it promptly after starting the container. After that, everything requires a signed-in user: the web app has a login page (sessions persist per browser), and Jellyfin clients, OPDS readers, and direct `/api/*` calls authenticate with the same per-user credentials. Add household members and control their library access and NSFW visibility in **Settings → Users**. See [Authentication & User Accounts](../deployment/authentication.md).
 
 ## Image tags
 

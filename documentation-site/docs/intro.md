@@ -34,7 +34,7 @@ It ships as one Docker image. PostgreSQL 16, ffmpeg, the .NET API, the .NET work
 | **Request** | Search connected Radarr/Sonarr/Lidarr instances and request movies, series, artists, and albums. |
 | **Plugins** | Native plugins and wrapped Stash community scrapers. |
 | **Jobs** | Worker heartbeat, active queues, recent work, failures, and manual queue actions. |
-| **Settings** | Library roots, visibility, playback, subtitles, generation, worker, storage, API access, and diagnostics. |
+| **Settings** | Library roots, user accounts, playback, subtitles, generation, worker, storage, and diagnostics. |
 
 The sidebar is yours to rearrange — rename, reorder, group, hide, and collapse sections — and your layout is saved on the server and follows you across devices. See [Navigation & Mobile Gestures](./using/navigation.md).
 

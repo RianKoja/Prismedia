@@ -74,7 +74,7 @@ Use **Plugins** to:
 - Browse installed plugins (with capability and source info).
 - Install community packages from the **Prismedia Index** and wrap scrapers from the **Stash Community** tab.
 - Enable or disable providers.
-- Configure credentials (encrypted at rest — see [Authentication & API Keys](../deployment/authentication.md)).
+- Configure credentials (encrypted at rest — see [Authentication & User Accounts](../deployment/authentication.md)).
 - Update plugins when newer versions are published.
 
 ## Content ratings and NSFW

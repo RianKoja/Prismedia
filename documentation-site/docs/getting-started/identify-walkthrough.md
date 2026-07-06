@@ -27,7 +27,7 @@ One click downloads, verifies, and registers the plugin. For adult-site metadata
 
 ## 2. Add credentials (if required)
 
-Some providers need an API key. Expand the installed plugin in **Plugins → Installed**, paste the key into its auth field, and save. Credentials are encrypted at rest with the container's `PRISMEDIA_SECRET` (auto-managed; see [Authentication & API Keys](../deployment/authentication.md)).
+Some providers need an API key. Expand the installed plugin in **Plugins → Installed**, paste the key into its auth field, and save. Credentials are encrypted at rest with the container's `PRISMEDIA_SECRET` (auto-managed; see [Authentication & User Accounts](../deployment/authentication.md)).
 
 ## 3. Identify an item
 

@@ -1,58 +1,50 @@
 ---
 sidebar_position: 2
-title: Profiles, API Key & NSFW Servers
-description: Create Jellyfin sign-in profiles, manage the API key, and split SFW/NSFW access.
+title: Users & NSFW Servers
+description: Sign Jellyfin clients in with Prismedia user accounts and split SFW/NSFW access per user.
 ---
 
-# Profiles, API Key & NSFW Servers
+# Users & NSFW Servers
 
-Jellyfin clients sign in with a **username and password**. Prismedia maps that onto two things:
+Jellyfin clients sign in with a **username and password** — and in Prismedia those are simply your **user accounts**. The same credentials sign in to the web app, Jellyfin-compatible clients, and OPDS readers. There is no separate client key.
 
-- **Jellyfin profiles** — lightweight "fake users" you create. The username is the profile name.
-- **The app API key** — used as the **password** for every profile.
+## Managing users
 
-There are no per-user passwords; the single app API key authenticates all profiles. What differs between profiles is their **name** and their **NSFW visibility**.
-
-## The API key
-
-A human-typeable API key is generated on first boot. Manage it in **Settings → API Access**:
-
-- **Reveal / copy** the key to paste into a client.
-- **Regenerate** the key — this immediately **invalidates all existing Jellyfin sessions** (clients must sign in again) and also rotates the key the web app uses.
-
-The same key authenticates direct `/api/*` calls. See [Authentication & API Keys](../deployment/authentication.md).
-
-## Creating profiles
-
-In **Settings → API Access**, add a profile with:
+Administrators manage accounts in **Settings → Users**:
 
 | Field | Meaning |
 | --- | --- |
 | **Username** | The name the client signs in as (must be unique). |
 | **Display name** | Optional friendlier label. |
-| **Allow NSFW** | Whether this profile sees NSFW-flagged content. |
-| **Enabled** | Disabled profiles cannot sign in. |
+| **Role** | Administrators manage the server and see every library; members see granted libraries. |
+| **Allow NSFW** | Whether this user may see NSFW-flagged content. |
+| **Library access** | The libraries a member can see (admins always see everything). |
+| **Enabled** | Disabled users cannot sign in; disabling ends their sessions. |
 
-You can edit or delete profiles at any time. Deleting or disabling a profile, or regenerating the API key, ends its sessions.
+You can edit, disable, or delete users at any time, and reset a user's password from the same screen. Deleting or disabling a user, or resetting their password, ends their sessions — clients sign in again with the new credentials.
+
+:::info Upgrading from pre-2.0
+Former Jellyfin sign-in profiles become real member accounts automatically, and their password is the **previous server API key**, so connected clients keep working. See [Authentication & User Accounts](../deployment/authentication.md#upgrading-from-pre-20).
+:::
 
 ## NSFW "servers"
 
-Because NSFW visibility is **per profile**, you can present the same library two ways and add each as a **separate server** in your client app:
+Because NSFW visibility is **per user**, you can present the same library two ways and add each as a **separate server** in your client app:
 
 ```text
-Profile "Family"     Allow NSFW = off   →  client server A (no adult content)
-Profile "Me"         Allow NSFW = on    →  client server B (everything)
+User "family"     Allow NSFW = off   →  client server A (no adult content)
+User "me"         Allow NSFW = on    →  client server B (everything)
 ```
 
-In Infuse/Manet you add two Jellyfin servers pointing at the same Prismedia URL, signing in as each profile. The "Family" server never shows NSFW items (they're filtered out of listings, search, artwork, and playback); the "Me" server shows everything.
+In Infuse/Manet you add two Jellyfin servers pointing at the same Prismedia URL, signing in as each user. The "family" server never shows NSFW items (they're filtered out of listings, search, artwork, and playback); the "me" server shows everything.
 
-This mirrors Prismedia's own [content-visibility](../using/settings.md#content-visibility) model — the profile's setting takes the place of the browser's visibility mode for that client.
+Per-user **library access** works the same way: a member's client only ever sees the libraries an administrator granted them.
 
 ## How sign-in works
 
-1. The client sends the profile **username** and the **API key** as the password to `/Users/AuthenticateByName`.
-2. Prismedia verifies the username is an enabled profile and the password matches the API key.
+1. The client sends the **username** and **password** to `/Users/AuthenticateByName`.
+2. Prismedia verifies them against the enabled user account.
 3. It issues a session token the client stores and sends on every request.
-4. Each request is resolved back to its profile, and NSFW filtering is applied accordingly.
+4. Each request is resolved back to its user, and library access, NSFW filtering, and per-user watch state apply accordingly.
 
 Continue to [Connecting Infuse & Manet](./clients.md).

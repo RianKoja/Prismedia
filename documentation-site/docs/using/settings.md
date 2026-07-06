@@ -35,13 +35,9 @@ How files become entities is covered in [Library & Scanning](../library/overview
 
 ## Content visibility
 
-Visibility controls whether NSFW content appears in browse pages, search, files, identify, plugin providers, relationship surfaces, and Jellyfin clients. Modes are designed for private LAN use:
+NSFW visibility is a **per-user permission**: an administrator grants **Allow NSFW** per account in **Settings → Users**. A permitted user chooses whether restricted content currently shows from their **Account** page (the choice is remembered per browser); users without the permission never see NSFW content, in the web app or any connected client.
 
-- Hide restricted content by default.
-- Show restricted content when explicitly enabled.
-- Optionally auto-enable on trusted LAN access.
-
-For Jellyfin clients, visibility is set **per profile** instead — see [Jellyfin Profiles](../jellyfin/profiles.md).
+Visibility applies across browse pages, search, files, identify, plugin providers, relationship surfaces, Jellyfin clients, and OPDS — see [Users & NSFW Servers](../jellyfin/profiles.md).
 
 ## Playback
 
@@ -88,9 +84,9 @@ Connect Radarr, Sonarr, and Lidarr instances for the [Request](./requests.md) wo
 
 Worker settings include concurrency and scheduling behavior. Higher concurrency helps on large machines and hurts on small disks; raise it carefully. Changes apply without a restart.
 
-## API access
+## Users
 
-Manage the app **API key** (reveal, copy, regenerate) and **Jellyfin profiles** (create/edit/delete fake users with per-profile NSFW visibility and an enabled toggle). The API key authenticates `/api/*` calls and Jellyfin sign-in. See [Authentication & API Keys](../deployment/authentication.md) and [Jellyfin Profiles](../jellyfin/profiles.md).
+Manage user accounts: create, edit, disable, or delete users, reset passwords, set roles, grant NSFW visibility and library-creation rights, and choose which libraries each member can see. The same credentials sign in to the web app, Jellyfin clients, and OPDS readers. See [Authentication & User Accounts](../deployment/authentication.md) and [Users & NSFW Servers](../jellyfin/profiles.md).
 
 ## Diagnostics
 

@@ -163,7 +163,7 @@ the product surface:
 flowchart TD
   Program["Program.cs"] --> Services["AddPrismediaApplication and AddPrismediaInfrastructure"]
   Program --> StaticHost["Static file and SPA fallback"]
-  Program --> Auth["API key auth and UI cookie"]
+  Program --> Auth["User session auth middleware"]
   Program --> Endpoints["MapPrismediaEndpoints"]
   Endpoints --> EntityRoutes["Entities, media kinds, taxonomy, collections"]
   Endpoints --> OpsRoutes["Jobs, files, settings, nav, plugins, identify, requests"]
@@ -185,7 +185,7 @@ Important groups currently mapped:
 | Identify | `/api/identify` | Plugin services, identify queues, cascade runners. |
 | Requests | `/api/requests` | Radarr, Sonarr, Lidarr clients and history stores. |
 | Playback | `/api/playback`, `/api/music-player`, Jellyfin routes | Playback services, HLS assets, stream sources. |
-| Settings/security | `/api/settings`, `/api/security` | Settings registry, API key and Jellyfin profile services. |
+| Settings/auth | `/api/settings`, `/api/auth`, `/api/users` | Settings registry, user authentication, and user administration services. |
 
 ## Background Job Flow
 

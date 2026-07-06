@@ -25,12 +25,12 @@ Video playback is tested through Infuse (direct play of compatible files, on-dem
 
 ## What works
 
-- **Discovery & sign-in** — clients find the server and authenticate with a Jellyfin profile (a "fake user") plus the app API key. See [Profiles, API Key & NSFW Servers](./profiles.md).
+- **Discovery & sign-in** — clients find the server and authenticate with a Prismedia user's username and password, exactly like a real Jellyfin server. See [Users & NSFW Servers](./profiles.md).
 - **Browsing** — Movies, Series (with seasons/episodes), Videos, and a Music library of artists, albums, and tracks; collections and "Next Up"/resume shelves; poster, backdrop, logo, and thumbnail artwork.
 - **Video playback** — direct play for files the client can decode, transcoded HLS otherwise, with rich media-source/codec metadata so capable clients (e.g. Infuse) direct-play 4K HEVC / Dolby Vision.
 - **Audio playback** — direct for common formats, transcoded on the fly otherwise.
-- **Progress sync** — resume position, completion, and play counts sync both ways with Prismedia's native player, so where you stop in Infuse is where you resume in the browser.
-- **NSFW filtering** — each profile independently shows or hides NSFW content, so you can run separate SFW and NSFW "servers" in your client. See [Profiles, API Key & NSFW Servers](./profiles.md).
+- **Progress sync** — resume position, completion, and play counts sync both ways with Prismedia's native player, per user, so where you stop in Infuse is where you resume in the browser.
+- **Per-user visibility** — each user carries their own library access and NSFW permission, so you can run separate SFW and NSFW "servers" in your client. See [Users & NSFW Servers](./profiles.md).
 
 ## How it fits together
 
@@ -40,8 +40,8 @@ Jellyfin client (Infuse / Manet)
     ▼
 .NET API  ── /System  /Users  /Items  /Videos  /Audio  /Sessions  /Library  …
     │
-    ├─ authenticates the token to a Jellyfin profile
-    ├─ filters NSFW per the profile's setting
+    ├─ authenticates the token to a Prismedia user
+    ├─ applies the user's library access and NSFW permission
     └─ streams from Prismedia's existing video/audio pipeline
 ```
 
@@ -49,5 +49,5 @@ The Jellyfin routes are protected by Prismedia's own token auth — they are **n
 
 ## Next
 
-- [Profiles, API Key & NSFW Servers](./profiles.md) — create the "users" your clients sign in as.
+- [Users & NSFW Servers](./profiles.md) — the accounts your clients sign in as.
 - [Connecting Infuse & Manet](./clients.md) — step-by-step client setup.

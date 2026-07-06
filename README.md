@@ -92,7 +92,7 @@ Mount `/media` read-only if Prismedia should only scan and play files. Mount it 
 
 ### Access
 
-The web app is open on your LAN and authenticates itself automatically (a same-origin HttpOnly cookie). The **`/api/*` and Jellyfin routes require an API key**, generated on first boot and shown in **Settings → API Access** — you'll need it for external API calls and for signing in from Jellyfin clients. See [Authentication & API Keys](https://pauljoda.github.io/Prismedia/docs/deployment/authentication).
+Prismedia has real user accounts: a first-run wizard creates your administrator, and every household member gets their own username and password. The same credentials sign in to the web app, Jellyfin clients, and OPDS readers, and all `/api/*` routes require a signed-in user — so no reverse-proxy auth middleware is needed. Admins control per-user library access and NSFW visibility. See [Authentication & User Accounts](https://pauljoda.github.io/Prismedia/docs/deployment/authentication).
 
 ### Image Tags
 
@@ -159,7 +159,7 @@ Request is Prismedia's first-party acquisition workspace. Search for books, auth
 
 ### Jellyfin Clients (Experimental)
 
-A Jellyfin-compatible API lets client apps discover Prismedia, sign in, and stream — tested with **Infuse** (video + audio) and music clients like **Manet**, **Finamp**, and **Symfonium**. Create lightweight "fake user" profiles, sign in with the app API key, and give each profile its own NSFW visibility so you can run separate SFW and NSFW "servers" in your client. Resume position and play counts sync both ways. See [Jellyfin Compatibility](https://pauljoda.github.io/Prismedia/docs/jellyfin/overview).
+A Jellyfin-compatible API lets client apps discover Prismedia, sign in, and stream — tested with **Infuse** (video + audio) and music clients like **Manet**, **Finamp**, and **Symfonium**. Clients sign in with your Prismedia user accounts, and each user carries their own library access and NSFW visibility, so you can run separate SFW and NSFW "servers" in your client. Resume position and play counts sync both ways, per user. See [Jellyfin Compatibility](https://pauljoda.github.io/Prismedia/docs/jellyfin/overview).
 
 ### Navigation And Mobile
 
@@ -182,7 +182,7 @@ Collections are simple groupings for browsing and curation. They can be manual, 
 
 ### Jobs, Settings, And Visibility
 
-Long-running work runs in the .NET worker and is visible in **Jobs**: scans, probes, previews, thumbnails, sprites, waveforms, HLS, subtitles, identify, imports, collection refreshes, and maintenance. Settings control watched libraries, NSFW visibility, playback, subtitles, generated storage, worker concurrency, API access, and diagnostics.
+Long-running work runs in the .NET worker and is visible in **Jobs**: scans, probes, previews, thumbnails, sprites, waveforms, HLS, subtitles, identify, imports, collection refreshes, and maintenance. Settings control watched libraries, user accounts, playback, subtitles, generated storage, worker concurrency, and diagnostics.
 
 <p align="center">
   <img src="docs/screenshots/jobs.png" alt="Jobs" width="49%" />
