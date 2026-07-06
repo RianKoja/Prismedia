@@ -21,7 +21,7 @@
     showRatingControls = true,
   }: Props = $props();
 
-  provideNsfw(() => ({ initialMode: "show", lanAutoEnable: false }));
+  provideNsfw(() => ({ initialMode: "show", allowed: true }));
 </script>
 
 <UniversalLightbox

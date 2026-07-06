@@ -567,7 +567,6 @@ export const SETTING_KEYS = {
   subtitlesStyle: "subtitles.style",
   taxonomyRemoveOrphanTags: "taxonomy.removeOrphanTags",
   visibilityDefaultMode: "visibility.defaultMode",
-  visibilityLanAutoEnable: "visibility.lanAutoEnable",
 } as const;
 
 export type SettingKey = (typeof SETTING_KEYS)[keyof typeof SETTING_KEYS];

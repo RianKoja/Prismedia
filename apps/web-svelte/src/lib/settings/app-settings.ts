@@ -14,7 +14,6 @@ export type { SettingKey };
 
 export const defaultLibrarySettings: LibrarySettings = {
   visibilityDefaultMode: "off",
-  nsfwLanAutoEnable: false,
   autoScanEnabled: false,
   scanIntervalMinutes: 60,
   autoIdentifyEnabled: false,
@@ -149,10 +148,6 @@ export function valuesToLibrarySettings(
 
   return {
     visibilityDefaultMode: visibilityDefaultMode === "show" ? "show" : "off",
-    nsfwLanAutoEnable: valueAsBoolean(
-      values[settingKeys.visibilityLanAutoEnable],
-      fallback.nsfwLanAutoEnable,
-    ),
     autoScanEnabled: valueAsBoolean(
       values[settingKeys.scanAutoScanEnabled],
       fallback.autoScanEnabled,

@@ -206,7 +206,6 @@ export interface EntityReference {
 }
 export interface LibrarySettings {
   visibilityDefaultMode: "off" | "show";
-  nsfwLanAutoEnable: boolean;
   autoScanEnabled: boolean;
   scanIntervalMinutes: number;
   autoGenerateMetadata: boolean;
