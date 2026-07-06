@@ -49,6 +49,28 @@ public sealed class BookReleaseDecisionEngineTests {
         Assert.DoesNotContain(ReleaseRejectionReason.NoDownloadLink, result[0].Rejections);
     }
 
+    [Theory]
+    [InlineData("The Martian epub.exe")]
+    [InlineData("Some Book (2020).scr")]
+    [InlineData("Great Read.EXE")]
+    public void RejectsReleaseTitlesNamingDangerousFiles(string title) {
+        // The pre-download counterpart of the import-time payload hold: an obvious fake-release
+        // payload advertised right in the title never earns a grab.
+        var result = Engine.Evaluate(One(Release(title: title)), BookAcquisitionRules.Default);
+
+        Assert.False(result[0].Accepted);
+        Assert.Contains(ReleaseRejectionReason.DangerousContent, result[0].Rejections);
+    }
+
+    [Theory]
+    [InlineData("exe files explained (epub)")]
+    [InlineData("The Executioner (2020) (epub)")]
+    public void DangerousTokensMidTitleStayAcceptable(string title) {
+        var result = Engine.Evaluate(One(Release(title: title)), BookAcquisitionRules.Default);
+
+        Assert.DoesNotContain(ReleaseRejectionReason.DangerousContent, result[0].Rejections);
+    }
+
     [Fact]
     public void RejectsUsenetProtocol() {
         var result = Engine.Evaluate(One(Release(protocol: DownloadProtocol.Usenet)), BookAcquisitionRules.Default);

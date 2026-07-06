@@ -16,6 +16,19 @@ public interface IReleaseSpecification {
 }
 
 /// <summary>
+/// Rejects releases whose title already names an executable/dangerous file (e.g. ends in .exe or
+/// .scr) — the pre-download counterpart of the import-time payload gate. The classic fake release
+/// advertises its payload right in the title; grabbing it only to hold it at import wastes a grab
+/// and leaves an open abuse loop.
+/// </summary>
+public sealed class DangerousContentSpecification : IReleaseSpecification {
+    public ReleaseRejectionReason Reason => ReleaseRejectionReason.DangerousContent;
+
+    public ReleaseRejectionReason? Evaluate(IndexerRelease release, BookAcquisitionRules rules) =>
+        DangerousFileDetection.IsDangerousTitle(release.Title) ? Reason : null;
+}
+
+/// <summary>
 /// Rejects releases whose transfer protocol no enabled download client can acquire (e.g. a usenet
 /// release when no usenet client is configured). The allowed set is computed from the configured
 /// clients at search time and carried on the rules.
@@ -253,6 +266,7 @@ public sealed class BookReleaseDecisionEngine : IAcquisitionDecisionEngine {
     public EntityKind Kind => EntityKind.Book;
 
     private static readonly IReleaseSpecification[] Specifications = [
+        new DangerousContentSpecification(),
         new ProtocolSpecification(),
         new DownloadLinkSpecification(),
         new FormatSpecification(),

@@ -247,6 +247,18 @@ public sealed class MediaReleaseDecisionEnginesTests {
         Assert.Equal("Movie 1080p BluRay", ignored[0].Release.Title);
     }
 
+    [Fact]
+    public void MediaEnginesRejectReleaseTitlesNamingDangerousFiles() {
+        var engine = new MovieReleaseDecisionEngine();
+
+        var scored = engine.Evaluate(
+            [(Release("Blockbuster 2160p BluRay.exe", seeders: 500), null, "Indexer")],
+            BookAcquisitionRules.Default);
+
+        Assert.False(scored[0].Accepted);
+        Assert.Contains(ReleaseRejectionReason.DangerousContent, scored[0].Rejections);
+    }
+
     private static IndexerRelease Release(string title, int seeders) =>
         new(title, SizeBytes: 1_000_000_000, Seeders: seeders, Peers: seeders, DownloadProtocol.Torrent,
             DownloadUrl: "http://dl", MagnetUrl: null, InfoHash: null, InfoUrl: null, Language: null, PublishedAt: null);

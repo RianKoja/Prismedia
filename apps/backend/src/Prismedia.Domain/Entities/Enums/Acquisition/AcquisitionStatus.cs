@@ -111,7 +111,11 @@ public enum ReleaseRejectionReason {
 
     /// <summary>The release's total custom-format score is below the profile's minimum-format-score floor.</summary>
     [Code("below-min-format-score")]
-    BelowMinFormatScore
+    BelowMinFormatScore,
+
+    /// <summary>The release title names an executable/dangerous file (e.g. ends in .exe or .scr) — the classic fake-release payload.</summary>
+    [Code("dangerous-content")]
+    DangerousContent
 }
 
 /// <summary>

@@ -54,6 +54,7 @@ public sealed class MovieReleaseDecisionEngine : IAcquisitionDecisionEngine {
     public EntityKind Kind => EntityKind.Movie;
 
     private static readonly IReleaseSpecification[] Specifications = [
+        new DangerousContentSpecification(),
         new ProtocolSpecification(),
         new DownloadLinkSpecification(),
         new MinSeedersSpecification(),
@@ -86,6 +87,7 @@ public sealed class MusicReleaseDecisionEngine : IAcquisitionDecisionEngine {
     public EntityKind Kind => EntityKind.AudioLibrary;
 
     private static readonly IReleaseSpecification[] Specifications = [
+        new DangerousContentSpecification(),
         new ProtocolSpecification(),
         new DownloadLinkSpecification(),
         new MinSeedersSpecification(),
@@ -242,6 +244,7 @@ public sealed class TvReleaseDecisionEngine(EntityKind kind) : IAcquisitionDecis
     public EntityKind Kind => kind;
 
     private readonly IReleaseSpecification[] _specifications = [
+        new DangerousContentSpecification(),
         new ProtocolSpecification(),
         new DownloadLinkSpecification(),
         new MinSeedersSpecification(),

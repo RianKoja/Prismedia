@@ -18,4 +18,13 @@ public static class DangerousFileDetection {
     /// <summary>The first dangerous file among the payload paths, or null when the payload is clean.</summary>
     public static string? FindDangerousFile(IEnumerable<string> filePaths) =>
         filePaths.FirstOrDefault(path => DangerousExtensions.Contains(Path.GetExtension(path)));
+
+    /// <summary>
+    /// True when a release TITLE already names a dangerous file (e.g. "Some Book.epub.exe") — the
+    /// pre-download counterpart of the payload gate, so an obvious fake-release payload is rejected
+    /// before it is ever grabbed. Only the title's trailing extension is considered; a dangerous token
+    /// mid-title ("exe files explained") stays acceptable.
+    /// </summary>
+    public static bool IsDangerousTitle(string? title) =>
+        !string.IsNullOrWhiteSpace(title) && DangerousExtensions.Contains(Path.GetExtension(title.Trim()));
 }
