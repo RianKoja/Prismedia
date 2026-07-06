@@ -56,16 +56,6 @@ public static class AppSettingsRegistry {
                     new SettingOption("off", "Off (SFW)", "Hide adult content by default."),
                     new SettingOption("show", "Show", "Display all content by default.")
                 ]),
-            Boolean(
-                AppSettingKeys.VisibilityLanAutoEnable,
-                Visibility,
-                "Content Visibility",
-                "Default adult-content visibility for new browsers.",
-                10,
-                "Auto-enable on LAN",
-                "Automatically switch a fresh browser to Show mode when accessed from a local network.",
-                false,
-                20),
 
             Boolean(
                 AppSettingKeys.ScanAutoScanEnabled,

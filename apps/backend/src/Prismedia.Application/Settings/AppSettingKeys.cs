@@ -5,7 +5,6 @@ namespace Prismedia.Application.Settings;
 /// </summary>
 public static class AppSettingKeys {
     public const string VisibilityDefaultMode = "visibility.defaultMode";
-    public const string VisibilityLanAutoEnable = "visibility.lanAutoEnable";
 
     public const string ScanAutoScanEnabled = "scan.autoScanEnabled";
     public const string ScanIntervalMinutes = "scan.intervalMinutes";

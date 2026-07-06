@@ -151,12 +151,10 @@ public sealed partial class SettingsService {
     public async Task<VisibilitySettings> GetVisibilitySettingsAsync(CancellationToken cancellationToken) {
         var values = await GetValueMapAsync([
             AppSettingKeys.VisibilityDefaultMode,
-            AppSettingKeys.VisibilityLanAutoEnable,
         ], cancellationToken);
 
         return new VisibilitySettings(
-            GetString(values, AppSettingKeys.VisibilityDefaultMode),
-            GetBoolean(values, AppSettingKeys.VisibilityLanAutoEnable));
+            GetString(values, AppSettingKeys.VisibilityDefaultMode));
     }
 
     /// <summary>

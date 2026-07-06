@@ -3,7 +3,7 @@ namespace Prismedia.Application.Settings;
 /// <summary>
 /// App-global visibility defaults used when a browser has not chosen a device-local mode.
 /// </summary>
-public sealed record VisibilitySettings(string DefaultMode, bool LanAutoEnable);
+public sealed record VisibilitySettings(string DefaultMode);
 
 /// <summary>
 /// Recurring scan scheduling settings.
