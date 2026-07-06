@@ -25,4 +25,6 @@ export interface LibraryRootCreateRequest {
   isNsfw: boolean | null;
   /** @nullable */
   autoIdentify?: boolean | null;
+  /** @nullable */
+  grantUserIds?: string[] | null;
 }

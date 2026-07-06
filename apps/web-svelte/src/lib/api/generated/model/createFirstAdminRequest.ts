@@ -5,11 +5,9 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export interface JellyfinProfileCreateRequest {
+export interface CreateFirstAdminRequest {
   username: string;
+  password: string;
   /** @nullable */
-  displayName: string | null;
-  allowSfw?: boolean;
-  allowNsfw?: boolean;
-  enabled?: boolean;
+  displayName?: string | null;
 }

@@ -21,4 +21,8 @@ export interface LibraryRoot {
   createdAt: string;
   updatedAt: string;
   autoIdentify?: boolean;
+  /** @nullable */
+  createdByUserId?: string | null;
+  /** @nullable */
+  accessUserIds?: string[] | null;
 }

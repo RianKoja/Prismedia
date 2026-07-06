@@ -39,19 +39,22 @@ public sealed record EntityKindManifestEntry(
 /// <param name="CapabilityKinds">Capability discriminator codes.</param>
 /// <param name="ExternalIdProviders">Well-known external-id provider keys.</param>
 /// <param name="SettingKeys">App setting keys.</param>
+/// <param name="ProblemCodes">Machine-readable API problem codes.</param>
 public sealed record CodesManifest(
     IReadOnlyDictionary<string, IReadOnlyList<CodeEntry>> Enums,
     IReadOnlyList<EntityKindManifestEntry> EntityKinds,
     IReadOnlyList<string> CapabilityKinds,
     IReadOnlyList<ConstantEntry> ExternalIdProviders,
-    IReadOnlyList<ConstantEntry> SettingKeys) {
+    IReadOnlyList<ConstantEntry> SettingKeys,
+    IReadOnlyList<ConstantEntry> ProblemCodes) {
     /// <summary>Reflects the current backend registries into a fresh manifest.</summary>
     public static CodesManifest Build() => new(
         BuildEnums(),
         BuildEntityKinds(),
         CapabilityPolymorphism.DiscriminatorKinds,
         ReflectConstants(typeof(Contracts.Entities.ExternalIdProviders)),
-        ReflectConstants(typeof(AppSettingKeys)));
+        ReflectConstants(typeof(AppSettingKeys)),
+        ReflectConstants(typeof(Contracts.System.ApiProblemCodes)));
 
     private static IReadOnlyDictionary<string, IReadOnlyList<CodeEntry>> BuildEnums() {
         var result = new SortedDictionary<string, IReadOnlyList<CodeEntry>>(StringComparer.Ordinal);

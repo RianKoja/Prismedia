@@ -485,6 +485,13 @@ export const PROPER_DOWNLOAD_POLICY = {
 
 export type ProperDownloadPolicyCode = (typeof PROPER_DOWNLOAD_POLICY)[keyof typeof PROPER_DOWNLOAD_POLICY];
 
+export const USER_ROLE = {
+  admin: "admin",
+  member: "member",
+} as const;
+
+export type UserRoleCode = (typeof USER_ROLE)[keyof typeof USER_ROLE];
+
 export const CAPABILITY_KIND = {
   classification: "classification",
   dates: "dates",
@@ -564,6 +571,85 @@ export const SETTING_KEYS = {
 } as const;
 
 export type SettingKey = (typeof SETTING_KEYS)[keyof typeof SETTING_KEYS];
+
+export const PROBLEM_CODE = {
+  acquisitionImportBlocked: "acquisition_import_blocked",
+  acquisitionInvalid: "acquisition_invalid",
+  acquisitionNotFound: "acquisition_not_found",
+  acquisitionProfileInvalid: "acquisition_profile_invalid",
+  acquisitionReleaseNotFound: "acquisition_release_not_found",
+  adminRequired: "admin_required",
+  audioStreamNotFound: "audio_stream_not_found",
+  authRateLimited: "auth_rate_limited",
+  authenticationRequired: "authentication_required",
+  changelogNotFound: "changelog_not_found",
+  collectionNotFound: "collection_not_found",
+  databaseBackupInvalid: "database_backup_invalid",
+  databaseBackupNotFound: "database_backup_not_found",
+  databaseRestoreInvalid: "database_restore_invalid",
+  downloadClientInvalid: "download_client_invalid",
+  downloadClientUnreachable: "download_client_unreachable",
+  emptyBulkIdentify: "empty_bulk_identify",
+  entityFileNotFound: "entity_file_not_found",
+  entityNotCreatable: "entity_not_creatable",
+  entityNotDeletable: "entity_not_deletable",
+  entityNotFound: "entity_not_found",
+  fileConflict: "file_conflict",
+  identifyApplyProgressNotFound: "identify_apply_progress_not_found",
+  identifyFailed: "identify_failed",
+  identifyQueueApplyInvalid: "identify_queue_apply_invalid",
+  identifyQueueItemNotFound: "identify_queue_item_not_found",
+  identifyQueueProposalInvalid: "identify_queue_proposal_invalid",
+  indexerInvalid: "indexer_invalid",
+  indexerUnreachable: "indexer_unreachable",
+  invalidCollection: "invalid_collection",
+  invalidCollectionItems: "invalid_collection_items",
+  invalidCollectionRules: "invalid_collection_rules",
+  invalidCredentials: "invalid_credentials",
+  invalidEntity: "invalid_entity",
+  invalidEntityImageUpload: "invalid_entity_image_upload",
+  invalidEntityKind: "invalid_entity_kind",
+  invalidEntityMetadataPatch: "invalid_entity_metadata_patch",
+  invalidOpdsRequest: "invalid_opds_request",
+  invalidPath: "invalid_path",
+  invalidPlaybackEventKind: "invalid_playback_event_kind",
+  invalidPlaybackStatisticsWindow: "invalid_playback_statistics_window",
+  invalidUpload: "invalid_upload",
+  jellyfinAudioNotFound: "jellyfin_audio_not_found",
+  jellyfinAuthFailed: "jellyfin_auth_failed",
+  jellyfinImageNotFound: "jellyfin_image_not_found",
+  jellyfinItemFileNotFound: "jellyfin_item_file_not_found",
+  jellyfinItemNotFound: "jellyfin_item_not_found",
+  jellyfinQuickConnectDisabled: "jellyfin_quick_connect_disabled",
+  jellyfinQuickConnectNotFound: "jellyfin_quick_connect_not_found",
+  jellyfinUserNotFound: "jellyfin_user_not_found",
+  lastAdminRequired: "last_admin_required",
+  notFound: "not_found",
+  passwordInvalid: "password_invalid",
+  playbackItemNotFound: "playback_item_not_found",
+  playbackSourceNotFound: "playback_source_not_found",
+  pluginNotFound: "plugin_not_found",
+  pluginUpdateNotFound: "plugin_update_not_found",
+  requestInvalid: "request_invalid",
+  requestServiceInvalid: "request_service_invalid",
+  rootNotFound: "root_not_found",
+  sessionNotFound: "session_not_found",
+  settingInvalid: "setting_invalid",
+  settingNotFound: "setting_not_found",
+  setupAlreadyCompleted: "setup_already_completed",
+  unknownJobType: "unknown_job_type",
+  unsupportedEntityImageRole: "unsupported_entity_image_role",
+  userInvalid: "user_invalid",
+  userNotFound: "user_not_found",
+  videoHlsNotFound: "video_hls_not_found",
+  videoStreamNotFound: "video_stream_not_found",
+  videoSubtitleNotFound: "video_subtitle_not_found",
+  videoSubtitleSourceNotFound: "video_subtitle_source_not_found",
+  videoTrickplayNotFound: "video_trickplay_not_found",
+  videoTrickplayTileNotFound: "video_trickplay_tile_not_found",
+} as const;
+
+export type ProblemCode = (typeof PROBLEM_CODE)[keyof typeof PROBLEM_CODE];
 
 export const ENTITY_KIND_LABELS: Record<EntityKindCode, string> = {
   "audio": "Audio",

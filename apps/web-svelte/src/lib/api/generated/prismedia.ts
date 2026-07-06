@@ -13,8 +13,7 @@ import type {
   AcquisitionQueueRequest,
   AcquisitionSummary,
   AcquisitionTransferView,
-  ApiKeyRegenerateResponse,
-  ApiKeyResponse,
+  AdminSetPasswordRequest,
   ApiProblem,
   ApplyIdentifyProposalRequest,
   ApplyIdentifyQueueItemRequest,
@@ -28,6 +27,7 @@ import type {
   BrowserSessionResponse,
   BulkJobResponse,
   CancelJobsParams,
+  ChangeOwnPasswordRequest,
   ClearJobFailuresParams,
   CollectionAddItemsRequest,
   CollectionDeleteResponse,
@@ -43,6 +43,7 @@ import type {
   CommitEntityRequestParams,
   CommitRequestParams,
   CreateFileFolderParams,
+  CreateFirstAdminRequest,
   CustomFormatSaveRequest,
   CustomFormatView,
   DatabaseBackupDto,
@@ -145,10 +146,6 @@ import type {
   JellyfinDisplayPreferencesDto,
   JellyfinEndpointInfo,
   JellyfinImageInfo,
-  JellyfinProfileCreateRequest,
-  JellyfinProfileResponse,
-  JellyfinProfileUpdateRequest,
-  JellyfinProfilesResponse,
   JellyfinPublicSystemInfo,
   JellyfinQueryResultOfJellyfinBaseItemDto,
   JellyfinQueryResultOfJellyfinMediaSegmentDto,
@@ -162,10 +159,12 @@ import type {
   JobCreateResponse,
   JobFailureClearResponse,
   JobListResponse,
+  LibraryAccessUpdateRequest,
   LibraryBrowseResponse,
   LibraryConfigResponse,
   LibraryRoot,
   LibraryRootCreateRequest,
+  LibraryRootSummary,
   LibraryRootUpdateRequest,
   ListAcquisitionHistoryParams,
   ListAudioLibrariesParams,
@@ -191,6 +190,8 @@ import type {
   ListTagsParams,
   ListVideoSeriesParams,
   ListVideosParams,
+  LoginRequest,
+  LoginResponse,
   MonitorCreateRequest,
   MonitorEligibilityView,
   MonitorView,
@@ -235,6 +236,7 @@ import type {
   SettingsBatchUpdateRequest,
   SettingsCatalogResponse,
   SettingsValuesResponse,
+  SetupStatusResponse,
   StartBulkIdentifyParams,
   StashScraperListing,
   StudioDetail,
@@ -242,7 +244,14 @@ import type {
   TranscodeCacheStatusResponse,
   UpdateCheckResponse,
   UpdateMusicPlayerStateRequest,
+  UpdateOwnProfileRequest,
   UploadAcquisitionTorrentBody,
+  UserCreateRequest,
+  UserLibraryAccessUpdateRequest,
+  UserResponse,
+  UserSessionsResponse,
+  UserUpdateRequest,
+  UsersResponse,
   VideoDetail,
   VideoSeasonDetail,
   VideoSeriesDetail,
@@ -2179,6 +2188,46 @@ export const getGetJellyfinItemsUrl = () => {
 export const getJellyfinItems = async ( options?: RequestInit): Promise<getJellyfinItemsResponse> => {
 
   return orvalFetch<getJellyfinItemsResponse>(getGetJellyfinItemsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export type getJellyfinPlaylistItemsResponse200 = {
+  data: JellyfinQueryResultOfJellyfinBaseItemDto
+  status: 200
+}
+
+export type getJellyfinPlaylistItemsResponse404 = {
+  data: ApiProblem
+  status: 404
+}
+
+export type getJellyfinPlaylistItemsResponseSuccess = (getJellyfinPlaylistItemsResponse200) & {
+  headers: Headers;
+};
+export type getJellyfinPlaylistItemsResponseError = (getJellyfinPlaylistItemsResponse404) & {
+  headers: Headers;
+};
+
+export type getJellyfinPlaylistItemsResponse = (getJellyfinPlaylistItemsResponseSuccess | getJellyfinPlaylistItemsResponseError)
+
+export const getGetJellyfinPlaylistItemsUrl = (playlistId: string,) => {
+
+
+
+
+  return `/Playlists/${playlistId}/Items`
+}
+
+export const getJellyfinPlaylistItems = async (playlistId: string, options?: RequestInit): Promise<getJellyfinPlaylistItemsResponse> => {
+
+  return orvalFetch<getJellyfinPlaylistItemsResponse>(getGetJellyfinPlaylistItemsUrl(playlistId),
   {
     ...options,
     method: 'GET'
@@ -4143,32 +4192,32 @@ export const getChangelog = async ( options?: RequestInit): Promise<getChangelog
 
 
 
-export type getApiKeyResponse200 = {
-  data: ApiKeyResponse
+export type getSetupStatusResponse200 = {
+  data: SetupStatusResponse
   status: 200
 }
 
-export type getApiKeyResponseSuccess = (getApiKeyResponse200) & {
+export type getSetupStatusResponseSuccess = (getSetupStatusResponse200) & {
   headers: Headers;
 };
 ;
 
-export type getApiKeyResponse = (getApiKeyResponseSuccess)
+export type getSetupStatusResponse = (getSetupStatusResponseSuccess)
 
-export const getGetApiKeyUrl = () => {
-
-
+export const getGetSetupStatusUrl = () => {
 
 
-  return `/api/security/api-key`
+
+
+  return `/api/auth/setup-status`
 }
 
 /**
- * @summary Gets the current app API key.
+ * @summary Reports whether first-run setup (creating an admin) is required.
  */
-export const getApiKey = async ( options?: RequestInit): Promise<getApiKeyResponse> => {
+export const getSetupStatus = async ( options?: RequestInit): Promise<getSetupStatusResponse> => {
 
-  return orvalFetch<getApiKeyResponse>(getGetApiKeyUrl(),
+  return orvalFetch<getSetupStatusResponse>(getGetSetupStatusUrl(),
   {
     ...options,
     method: 'GET'
@@ -4179,32 +4228,130 @@ export const getApiKey = async ( options?: RequestInit): Promise<getApiKeyRespon
 
 
 
-export type regenerateApiKeyResponse200 = {
-  data: ApiKeyRegenerateResponse
+export type completeSetupResponse200 = {
+  data: LoginResponse
   status: 200
 }
 
-export type regenerateApiKeyResponseSuccess = (regenerateApiKeyResponse200) & {
+export type completeSetupResponse400 = {
+  data: ApiProblem
+  status: 400
+}
+
+export type completeSetupResponse409 = {
+  data: ApiProblem
+  status: 409
+}
+
+export type completeSetupResponseSuccess = (completeSetupResponse200) & {
+  headers: Headers;
+};
+export type completeSetupResponseError = (completeSetupResponse400 | completeSetupResponse409) & {
+  headers: Headers;
+};
+
+export type completeSetupResponse = (completeSetupResponseSuccess | completeSetupResponseError)
+
+export const getCompleteSetupUrl = () => {
+
+
+
+
+  return `/api/auth/setup`
+}
+
+/**
+ * @summary Creates the first admin account and signs it in.
+ */
+export const completeSetup = async (createFirstAdminRequest: CreateFirstAdminRequest, options?: RequestInit): Promise<completeSetupResponse> => {
+
+  return orvalFetch<completeSetupResponse>(getCompleteSetupUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      createFirstAdminRequest,)
+  }
+);}
+
+
+
+export type loginResponse200 = {
+  data: LoginResponse
+  status: 200
+}
+
+export type loginResponse401 = {
+  data: ApiProblem
+  status: 401
+}
+
+export type loginResponse429 = {
+  data: ApiProblem
+  status: 429
+}
+
+export type loginResponseSuccess = (loginResponse200) & {
+  headers: Headers;
+};
+export type loginResponseError = (loginResponse401 | loginResponse429) & {
+  headers: Headers;
+};
+
+export type loginResponse = (loginResponseSuccess | loginResponseError)
+
+export const getLoginUrl = () => {
+
+
+
+
+  return `/api/auth/login`
+}
+
+/**
+ * @summary Signs in with username and password, issuing a session cookie and bearer token.
+ */
+export const login = async (loginRequest: LoginRequest, options?: RequestInit): Promise<loginResponse> => {
+
+  return orvalFetch<loginResponse>(getLoginUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      loginRequest,)
+  }
+);}
+
+
+
+export type logoutResponse204 = {
+  data: void
+  status: 204
+}
+
+export type logoutResponseSuccess = (logoutResponse204) & {
   headers: Headers;
 };
 ;
 
-export type regenerateApiKeyResponse = (regenerateApiKeyResponseSuccess)
+export type logoutResponse = (logoutResponseSuccess)
 
-export const getRegenerateApiKeyUrl = () => {
-
-
+export const getLogoutUrl = () => {
 
 
-  return `/api/security/api-key/regenerate`
+
+
+  return `/api/auth/logout`
 }
 
 /**
- * @summary Regenerates the app API key and invalidates Jellyfin sessions.
+ * @summary Invalidates the current session and clears the session cookie.
  */
-export const regenerateApiKey = async ( options?: RequestInit): Promise<regenerateApiKeyResponse> => {
+export const logout = async ( options?: RequestInit): Promise<logoutResponse> => {
 
-  return orvalFetch<regenerateApiKeyResponse>(getRegenerateApiKeyUrl(),
+  return orvalFetch<logoutResponse>(getLogoutUrl(),
   {
     ...options,
     method: 'POST'
@@ -4215,32 +4362,39 @@ export const regenerateApiKey = async ( options?: RequestInit): Promise<regenera
 
 
 
-export type listJellyfinProfilesResponse200 = {
-  data: JellyfinProfilesResponse
+export type getCurrentUserResponse200 = {
+  data: UserResponse
   status: 200
 }
 
-export type listJellyfinProfilesResponseSuccess = (listJellyfinProfilesResponse200) & {
+export type getCurrentUserResponse401 = {
+  data: ApiProblem
+  status: 401
+}
+
+export type getCurrentUserResponseSuccess = (getCurrentUserResponse200) & {
   headers: Headers;
 };
-;
+export type getCurrentUserResponseError = (getCurrentUserResponse401) & {
+  headers: Headers;
+};
 
-export type listJellyfinProfilesResponse = (listJellyfinProfilesResponseSuccess)
+export type getCurrentUserResponse = (getCurrentUserResponseSuccess | getCurrentUserResponseError)
 
-export const getListJellyfinProfilesUrl = () => {
-
-
+export const getGetCurrentUserUrl = () => {
 
 
-  return `/api/security/jellyfin-profiles`
+
+
+  return `/api/auth/me`
 }
 
 /**
- * @summary Lists Jellyfin-compatible fake user profiles.
+ * @summary Gets the signed-in user.
  */
-export const listJellyfinProfiles = async ( options?: RequestInit): Promise<listJellyfinProfilesResponse> => {
+export const getCurrentUser = async ( options?: RequestInit): Promise<getCurrentUserResponse> => {
 
-  return orvalFetch<listJellyfinProfilesResponse>(getListJellyfinProfilesUrl(),
+  return orvalFetch<getCurrentUserResponse>(getGetCurrentUserUrl(),
   {
     ...options,
     method: 'GET'
@@ -4251,138 +4405,489 @@ export const listJellyfinProfiles = async ( options?: RequestInit): Promise<list
 
 
 
-export type createJellyfinProfileResponse200 = {
-  data: JellyfinProfileResponse
+export type updateCurrentUserResponse200 = {
+  data: UserResponse
   status: 200
 }
 
-export type createJellyfinProfileResponse400 = {
+export type updateCurrentUserResponse400 = {
   data: ApiProblem
   status: 400
 }
 
-export type createJellyfinProfileResponseSuccess = (createJellyfinProfileResponse200) & {
+export type updateCurrentUserResponseSuccess = (updateCurrentUserResponse200) & {
   headers: Headers;
 };
-export type createJellyfinProfileResponseError = (createJellyfinProfileResponse400) & {
+export type updateCurrentUserResponseError = (updateCurrentUserResponse400) & {
   headers: Headers;
 };
 
-export type createJellyfinProfileResponse = (createJellyfinProfileResponseSuccess | createJellyfinProfileResponseError)
+export type updateCurrentUserResponse = (updateCurrentUserResponseSuccess | updateCurrentUserResponseError)
 
-export const getCreateJellyfinProfileUrl = () => {
-
-
+export const getUpdateCurrentUserUrl = () => {
 
 
-  return `/api/security/jellyfin-profiles`
+
+
+  return `/api/auth/me`
 }
 
 /**
- * @summary Creates a Jellyfin-compatible fake user profile.
+ * @summary Updates the signed-in user's profile.
  */
-export const createJellyfinProfile = async (jellyfinProfileCreateRequest: JellyfinProfileCreateRequest, options?: RequestInit): Promise<createJellyfinProfileResponse> => {
+export const updateCurrentUser = async (updateOwnProfileRequest: UpdateOwnProfileRequest, options?: RequestInit): Promise<updateCurrentUserResponse> => {
 
-  return orvalFetch<createJellyfinProfileResponse>(getCreateJellyfinProfileUrl(),
-  {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      jellyfinProfileCreateRequest,)
-  }
-);}
-
-
-
-export type updateJellyfinProfileResponse200 = {
-  data: JellyfinProfileResponse
-  status: 200
-}
-
-export type updateJellyfinProfileResponse400 = {
-  data: ApiProblem
-  status: 400
-}
-
-export type updateJellyfinProfileResponse404 = {
-  data: ApiProblem
-  status: 404
-}
-
-export type updateJellyfinProfileResponseSuccess = (updateJellyfinProfileResponse200) & {
-  headers: Headers;
-};
-export type updateJellyfinProfileResponseError = (updateJellyfinProfileResponse400 | updateJellyfinProfileResponse404) & {
-  headers: Headers;
-};
-
-export type updateJellyfinProfileResponse = (updateJellyfinProfileResponseSuccess | updateJellyfinProfileResponseError)
-
-export const getUpdateJellyfinProfileUrl = (profileId: string,) => {
-
-
-
-
-  return `/api/security/jellyfin-profiles/${profileId}`
-}
-
-/**
- * @summary Updates a Jellyfin-compatible fake user profile.
- */
-export const updateJellyfinProfile = async (profileId: string,
-    jellyfinProfileUpdateRequest: JellyfinProfileUpdateRequest, options?: RequestInit): Promise<updateJellyfinProfileResponse> => {
-
-  return orvalFetch<updateJellyfinProfileResponse>(getUpdateJellyfinProfileUrl(profileId),
+  return orvalFetch<updateCurrentUserResponse>(getUpdateCurrentUserUrl(),
   {
     ...options,
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(
-      jellyfinProfileUpdateRequest,)
+      updateOwnProfileRequest,)
   }
 );}
 
 
 
-export type deleteJellyfinProfileResponse204 = {
+export type changeOwnPasswordResponse204 = {
   data: void
   status: 204
 }
 
-export type deleteJellyfinProfileResponse404 = {
+export type changeOwnPasswordResponse400 = {
+  data: ApiProblem
+  status: 400
+}
+
+export type changeOwnPasswordResponseSuccess = (changeOwnPasswordResponse204) & {
+  headers: Headers;
+};
+export type changeOwnPasswordResponseError = (changeOwnPasswordResponse400) & {
+  headers: Headers;
+};
+
+export type changeOwnPasswordResponse = (changeOwnPasswordResponseSuccess | changeOwnPasswordResponseError)
+
+export const getChangeOwnPasswordUrl = () => {
+
+
+
+
+  return `/api/auth/password`
+}
+
+/**
+ * @summary Changes the signed-in user's password and signs out other sessions.
+ */
+export const changeOwnPassword = async (changeOwnPasswordRequest: ChangeOwnPasswordRequest, options?: RequestInit): Promise<changeOwnPasswordResponse> => {
+
+  return orvalFetch<changeOwnPasswordResponse>(getChangeOwnPasswordUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      changeOwnPasswordRequest,)
+  }
+);}
+
+
+
+export type listOwnSessionsResponse200 = {
+  data: UserSessionsResponse
+  status: 200
+}
+
+export type listOwnSessionsResponseSuccess = (listOwnSessionsResponse200) & {
+  headers: Headers;
+};
+;
+
+export type listOwnSessionsResponse = (listOwnSessionsResponseSuccess)
+
+export const getListOwnSessionsUrl = () => {
+
+
+
+
+  return `/api/auth/sessions`
+}
+
+/**
+ * @summary Lists the signed-in user's active sessions (devices).
+ */
+export const listOwnSessions = async ( options?: RequestInit): Promise<listOwnSessionsResponse> => {
+
+  return orvalFetch<listOwnSessionsResponse>(getListOwnSessionsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export type revokeOwnSessionResponse204 = {
+  data: void
+  status: 204
+}
+
+export type revokeOwnSessionResponse404 = {
   data: ApiProblem
   status: 404
 }
 
-export type deleteJellyfinProfileResponseSuccess = (deleteJellyfinProfileResponse204) & {
+export type revokeOwnSessionResponseSuccess = (revokeOwnSessionResponse204) & {
   headers: Headers;
 };
-export type deleteJellyfinProfileResponseError = (deleteJellyfinProfileResponse404) & {
+export type revokeOwnSessionResponseError = (revokeOwnSessionResponse404) & {
   headers: Headers;
 };
 
-export type deleteJellyfinProfileResponse = (deleteJellyfinProfileResponseSuccess | deleteJellyfinProfileResponseError)
+export type revokeOwnSessionResponse = (revokeOwnSessionResponseSuccess | revokeOwnSessionResponseError)
 
-export const getDeleteJellyfinProfileUrl = (profileId: string,) => {
-
-
+export const getRevokeOwnSessionUrl = (sessionId: string,) => {
 
 
-  return `/api/security/jellyfin-profiles/${profileId}`
+
+
+  return `/api/auth/sessions/${sessionId}`
 }
 
 /**
- * @summary Deletes a Jellyfin-compatible fake user profile.
+ * @summary Revokes one of the signed-in user's sessions.
  */
-export const deleteJellyfinProfile = async (profileId: string, options?: RequestInit): Promise<deleteJellyfinProfileResponse> => {
+export const revokeOwnSession = async (sessionId: string, options?: RequestInit): Promise<revokeOwnSessionResponse> => {
 
-  return orvalFetch<deleteJellyfinProfileResponse>(getDeleteJellyfinProfileUrl(profileId),
+  return orvalFetch<revokeOwnSessionResponse>(getRevokeOwnSessionUrl(sessionId),
   {
     ...options,
     method: 'DELETE'
 
 
+  }
+);}
+
+
+
+export type listUsersResponse200 = {
+  data: UsersResponse
+  status: 200
+}
+
+export type listUsersResponseSuccess = (listUsersResponse200) & {
+  headers: Headers;
+};
+;
+
+export type listUsersResponse = (listUsersResponseSuccess)
+
+export const getListUsersUrl = () => {
+
+
+
+
+  return `/api/users`
+}
+
+/**
+ * @summary Lists all user accounts with their library access.
+ */
+export const listUsers = async ( options?: RequestInit): Promise<listUsersResponse> => {
+
+  return orvalFetch<listUsersResponse>(getListUsersUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export type createUserResponse200 = {
+  data: UserResponse
+  status: 200
+}
+
+export type createUserResponse400 = {
+  data: ApiProblem
+  status: 400
+}
+
+export type createUserResponseSuccess = (createUserResponse200) & {
+  headers: Headers;
+};
+export type createUserResponseError = (createUserResponse400) & {
+  headers: Headers;
+};
+
+export type createUserResponse = (createUserResponseSuccess | createUserResponseError)
+
+export const getCreateUserUrl = () => {
+
+
+
+
+  return `/api/users`
+}
+
+/**
+ * @summary Creates a user account.
+ */
+export const createUser = async (userCreateRequest: UserCreateRequest, options?: RequestInit): Promise<createUserResponse> => {
+
+  return orvalFetch<createUserResponse>(getCreateUserUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      userCreateRequest,)
+  }
+);}
+
+
+
+export type getUserResponse200 = {
+  data: UserResponse
+  status: 200
+}
+
+export type getUserResponse404 = {
+  data: ApiProblem
+  status: 404
+}
+
+export type getUserResponseSuccess = (getUserResponse200) & {
+  headers: Headers;
+};
+export type getUserResponseError = (getUserResponse404) & {
+  headers: Headers;
+};
+
+export type getUserResponse = (getUserResponseSuccess | getUserResponseError)
+
+export const getGetUserUrl = (userId: string,) => {
+
+
+
+
+  return `/api/users/${userId}`
+}
+
+/**
+ * @summary Gets one user account.
+ */
+export const getUser = async (userId: string, options?: RequestInit): Promise<getUserResponse> => {
+
+  return orvalFetch<getUserResponse>(getGetUserUrl(userId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export type updateUserResponse200 = {
+  data: UserResponse
+  status: 200
+}
+
+export type updateUserResponse400 = {
+  data: ApiProblem
+  status: 400
+}
+
+export type updateUserResponse404 = {
+  data: ApiProblem
+  status: 404
+}
+
+export type updateUserResponse409 = {
+  data: ApiProblem
+  status: 409
+}
+
+export type updateUserResponseSuccess = (updateUserResponse200) & {
+  headers: Headers;
+};
+export type updateUserResponseError = (updateUserResponse400 | updateUserResponse404 | updateUserResponse409) & {
+  headers: Headers;
+};
+
+export type updateUserResponse = (updateUserResponseSuccess | updateUserResponseError)
+
+export const getUpdateUserUrl = (userId: string,) => {
+
+
+
+
+  return `/api/users/${userId}`
+}
+
+/**
+ * @summary Updates a user account; the last enabled admin cannot be demoted or disabled.
+ */
+export const updateUser = async (userId: string,
+    userUpdateRequest: UserUpdateRequest, options?: RequestInit): Promise<updateUserResponse> => {
+
+  return orvalFetch<updateUserResponse>(getUpdateUserUrl(userId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      userUpdateRequest,)
+  }
+);}
+
+
+
+export type deleteUserResponse204 = {
+  data: void
+  status: 204
+}
+
+export type deleteUserResponse404 = {
+  data: ApiProblem
+  status: 404
+}
+
+export type deleteUserResponse409 = {
+  data: ApiProblem
+  status: 409
+}
+
+export type deleteUserResponseSuccess = (deleteUserResponse204) & {
+  headers: Headers;
+};
+export type deleteUserResponseError = (deleteUserResponse404 | deleteUserResponse409) & {
+  headers: Headers;
+};
+
+export type deleteUserResponse = (deleteUserResponseSuccess | deleteUserResponseError)
+
+export const getDeleteUserUrl = (userId: string,) => {
+
+
+
+
+  return `/api/users/${userId}`
+}
+
+/**
+ * @summary Deletes a user account; the last enabled admin cannot be deleted.
+ */
+export const deleteUser = async (userId: string, options?: RequestInit): Promise<deleteUserResponse> => {
+
+  return orvalFetch<deleteUserResponse>(getDeleteUserUrl(userId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+export type setUserPasswordResponse204 = {
+  data: void
+  status: 204
+}
+
+export type setUserPasswordResponse400 = {
+  data: ApiProblem
+  status: 400
+}
+
+export type setUserPasswordResponse404 = {
+  data: ApiProblem
+  status: 404
+}
+
+export type setUserPasswordResponseSuccess = (setUserPasswordResponse204) & {
+  headers: Headers;
+};
+export type setUserPasswordResponseError = (setUserPasswordResponse400 | setUserPasswordResponse404) & {
+  headers: Headers;
+};
+
+export type setUserPasswordResponse = (setUserPasswordResponseSuccess | setUserPasswordResponseError)
+
+export const getSetUserPasswordUrl = (userId: string,) => {
+
+
+
+
+  return `/api/users/${userId}/password`
+}
+
+/**
+ * @summary Resets a user's password and signs them out everywhere.
+ */
+export const setUserPassword = async (userId: string,
+    adminSetPasswordRequest: AdminSetPasswordRequest, options?: RequestInit): Promise<setUserPasswordResponse> => {
+
+  return orvalFetch<setUserPasswordResponse>(getSetUserPasswordUrl(userId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      adminSetPasswordRequest,)
+  }
+);}
+
+
+
+export type replaceUserLibraryAccessResponse204 = {
+  data: void
+  status: 204
+}
+
+export type replaceUserLibraryAccessResponse404 = {
+  data: ApiProblem
+  status: 404
+}
+
+export type replaceUserLibraryAccessResponseSuccess = (replaceUserLibraryAccessResponse204) & {
+  headers: Headers;
+};
+export type replaceUserLibraryAccessResponseError = (replaceUserLibraryAccessResponse404) & {
+  headers: Headers;
+};
+
+export type replaceUserLibraryAccessResponse = (replaceUserLibraryAccessResponseSuccess | replaceUserLibraryAccessResponseError)
+
+export const getReplaceUserLibraryAccessUrl = (userId: string,) => {
+
+
+
+
+  return `/api/users/${userId}/library-access`
+}
+
+/**
+ * @summary Replaces the library roots a member user can access.
+ */
+export const replaceUserLibraryAccess = async (userId: string,
+    userLibraryAccessUpdateRequest: UserLibraryAccessUpdateRequest, options?: RequestInit): Promise<replaceUserLibraryAccessResponse> => {
+
+  return orvalFetch<replaceUserLibraryAccessResponse>(getReplaceUserLibraryAccessUrl(userId),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      userLibraryAccessUpdateRequest,)
   }
 );}
 
@@ -4787,6 +5292,11 @@ export type updateEntityFlagsResponse200 = {
   status: 200
 }
 
+export type updateEntityFlagsResponse403 = {
+  data: ApiProblem
+  status: 403
+}
+
 export type updateEntityFlagsResponse404 = {
   data: ApiProblem
   status: 404
@@ -4795,7 +5305,7 @@ export type updateEntityFlagsResponse404 = {
 export type updateEntityFlagsResponseSuccess = (updateEntityFlagsResponse200) & {
   headers: Headers;
 };
-export type updateEntityFlagsResponseError = (updateEntityFlagsResponse404) & {
+export type updateEntityFlagsResponseError = (updateEntityFlagsResponse403 | updateEntityFlagsResponse404) & {
   headers: Headers;
 };
 
@@ -9100,7 +9610,7 @@ export const getListLibraryRootsUrl = () => {
 }
 
 /**
- * @summary Lists watched media roots.
+ * @summary Lists watched media roots with per-user access (admin).
  */
 export const listLibraryRoots = async ( options?: RequestInit): Promise<listLibraryRootsResponse> => {
 
@@ -9120,12 +9630,19 @@ export type createLibraryRootResponse200 = {
   status: 200
 }
 
+export type createLibraryRootResponse403 = {
+  data: ApiProblem
+  status: 403
+}
+
 export type createLibraryRootResponseSuccess = (createLibraryRootResponse200) & {
   headers: Headers;
 };
-;
+export type createLibraryRootResponseError = (createLibraryRootResponse403) & {
+  headers: Headers;
+};
 
-export type createLibraryRootResponse = (createLibraryRootResponseSuccess)
+export type createLibraryRootResponse = (createLibraryRootResponseSuccess | createLibraryRootResponseError)
 
 export const getCreateLibraryRootUrl = () => {
 
@@ -9152,17 +9669,60 @@ export const createLibraryRoot = async (libraryRootCreateRequest: LibraryRootCre
 
 
 
+export type listAccessibleLibraryRootsResponse200 = {
+  data: LibraryRootSummary[]
+  status: 200
+}
+
+export type listAccessibleLibraryRootsResponseSuccess = (listAccessibleLibraryRootsResponse200) & {
+  headers: Headers;
+};
+;
+
+export type listAccessibleLibraryRootsResponse = (listAccessibleLibraryRootsResponseSuccess)
+
+export const getListAccessibleLibraryRootsUrl = () => {
+
+
+
+
+  return `/api/libraries/accessible`
+}
+
+/**
+ * @summary Lists the library roots the signed-in user can access.
+ */
+export const listAccessibleLibraryRoots = async ( options?: RequestInit): Promise<listAccessibleLibraryRootsResponse> => {
+
+  return orvalFetch<listAccessibleLibraryRootsResponse>(getListAccessibleLibraryRootsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
 export type browseLibraryPathResponse200 = {
   data: LibraryBrowseResponse
   status: 200
 }
 
+export type browseLibraryPathResponse403 = {
+  data: ApiProblem
+  status: 403
+}
+
 export type browseLibraryPathResponseSuccess = (browseLibraryPathResponse200) & {
   headers: Headers;
 };
-;
+export type browseLibraryPathResponseError = (browseLibraryPathResponse403) & {
+  headers: Headers;
+};
 
-export type browseLibraryPathResponse = (browseLibraryPathResponseSuccess)
+export type browseLibraryPathResponse = (browseLibraryPathResponseSuccess | browseLibraryPathResponseError)
 
 export const getBrowseLibraryPathUrl = (params?: BrowseLibraryPathParams,) => {
   const normalizedParams = new URLSearchParams();
@@ -9196,16 +9756,28 @@ export const browseLibraryPath = async (params?: BrowseLibraryPathParams, option
 
 
 export type updateLibraryRootResponse200 = {
-  data: void
+  data: LibraryRoot
   status: 200
+}
+
+export type updateLibraryRootResponse403 = {
+  data: ApiProblem
+  status: 403
+}
+
+export type updateLibraryRootResponse404 = {
+  data: void
+  status: 404
 }
 
 export type updateLibraryRootResponseSuccess = (updateLibraryRootResponse200) & {
   headers: Headers;
 };
-;
+export type updateLibraryRootResponseError = (updateLibraryRootResponse403 | updateLibraryRootResponse404) & {
+  headers: Headers;
+};
 
-export type updateLibraryRootResponse = (updateLibraryRootResponseSuccess)
+export type updateLibraryRootResponse = (updateLibraryRootResponseSuccess | updateLibraryRootResponseError)
 
 export const getUpdateLibraryRootUrl = (id: string,) => {
 
@@ -9233,17 +9805,22 @@ export const updateLibraryRoot = async (id: string,
 
 
 
-export type deleteLibraryRootResponse200 = {
-  data: void
-  status: 200
+export type deleteLibraryRootResponse403 = {
+  data: ApiProblem
+  status: 403
 }
 
-export type deleteLibraryRootResponseSuccess = (deleteLibraryRootResponse200) & {
+export type deleteLibraryRootResponse404 = {
+  data: void
+  status: 404
+}
+
+;
+export type deleteLibraryRootResponseError = (deleteLibraryRootResponse403 | deleteLibraryRootResponse404) & {
   headers: Headers;
 };
-;
 
-export type deleteLibraryRootResponse = (deleteLibraryRootResponseSuccess)
+export type deleteLibraryRootResponse = (deleteLibraryRootResponseError)
 
 export const getDeleteLibraryRootUrl = (id: string,) => {
 
@@ -9264,6 +9841,51 @@ export const deleteLibraryRoot = async (id: string, options?: RequestInit): Prom
     method: 'DELETE'
 
 
+  }
+);}
+
+
+
+export type replaceLibraryAccessResponse204 = {
+  data: void
+  status: 204
+}
+
+export type replaceLibraryAccessResponse404 = {
+  data: ApiProblem
+  status: 404
+}
+
+export type replaceLibraryAccessResponseSuccess = (replaceLibraryAccessResponse204) & {
+  headers: Headers;
+};
+export type replaceLibraryAccessResponseError = (replaceLibraryAccessResponse404) & {
+  headers: Headers;
+};
+
+export type replaceLibraryAccessResponse = (replaceLibraryAccessResponseSuccess | replaceLibraryAccessResponseError)
+
+export const getReplaceLibraryAccessUrl = (id: string,) => {
+
+
+
+
+  return `/api/libraries/${id}/access`
+}
+
+/**
+ * @summary Replaces the member users granted access to a library root (admin).
+ */
+export const replaceLibraryAccess = async (id: string,
+    libraryAccessUpdateRequest: LibraryAccessUpdateRequest, options?: RequestInit): Promise<replaceLibraryAccessResponse> => {
+
+  return orvalFetch<replaceLibraryAccessResponse>(getReplaceLibraryAccessUrl(id),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      libraryAccessUpdateRequest,)
   }
 );}
 

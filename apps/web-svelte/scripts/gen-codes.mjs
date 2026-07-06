@@ -61,6 +61,7 @@ const ENUM_EXPORTS = [
   ["BookFormatTier", "BOOK_FORMAT_TIER", "BookFormatTierCode"],
   ["BookSourceTier", "BOOK_SOURCE_TIER", "BookSourceTierCode"],
   ["ProperDownloadPolicy", "PROPER_DOWNLOAD_POLICY", "ProperDownloadPolicyCode"],
+  ["UserRole", "USER_ROLE", "UserRoleCode"],
 ];
 
 const camel = (name) => (name.length === 0 ? name : name[0].toLowerCase() + name.slice(1));
@@ -115,6 +116,15 @@ async function main() {
       "SETTING_KEYS",
       "SettingKey",
       (manifest.settingKeys ?? []).map((c) => [camel(c.name), c.value]),
+    ),
+  );
+
+  // Machine-readable API problem codes (matched by clients instead of message text).
+  sections.push(
+    constBlock(
+      "PROBLEM_CODE",
+      "ProblemCode",
+      (manifest.problemCodes ?? []).map((c) => [camel(c.name), c.value]),
     ),
   );
 

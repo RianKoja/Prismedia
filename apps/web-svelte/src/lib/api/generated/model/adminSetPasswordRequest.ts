@@ -5,8 +5,6 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export interface ApiKeyResponse {
-  apiKey: string;
-  createdAt: string;
-  updatedAt: string;
+export interface AdminSetPasswordRequest {
+  newPassword: string;
 }

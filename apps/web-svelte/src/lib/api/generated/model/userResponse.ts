@@ -4,16 +4,21 @@
  * Prismedia.Api | v1
  * OpenAPI spec version: 1.0.0
  */
+import type { UserRole } from './userRole';
 
-export interface JellyfinProfileResponse {
+export interface UserResponse {
   id: string;
   username: string;
   displayName: string;
+  role: UserRole;
   allowSfw: boolean;
   allowNsfw: boolean;
+  canCreateLibraries: boolean;
   enabled: boolean;
   /** @nullable */
   lastLoginAt: string | null;
   createdAt: string;
   updatedAt: string;
+  /** @nullable */
+  libraryRootIds?: string[] | null;
 }

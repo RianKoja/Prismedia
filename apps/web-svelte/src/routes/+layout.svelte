@@ -1,7 +1,8 @@
 <script lang="ts">
   import "../app.css";
 
-  import { afterNavigate } from "$app/navigation";
+  import { afterNavigate, beforeNavigate, goto } from "$app/navigation";
+  import { page } from "$app/state";
   import { onMount, tick } from "svelte";
   import type { Snapshot } from "@sveltejs/kit";
   import { cn } from "@prismedia/ui-svelte";
@@ -10,6 +11,7 @@
   import MobileNav from "$lib/components/MobileNav.svelte";
   import CommandPalette from "$lib/components/CommandPalette.svelte";
   import AudioVidStackPlayer from "$lib/components/AudioVidStackPlayer.svelte";
+  import { provideSession } from "$lib/stores/session.svelte";
 
   import { type NsfwMode, parseNsfwModeCookie } from "$lib/nsfw/cookie";
   import { provideNsfw } from "$lib/nsfw/store.svelte";
@@ -47,10 +49,38 @@
   let { data, children: pageContent } = $props();
   const layoutData = $derived({ ...defaultLayoutData, ...data });
 
-  // Wire all context providers once at the root. The stores themselves
-  // attach keyboard listeners (Cmd+K, ⌘⇧Z) via $effect.root on client boot.
+  // Wire all context providers once at the root. Session comes first so downstream
+  // stores (NSFW cap, nav gating) can consume it. The stores themselves attach
+  // keyboard listeners (Cmd+K, ⌘⇧Z) via $effect.root on client boot.
+  // svelte-ignore state_referenced_locally -- the session seeds once per boot; auth
+  // transitions always use full-page navigations, so live tracking is unnecessary.
+  const session = provideSession({
+    user: data.user ?? null,
+    needsSetup: data.needsSetup ?? false,
+  });
+
+  // The login page and setup wizard render bare (no sidebar, header, nav, or player):
+  // they are the app's front door and must never flash the authenticated shell.
+  const bareShell = $derived(
+    page.url.pathname === "/login" || page.url.pathname.startsWith("/setup"),
+  );
+
+  // Defense-in-depth for client-side navigations after boot: the root load guard only
+  // runs on full loads, so mid-session transitions check the in-memory session.
+  beforeNavigate((navigation) => {
+    const path = navigation.to?.url.pathname;
+    if (!path) return;
+    if (session.status === "needs-setup" && !path.startsWith("/setup")) {
+      navigation.cancel();
+      void goto("/setup");
+    } else if (session.status === "anonymous" && path !== "/login" && !path.startsWith("/setup")) {
+      navigation.cancel();
+      void goto(`/login?returnTo=${encodeURIComponent(path)}`);
+    }
+  });
+
   provideNsfw(() => ({
-    initialMode: readNsfwCookie() ?? layoutData.initialNsfwMode,
+    initialMode: readNsfwCookie() ?? layoutData.initialNsfwMode ?? "off",
     lanAutoEnable: layoutData.lanAutoEnable,
     hasExplicitMode: readNsfwCookie() !== null || layoutData.hasNsfwModeCookie,
   }));
@@ -143,15 +173,18 @@
     window.addEventListener("pagehide", persistMusicPlayerState);
     const timePersistInterval = window.setInterval(persistMusicPlayerTimeIfChanged, 5000);
     const controller = new AbortController();
-    void fetchMusicPlayerState(controller.signal)
-      .then((state) => playback.restore(state))
-      .catch(() => {})
-      .finally(() => {
-        const state = musicPlayerState();
-        lastMusicPlayerSnapshot = musicPlayerSnapshotFromState(state);
-        lastMusicPlayerTimeSnapshot = musicPlayerTimeSnapshotFromState(state);
-        musicPlayerPersistenceReady = true;
-      });
+    // Music-player persistence needs a session; pre-login boots (login/setup) skip it.
+    if (session.status === "authed") {
+      void fetchMusicPlayerState(controller.signal)
+        .then((state) => playback.restore(state))
+        .catch(() => {})
+        .finally(() => {
+          const state = musicPlayerState();
+          lastMusicPlayerSnapshot = musicPlayerSnapshotFromState(state);
+          lastMusicPlayerTimeSnapshot = musicPlayerTimeSnapshotFromState(state);
+          musicPlayerPersistenceReady = true;
+        });
+    }
 
     return () => {
       controller.abort();
@@ -219,35 +252,39 @@
   });
 </script>
 
-<div
-  class="flex min-h-dvh"
-  style:--prismedia-bottom-dock-padding={bottomDockPadding}
-  style:--prismedia-mobile-nav-height="calc(3.65rem + max(1.25rem, env(safe-area-inset-bottom, 0px)))"
-  style:--prismedia-mobile-bottom-clearance="calc(3.65rem + max(1.25rem, env(safe-area-inset-bottom, 0px)) + var(--prismedia-bottom-dock-padding))"
-  style:--prismedia-desktop-bottom-clearance="var(--prismedia-bottom-dock-padding)"
->
-  <!-- Desktop sidebar -->
-  <div class="hidden md:block">
-    <Sidebar collapsed={chrome.sidebarCollapsed} onToggle={() => chrome.toggleSidebar()} />
-  </div>
-
-  <main
-    bind:this={mainScroller}
-    class={cn(
-      "flex flex-1 flex-col transition-[margin-left] duration-moderate",
-      "h-[calc(100dvh-var(--prismedia-mobile-nav-height))] overflow-y-auto [scrollbar-gutter:stable] md:h-dvh",
-      chrome.sidebarCollapsed ? "md:ml-14" : "md:ml-60",
-    )}
-    style:transition-timing-function="var(--ease-mechanical)"
-    style:padding-bottom="var(--prismedia-bottom-dock-padding)"
+{#if bareShell}
+  {@render pageContent()}
+{:else}
+  <div
+    class="flex min-h-dvh"
+    style:--prismedia-bottom-dock-padding={bottomDockPadding}
+    style:--prismedia-mobile-nav-height="calc(3.65rem + max(1.25rem, env(safe-area-inset-bottom, 0px)))"
+    style:--prismedia-mobile-bottom-clearance="calc(3.65rem + max(1.25rem, env(safe-area-inset-bottom, 0px)) + var(--prismedia-bottom-dock-padding))"
+    style:--prismedia-desktop-bottom-clearance="var(--prismedia-bottom-dock-padding)"
   >
-    <CanvasHeader />
-    <div class="flex-1 p-5">
-      {@render pageContent()}
+    <!-- Desktop sidebar -->
+    <div class="hidden md:block">
+      <Sidebar collapsed={chrome.sidebarCollapsed} onToggle={() => chrome.toggleSidebar()} />
     </div>
-  </main>
 
-  <MobileNav />
-  <CommandPalette />
-  <AudioVidStackPlayer />
-</div>
+    <main
+      bind:this={mainScroller}
+      class={cn(
+        "flex flex-1 flex-col transition-[margin-left] duration-moderate",
+        "h-[calc(100dvh-var(--prismedia-mobile-nav-height))] overflow-y-auto [scrollbar-gutter:stable] md:h-dvh",
+        chrome.sidebarCollapsed ? "md:ml-14" : "md:ml-60",
+      )}
+      style:transition-timing-function="var(--ease-mechanical)"
+      style:padding-bottom="var(--prismedia-bottom-dock-padding)"
+    >
+      <CanvasHeader />
+      <div class="flex-1 p-5">
+        {@render pageContent()}
+      </div>
+    </main>
+
+    <MobileNav />
+    <CommandPalette />
+    <AudioVidStackPlayer />
+  </div>
+{/if}

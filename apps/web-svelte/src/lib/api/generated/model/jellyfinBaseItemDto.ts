@@ -123,6 +123,8 @@ export interface JellyfinBaseItemDto {
   /** @nullable */
   CollectionType?: string | null;
   ParentId?: unknown;
+  /** @nullable */
+  PlaylistItemId?: string | null;
   IsFolder?: boolean;
   /**
      * @nullable

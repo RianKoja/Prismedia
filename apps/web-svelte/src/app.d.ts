@@ -2,6 +2,7 @@
 // for information about these interfaces
 import "vidstack/svelte";
 import type { NsfwMode } from "$lib/nsfw/cookie";
+import type { AuthUser } from "$lib/api/auth";
 
 declare global {
   namespace App {
@@ -12,6 +13,8 @@ declare global {
       hasNsfwModeCookie?: boolean;
       initialNsfwMode?: NsfwMode;
       lanAutoEnable?: boolean;
+      user?: AuthUser | null;
+      needsSetup?: boolean;
     }
     // interface PageState {}
     // interface Platform {}
