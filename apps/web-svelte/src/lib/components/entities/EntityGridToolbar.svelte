@@ -40,6 +40,10 @@
     activeFilterIds: string[];
     activePresetId?: string | null;
     allSelectedNsfw: boolean;
+    /** True when every selected card is a wanted placeholder; enables the Remove wanted bulk action. */
+    allSelectedWanted?: boolean;
+    /** Removes the selected wanted placeholders (delete + discovery blacklist). */
+    onRemoveWanted?: () => void;
     /** Persisted collapse state for the secondary toolbar rows; seeds the initial view. */
     barsCollapsed?: boolean;
     bulkActions: EntityGridBulkAction[];
@@ -79,6 +83,8 @@
     query: string;
     scale: number;
     selectable: boolean;
+    /** Whether the selection bar offers the Mark NSFW action (off for non-library grids). */
+    showNsfwAction?: boolean;
     selectedCount: number;
     selectedIds: string[];
     selectionActive: boolean;
@@ -91,6 +97,8 @@
     activeFilterIds,
     activePresetId = null,
     allSelectedNsfw,
+    allSelectedWanted = false,
+    onRemoveWanted,
     barsCollapsed: initialBarsCollapsed = false,
     bulkActions,
     collectionItems,
@@ -125,6 +133,7 @@
     query,
     scale,
     selectable,
+    showNsfwAction = true,
     selectedCount,
     selectedIds,
     selectionActive,
@@ -491,12 +500,15 @@
     {#if selectable && !barsCollapsed}
       <BulkSelectionBar
         {allSelectedNsfw}
+        {allSelectedWanted}
+        {onRemoveWanted}
         {bulkActions}
         {collectionItems}
         {onClearSelection}
         {onSelectAllVisible}
         {onSelectionActiveChange}
         {onToggleNsfwFlag}
+        {showNsfwAction}
         {selectedCount}
         {selectedIds}
         {selectionActive}

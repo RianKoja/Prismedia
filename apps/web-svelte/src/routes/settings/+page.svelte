@@ -48,7 +48,7 @@
   } from "$lib/settings/app-settings";
   import { useNsfw } from "$lib/nsfw/store.svelte";
   import SettingsControl from "$lib/components/settings/SettingsControl.svelte";
-  import RequestServicesSection from "$lib/components/settings/RequestServicesSection.svelte";
+  import AcquisitionSection from "$lib/components/settings/AcquisitionSection.svelte";
   import AutoIdentifySection from "$lib/components/settings/AutoIdentifySection.svelte";
   import DatabaseBackupsSection from "$lib/components/settings/DatabaseBackupsSection.svelte";
   import DiagnosticsSection from "$lib/components/settings/DiagnosticsSection.svelte";
@@ -746,8 +746,8 @@
     </div>
   </Panel>
 
-  <!-- ── Request Services ── -->
-  <RequestServicesSection onError={setError} onMessage={flashMessage} />
+  <!-- ── Acquisition ── -->
+  <AcquisitionSection onError={setError} onMessage={flashMessage} />
 
   <!-- ── Playback ── -->
   <Panel>

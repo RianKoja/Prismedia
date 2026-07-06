@@ -14,6 +14,7 @@ export const ENTITY_KIND = {
   gallery: "gallery",
   image: "image",
   musicArtist: "music-artist",
+  bookAuthor: "book-author",
   person: "person",
   movie: "movie",
   studio: "studio",
@@ -33,6 +34,7 @@ export const PROPOSAL_KIND = {
   bookVolume: "book-volume",
   bookChapter: "book-chapter",
   bookPage: "book-page",
+  bookAuthor: "book-author",
   collection: "collection",
   gallery: "gallery",
   image: "image",
@@ -117,9 +119,49 @@ export const JOB_TYPE = {
   bulkIdentify: "bulk-identify",
   autoIdentify: "auto-identify",
   identifyCascade: "identify-cascade",
+  acquisitionSearch: "acquisition-search",
+  acquisitionMonitor: "acquisition-monitor",
+  acquisitionImport: "acquisition-import",
+  acquisitionFailedHandle: "acquisition-failed-handle",
+  monitoredSearch: "monitored-search",
+  acquisitionUpgradeReplace: "acquisition-upgrade-replace",
+  acquisitionEnrich: "acquisition-enrich",
+  recycleBinCleanup: "recycle-bin-cleanup",
 } as const;
 
 export type JobTypeCode = (typeof JOB_TYPE)[keyof typeof JOB_TYPE];
+
+export const VIDEO_QUALITY = {
+  unknown: "unknown",
+  sdtv: "sdtv",
+  dvd: "dvd",
+  hdtv720p: "hdtv-720p",
+  webrip720p: "webrip-720p",
+  webdl720p: "webdl-720p",
+  bluray720p: "bluray-720p",
+  hdtv1080p: "hdtv-1080p",
+  webrip1080p: "webrip-1080p",
+  webdl1080p: "webdl-1080p",
+  bluray1080p: "bluray-1080p",
+  remux1080p: "remux-1080p",
+  hdtv2160p: "hdtv-2160p",
+  webrip2160p: "webrip-2160p",
+  webdl2160p: "webdl-2160p",
+  bluray2160p: "bluray-2160p",
+  remux2160p: "remux-2160p",
+} as const;
+
+export type VideoQualityCode = (typeof VIDEO_QUALITY)[keyof typeof VIDEO_QUALITY];
+
+export const AUDIO_QUALITY = {
+  unknown: "unknown",
+  lossy: "lossy",
+  lossyHigh: "lossy-high",
+  lossless: "lossless",
+  losslessHiRes: "lossless-hires",
+} as const;
+
+export type AudioQualityCode = (typeof AUDIO_QUALITY)[keyof typeof AUDIO_QUALITY];
 
 export const JOB_RUN_STATUS = {
   queued: "queued",
@@ -265,43 +307,24 @@ export const READER_MODE = {
 export type ReaderModeCode = (typeof READER_MODE)[keyof typeof READER_MODE];
 
 export const REQUEST_PROVIDER_KIND = {
-  radarr: "radarr",
-  sonarr: "sonarr",
-  lidarr: "lidarr",
   plugin: "plugin",
 } as const;
 
 export type RequestProviderKindCode = (typeof REQUEST_PROVIDER_KIND)[keyof typeof REQUEST_PROVIDER_KIND];
 
 export const REQUEST_MEDIA_KIND = {
+  book: "book",
+  author: "author",
   movie: "movie",
   series: "series",
+  season: "season",
+  episode: "episode",
   artist: "artist",
   album: "album",
   plugin: "plugin",
 } as const;
 
 export type RequestMediaKindCode = (typeof REQUEST_MEDIA_KIND)[keyof typeof REQUEST_MEDIA_KIND];
-
-export const REQUEST_MINIMUM_AVAILABILITY = {
-  announced: "announced",
-  inCinemas: "inCinemas",
-  released: "released",
-} as const;
-
-export type RequestMinimumAvailabilityCode = (typeof REQUEST_MINIMUM_AVAILABILITY)[keyof typeof REQUEST_MINIMUM_AVAILABILITY];
-
-export const REQUEST_HISTORY_STATUS = {
-  submitted: "submitted",
-  pending: "pending",
-  downloading: "downloading",
-  partial: "partial",
-  available: "available",
-  removed: "removed",
-  unknown: "unknown",
-} as const;
-
-export type RequestHistoryStatusCode = (typeof REQUEST_HISTORY_STATUS)[keyof typeof REQUEST_HISTORY_STATUS];
 
 export const REQUEST_RATING_SOURCE = {
   tmdb: "tmdb",
@@ -311,6 +334,156 @@ export const REQUEST_RATING_SOURCE = {
 } as const;
 
 export type RequestRatingSourceCode = (typeof REQUEST_RATING_SOURCE)[keyof typeof REQUEST_RATING_SOURCE];
+
+export const REQUEST_COMMIT_OUTCOME = {
+  requested: "requested",
+  alreadyOwned: "already-owned",
+  alreadyRequested: "already-requested",
+} as const;
+
+export type RequestCommitOutcomeCode = (typeof REQUEST_COMMIT_OUTCOME)[keyof typeof REQUEST_COMMIT_OUTCOME];
+
+export const INDEXER_KIND = {
+  prowlarr: "prowlarr",
+  jackett: "jackett",
+  torznab: "torznab",
+  newznab: "newznab",
+} as const;
+
+export type IndexerKindCode = (typeof INDEXER_KIND)[keyof typeof INDEXER_KIND];
+
+export const DOWNLOAD_CLIENT_KIND = {
+  qBittorrent: "qbittorrent",
+  transmission: "transmission",
+  sabnzbd: "sabnzbd",
+} as const;
+
+export type DownloadClientKindCode = (typeof DOWNLOAD_CLIENT_KIND)[keyof typeof DOWNLOAD_CLIENT_KIND];
+
+export const DOWNLOAD_PROTOCOL = {
+  torrent: "torrent",
+  usenet: "usenet",
+} as const;
+
+export type DownloadProtocolCode = (typeof DOWNLOAD_PROTOCOL)[keyof typeof DOWNLOAD_PROTOCOL];
+
+export const ACQUISITION_STATUS = {
+  pending: "pending",
+  searching: "searching",
+  awaitingSelection: "awaiting-selection",
+  queued: "queued",
+  downloading: "downloading",
+  downloaded: "downloaded",
+  importing: "importing",
+  imported: "imported",
+  failed: "failed",
+  cancelled: "cancelled",
+  manualImportRequired: "manual-import-required",
+} as const;
+
+export type AcquisitionStatusCode = (typeof ACQUISITION_STATUS)[keyof typeof ACQUISITION_STATUS];
+
+export const ACQUISITION_HISTORY_EVENT = {
+  grabbed: "grabbed",
+  imported: "imported",
+  importFailed: "import-failed",
+  downloadFailed: "download-failed",
+  blocklisted: "blocklisted",
+  upgraded: "upgraded",
+  removed: "removed",
+} as const;
+
+export type AcquisitionHistoryEventCode = (typeof ACQUISITION_HISTORY_EVENT)[keyof typeof ACQUISITION_HISTORY_EVENT];
+
+export const RELEASE_REJECTION_REASON = {
+  unsupportedFormat: "unsupported-format",
+  belowMinSeeders: "below-min-seeders",
+  sizeOutOfRange: "size-out-of-range",
+  missingRequiredTerm: "missing-required-term",
+  hasIgnoredTerm: "has-ignored-term",
+  languageMismatch: "language-mismatch",
+  wrongProtocol: "wrong-protocol",
+  noDownloadLink: "no-download-link",
+  blocklisted: "blocklisted",
+  qualityNotAllowed: "quality-not-allowed",
+  notAnUpgrade: "not-an-upgrade",
+  formatDowngrade: "format-downgrade",
+  wrongTvUnit: "wrong-tv-unit",
+  belowMinFormatScore: "below-min-format-score",
+} as const;
+
+export type ReleaseRejectionReasonCode = (typeof RELEASE_REJECTION_REASON)[keyof typeof RELEASE_REJECTION_REASON];
+
+export const CUSTOM_FORMAT_CONDITION_TYPE = {
+  releaseTitle: "release-title",
+  releaseGroup: "release-group",
+  language: "language",
+  quality: "quality",
+} as const;
+
+export type CustomFormatConditionTypeCode = (typeof CUSTOM_FORMAT_CONDITION_TYPE)[keyof typeof CUSTOM_FORMAT_CONDITION_TYPE];
+
+export const IMPORT_MODE = {
+  move: "move",
+  copy: "copy",
+  hardlink: "hardlink",
+} as const;
+
+export type ImportModeCode = (typeof IMPORT_MODE)[keyof typeof IMPORT_MODE];
+
+export const BLOCKLIST_REASON = {
+  failed: "failed",
+  stalled: "stalled",
+  noImportableFiles: "no-importable-files",
+  manual: "manual",
+} as const;
+
+export type BlocklistReasonCode = (typeof BLOCKLIST_REASON)[keyof typeof BLOCKLIST_REASON];
+
+export const MONITOR_STATUS = {
+  active: "active",
+  paused: "paused",
+  fulfilled: "fulfilled",
+} as const;
+
+export type MonitorStatusCode = (typeof MONITOR_STATUS)[keyof typeof MONITOR_STATUS];
+
+export const MONITOR_PRESET = {
+  all: "all",
+  future: "future",
+  missing: "missing",
+  firstSeason: "first-season",
+  latestSeason: "latest-season",
+  pilot: "pilot",
+  none: "none",
+} as const;
+
+export type MonitorPresetCode = (typeof MONITOR_PRESET)[keyof typeof MONITOR_PRESET];
+
+export const BOOK_FORMAT_TIER = {
+  unknown: "unknown",
+  fixed: "fixed",
+  reflowable: "reflowable",
+  archive: "archive",
+} as const;
+
+export type BookFormatTierCode = (typeof BOOK_FORMAT_TIER)[keyof typeof BOOK_FORMAT_TIER];
+
+export const BOOK_SOURCE_TIER = {
+  unknown: "unknown",
+  web: "web",
+  retail: "retail",
+} as const;
+
+export type BookSourceTierCode = (typeof BOOK_SOURCE_TIER)[keyof typeof BOOK_SOURCE_TIER];
+
+export const PROPER_DOWNLOAD_POLICY = {
+  preferAndUpgrade: "prefer-and-upgrade",
+  doNotUpgrade: "do-not-upgrade",
+  doNotPrefer: "do-not-prefer",
+} as const;
+
+export type ProperDownloadPolicyCode = (typeof PROPER_DOWNLOAD_POLICY)[keyof typeof PROPER_DOWNLOAD_POLICY];
 
 export const CAPABILITY_KIND = {
   classification: "classification",
@@ -346,6 +519,9 @@ export const EXTERNAL_ID_PROVIDER = {
 export type ExternalIdProviderCode = (typeof EXTERNAL_ID_PROVIDER)[keyof typeof EXTERNAL_ID_PROVIDER];
 
 export const SETTING_KEYS = {
+  acquisitionDownloadPropers: "acquisition.downloadPropers",
+  acquisitionRecycleBinCleanupDays: "acquisition.recycleBinCleanupDays",
+  acquisitionRecycleBinPath: "acquisition.recycleBinPath",
   autoIdentifyConfidenceThreshold: "autoIdentify.confidenceThreshold",
   autoIdentifyEnabled: "autoIdentify.enabled",
   autoIdentifyEntityKinds: "autoIdentify.entityKinds",
@@ -369,6 +545,8 @@ export const SETTING_KEYS = {
   hlsTranscoderProfile: "hls.transcoderProfile",
   hlsVaapiDevice: "hls.vaapiDevice",
   jobsBackgroundConcurrency: "jobs.backgroundConcurrency",
+  monitoringIntervalMinutes: "monitoring.intervalMinutes",
+  monitoringSearchEnabled: "monitoring.searchEnabled",
   playbackAudioPreferredLanguages: "playback.audioPreferredLanguages",
   playbackDefaultMode: "playback.defaultMode",
   playbackShowCastControls: "playback.showCastControls",
@@ -399,6 +577,7 @@ export const ENTITY_KIND_LABELS: Record<EntityKindCode, string> = {
   "gallery": "Galleries",
   "image": "Images",
   "music-artist": "Artists",
+  "book-author": "Authors",
   "person": "People",
   "movie": "Movies",
   "studio": "Studios",

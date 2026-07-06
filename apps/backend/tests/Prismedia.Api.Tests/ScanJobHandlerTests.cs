@@ -2055,7 +2055,7 @@ public sealed class ScanJobHandlerTests {
     }
 
     [Fact]
-    public async Task SingleFileBookScanMaterializesFolderAsBookSeriesWithChildBooks() {
+    public async Task SingleFileBookScanMaterializesFolderAsBookAuthorWithChildBooks() {
         var tempRoot = Directory.CreateTempSubdirectory("prismedia-single-book-series-scan-");
         try {
             var rootPath = tempRoot.FullName;
@@ -2102,30 +2102,77 @@ public sealed class ScanJobHandlerTests {
 
             await handler.HandleAsync(new JobContext(job, new RecordingJobQueue()), CancellationToken.None);
 
-            var series = Assert.Single(persistence.UpsertedBookSeries);
-            Assert.Equal(seriesPath, series.SourcePath);
-            Assert.Equal("Game of Thrones", series.Title);
-            Assert.Equal(BookType.Book, series.BookType);
-            Assert.Equal(BookFormat.Pdf, series.Format);
+            // The top-level folder is grouped as a book author (mirroring Artist/Album), not a series.
+            var author = Assert.Single(persistence.UpsertedBookAuthors);
+            Assert.Equal(seriesPath, author.FolderPath);
+            Assert.Equal("Game of Thrones", author.Title);
+            Assert.Empty(persistence.UpsertedBookSeries);
 
             Assert.Collection(
                 persistence.UpsertedBooks,
                 book => {
                     Assert.Equal(firstBookPath, book.SourcePath);
                     Assert.Equal("01 - A Game of Thrones", book.Title);
-                    Assert.Equal(series.Id, book.ParentEntityId);
+                    Assert.Equal(author.Id, book.ParentEntityId);
                     Assert.Equal(0, book.SortOrder);
                 },
                 book => {
                     Assert.Equal(secondBookPath, book.SourcePath);
                     Assert.Equal("02 - A Clash of Kings", book.Title);
-                    Assert.Equal(series.Id, book.ParentEntityId);
+                    Assert.Equal(author.Id, book.ParentEntityId);
                     Assert.Equal(1, book.SortOrder);
                 });
-            Assert.Equal([seriesPath, firstBookPath, secondBookPath], persistence.ValidBookPaths);
+            // The author folder is not a book path; only the book files are tracked for stale cleanup.
+            Assert.Equal([firstBookPath, secondBookPath], persistence.ValidBookPaths);
         } finally {
             tempRoot.Delete(recursive: true);
         }
+    }
+
+    [Fact]
+    public async Task SingleFileBookScanNamesAuthorFromEmbeddedCreatorNotFolder() {
+        var tempRoot = Directory.CreateTempSubdirectory("prismedia-book-author-metadata-");
+        try {
+            var rootPath = tempRoot.FullName;
+            var seriesPath = Path.Combine(rootPath, "Game of Thrones");
+            Directory.CreateDirectory(seriesPath);
+            var bookPath = Path.Combine(seriesPath, "01 - A Game of Thrones.epub");
+            await File.WriteAllTextAsync(bookPath, "epub");
+
+            var root = new LibraryRootData(
+                Guid.Parse("11111111-1111-1111-1111-111111111111"),
+                rootPath, "Books", Enabled: true, Recursive: true,
+                ScanVideos: false, ScanImages: false, ScanAudio: false, ScanBooks: true, IsNsfw: false);
+            var persistence = new FakeScanPersistence([root]) { Settings = DisabledGeneratedWorkSettings };
+            var handler = new ScanBookJobHandler(
+                NullLogger<ScanBookJobHandler>.Instance,
+                new RecordingFileDiscovery([bookPath]),
+                persistence, persistence, persistence,
+                bookFileMetadata: new StubBookFileMetadataReader(new ComicInfoMetadata {
+                    Title = "A Game of Thrones",
+                    Creators = ["George R.R. Martin"],
+                }));
+            var job = new JobRunSnapshot(
+                Guid.NewGuid(), JobType.ScanBook, JobRunStatus.Running, 0, null,
+                $$"""{"libraryRootId":"{{root.Id}}"}""",
+                "library-root", root.Id.ToString(), root.Label,
+                DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, null);
+
+            await handler.HandleAsync(new JobContext(job, new RecordingJobQueue()), CancellationToken.None);
+
+            // The series-named folder ("Game of Thrones") must NOT become the author — the embedded
+            // EPUB creator wins, so the author is named "George R.R. Martin".
+            var author = Assert.Single(persistence.UpsertedBookAuthors);
+            Assert.Equal("George R.R. Martin", author.Title);
+            Assert.Equal(seriesPath, author.FolderPath);
+        } finally {
+            tempRoot.Delete(recursive: true);
+        }
+    }
+
+    private sealed class StubBookFileMetadataReader(ComicInfoMetadata metadata) : IBookFileMetadataReader {
+        public Task<ComicInfoMetadata?> ReadAsync(string sourcePath, BookFormat format, CancellationToken cancellationToken) =>
+            Task.FromResult<ComicInfoMetadata?>(metadata);
     }
 
     [Fact]
@@ -2637,6 +2684,16 @@ public sealed class ScanJobHandlerTests {
             UpsertedBookSeries.Add(new BookSeriesRecord(id, folderPath, title, libraryRootId, bookType, format));
             return Task.FromResult(id);
         }
+
+        public List<(Guid Id, string FolderPath, string Title)> UpsertedBookAuthors { get; } = [];
+
+        public Task<Guid> UpsertBookAuthorAsync(string folderPath, string title, int? sortOrder, bool isNsfw, CancellationToken cancellationToken) {
+            var id = IdFor($"book-author:{folderPath}");
+            UpsertedBookAuthors.Add((id, folderPath, title));
+            return Task.FromResult(id);
+        }
+
+        public Task<int> RemoveEmptyBookAuthorsAsync(CancellationToken cancellationToken) => Task.FromResult(0);
 
         public Task<Guid> UpsertSingleFileBookAsync(
             string sourcePath,

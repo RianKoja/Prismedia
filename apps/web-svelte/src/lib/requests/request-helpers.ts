@@ -1,145 +1,89 @@
-import { REQUEST_MEDIA_KIND, REQUEST_PROVIDER_KIND, REQUEST_RATING_SOURCE } from "$lib/api/generated/codes";
-import type { RequestMediaKindCode, RequestProviderKindCode } from "$lib/api/generated/codes";
-import type {
-  RequestDetailResponse,
-  RequestRatingValue,
-  RequestServiceInstanceSummary,
-  RequestServiceOptionsResponse,
-  RequestSubmitRequest,
-} from "./request-model";
-
-export interface RequestSubmitFormState {
-  qualityProfileId: number | null;
-  rootFolderPath: string | null;
-  metadataProfileId: number | null;
-  monitored: boolean;
-  searchNow: boolean;
-  selectedChildIds: string[];
-}
+import { ENTITY_KIND, REQUEST_MEDIA_KIND, REQUEST_PROVIDER_KIND } from "$lib/api/generated/codes";
+import type { EntityKindCode, RequestMediaKindCode, RequestProviderKindCode } from "$lib/api/generated/codes";
 
 /** Display names for request provider families. */
 export const REQUEST_PROVIDER_LABELS: Record<string, string> = {
-  [REQUEST_PROVIDER_KIND.radarr]: "Radarr",
-  [REQUEST_PROVIDER_KIND.sonarr]: "Sonarr",
-  [REQUEST_PROVIDER_KIND.lidarr]: "Lidarr",
   [REQUEST_PROVIDER_KIND.plugin]: "Plugin",
 };
 
-/** Singular display names for request media kinds. */
-export const REQUEST_KIND_LABELS: Record<string, string> = {
-  [REQUEST_MEDIA_KIND.movie]: "Movie",
-  [REQUEST_MEDIA_KIND.series]: "Series",
-  [REQUEST_MEDIA_KIND.artist]: "Artist",
-  [REQUEST_MEDIA_KIND.album]: "Album",
-  [REQUEST_MEDIA_KIND.plugin]: "Plugin",
-};
-
-/** Plural display names for request media kinds, used by filters and section headings. */
-export const REQUEST_KIND_LABELS_PLURAL: Record<string, string> = {
-  [REQUEST_MEDIA_KIND.movie]: "Movies",
-  [REQUEST_MEDIA_KIND.series]: "Series",
-  [REQUEST_MEDIA_KIND.artist]: "Artists",
-  [REQUEST_MEDIA_KIND.album]: "Albums",
-  [REQUEST_MEDIA_KIND.plugin]: "Plugins",
-};
-
-/** Display names for request rating sources. */
-export const REQUEST_RATING_SOURCE_LABELS: Record<string, string> = {
-  [REQUEST_RATING_SOURCE.tmdb]: "TMDB",
-  [REQUEST_RATING_SOURCE.imdb]: "IMDb",
-  [REQUEST_RATING_SOURCE.rottenTomatoes]: "RT",
-  [REQUEST_RATING_SOURCE.metacritic]: "MC",
-};
-
-/** Formats a rating in its native scale: percent sources as "60%", ten-point as "6.9". */
-export function requestRatingDisplay(rating: RequestRatingValue): string {
-  const value = numericValue(rating.value) ?? 0;
-  return numericValue(rating.scale) === 100 ? `${Math.round(value)}%` : value.toFixed(1);
+/**
+ * UI-side view of the backend's RequestKindRegistry: labels and per-kind flow hints for each
+ * requestable kind, in Discover display order. `committable: false` kinds (series, until the TV
+ * engine lands) are discoverable/browsable but offer no Request action. `childNoun` names a
+ * container's selectable works ("book", "album") and a book's sibling volumes.
+ */
+export interface RequestKindInfo {
+  kind: RequestMediaKindCode;
+  label: string;
+  plural: string;
+  committable: boolean;
+  childNoun: string | null;
+  /**
+   * The library entity kind this request materializes as. Request items are "virtual" entities: they
+   * render through the exact same components — and therefore the same thumbnail shape, placeholder
+   * family, and detail layout — as the real thing they become (a movie result IS a movie poster, an
+   * album result IS square album art).
+   */
+  entityKind: EntityKindCode;
+  /** The acquisition-profile kind this request's downloads are governed by (null while not committable). */
+  profileKind: EntityKindCode | null;
+  /** The library-root capability flag the acquired files need ("scanBooks" | "scanVideos" | "scanAudio"). */
+  rootFlag: "scanBooks" | "scanVideos" | "scanAudio" | null;
+  /** Whether Discover offers the kind directly; unit kinds (season, episode) exist only inside their parent's flow. */
+  discoverable: boolean;
 }
 
-/** "In Radarr"-style label for items already tracked by the upstream service. */
+export const REQUEST_KINDS: RequestKindInfo[] = [
+  { kind: REQUEST_MEDIA_KIND.book, label: "Book", plural: "Books", committable: true, childNoun: "volume", entityKind: ENTITY_KIND.book, profileKind: ENTITY_KIND.book, rootFlag: "scanBooks", discoverable: true },
+  { kind: REQUEST_MEDIA_KIND.author, label: "Author", plural: "Authors", committable: true, childNoun: "book", entityKind: ENTITY_KIND.bookAuthor, profileKind: ENTITY_KIND.book, rootFlag: "scanBooks", discoverable: true },
+  { kind: REQUEST_MEDIA_KIND.movie, label: "Movie", plural: "Movies", committable: true, childNoun: null, entityKind: ENTITY_KIND.movie, profileKind: ENTITY_KIND.movie, rootFlag: "scanVideos", discoverable: true },
+  { kind: REQUEST_MEDIA_KIND.series, label: "Series", plural: "Series", committable: true, childNoun: "season", entityKind: ENTITY_KIND.videoSeries, profileKind: ENTITY_KIND.videoSeries, rootFlag: "scanVideos", discoverable: true },
+  { kind: REQUEST_MEDIA_KIND.season, label: "Season", plural: "Seasons", committable: true, childNoun: "episode", entityKind: ENTITY_KIND.videoSeason, profileKind: ENTITY_KIND.videoSeries, rootFlag: "scanVideos", discoverable: false },
+  { kind: REQUEST_MEDIA_KIND.episode, label: "Episode", plural: "Episodes", committable: true, childNoun: null, entityKind: ENTITY_KIND.video, profileKind: ENTITY_KIND.videoSeries, rootFlag: "scanVideos", discoverable: false },
+  { kind: REQUEST_MEDIA_KIND.artist, label: "Artist", plural: "Artists", committable: true, childNoun: "album", entityKind: ENTITY_KIND.musicArtist, profileKind: ENTITY_KIND.audioLibrary, rootFlag: "scanAudio", discoverable: true },
+  { kind: REQUEST_MEDIA_KIND.album, label: "Album", plural: "Albums", committable: true, childNoun: null, entityKind: ENTITY_KIND.audioLibrary, profileKind: ENTITY_KIND.audioLibrary, rootFlag: "scanAudio", discoverable: true },
+];
+
+/** The kinds Discover's search and its kind chips offer. */
+export const DISCOVERABLE_REQUEST_KINDS: RequestKindInfo[] = REQUEST_KINDS.filter((info) => info.discoverable);
+
+/**
+ * The library entity kind a request media kind renders as — the single mapping every request surface
+ * (search grid, review children, detail hero, queue) uses so virtual items look exactly like the real
+ * entities they become. Unmapped kinds fall back to book (a 2:3 poster).
+ */
+export function entityKindForRequest(kind: RequestMediaKindCode | string): EntityKindCode {
+  return requestKindInfo(kind as RequestMediaKindCode)?.entityKind ?? ENTITY_KIND.book;
+}
+
+/** The request media kind a library entity kind maps back to (for queue grouping), or null when none does. */
+export function requestKindForEntityKind(entityKind: string): RequestMediaKindCode | null {
+  return REQUEST_KINDS.find((info) => info.entityKind === entityKind)?.kind ?? null;
+}
+
+export function requestKindInfo(kind: RequestMediaKindCode): RequestKindInfo | null {
+  return REQUEST_KINDS.find((info) => info.kind === kind) ?? null;
+}
+
+/** Singular display names for request media kinds. */
+export const REQUEST_KIND_LABELS: Record<string, string> = Object.fromEntries(
+  REQUEST_KINDS.map((info) => [info.kind, info.label]),
+);
+
+/** Plural display names for request media kinds, used by filters and section headings. */
+export const REQUEST_KIND_LABELS_PLURAL: Record<string, string> = Object.fromEntries(
+  REQUEST_KINDS.map((info) => [info.kind, info.plural]),
+);
+
+/** "In Library"-style label for items already tracked. */
 export function trackedLabel(source: RequestProviderKindCode): string {
   return `In ${REQUEST_PROVIDER_LABELS[source] ?? source}`;
 }
 
-export function selectDefaultService(
-  services: RequestServiceInstanceSummary[],
-  kind: RequestProviderKindCode,
-): RequestServiceInstanceSummary | null {
-  const matching = services.filter((service) => service.kind === kind);
-  return matching.find((service) => service.isDefault) ?? matching[0] ?? null;
-}
-
-export function defaultSelectedChildIds(detail: RequestDetailResponse): string[] {
-  if (detail.source === REQUEST_PROVIDER_KIND.lidarr) return [];
-
-  // Tracked items mirror the upstream monitoring state so an update submits
-  // exactly what the checkboxes show; new items preselect everything requestable.
-  if (detail.tracked) {
-    return detail.children
-      .filter((child) => child.monitored === true)
-      .map((child) => child.id);
-  }
-
-  return detail.children
-    .filter((child) => child.requestable)
-    .map((child) => child.id);
-}
-
-/**
- * CSS aspect-ratio for a request result's artwork. Music kinds use square cover art;
- * everything else uses the standard 2:3 poster shape.
- */
-export function thumbnailAspectForKind(kind: RequestMediaKindCode): string {
-  return kind === REQUEST_MEDIA_KIND.artist || kind === REQUEST_MEDIA_KIND.album ? "1 / 1" : "2 / 3";
-}
-
 export function inferRequestSourceForKind(kind: RequestMediaKindCode): RequestProviderKindCode | null {
-  if (kind === REQUEST_MEDIA_KIND.movie) return REQUEST_PROVIDER_KIND.radarr;
-  if (kind === REQUEST_MEDIA_KIND.series) return REQUEST_PROVIDER_KIND.sonarr;
-  if (kind === REQUEST_MEDIA_KIND.artist || kind === REQUEST_MEDIA_KIND.album) return REQUEST_PROVIDER_KIND.lidarr;
-  return null;
-}
-
-export function optionDefaultsForService(
-  service: RequestServiceInstanceSummary,
-  options: RequestServiceOptionsResponse,
-): Pick<RequestSubmitFormState, "qualityProfileId" | "rootFolderPath" | "metadataProfileId" | "searchNow"> {
-  const defaultQualityProfileId = numericValue(service.defaultQualityProfileId);
-  const defaultMetadataProfileId = numericValue(service.defaultMetadataProfileId);
-  return {
-    qualityProfileId:
-      findNumericOption(options.qualityProfiles, defaultQualityProfileId) ??
-      numericValue(options.qualityProfiles[0]?.id),
-    rootFolderPath:
-      options.rootFolders.find((option) => option.path === service.defaultRootFolderPath)?.path ??
-      options.rootFolders[0]?.path ??
-      service.defaultRootFolderPath,
-    metadataProfileId:
-      findNumericOption(options.metadataProfiles, defaultMetadataProfileId) ??
-      numericValue(options.metadataProfiles[0]?.id),
-    searchNow: service.searchOnRequest,
-  };
-}
-
-export function buildRequestSubmitPayload(
-  detail: RequestDetailResponse,
-  service: RequestServiceInstanceSummary,
-  form: RequestSubmitFormState,
-): RequestSubmitRequest {
-  return {
-    serviceId: service.id,
-    source: detail.source,
-    kind: detail.kind,
-    externalId: detail.externalId,
-    title: detail.title,
-    qualityProfileId: form.qualityProfileId,
-    rootFolderPath: form.rootFolderPath,
-    metadataProfileId: form.metadataProfileId,
-    monitored: form.monitored,
-    searchNow: form.searchNow,
-    selectedChildIds: form.selectedChildIds,
-  };
+  // Every registered kind is fulfilled by the Prismedia plugin acquisition path; this is the fallback
+  // when a detail URL is opened without an explicit source (Discover always sets one, back nav may not).
+  return requestKindInfo(kind) ? REQUEST_PROVIDER_KIND.plugin : null;
 }
 
 export function numericValue(value: number | string | null | undefined): number | null {
@@ -150,12 +94,4 @@ export function numericValue(value: number | string | null | undefined): number 
   }
 
   return null;
-}
-
-function findNumericOption(
-  options: RequestServiceOptionsResponse["qualityProfiles"],
-  value: number | null,
-): number | null {
-  if (value === null) return null;
-  return options.some((option) => numericValue(option.id) === value) ? value : null;
 }

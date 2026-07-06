@@ -10,6 +10,8 @@
     Users,
   } from "@lucide/svelte";
   import { cn } from "@prismedia/ui-svelte";
+  import { goto } from "$app/navigation";
+  import EntityAcquisitionCard from "$lib/components/acquisitions/EntityAcquisitionCard.svelte";
   import EntityDetailSkeleton from "$lib/components/entities/EntityDetailSkeleton.svelte";
   import EntityDetailHeroDates from "$lib/components/entities/EntityDetailHeroDates.svelte";
   import { fetchMovie, fetchVideo, type MovieDetail, type VideoDetail } from "$lib/api/media";
@@ -31,7 +33,7 @@
     updateEntityMetadata,
   } from "$lib/api/entity-mutations";
   import { settingKeys, valuesToLibrarySettings } from "$lib/settings/app-settings";
-  import { getCapability } from "$lib/api/capabilities";
+  import { getCapability, isWanted } from "$lib/api/capabilities";
   import {
     toggleOptimisticEntityFlag,
     updateOptimisticEntityRating,
@@ -78,6 +80,8 @@
   let loadState: LoadState = $state("loading");
   let movie = $state<MovieDetail | null>(null);
   let video = $state<VideoDetail | null>(null);
+  // The acquisition backing this movie (a wanted placeholder still searching/downloading, or the
+  // import that produced it), so its state is managed right here instead of only under /request.
   let playbackInfo = $state<JellyfinPlaybackInfoResponse | null>(null);
   let errorMessage: string | null = $state(null);
   let lastNsfwMode = $state(nsfw.mode);
@@ -120,7 +124,10 @@
     video ? entityCardToDetailCard(video) : null
   ));
   const identifyAction = useIdentifyDetailAction(() => card?.entity.id, () => card?.entity.kind);
-  const heroActions = $derived.by((): EntityDetailActionButton[] => identifyAction.action ? [identifyAction.action] : []);
+  // Wanted/tracking state (Search for release, releases, live download, monitoring) lives in the
+  // EntityAcquisitionCard mounted below the detail.
+  const heroActions = $derived.by((): EntityDetailActionButton[] =>
+    identifyAction.action ? [identifyAction.action] : []);
   const videoId = $derived(video?.id ?? "");
 
   const playerProps = $derived.by(() => {
@@ -382,7 +389,14 @@
       const nextMovie = await fetchMovie(page.params.id ?? "");
       const childVideoId = getChildIds(nextMovie, ENTITY_KIND.video)[0];
       if (!childVideoId) {
-        throw new Error("Movie has no playable video.");
+        // A wanted movie (request placeholder) has no video child yet: render metadata plus the
+        // inline acquisition surface instead of the player.
+        movie = nextMovie;
+        video = null;
+        playbackInfo = null;
+        await hydrateMovieRelationships(nextMovie);
+        loadState = "ready";
+        return;
       }
       const nextVideo = await fetchVideo(childVideoId);
       movie = nextMovie;
@@ -398,6 +412,14 @@
       errorMessage = err instanceof Error ? err.message : String(err);
       loadState = "error";
     }
+  }
+
+  const entityWanted = $derived(!!movie && isWanted(movie.capabilities));
+
+  /** Cancelling a wanted movie's request deletes the placeholder entity, so this page no longer exists. */
+  function handleAcquisitionCancelled() {
+    if (!entityWanted) return;
+    void goto("/movies");
   }
 
   async function refreshMovie() {
@@ -761,6 +783,41 @@
         />
       {/snippet}
     </EntityDetail>
+  {:else if card}
+    <!-- Fileless movie (a wanted request placeholder): metadata plus the inline acquisition surface —
+         wanted/tracking state is managed on the entity itself, same as books. -->
+    <EntityDetail
+      {card}
+      onRatingChange={handleRatingChange}
+      onFavoriteToggle={handleFavoriteToggle}
+      onOrganizedToggle={handleOrganizedToggle}
+      onMetadataSave={handleMetadataSave}
+      {ratingBusy}
+      showHero
+      posterSize="large"
+      actionButtons={heroActions}
+      defaultCreditRole={CREDIT_ROLE.actor}
+    >
+      {#snippet heroMeta()}
+        {#if primaryStudio}
+          <a href={resolveEntityHref(primaryStudio.kind as EntityKindCode, primaryStudio.id)} class="meta-item is-studio">{primaryStudio.title}</a>
+        {/if}
+        <EntityDetailHeroDates {dates} leadingSeparator={Boolean(primaryStudio)} />
+      {/snippet}
+
+      {#snippet heroBadges()}
+        {#if entityWanted}
+          <span class="hero-badge wanted">Wanted</span>
+        {/if}
+      {/snippet}
+    </EntityDetail>
+
+    <EntityAcquisitionCard
+      entityId={movie?.id}
+      capabilities={movie?.capabilities}
+      onChanged={loadMovie}
+      onCancelled={handleAcquisitionCancelled}
+    />
   {/if}
 </div>
 

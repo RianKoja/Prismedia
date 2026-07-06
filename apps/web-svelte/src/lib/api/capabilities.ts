@@ -72,6 +72,21 @@ export function isNsfw(capabilities: EntityCapability[]): boolean {
   return getFlagsCapability(capabilities)?.isNsfw === true;
 }
 
+/** True for a request-created Wanted placeholder: a library entity with metadata but no file yet. */
+export function isWanted(capabilities: EntityCapability[]): boolean {
+  return getFlagsCapability(capabilities)?.isWanted === true;
+}
+
+/**
+ * The entity's first provider identity as a provider-qualified id ("provider:itemId"), or null when
+ * the entity has none yet. This is what request commits and monitoring re-resolve the entity from.
+ */
+export function firstProviderQualifiedId(capabilities: EntityCapability[]): string | null {
+  const links = getCapability(capabilities, "links");
+  const first = links?.externalIds?.find((id) => id.provider && id.value);
+  return first ? `${first.provider}:${first.value}` : null;
+}
+
 export function withRatingCapability(
   capabilities: EntityCapability[],
   value: number | null,

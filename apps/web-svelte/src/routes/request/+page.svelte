@@ -1,29 +1,38 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { CloudDownload, History, Loader2, Search, Send, Settings } from "@lucide/svelte";
+  import {
+    AlertTriangle,
+    Compass,
+    HardDriveDownload,
+    History,
+    Loader2,
+    PackageSearch,
+    Search,
+    Send,
+    Settings,
+  } from "@lucide/svelte";
   import { Button, Select, TextInput, cn } from "@prismedia/ui-svelte";
+  import type { SelectOption } from "@prismedia/ui-svelte";
   import { goto } from "$app/navigation";
   import { page } from "$app/state";
-  import { REQUEST_MEDIA_KIND, REQUEST_PROVIDER_KIND } from "$lib/api/generated/codes";
-  import type { RequestMediaKindCode, RequestProviderKindCode } from "$lib/api/generated/codes";
-  import { fetchRequestServices, searchRequests } from "$lib/api/requests";
-  import RequestPosterCard from "$lib/components/requests/RequestPosterCard.svelte";
+  import { ENTITY_KIND, type RequestMediaKindCode } from "$lib/api/generated/codes";
+  import type { AcquisitionHistoryView } from "$lib/api/generated/model";
+  import { fetchAcquisitionHistory } from "$lib/api/acquisitions";
+  import { searchRequests } from "$lib/api/requests";
+  import { labelForEntityKind } from "$lib/entities/entity-codes";
+  import AcquisitionHistoryList from "$lib/components/acquisitions/AcquisitionHistoryList.svelte";
+  import DownloadsPanel from "$lib/components/acquisitions/DownloadsPanel.svelte";
+  import WantedList from "$lib/components/acquisitions/WantedList.svelte";
+  import EntityThumbnail from "$lib/components/thumbnails/EntityThumbnail.svelte";
+  import { usePageSnapshots } from "$lib/stores/page-snapshots.svelte";
   import { useNsfw } from "$lib/nsfw/store.svelte";
-  import type { RequestSearchResult, RequestServiceInstanceSummary } from "$lib/requests/request-model";
+  import type { RequestSearchResult } from "$lib/requests/request-model";
+  import { requestSearchResultToThumbnailCard } from "$lib/requests/review-cards";
   import {
+    DISCOVERABLE_REQUEST_KINDS,
     REQUEST_KIND_LABELS_PLURAL,
-    REQUEST_PROVIDER_LABELS,
     numericValue,
-    thumbnailAspectForKind,
-    trackedLabel,
   } from "$lib/requests/request-helpers";
-
-  const kindsBySource: Record<string, RequestMediaKindCode[]> = {
-    [REQUEST_PROVIDER_KIND.radarr]: [REQUEST_MEDIA_KIND.movie],
-    [REQUEST_PROVIDER_KIND.sonarr]: [REQUEST_MEDIA_KIND.series],
-    [REQUEST_PROVIDER_KIND.lidarr]: [REQUEST_MEDIA_KIND.artist, REQUEST_MEDIA_KIND.album],
-    [REQUEST_PROVIDER_KIND.plugin]: [REQUEST_MEDIA_KIND.plugin],
-  };
 
   const sortOptions = [
     { value: "relevance", label: "Relevance" },
@@ -38,24 +47,57 @@
     { value: "tracked", label: "Already tracked" },
   ];
 
-  /** Order sections appear in mixed-kind results. */
-  const sectionOrder: RequestMediaKindCode[] = [
-    REQUEST_MEDIA_KIND.movie,
-    REQUEST_MEDIA_KIND.series,
-    REQUEST_MEDIA_KIND.artist,
-    REQUEST_MEDIA_KIND.album,
-    REQUEST_MEDIA_KIND.plugin,
-  ];
+  /** Order sections appear in mixed-kind results (the kind catalog's Discover order). */
+  const sectionOrder: RequestMediaKindCode[] = DISCOVERABLE_REQUEST_KINDS.map((info) => info.kind);
 
   const nsfw = useNsfw();
 
+  const tabs = [
+    { id: "discover", label: "Discover", icon: Compass },
+    { id: "downloads", label: "Downloads", icon: HardDriveDownload },
+    { id: "missing", label: "Missing", icon: PackageSearch },
+    { id: "cutoff", label: "Cutoff unmet", icon: AlertTriangle },
+    { id: "history", label: "History", icon: History },
+  ] as const;
+  type RequestTab = (typeof tabs)[number]["id"];
+  let activeTab = $state<RequestTab>("discover");
+
+  // Kind filter options for the Wanted lists — the acquisition-capable library kinds plus "All".
+  const wantedKindOptions: SelectOption[] = [
+    { value: "all", label: "All kinds" },
+    ...[ENTITY_KIND.book, ENTITY_KIND.movie, ENTITY_KIND.videoSeries, ENTITY_KIND.audioLibrary].map(
+      (kind) => ({ value: kind, label: labelForEntityKind(kind) }),
+    ),
+  ];
+
+  // Durable acquisition activity log (global, newest-first), loaded lazily when the History tab opens.
+  let history = $state<AcquisitionHistoryView[]>([]);
+  let historyLoading = $state(false);
+  let historyError = $state<string | null>(null);
+  let historyLoaded = false;
+
+  async function loadHistory() {
+    if (historyLoaded) return;
+    historyLoading = true;
+    historyError = null;
+    try {
+      history = await fetchAcquisitionHistory({ limit: 200 });
+      historyLoaded = true;
+    } catch (err) {
+      historyError = err instanceof Error ? err.message : "Failed to load history";
+    } finally {
+      historyLoading = false;
+    }
+  }
+
+  $effect(() => {
+    if (activeTab === "history") void loadHistory();
+  });
+
   let query = $state("");
   let selectedKind = $state<RequestMediaKindCode | "all">("all");
-  let selectedSource = $state<RequestProviderKindCode | "all">("all");
   let sortBy = $state("relevance");
   let availability = $state<"all" | "requestable" | "tracked">("all");
-  let services = $state<RequestServiceInstanceSummary[]>([]);
-  let servicesLoaded = $state(false);
   let results = $state<RequestSearchResult[]>([]);
   let hasSearched = $state(false);
   let loading = $state(false);
@@ -63,14 +105,8 @@
   let providerWarnings = $state<string[]>([]);
   let lastSearchKey = "";
 
-  const availableSources = $derived(
-    [...new Set(services.map((service) => service.kind))] as RequestProviderKindCode[],
-  );
-  const availableKinds = $derived(
-    [...new Set(availableSources.flatMap((source) => kindsBySource[source] ?? []))].sort(
-      (a, b) => sectionOrder.indexOf(a) - sectionOrder.indexOf(b),
-    ),
-  );
+  // Kinds Prismedia searches via the plugin acquisition pipeline (from the shared kind catalog).
+  const availableKinds: RequestMediaKindCode[] = DISCOVERABLE_REQUEST_KINDS.map((info) => info.kind);
 
   const filteredResults = $derived(
     results.filter((result) =>
@@ -86,15 +122,20 @@
 
   const trackedCount = $derived(results.filter((result) => result.tracked).length);
 
-  onMount(async () => {
-    try {
-      services = await fetchRequestServices();
-    } catch (err) {
-      error = err instanceof Error ? err.message : "Failed to load request services";
-    } finally {
-      servicesLoaded = true;
-    }
-  });
+  // Preserve the active tab across navigation so returning from a detail page lands back on Requests
+  // rather than resetting to Discover. (Discover's search state already restores from the URL.)
+  const pageSnapshots = usePageSnapshots();
+  onMount(() =>
+    pageSnapshots.registerSurface<{ tab: RequestTab }>("request-view", {
+      capture: () => ({ tab: activeTab }),
+      restore: (snapshot) => {
+        // Ignore a snapshot naming a tab that no longer exists (e.g. the retired "requests" tab).
+        if (tabs.some((tab) => tab.id === snapshot.tab)) {
+          activeTab = snapshot.tab;
+        }
+      },
+    }),
+  );
 
   // The URL is the source of truth for search state, so back/forward and
   // shared links land on the same results. Effect re-runs on URL changes.
@@ -102,44 +143,37 @@
     const params = page.url.searchParams;
     const urlQuery = params.get("q") ?? "";
     const urlKind = (params.get("kind") as RequestMediaKindCode | null) ?? "all";
-    const urlSource = (params.get("source") as RequestProviderKindCode | null) ?? "all";
-    const searchKey = `${urlQuery}::${urlKind}::${urlSource}::${nsfw.mode}`;
+    const searchKey = `${urlQuery}::${urlKind}::${nsfw.mode}`;
     if (searchKey === lastSearchKey) return;
     lastSearchKey = searchKey;
 
     query = urlQuery;
     selectedKind = urlKind;
-    selectedSource = urlSource;
     if (urlQuery.trim()) {
-      void runSearch(urlQuery, urlKind, urlSource);
+      void runSearch(urlQuery, urlKind);
     } else {
       results = [];
       hasSearched = false;
     }
   });
 
-  function searchHref(value: string, kind: RequestMediaKindCode | "all", source: RequestProviderKindCode | "all") {
+  function searchHref(value: string, kind: RequestMediaKindCode | "all") {
     const params = new URLSearchParams();
     if (value.trim()) params.set("q", value.trim());
     if (kind !== "all") params.set("kind", kind);
-    if (source !== "all") params.set("source", source);
     const queryString = params.toString();
     return queryString ? `/request?${queryString}` : "/request";
   }
 
-  function commitSearchState(kind = selectedKind, source = selectedSource) {
-    void goto(searchHref(query, kind, source), {
+  function commitSearchState(kind = selectedKind) {
+    void goto(searchHref(query, kind), {
       replaceState: hasSearched,
       keepFocus: true,
       noScroll: true,
     });
   }
 
-  async function runSearch(
-    value: string,
-    kind: RequestMediaKindCode | "all",
-    source: RequestProviderKindCode | "all",
-  ) {
+  async function runSearch(value: string, kind: RequestMediaKindCode | "all") {
     loading = true;
     error = null;
     providerWarnings = [];
@@ -150,7 +184,7 @@
       const response = await searchRequests({
         query: value.trim(),
         kinds: kind === "all" ? [] : [kind],
-        sources: source === "all" ? [] : [source],
+        sources: [],
         hideNsfw: nsfw.mode !== "show",
       });
       results = response.results;
@@ -167,12 +201,7 @@
 
   function setKind(kind: RequestMediaKindCode | "all") {
     selectedKind = kind;
-    if (hasSearched || query.trim()) commitSearchState(kind, selectedSource);
-  }
-
-  function setSource(source: RequestProviderKindCode | "all") {
-    selectedSource = source;
-    if (hasSearched || query.trim()) commitSearchState(selectedKind, source);
+    if (hasSearched || query.trim()) commitSearchState(kind);
   }
 
   function sortResults(items: RequestSearchResult[]) {
@@ -184,36 +213,13 @@
     });
   }
 
-  function sourceName(result: RequestSearchResult) {
-    return (
-      services.find((service) => service.id === result.serviceId)?.displayName ??
-      REQUEST_PROVIDER_LABELS[result.source] ??
-      result.source
-    );
-  }
-
   function detailHref(result: RequestSearchResult) {
-    const params = new URLSearchParams({ source: result.source, serviceId: result.serviceId });
-    const backQuery = searchHref(query, selectedKind, selectedSource).split("?")[1];
+    const params = new URLSearchParams({ source: result.source });
+    const backQuery = searchHref(query, selectedKind).split("?")[1];
     if (backQuery) params.set("back", backQuery);
     return `/request/${result.kind}/${encodeURIComponent(result.externalId)}?${params.toString()}`;
   }
 
-  function cardChips(result: RequestSearchResult) {
-    const year = numericValue(result.year);
-    const runtime = numericValue(result.runtimeMinutes);
-    const trackCount = numericValue(result.trackCount);
-    return [
-      year ? String(year) : null,
-      result.certification,
-      runtime ? `${runtime} min` : null,
-      trackCount ? `${trackCount} tracks` : null,
-    ];
-  }
-
-  function isMusic(kind: RequestMediaKindCode) {
-    return kind === REQUEST_MEDIA_KIND.artist || kind === REQUEST_MEDIA_KIND.album;
-  }
 </script>
 
 <svelte:head><title>Request · Prismedia</title></svelte:head>
@@ -227,39 +233,66 @@
         Request
       </h1>
       <p class="mt-1 text-[0.78rem] text-text-muted">
-        Search connected services and request new movies, series, and music
+        Search for books and authors to add to your library
       </p>
     </div>
     <Button
       type="button"
       variant="secondary"
       size="sm"
-      onclick={() => void goto("/request/history")}
+      onclick={() => void goto("/settings")}
       class="no-lift gap-1.5 px-3 py-1.5 text-xs"
     >
-      <History class="h-3.5 w-3.5" />
-      History
+      <Settings class="h-3.5 w-3.5" />
+      Settings
     </Button>
   </div>
 
-  {#if servicesLoaded && services.length === 0}
-    <div class="empty-rack-slot flex flex-col items-center gap-2 p-10 text-center">
-      <CloudDownload class="h-8 w-8 text-text-disabled" />
-      <p class="text-sm font-medium text-text-secondary">No request services configured</p>
-      <p class="max-w-md text-[0.78rem] text-text-muted">
-        Connect a Radarr, Sonarr, or Lidarr instance in Settings to start requesting media.
-      </p>
-      <Button
+  <!-- ── Tabs ── -->
+  <div class="primary-tabs" role="tablist" aria-label="Request views">
+    {#each tabs as tab (tab.id)}
+      {@const TabIcon = tab.icon}
+      <button
         type="button"
-        variant="primary"
-        size="sm"
-        onclick={() => void goto("/settings")}
-        class="mt-2 gap-1.5 px-3 py-1.5 text-xs"
+        role="tab"
+        aria-selected={activeTab === tab.id}
+        onclick={() => (activeTab = tab.id)}
+        class={cn("primary-tab", activeTab === tab.id && "is-active")}
       >
-        <Settings class="h-3.5 w-3.5" />
-        Open Settings
-      </Button>
-    </div>
+        <TabIcon class="h-4 w-4" />
+        {tab.label}
+      </button>
+    {/each}
+  </div>
+
+  {#if activeTab === "downloads"}
+    <!-- ── Global downloads: every active acquisition in one shared card list, live telemetry included ── -->
+    <DownloadsPanel />
+  {:else if activeTab === "missing"}
+    <WantedList variant="missing" kindOptions={wantedKindOptions} />
+  {:else if activeTab === "cutoff"}
+    <WantedList variant="cutoffUnmet" kindOptions={wantedKindOptions} />
+  {:else if activeTab === "history"}
+    <!-- ── Activity log (global, newest-first) ── -->
+    {#if historyError}
+      <div class="surface-panel border-l-2 border-error px-4 py-2.5 text-sm text-error-text">
+        {historyError}
+      </div>
+    {/if}
+    {#if history.length > 0}
+      <AcquisitionHistoryList entries={history} showKind />
+    {:else if historyLoading}
+      <div class="flex items-center justify-center gap-2.5 p-10 text-text-muted">
+        <Loader2 class="h-4 w-4 animate-spin" />
+        <span class="text-sm">Loading history…</span>
+      </div>
+    {:else}
+      <div class="empty-rack-slot p-8 text-center">
+        <p class="text-sm text-text-muted">
+          No acquisition activity yet. Grabs, imports, failures, and removals will appear here.
+        </p>
+      </div>
+    {/if}
   {:else}
     <!-- ── Search ── -->
     <form
@@ -273,7 +306,7 @@
         <TextInput
           value={query}
           oninput={(event) => (query = event.currentTarget.value)}
-          placeholder="Search movies, series, artists, albums…"
+          placeholder="Search books and authors…"
           aria-label="Search requests"
           autocomplete="off"
         />
@@ -290,7 +323,7 @@
 
     <!-- ── Filters ── -->
     <div class="space-y-2">
-      {#if availableKinds.length > 1}
+      {#if availableKinds.length >= 1}
         <div class="flex flex-wrap items-center gap-2" role="group" aria-label="Filter by kind">
           {#each [{ value: "all", label: "All" }, ...availableKinds.map((kind) => ({ value: kind, label: REQUEST_KIND_LABELS_PLURAL[kind] ?? kind }))] as option (option.value)}
             <button
@@ -299,24 +332,6 @@
               class={cn(
                 "rounded-xs border px-2.5 py-1 text-[0.72rem] font-medium transition-all duration-fast",
                 selectedKind === option.value
-                  ? "bg-accent-950/30 border-border-accent text-text-accent shadow-[var(--shadow-glow-accent)]"
-                  : "bg-surface-1 border-border-subtle text-text-muted hover:border-border-default hover:text-text-primary",
-              )}
-            >
-              {option.label}
-            </button>
-          {/each}
-        </div>
-      {/if}
-      {#if availableSources.length > 1}
-        <div class="flex flex-wrap items-center gap-2" role="group" aria-label="Filter by source">
-          {#each [{ value: "all", label: "All sources" }, ...availableSources.map((source) => ({ value: source, label: REQUEST_PROVIDER_LABELS[source] ?? source }))] as option (option.value)}
-            <button
-              type="button"
-              onclick={() => setSource(option.value as RequestProviderKindCode | "all")}
-              class={cn(
-                "rounded-xs border px-2.5 py-1 text-[0.72rem] font-medium transition-all duration-fast",
-                selectedSource === option.value
                   ? "bg-accent-950/30 border-border-accent text-text-accent shadow-[var(--shadow-glow-accent)]"
                   : "bg-surface-1 border-border-subtle text-text-muted hover:border-border-default hover:text-text-primary",
               )}
@@ -387,21 +402,9 @@
             {/if}
             <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
               {#each section.items as result (`${result.source}:${result.kind}:${result.externalId}`)}
-                <RequestPosterCard
-                  href={detailHref(result)}
-                  title={result.title}
-                  subtitle={result.subtitle ?? sourceName(result)}
-                  imageUrl={result.posterUrl}
-                  aspect={thumbnailAspectForKind(result.kind)}
-                  chips={cardChips(result)}
-                  trackedLabel={result.tracked ? trackedLabel(result.source) : null}
-                  rating={numericValue(result.rating)}
-                  placeholder={result.kind === REQUEST_MEDIA_KIND.artist
-                    ? "person"
-                    : isMusic(result.kind)
-                      ? "music"
-                      : "video"}
-                />
+                <!-- Every result opens its detail page first, where the user reviews it and explicitly
+                     requests it. Nothing is queued on a thumbnail click. -->
+                <EntityThumbnail card={requestSearchResultToThumbnailCard(result, detailHref(result))} />
               {/each}
             </div>
           </section>
@@ -423,9 +426,91 @@
     {:else if !hasSearched}
       <div class="empty-rack-slot p-8 text-center">
         <p class="text-sm text-text-muted">
-          Search across your connected services to find media to request.
+          Search for books and authors to add to your library.
         </p>
       </div>
     {/if}
   {/if}
 </div>
+
+<style>
+  /* Primary mode tabs (Discover / Requests): the app's underline-glow tab treatment, scaled up for
+     top-level navigation. */
+  .primary-tabs {
+    position: relative;
+    display: flex;
+    gap: 0.25rem;
+  }
+
+  .primary-tabs::after {
+    content: "";
+    position: absolute;
+    inset: auto 0 0 0;
+    height: 1px;
+    background: linear-gradient(
+      to right,
+      transparent,
+      var(--color-border-subtle) 8%,
+      var(--color-border-subtle) 92%,
+      transparent
+    );
+    pointer-events: none;
+  }
+
+  .primary-tab {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: transparent;
+    color: var(--color-text-muted);
+    font-family: var(--font-heading, Geist, sans-serif);
+    font-size: 0.92rem;
+    font-weight: 600;
+    line-height: 1;
+    padding: 0.65rem 0.9rem;
+    transition: color var(--duration-fast, 120ms) var(--ease-default);
+  }
+
+  .primary-tab::before {
+    content: "";
+    position: absolute;
+    inset: auto 0.35rem 0 0.35rem;
+    height: 2px;
+    background: transparent;
+    transition:
+      background var(--duration-normal, 200ms) var(--ease-mechanical),
+      box-shadow var(--duration-normal, 200ms) var(--ease-mechanical);
+    z-index: 1;
+  }
+
+  .primary-tab:hover {
+    color: var(--color-text-secondary);
+  }
+
+  .primary-tab:hover::before {
+    background: rgb(255 255 255 / 0.16);
+  }
+
+  .primary-tab:focus-visible {
+    outline: 1px solid rgb(242 194 106 / 0.72);
+    outline-offset: 2px;
+    border-radius: var(--radius-xs, 4px);
+  }
+
+  .primary-tab.is-active {
+    color: var(--color-text-accent-bright, #f2c26a);
+  }
+
+  .primary-tab.is-active::before {
+    background: linear-gradient(
+      to right,
+      var(--color-accent-overlay-faint),
+      var(--color-accent-overlay-strong) 50%,
+      var(--color-accent-overlay-faint)
+    );
+    box-shadow:
+      0 0 8px var(--color-accent-overlay-light),
+      0 0 16px rgba(196, 154, 90, 0.1);
+  }
+</style>

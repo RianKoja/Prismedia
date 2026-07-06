@@ -10,7 +10,7 @@
     updateEntityFlags,
     updateEntityMetadata,
   } from "$lib/api/entity-mutations";
-  import { getCapability } from "$lib/api/capabilities";
+  import { getCapability, isWanted } from "$lib/api/capabilities";
   import {
     toggleOptimisticEntityFlag,
     updateOptimisticEntityRating,
@@ -25,6 +25,7 @@
   } from "$lib/entities/entity-relationship-thumbnails";
   import type { EntityThumbnailCard } from "$lib/entities/entity-thumbnail";
   import { ENTITY_KIND } from "$lib/entities/entity-codes";
+  import EntityAcquisitionCard from "$lib/components/acquisitions/EntityAcquisitionCard.svelte";
   import EntityDetail, {
     type EntityMetadataUpdateRequest,
     type EntityDetailSection,
@@ -119,6 +120,10 @@
       { label: season.title },
     ]);
   });
+
+  // A phantom season's "Search for release" (a season-pack acquisition) and its acquisition
+  // management live in the EntityAcquisitionCard below the detail, exactly like a wanted movie.
+  const seasonWanted = $derived(!!season && isWanted(season.capabilities));
 
   async function loadSeason() {
     loadState = "loading";
@@ -215,6 +220,7 @@
       posterSize="large"
       tabs={detailTabs}
       sections={detailSections}
+      actionButtons={[]}
     >
       {#snippet heroMeta()}
         {#if parentSeries}
@@ -228,12 +234,22 @@
       {/snippet}
 
       {#snippet heroBadges()}
+        {#if seasonWanted}
+          <span class="hero-badge wanted">Wanted</span>
+        {/if}
         {#if seasonNumber != null}
           <span class="hero-badge">S{String(seasonNumber).padStart(2, "0")}</span>
         {/if}
       {/snippet}
 
     </EntityDetail>
+
+    <EntityAcquisitionCard
+      entityId={season?.id}
+      capabilities={season?.capabilities}
+      onChanged={loadSeason}
+      onCancelled={() => void loadSeason()}
+    />
 
     {#if episodeCards.length > 0}
       <section class="content-section">

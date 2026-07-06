@@ -15,6 +15,19 @@ public sealed record ScanSettings(bool AutoScanEnabled, int IntervalMinutes);
 /// </summary>
 public sealed record CollectionRefreshSettings(bool AutoRefreshEnabled);
 
+/// <summary>Cadence for re-searching monitored items so a wanted book is fetched once a release appears.</summary>
+public sealed record MonitoredSearchSettings(bool Enabled, int IntervalMinutes);
+
+/// <summary>Recycle-bin settings: a null path means the bin is off (replaced files stay beside the upgrade).</summary>
+public sealed record RecycleBinSettings(string? Path, int CleanupDays);
+
+/// <summary>
+/// How PROPER/REPACK/RERIP and anime v2+ revisions are treated in ranking and upgrades. Decoded from the
+/// stored <see cref="Prismedia.Domain.Entities.ProperDownloadPolicy"/> code; defaults to
+/// <see cref="Prismedia.Domain.Entities.ProperDownloadPolicy.PreferAndUpgrade"/> on a missing/unknown value.
+/// </summary>
+public sealed record ProperDownloadSettings(Prismedia.Domain.Entities.ProperDownloadPolicy Policy);
+
 /// <summary>
 /// Auto-identify settings that drive plugin-based identification during library scans.
 /// </summary>

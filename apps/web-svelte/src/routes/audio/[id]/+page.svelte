@@ -12,6 +12,7 @@
   } from "$lib/api/entity-mutations";
   import { assetUrl } from "$lib/api/orval-fetch";
   import { getCapability } from "$lib/api/capabilities";
+  import EntityAcquisitionCard from "$lib/components/acquisitions/EntityAcquisitionCard.svelte";
   import {
     toggleOptimisticEntityFlag,
     updateOptimisticEntityRating,
@@ -82,6 +83,8 @@
     return assetUrl(images?.coverUrl ?? images?.thumbnailUrl) || undefined;
   });
   const identifyAction = useIdentifyDetailAction(() => library?.id, () => library?.kind);
+  // A phantom album's "Search for release" and its acquisition management live in the
+  // EntityAcquisitionCard mounted below the detail, exactly like a wanted book or movie.
   const heroActions = $derived.by((): EntityDetailActionButton[] => {
     const actions: EntityDetailActionButton[] = [];
     if (trackItems.length > 0) {
@@ -343,6 +346,13 @@
         {/if}
       {/snippet}
     </EntityDetail>
+
+    <EntityAcquisitionCard
+      entityId={library?.id}
+      capabilities={library?.capabilities}
+      onChanged={() => void loadLibrary()}
+      onCancelled={() => void loadLibrary()}
+    />
 
     {#if subLibraryCards.length > 0}
       <section class="content-section">

@@ -1,19 +1,8 @@
-import { CAPABILITY_KIND, ENTITY_FILE_ROLE, ENTITY_KIND, REQUEST_MEDIA_KIND } from "$lib/api/generated/codes";
-import type { EntityCapability, EntityKind } from "$lib/api/generated/model";
+import { CAPABILITY_KIND, ENTITY_FILE_ROLE, ENTITY_KIND } from "$lib/api/generated/codes";
+import type { EntityCapability } from "$lib/api/generated/model";
 import { entityCardToDetailCard, type EntityDetailCardFull } from "$lib/entities/entity-detail";
+import { entityKindForRequest, numericValue } from "./request-helpers";
 import type { RequestDetailResponse } from "./request-model";
-
-/**
- * Library entity kind that best represents a request media kind, so the
- * EntityDetail surface lays the synthetic card out like its library sibling
- * (poster aspect, placeholder family).
- */
-const ENTITY_KIND_FOR_REQUEST: Record<string, EntityKind> = {
-  [REQUEST_MEDIA_KIND.movie]: ENTITY_KIND.movie,
-  [REQUEST_MEDIA_KIND.series]: ENTITY_KIND.videoSeries,
-  [REQUEST_MEDIA_KIND.artist]: ENTITY_KIND.musicArtist,
-  [REQUEST_MEDIA_KIND.album]: ENTITY_KIND.audioLibrary,
-};
 
 /**
  * Builds a synthetic EntityDetail card for an external request item so request
@@ -47,9 +36,27 @@ export function requestDetailToEntityCard(detail: RequestDetailResponse): Entity
     capabilities.push({ kind: CAPABILITY_KIND.description, value: detail.overview } as EntityCapability);
   }
 
+  // Dates and runtime flow through the same capabilities a real entity carries, so EntityDetail's
+  // hero meta and metadata sections light up exactly as they would after identify.
+  const dateItems = Object.entries(detail.dates ?? {})
+    .filter(([, value]) => Boolean(value))
+    .map(([code, value]) => ({ code, value }));
+  if (dateItems.length === 0 && detail.year) {
+    dateItems.push({ code: "release", value: String(detail.year) });
+  }
+  if (dateItems.length > 0) {
+    capabilities.push({ kind: CAPABILITY_KIND.dates, items: dateItems } as EntityCapability);
+  }
+
+  const runtimeMinutes = numericValue(detail.runtimeMinutes);
+  if (runtimeMinutes) {
+    const duration = `${Math.floor(runtimeMinutes / 60)}:${String(runtimeMinutes % 60).padStart(2, "0")}:00`;
+    capabilities.push({ kind: CAPABILITY_KIND.technical, duration } as EntityCapability);
+  }
+
   const card = entityCardToDetailCard({
     id: `request-${detail.source}-${detail.externalId}`,
-    kind: ENTITY_KIND_FOR_REQUEST[detail.kind] ?? ENTITY_KIND.video,
+    kind: entityKindForRequest(detail.kind),
     title: detail.title,
     parentEntityId: null,
     sortOrder: null,

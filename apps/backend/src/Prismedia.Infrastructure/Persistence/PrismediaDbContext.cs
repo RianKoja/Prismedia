@@ -110,12 +110,6 @@ public sealed class PrismediaDbContext : DbContext {
 
     public DbSet<ProviderCredentialRow> ProviderCredentials => Set<ProviderCredentialRow>();
 
-    public DbSet<RequestServiceInstanceRow> RequestServiceInstances => Set<RequestServiceInstanceRow>();
-
-    public DbSet<RequestServiceCredentialRow> RequestServiceCredentials => Set<RequestServiceCredentialRow>();
-
-    public DbSet<RequestHistoryRow> RequestHistory => Set<RequestHistoryRow>();
-
     public DbSet<IdentifyResultRow> IdentifyResults => Set<IdentifyResultRow>();
 
     public DbSet<IdentifyQueueItemRow> IdentifyQueueItems => Set<IdentifyQueueItemRow>();
@@ -125,6 +119,36 @@ public sealed class PrismediaDbContext : DbContext {
     public DbSet<DatabaseBackupRow> DatabaseBackups => Set<DatabaseBackupRow>();
 
     public DbSet<JobRunRow> JobRuns => Set<JobRunRow>();
+
+    public DbSet<IndexerConfigRow> IndexerConfigs => Set<IndexerConfigRow>();
+    public DbSet<IndexerStatusRow> IndexerStatuses => Set<IndexerStatusRow>();
+
+    public DbSet<IndexerCredentialRow> IndexerCredentials => Set<IndexerCredentialRow>();
+
+    public DbSet<DownloadClientConfigRow> DownloadClientConfigs => Set<DownloadClientConfigRow>();
+    public DbSet<RemotePathMappingRow> RemotePathMappings => Set<RemotePathMappingRow>();
+
+    public DbSet<DownloadClientCredentialRow> DownloadClientCredentials => Set<DownloadClientCredentialRow>();
+
+    public DbSet<BookAcquisitionProfileRow> BookAcquisitionProfiles => Set<BookAcquisitionProfileRow>();
+
+    public DbSet<CustomFormatRow> CustomFormats => Set<CustomFormatRow>();
+
+    public DbSet<AcquisitionRow> Acquisitions => Set<AcquisitionRow>();
+
+    public DbSet<ReleaseCandidateRow> ReleaseCandidates => Set<ReleaseCandidateRow>();
+
+    public DbSet<DownloadTransferRow> DownloadTransfers => Set<DownloadTransferRow>();
+
+    public DbSet<AcquisitionImportHintRow> AcquisitionImportHints => Set<AcquisitionImportHintRow>();
+
+    public DbSet<AcquisitionBlocklistRow> AcquisitionBlocklist => Set<AcquisitionBlocklistRow>();
+
+    public DbSet<AcquisitionHistoryRow> AcquisitionHistory => Set<AcquisitionHistoryRow>();
+
+    public DbSet<WantedSuppressionRow> WantedSuppressions => Set<WantedSuppressionRow>();
+
+    public DbSet<MonitorRow> Monitors => Set<MonitorRow>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder) {
         modelBuilder.ConfigureBaseEntityModel();

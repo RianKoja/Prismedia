@@ -47,6 +47,19 @@ public sealed record EntityThumbnail(
     public EntityKind? ParentKind { get; init; }
 
     /// <summary>
+    /// True for a request-created wanted placeholder: a real library entity with metadata and artwork
+    /// but no file yet. Grids badge it; external projections (Jellyfin, OPDS) exclude it.
+    /// </summary>
+    public bool IsWanted { get; init; }
+
+    /// <summary>
+    /// For a wanted placeholder, the status of its latest acquisition — so a grid can show what the
+    /// item is doing (searching, downloading, failed) on its thumbnail, not just that it is wanted.
+    /// Null when the entity is not wanted, or is wanted but has no acquisition yet.
+    /// </summary>
+    public AcquisitionStatus? WantedStatus { get; init; }
+
+    /// <summary>
     /// When the entity was added to the library. Surfaced so compatibility layers (e.g. the Jellyfin
     /// surface) can populate the always-present <c>DateCreated</c> field that clients sort by.
     /// </summary>

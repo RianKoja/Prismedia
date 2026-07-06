@@ -46,12 +46,33 @@ public static class DependencyInjection {
         services.AddScoped<JellyfinCatalogService>();
         services.AddScoped<OrganizeService>();
         services.AddScoped<FilesService>();
-        services.AddScoped<RequestServiceInstanceCommandService>();
         services.AddScoped<RequestSearchService>();
         services.AddScoped<RequestDetailService>();
-        services.AddScoped<RequestServiceTestService>();
-        services.AddScoped<RequestSubmitService>();
-        services.AddScoped<RequestHistoryService>();
+        services.AddScoped<RequestCommitService>();
+        services.AddScoped<Acquisition.IndexerConfigCommandService>();
+        services.AddScoped<Acquisition.DownloadClientCommandService>();
+        services.AddScoped<Acquisition.BookAcquisitionProfileCommandService>();
+        services.AddScoped<Acquisition.AcquisitionSearchRunner>();
+        services.AddScoped<Acquisition.AcquisitionService>();
+        services.AddScoped<Acquisition.IAcquisitionRequestService>(sp => sp.GetRequiredService<Acquisition.AcquisitionService>());
+        services.AddScoped<Acquisition.AcquisitionQueueService>();
+        services.AddScoped<Acquisition.IAcquisitionQueueService>(sp => sp.GetRequiredService<Acquisition.AcquisitionQueueService>());
+        services.AddScoped<Acquisition.MonitorService>();
+        services.AddSingleton<Acquisition.IAcquisitionDecisionEngine, Acquisition.BookReleaseDecisionEngine>();
+        services.AddSingleton<Acquisition.IAcquisitionDecisionEngine, Acquisition.MovieReleaseDecisionEngine>();
+        services.AddSingleton<Acquisition.IAcquisitionDecisionEngine, Acquisition.MusicReleaseDecisionEngine>();
+        // One TV engine class serves both acquisition units: season packs and single episodes.
+        services.AddSingleton<Acquisition.IAcquisitionDecisionEngine>(new Acquisition.TvReleaseDecisionEngine(EntityKind.VideoSeason));
+        services.AddSingleton<Acquisition.IAcquisitionDecisionEngine>(new Acquisition.TvReleaseDecisionEngine(EntityKind.Video));
+        services.AddSingleton<Acquisition.IAcquisitionDecisionEngineFactory, Acquisition.AcquisitionDecisionEngineFactory>();
+        services.AddScoped<ImportedTorrentRemover>();
+        services.AddScoped<IAcquisitionImportEngine, BookAcquisitionImportEngine>();
+        services.AddScoped<IAcquisitionImportEngine, MovieAcquisitionImportEngine>();
+        services.AddScoped<IAcquisitionImportEngine, MusicAcquisitionImportEngine>();
+        // One TV engine class serves both acquisition units: season packs and single episodes.
+        services.AddScoped<IAcquisitionImportEngine>(provider => ActivatorUtilities.CreateInstance<TvAcquisitionImportEngine>(provider, EntityKind.VideoSeason));
+        services.AddScoped<IAcquisitionImportEngine>(provider => ActivatorUtilities.CreateInstance<TvAcquisitionImportEngine>(provider, EntityKind.Video));
+        services.AddScoped<IAcquisitionImportEngineFactory, AcquisitionImportEngineFactory>();
         services.AddScoped<IAudioStreamService, AudioStreamService>();
         services.AddSingleton<IIdentifyApplyProgressStore, InMemoryIdentifyApplyProgressStore>();
         services.AddSingleton<AuthAttemptThrottle>();
@@ -118,6 +139,16 @@ public static class DependencyInjection {
         services.AddTransient<IJobHandler, BulkIdentifyJobHandler>();
         services.AddTransient<IJobHandler, AutoIdentifyJobHandler>();
         services.AddTransient<IJobHandler, IdentifyCascadeJobHandler>();
+
+        // Acquisition
+        services.AddTransient<IJobHandler, AcquisitionSearchJobHandler>();
+        services.AddTransient<IJobHandler, AcquisitionMonitorJobHandler>();
+        services.AddTransient<IJobHandler, AcquisitionImportJobHandler>();
+        services.AddTransient<IJobHandler, RecycleBinCleanupJobHandler>();
+        services.AddTransient<IJobHandler, AcquisitionFailedHandleJobHandler>();
+        services.AddTransient<IJobHandler, MonitoredSearchJobHandler>();
+        services.AddTransient<IJobHandler, AcquisitionUpgradeReplaceJobHandler>();
+        services.AddTransient<IJobHandler, AcquisitionEnrichJobHandler>();
 
         // Background services
         services.AddSingleton<WorkerRuntimeIdentity>();

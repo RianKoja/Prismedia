@@ -1,5 +1,6 @@
 using Prismedia.Application.Jobs.Handlers;
 using Microsoft.Extensions.Logging;
+using Prismedia.Application.Acquisition;
 using Prismedia.Application.Jobs.Ports;
 using Prismedia.Domain.Entities;
 using System.Text.RegularExpressions;
@@ -19,7 +20,8 @@ public sealed class ScanLibraryJobHandler(
     IDownstreamNeedsPersistence downstreamNeeds,
     IScanSnapshotStore? snapshots = null,
     IVideoSidecarMetadataReader? sidecars = null,
-    IScanMetadataPersistence? scanMetadata = null) : ScanJobHandler(logger, fileDiscovery, roots, snapshots) {
+    IScanMetadataPersistence? scanMetadata = null,
+    IAcquisitionHintApplier? acquisitionHints = null) : ScanJobHandler(logger, fileDiscovery, roots, snapshots) {
     private const int BatchSize = 50;
     private static readonly Regex SeasonFolderPattern = new(
         @"^(?:Season\s*(?<season>\d{1,3})|S(?<season>\d{1,3}))$",
@@ -78,6 +80,33 @@ public sealed class ScanLibraryJobHandler(
                     var item = BuildVideoUpsertItem(filePath, root, files, sidecar);
                     if (item.Movie is { } movie) {
                         validMovieFolders.Add(movie.FolderPath);
+                        if (acquisitionHints is not null) {
+                            // Bind a request-created wanted Movie to this folder BEFORE the upsert, so the
+                            // path-keyed movie upsert finds the wanted entity instead of creating a duplicate.
+                            await acquisitionHints.BindWantedEntityAsync(EntityKind.Movie, movie.FolderPath, cancellationToken);
+                        }
+                    }
+
+                    // Bind the wanted TV tree BEFORE the upserts, top-down: the series grouping by
+                    // folder (the ancestor of an imported season/episode hint), then its phantom season
+                    // and episode by their sibling positions — so the path/position-keyed upserts find
+                    // the request-created entities instead of creating duplicates.
+                    if (acquisitionHints is not null && item.Series is { } seriesInfo) {
+                        await acquisitionHints.BindWantedParentAsync(EntityKind.VideoSeries, seriesInfo.FolderPath, cancellationToken);
+                        if (item.Season is { } seasonInfo) {
+                            // A season-pack hint names the wanted season directly; phantom seasons of a
+                            // bound series also match by their sibling position.
+                            await acquisitionHints.BindWantedEntityAsync(EntityKind.VideoSeason, seasonInfo.FolderPath, cancellationToken);
+                            await acquisitionHints.BindWantedChildBySortOrderAsync(
+                                EntityKind.VideoSeason, seriesInfo.FolderPath, seasonInfo.SeasonNumber, seasonInfo.FolderPath, cancellationToken);
+                            if (item.EpisodeNumber is { } episodeNumber) {
+                                await acquisitionHints.BindWantedChildBySortOrderAsync(
+                                    EntityKind.Video, seasonInfo.FolderPath, episodeNumber, filePath, cancellationToken);
+                            }
+                        }
+
+                        // A hint that names this exact file (a single-episode import) binds directly too.
+                        await acquisitionHints.BindWantedEntityAsync(EntityKind.Video, filePath, cancellationToken);
                     }
 
                     batchItems.Add(item);

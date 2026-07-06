@@ -114,5 +114,38 @@ public enum JobType {
 
     /// <summary>Walks a queued entity's full child tree through a provider, streaming the growing proposal onto the queue item.</summary>
     [Code("identify-cascade")]
-    IdentifyCascade
+    IdentifyCascade,
+
+    // ── Acquisition ─────────────────────────────────────────────
+    /// <summary>Searches configured indexers for an acquisition's book and persists scored release candidates.</summary>
+    [Code("acquisition-search")]
+    AcquisitionSearch,
+
+    /// <summary>Polls active download-client transfers for in-flight acquisitions and advances their status.</summary>
+    [Code("acquisition-monitor")]
+    AcquisitionMonitor,
+
+    /// <summary>Moves a completed acquisition payload into a library root, writes identify hints, and enqueues a book scan.</summary>
+    [Code("acquisition-import")]
+    AcquisitionImport,
+
+    /// <summary>Handles a failed download: blocklists the release and, when auto-redownload is on, grabs the next-best candidate.</summary>
+    [Code("acquisition-failed-handle")]
+    AcquisitionFailedHandle,
+
+    /// <summary>Re-runs the release search for every due monitored acquisition so a wanted item is fetched once a release appears.</summary>
+    [Code("monitored-search")]
+    MonitoredSearch,
+
+    /// <summary>Replaces an owned book file with a fully-downloaded, verified, strictly-better upgrade release.</summary>
+    [Code("acquisition-upgrade-replace")]
+    AcquisitionUpgradeReplace,
+
+    /// <summary>Enriches a request's held metadata (cover, description, dates) from the provider before import.</summary>
+    [Code("acquisition-enrich")]
+    AcquisitionEnrich,
+
+    /// <summary>Purges recycle-bin entries older than the configured cleanup window.</summary>
+    [Code("recycle-bin-cleanup")]
+    RecycleBinCleanup
 }

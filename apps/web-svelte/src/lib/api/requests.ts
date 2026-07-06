@@ -1,51 +1,15 @@
-import type { RequestMediaKindCode, RequestProviderKindCode } from "$lib/api/generated/codes";
+import type { MonitorPresetCode, RequestMediaKindCode, RequestProviderKindCode } from "$lib/api/generated/codes";
 import {
-  deleteRequestHistoryEntry as deleteRequestHistoryEntryRequest,
-  deleteRequestService,
+  commitEntityRequest as commitEntityRequestRequest,
+  commitRequest as commitRequestRequest,
   getRequestDetail as getRequestDetailRequest,
-  listRequestHistory,
-  listRequestServices,
-  saveRequestService,
+  removeWanted as removeWantedRequest,
   searchRequests as searchRequestsRequest,
-  submitRequest as submitRequestRequest,
-  testRequestService,
-  updateRequestService,
+  syncContainerRequest as syncContainerRequestRequest,
 } from "$lib/api/generated/prismedia";
-import type {
-  RequestDetailResponse,
-  RequestHistoryResponse,
-  RequestSearchResponse,
-  RequestServiceInstanceSaveRequest,
-  RequestServiceInstanceSummary,
-  RequestServiceTestRequest,
-  RequestServiceTestResponse,
-  RequestSubmitRequest,
-  RequestSubmitResponse,
-} from "$lib/requests/request-model";
+import type { RequestCommitResponse } from "$lib/api/generated/model";
+import type { RequestDetailResponse, RequestSearchResponse } from "$lib/requests/request-model";
 import { unwrapGenerated } from "$lib/api/generated-response";
-
-export async function fetchRequestServices(): Promise<RequestServiceInstanceSummary[]> {
-  return unwrapGenerated(await listRequestServices(), "Failed to load request services");
-}
-
-export async function saveRequestServiceInstance(
-  payload: RequestServiceInstanceSaveRequest,
-): Promise<RequestServiceInstanceSummary> {
-  const request = payload.id
-    ? updateRequestService(payload.id, payload)
-    : saveRequestService(payload);
-  return unwrapGenerated(await request, "Failed to save request service");
-}
-
-export async function deleteRequestServiceInstance(id: string): Promise<void> {
-  unwrapGenerated(await deleteRequestService(id), "Failed to delete request service", [204]);
-}
-
-export async function testRequestServiceConnection(
-  payload: RequestServiceTestRequest,
-): Promise<RequestServiceTestResponse> {
-  return unwrapGenerated(await testRequestService(payload), "Failed to test request service");
-}
 
 export async function searchRequests(params: {
   query: string;
@@ -64,12 +28,59 @@ export async function searchRequests(params: {
   );
 }
 
-export async function fetchRequestHistory(): Promise<RequestHistoryResponse> {
-  return unwrapGenerated(await listRequestHistory(), "Failed to load request history");
+/**
+ * Commits a reviewed request: the server creates the wanted library entity/entities up front (the
+ * author container plus each picked book, a standalone book, or picked series volumes) and starts one
+ * acquisition per requested book. Already-owned / already-in-flight picks are reported per item.
+ * The request-time choices — which library to import into and which quality profile to score releases
+ * with — ride along; null falls back to the kind's defaults server-side.
+ */
+export async function commitRequest(params: {
+  kind: RequestMediaKindCode;
+  externalId: string;
+  selectedChildIds: string[];
+  targetLibraryRootId?: string | null;
+  profileId?: string | null;
+  /**
+   * The monitoring preset for a container request (a series, an author, an artist). Recorded on the
+   * container monitor to govern whether future syncs auto-monitor newly discovered works; when
+   * selectedChildIds is empty it also derives which existing children to request now.
+   */
+  preset?: MonitorPresetCode | null;
+}): Promise<RequestCommitResponse> {
+  return unwrapGenerated(
+    await commitRequestRequest({
+      kind: params.kind,
+      externalId: params.externalId,
+      selectedChildIds: params.selectedChildIds,
+      targetLibraryRootId: params.targetLibraryRootId ?? null,
+      profileId: params.profileId ?? null,
+      preset: params.preset ?? undefined,
+    }),
+    "Failed to commit the request",
+  );
 }
 
-export async function deleteRequestHistoryEntry(id: string): Promise<void> {
-  unwrapGenerated(await deleteRequestHistoryEntryRequest(id), "Failed to delete request history entry", [204]);
+/**
+ * Requests an existing library entity by id — a wanted placeholder's "Search for release". The server
+ * resolves the entity's kind and provider identity itself and starts the auto-grabbing acquisition.
+ */
+export async function commitEntityRequest(entityId: string): Promise<RequestCommitResponse> {
+  return unwrapGenerated(await commitEntityRequestRequest({ entityId }), "Failed to search for a release");
+}
+
+/**
+ * Removes wanted placeholders: each is deleted (any in-flight download torn down) and blacklisted from
+ * container discovery so a followed author/artist sweep never resurrects it. Explicitly requesting the
+ * same work again clears its blacklist entry.
+ */
+export async function removeWantedEntities(entityIds: string[]): Promise<void> {
+  unwrapGenerated(await removeWantedRequest({ entityIds }), "Failed to remove wanted items");
+}
+
+/** Immediately re-syncs a followed author/artist from its provider — the manual counterpart to the daily sweep. */
+export async function syncContainerRequest(entityId: string): Promise<void> {
+  unwrapGenerated(await syncContainerRequestRequest({ entityId }), "Failed to check for new works", [204]);
 }
 
 export async function fetchRequestDetail(params: {
@@ -84,8 +95,4 @@ export async function fetchRequestDetail(params: {
     }),
     "Failed to load request detail",
   );
-}
-
-export async function submitRequest(payload: RequestSubmitRequest): Promise<RequestSubmitResponse> {
-  return unwrapGenerated(await submitRequestRequest(payload), "Failed to submit request");
 }

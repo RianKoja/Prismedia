@@ -10,12 +10,14 @@ public static class AppSettingsRegistry {
     private const string Visibility = "visibility";
     private const string Scan = "scan";
     private const string Collections = "collections";
+    private const string Monitoring = "monitoring";
     private const string Taxonomy = "taxonomy";
     private const string AutoIdentify = "autoIdentify";
     private const string Generation = "generation";
     private const string Jobs = "jobs";
     private const string Playback = "playback";
     private const string Subtitles = "subtitles";
+    private const string Requests = "requests";
     private const string Hls = "hls";
     private const string TranscodeCache = "transcodeCache";
 
@@ -99,6 +101,68 @@ public static class AppSettingsRegistry {
                 "When on, Prismedia queues an hourly job at the top of the hour to evaluate dynamic collection rules and update collection membership.",
                 true,
                 10),
+
+            Boolean(
+                AppSettingKeys.MonitoringSearchEnabled,
+                Monitoring,
+                "Monitoring",
+                "Keep searching for monitored items until they are acquired.",
+                22,
+                "Re-search monitored items",
+                "When on, Prismedia periodically re-runs the release search for monitored items so a wanted book is fetched once a release appears.",
+                true,
+                10),
+            Integer(
+                AppSettingKeys.MonitoringIntervalMinutes,
+                Monitoring,
+                "Monitoring",
+                "Keep searching for monitored items until they are acquired.",
+                22,
+                "Re-search interval",
+                "Minutes between re-searches of monitored items.",
+                1440,
+                20,
+                min: 15,
+                max: 10080,
+                step: 15),
+            String(
+                AppSettingKeys.AcquisitionRecycleBinPath,
+                Monitoring,
+                "Monitoring",
+                "Keep searching for monitored items until they are acquired.",
+                22,
+                "Recycle bin folder",
+                "When set, a file replaced by a quality upgrade is moved here instead of being kept beside the new one, and is purged after the cleanup window. Leave blank to keep replaced files next to the upgrade as .prismedia-bak.",
+                "",
+                30),
+            Integer(
+                AppSettingKeys.AcquisitionRecycleBinCleanupDays,
+                Monitoring,
+                "Monitoring",
+                "Keep searching for monitored items until they are acquired.",
+                22,
+                "Recycle bin cleanup (days)",
+                "Files older than this are deleted from the recycle bin by the daily cleanup.",
+                7,
+                40,
+                min: 1,
+                max: 365,
+                step: 1),
+            Select(
+                AppSettingKeys.AcquisitionDownloadPropers,
+                Monitoring,
+                "Monitoring",
+                "Keep searching for monitored items until they are acquired.",
+                22,
+                "Download propers and repacks",
+                "How PROPER, REPACK, RERIP and anime v2+ re-releases are treated. Stores a ProperDownloadPolicy code: prefer-and-upgrade (default) ranks them higher AND upgrades an owned copy to a better revision at the same quality; do-not-upgrade ranks them higher but never upgrades an owned copy for revision alone; do-not-prefer ignores revisions entirely.",
+                "prefer-and-upgrade",
+                50,
+                [
+                    new SettingOption("prefer-and-upgrade", "Prefer and upgrade", "Rank revisions higher and upgrade an owned copy to a better same-quality revision."),
+                    new SettingOption("do-not-upgrade", "Prefer, do not upgrade", "Rank revisions higher on first grab, but never upgrade an owned copy for revision alone."),
+                    new SettingOption("do-not-prefer", "Do not prefer", "Ignore revisions entirely; only the quality ladder decides.")
+                ]),
 
             Boolean(
                 AppSettingKeys.TaxonomyRemoveOrphanTags,

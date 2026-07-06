@@ -22,6 +22,421 @@ namespace Prismedia.Infrastructure.Persistence.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("Prismedia.Infrastructure.Persistence.Entities.AcquisitionBlocklistRow", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid?>("AcquisitionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("acquisition_id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Identity")
+                        .IsRequired()
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)")
+                        .HasColumnName("identity");
+
+                    b.Property<string>("IndexerName")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("indexer_name");
+
+                    b.Property<string>("InfoHash")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("info_hash");
+
+                    b.Property<string>("Message")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)")
+                        .HasColumnName("message");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasDefaultValue("failed")
+                        .HasColumnName("reason");
+
+                    b.Property<string>("Title")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)")
+                        .HasColumnName("title");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AcquisitionId");
+
+                    b.HasIndex("Identity")
+                        .IsUnique();
+
+                    b.ToTable("acquisition_blocklist", (string)null);
+                });
+
+            modelBuilder.Entity("Prismedia.Infrastructure.Persistence.Entities.AcquisitionHistoryRow", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid?>("AcquisitionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("acquisition_id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("DownloadClientName")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("download_client_name");
+
+                    b.Property<Guid?>("EntityId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("entity_id");
+
+                    b.Property<string>("Event")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasDefaultValue("grabbed")
+                        .HasColumnName("event");
+
+                    b.Property<int?>("FormatScore")
+                        .HasColumnType("integer")
+                        .HasColumnName("format_score");
+
+                    b.Property<string>("IndexerName")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("indexer_name");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasDefaultValue("book")
+                        .HasColumnName("kind");
+
+                    b.Property<string>("Message")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)")
+                        .HasColumnName("message");
+
+                    b.Property<string>("QualityCode")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("quality_code");
+
+                    b.Property<string>("ReleaseTitle")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)")
+                        .HasColumnName("release_title");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)")
+                        .HasColumnName("title");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AcquisitionId");
+
+                    b.HasIndex("CreatedAt")
+                        .IsDescending();
+
+                    b.HasIndex("EntityId");
+
+                    b.ToTable("acquisition_history", (string)null);
+                });
+
+            modelBuilder.Entity("Prismedia.Infrastructure.Persistence.Entities.AcquisitionImportHintRow", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("AcquisitionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("acquisition_id");
+
+                    b.Property<string>("Author")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)")
+                        .HasColumnName("author");
+
+                    b.Property<bool>("Consumed")
+                        .HasColumnType("boolean")
+                        .HasColumnName("consumed");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("text")
+                        .HasColumnName("description");
+
+                    b.Property<Guid?>("EntityId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("entity_id");
+
+                    b.Property<string>("ExternalIdsJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("external_ids_json");
+
+                    b.Property<string>("OwnedFormatTier")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasDefaultValue("unknown")
+                        .HasColumnName("owned_format_tier");
+
+                    b.Property<string>("OwnedSourceTier")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasDefaultValue("unknown")
+                        .HasColumnName("owned_source_tier");
+
+                    b.Property<string>("PluginId")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("plugin_id");
+
+                    b.Property<string>("PluginItemId")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("plugin_item_id");
+
+                    b.Property<string>("PosterUrl")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)")
+                        .HasColumnName("poster_url");
+
+                    b.Property<string>("Series")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)")
+                        .HasColumnName("series");
+
+                    b.Property<string>("SourcePath")
+                        .IsRequired()
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)")
+                        .HasColumnName("source_path");
+
+                    b.Property<string>("SourceUrlsJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("source_urls_json");
+
+                    b.Property<string>("Title")
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)")
+                        .HasColumnName("title");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<int?>("Year")
+                        .HasColumnType("integer")
+                        .HasColumnName("year");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AcquisitionId");
+
+                    b.HasIndex("SourcePath");
+
+                    b.ToTable("acquisition_import_hints", (string)null);
+                });
+
+            modelBuilder.Entity("Prismedia.Infrastructure.Persistence.Entities.AcquisitionRow", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Author")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)")
+                        .HasColumnName("author");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("text")
+                        .HasColumnName("description");
+
+                    b.Property<Guid?>("EntityId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("entity_id");
+
+                    b.Property<int?>("EpisodeNumber")
+                        .HasColumnType("integer")
+                        .HasColumnName("episode_number");
+
+                    b.Property<string>("ExternalIdsJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("external_ids_json");
+
+                    b.Property<string>("FinalSourcePath")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)")
+                        .HasColumnName("final_source_path");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasDefaultValue("book")
+                        .HasColumnName("kind");
+
+                    b.Property<int>("OwnedFormatScore")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("owned_format_score");
+
+                    b.Property<string>("OwnedFormatTier")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasDefaultValue("unknown")
+                        .HasColumnName("owned_format_tier");
+
+                    b.Property<string>("OwnedMediaQuality")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("owned_media_quality");
+
+                    b.Property<int>("OwnedMediaRevision")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1)
+                        .HasColumnName("owned_media_revision");
+
+                    b.Property<string>("OwnedSourceTier")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasDefaultValue("unknown")
+                        .HasColumnName("owned_source_tier");
+
+                    b.Property<string>("PluginId")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("plugin_id");
+
+                    b.Property<string>("PluginItemId")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("plugin_item_id");
+
+                    b.Property<string>("PosterUrl")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)")
+                        .HasColumnName("poster_url");
+
+                    b.Property<Guid?>("ProfileId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("profile_id");
+
+                    b.Property<int?>("SeasonNumber")
+                        .HasColumnType("integer")
+                        .HasColumnName("season_number");
+
+                    b.Property<string>("SelectedReleaseJson")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("selected_release_json");
+
+                    b.Property<string>("Series")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)")
+                        .HasColumnName("series");
+
+                    b.Property<string>("SourceUrlsJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("source_urls_json");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasDefaultValue("pending")
+                        .HasColumnName("status");
+
+                    b.Property<string>("StatusMessage")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)")
+                        .HasColumnName("status_message");
+
+                    b.Property<Guid?>("TargetLibraryRootId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("target_library_root_id");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)")
+                        .HasColumnName("title");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpgradeOfAcquisitionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("upgrade_of_acquisition_id");
+
+                    b.Property<bool>("UpgradeQualityCaptured")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("upgrade_quality_captured");
+
+                    b.Property<int?>("Year")
+                        .HasColumnType("integer")
+                        .HasColumnName("year");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAt");
+
+                    b.HasIndex("EntityId");
+
+                    b.HasIndex("ProfileId");
+
+                    b.HasIndex("Status");
+
+                    b.HasIndex("UpgradeOfAcquisitionId");
+
+                    b.ToTable("acquisitions", (string)null);
+                });
+
             modelBuilder.Entity("Prismedia.Infrastructure.Persistence.Entities.AppSecurityRow", b =>
                 {
                     b.Property<int>("Id")
@@ -134,6 +549,171 @@ namespace Prismedia.Infrastructure.Persistence.Migrations
                     b.ToTable("audio_track_details", (string)null);
                 });
 
+            modelBuilder.Entity("Prismedia.Infrastructure.Persistence.Entities.BookAcquisitionProfileRow", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.PrimitiveCollection<string[]>("AllowedFormats")
+                        .IsRequired()
+                        .HasColumnType("text[]")
+                        .HasColumnName("allowed_formats");
+
+                    b.PrimitiveCollection<string[]>("AllowedQualities")
+                        .IsRequired()
+                        .HasColumnType("text[]")
+                        .HasColumnName("allowed_qualities");
+
+                    b.Property<bool>("AutoPick")
+                        .HasColumnType("boolean")
+                        .HasColumnName("auto_pick");
+
+                    b.Property<bool>("AutoRedownload")
+                        .HasColumnType("boolean")
+                        .HasColumnName("auto_redownload");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<int?>("CutoffFormatScore")
+                        .HasColumnType("integer")
+                        .HasColumnName("cutoff_format_score");
+
+                    b.Property<string>("CutoffFormatTier")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasDefaultValue("unknown")
+                        .HasColumnName("cutoff_format_tier");
+
+                    b.Property<string>("CutoffQuality")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("cutoff_quality");
+
+                    b.Property<string>("CutoffSourceTier")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasDefaultValue("unknown")
+                        .HasColumnName("cutoff_source_tier");
+
+                    b.Property<string>("DisplayName")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("display_name");
+
+                    b.Property<string>("DownloadCategory")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("download_category");
+
+                    b.Property<string>("FormatScoresJson")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("jsonb")
+                        .HasDefaultValue("{}")
+                        .HasColumnName("format_scores_json");
+
+                    b.PrimitiveCollection<string[]>("IgnoredTerms")
+                        .IsRequired()
+                        .HasColumnType("text[]")
+                        .HasColumnName("ignored_terms");
+
+                    b.Property<string>("ImportMode")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasDefaultValue("move")
+                        .HasColumnName("import_mode");
+
+                    b.Property<bool>("IsDefault")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_default");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasDefaultValue("book")
+                        .HasColumnName("kind");
+
+                    b.Property<long?>("MaxSizeBytes")
+                        .HasColumnType("bigint")
+                        .HasColumnName("max_size_bytes");
+
+                    b.Property<int>("MinFormatScore")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("min_format_score");
+
+                    b.Property<int>("MinSeeders")
+                        .HasColumnType("integer")
+                        .HasColumnName("min_seeders");
+
+                    b.Property<long?>("MinSizeBytes")
+                        .HasColumnType("bigint")
+                        .HasColumnName("min_size_bytes");
+
+                    b.Property<string>("PathTemplate")
+                        .IsRequired()
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)")
+                        .HasColumnName("path_template");
+
+                    b.PrimitiveCollection<string[]>("PreferredLanguages")
+                        .IsRequired()
+                        .HasColumnType("text[]")
+                        .HasColumnName("preferred_languages");
+
+                    b.PrimitiveCollection<string[]>("PreferredTerms")
+                        .IsRequired()
+                        .HasColumnType("text[]")
+                        .HasColumnName("preferred_terms");
+
+                    b.PrimitiveCollection<string[]>("RequiredTerms")
+                        .IsRequired()
+                        .HasColumnType("text[]")
+                        .HasColumnName("required_terms");
+
+                    b.Property<Guid>("TargetLibraryRootId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("target_library_root_id");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<bool>("UpgradeUntilCutoff")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("upgrade_until_cutoff");
+
+                    b.Property<string>("WeightedTermsJson")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("[]")
+                        .HasColumnName("weighted_terms_json");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IsDefault");
+
+                    b.HasIndex("TargetLibraryRootId");
+
+                    b.ToTable("book_acquisition_profiles", (string)null);
+                });
+
             modelBuilder.Entity("Prismedia.Infrastructure.Persistence.Entities.BookChapterDetailRow", b =>
                 {
                     b.Property<Guid>("EntityId")
@@ -174,6 +754,14 @@ namespace Prismedia.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("LibraryRootId")
                         .HasColumnType("uuid")
                         .HasColumnName("library_root_id");
+
+                    b.Property<string>("SourceTier")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasDefaultValue("unknown")
+                        .HasColumnName("source_tier");
 
                     b.HasKey("EntityId");
 
@@ -305,6 +893,48 @@ namespace Prismedia.Infrastructure.Persistence.Migrations
                     b.ToTable("collection_item_details", (string)null);
                 });
 
+            modelBuilder.Entity("Prismedia.Infrastructure.Persistence.Entities.CustomFormatRow", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("ConditionsJson")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("jsonb")
+                        .HasDefaultValue("[]")
+                        .HasColumnName("conditions_json");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasDefaultValue("book")
+                        .HasColumnName("kind");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("name");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Kind");
+
+                    b.ToTable("custom_formats", (string)null);
+                });
+
             modelBuilder.Entity("Prismedia.Infrastructure.Persistence.Entities.DatabaseBackupRow", b =>
                 {
                     b.Property<Guid>("Id")
@@ -351,6 +981,188 @@ namespace Prismedia.Infrastructure.Persistence.Migrations
                     b.HasIndex("IsManual", "ExpiresAt");
 
                     b.ToTable("database_backups", (string)null);
+                });
+
+            modelBuilder.Entity("Prismedia.Infrastructure.Persistence.Entities.DownloadClientConfigRow", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("BaseUrl")
+                        .IsRequired()
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)")
+                        .HasColumnName("base_url");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("category");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("DisplayName")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("display_name");
+
+                    b.Property<bool>("Enabled")
+                        .HasColumnType("boolean")
+                        .HasColumnName("enabled");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("kind");
+
+                    b.Property<int>("Priority")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(25)
+                        .HasColumnName("priority");
+
+                    b.Property<double?>("SeedRatio")
+                        .HasColumnType("double precision")
+                        .HasColumnName("seed_ratio");
+
+                    b.Property<int?>("SeedTimeMinutes")
+                        .HasColumnType("integer")
+                        .HasColumnName("seed_time_minutes");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<string>("Username")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("username");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Kind", "Enabled");
+
+                    b.ToTable("download_client_configs", (string)null);
+                });
+
+            modelBuilder.Entity("Prismedia.Infrastructure.Persistence.Entities.DownloadClientCredentialRow", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("CredentialKey")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("credential_key");
+
+                    b.Property<Guid>("DownloadClientConfigId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("download_client_config_id");
+
+                    b.Property<string>("EncryptedValue")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("encrypted_value");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DownloadClientConfigId", "CredentialKey")
+                        .IsUnique();
+
+                    b.ToTable("download_client_credentials", (string)null);
+                });
+
+            modelBuilder.Entity("Prismedia.Infrastructure.Persistence.Entities.DownloadTransferRow", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("AcquisitionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("acquisition_id");
+
+                    b.Property<string>("Category")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("category");
+
+                    b.Property<string>("ClientItemId")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("client_item_id");
+
+                    b.Property<string>("ContentPath")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)")
+                        .HasColumnName("content_path");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("DownloadClientConfigId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("download_client_config_id");
+
+                    b.Property<double>("Progress")
+                        .HasColumnType("double precision")
+                        .HasColumnName("progress");
+
+                    b.Property<string>("SavePath")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)")
+                        .HasColumnName("save_path");
+
+                    b.Property<double?>("SeedGoalRatio")
+                        .HasColumnType("double precision")
+                        .HasColumnName("seed_goal_ratio");
+
+                    b.Property<int?>("SeedGoalTimeMinutes")
+                        .HasColumnType("integer")
+                        .HasColumnName("seed_goal_time_minutes");
+
+                    b.Property<DateTimeOffset?>("SeedingSince")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("seeding_since");
+
+                    b.Property<DateTimeOffset?>("StalledSince")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("stalled_since");
+
+                    b.Property<string>("State")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("state");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AcquisitionId");
+
+                    b.HasIndex("DownloadClientConfigId");
+
+                    b.ToTable("download_transfers", (string)null);
                 });
 
             modelBuilder.Entity("Prismedia.Infrastructure.Persistence.Entities.EntityClassificationRow", b =>
@@ -674,6 +1486,13 @@ namespace Prismedia.Infrastructure.Persistence.Migrations
                             Code = "music-artist",
                             Category = "Media",
                             DisplayName = "Music Artist",
+                            StorageShape = "folder"
+                        },
+                        new
+                        {
+                            Code = "book-author",
+                            Category = "Media",
+                            DisplayName = "Book Author",
                             StorageShape = "folder"
                         },
                         new
@@ -1068,6 +1887,12 @@ namespace Prismedia.Infrastructure.Persistence.Migrations
                         .HasColumnType("boolean")
                         .HasDefaultValue(false)
                         .HasColumnName("is_organized");
+
+                    b.Property<bool>("IsWanted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("is_wanted");
 
                     b.Property<string>("KindCode")
                         .IsRequired()
@@ -1536,6 +2361,135 @@ namespace Prismedia.Infrastructure.Persistence.Migrations
                     b.HasIndex("EntityId", "Status");
 
                     b.ToTable("identify_results", (string)null);
+                });
+
+            modelBuilder.Entity("Prismedia.Infrastructure.Persistence.Entities.IndexerConfigRow", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("BaseUrl")
+                        .IsRequired()
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)")
+                        .HasColumnName("base_url");
+
+                    b.PrimitiveCollection<int[]>("Categories")
+                        .IsRequired()
+                        .HasColumnType("integer[]")
+                        .HasColumnName("categories");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("DisplayName")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("display_name");
+
+                    b.Property<bool>("Enabled")
+                        .HasColumnType("boolean")
+                        .HasColumnName("enabled");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("kind");
+
+                    b.Property<int>("Priority")
+                        .HasColumnType("integer")
+                        .HasColumnName("priority");
+
+                    b.Property<int?>("QueryLimitPerHour")
+                        .HasColumnType("integer")
+                        .HasColumnName("query_limit_per_hour");
+
+                    b.Property<double?>("SeedRatio")
+                        .HasColumnType("double precision")
+                        .HasColumnName("seed_ratio");
+
+                    b.Property<int?>("SeedTimeMinutes")
+                        .HasColumnType("integer")
+                        .HasColumnName("seed_time_minutes");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Kind", "Enabled");
+
+                    b.ToTable("indexer_configs", (string)null);
+                });
+
+            modelBuilder.Entity("Prismedia.Infrastructure.Persistence.Entities.IndexerCredentialRow", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("CredentialKey")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("credential_key");
+
+                    b.Property<string>("EncryptedValue")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("encrypted_value");
+
+                    b.Property<Guid>("IndexerConfigId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("indexer_config_id");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IndexerConfigId", "CredentialKey")
+                        .IsUnique();
+
+                    b.ToTable("indexer_credentials", (string)null);
+                });
+
+            modelBuilder.Entity("Prismedia.Infrastructure.Persistence.Entities.IndexerStatusRow", b =>
+                {
+                    b.Property<Guid>("IndexerConfigId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("indexer_config_id");
+
+                    b.Property<DateTimeOffset?>("DisabledUntil")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("disabled_until");
+
+                    b.Property<int>("EscalationLevel")
+                        .HasColumnType("integer")
+                        .HasColumnName("escalation_level");
+
+                    b.Property<string>("LastFailureMessage")
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)")
+                        .HasColumnName("last_failure_message");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("IndexerConfigId");
+
+                    b.ToTable("indexer_statuses", (string)null);
                 });
 
             modelBuilder.Entity("Prismedia.Infrastructure.Persistence.Entities.JellyfinProfileRow", b =>
@@ -2112,6 +3066,110 @@ namespace Prismedia.Infrastructure.Persistence.Migrations
                     b.ToTable("media_streams", (string)null);
                 });
 
+            modelBuilder.Entity("Prismedia.Infrastructure.Persistence.Entities.MonitorRow", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid?>("AcquisitionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("acquisition_id");
+
+                    b.Property<string>("Author")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)")
+                        .HasColumnName("author");
+
+                    b.Property<int>("BarrenSearches")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("barren_searches");
+
+                    b.Property<Guid?>("BookEntityId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("book_entity_id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("EntityId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("entity_id");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasDefaultValue("book")
+                        .HasColumnName("kind");
+
+                    b.Property<DateTimeOffset?>("LastSearchedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_searched_at");
+
+                    b.Property<string>("Preset")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasDefaultValue("all")
+                        .HasColumnName("monitor_preset");
+
+                    b.Property<Guid?>("ProfileId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("profile_id");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasDefaultValue("active")
+                        .HasColumnName("status");
+
+                    b.Property<Guid?>("TargetLibraryRootId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("target_library_root_id");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)")
+                        .HasColumnName("title");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<int>("UpgradeAttempts")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("upgrade_attempts");
+
+                    b.Property<Guid?>("UpgradeChildAcquisitionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("upgrade_child_acquisition_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AcquisitionId")
+                        .IsUnique();
+
+                    b.HasIndex("BookEntityId");
+
+                    b.HasIndex("EntityId")
+                        .IsUnique();
+
+                    b.HasIndex("Status", "LastSearchedAt");
+
+                    b.ToTable("monitors", (string)null);
+                });
+
             modelBuilder.Entity("Prismedia.Infrastructure.Persistence.Entities.MusicArtistDetailRow", b =>
                 {
                     b.Property<Guid>("EntityId")
@@ -2274,107 +3332,102 @@ namespace Prismedia.Infrastructure.Persistence.Migrations
                     b.ToTable("provider_credentials", (string)null);
                 });
 
-            modelBuilder.Entity("Prismedia.Infrastructure.Persistence.Entities.RequestHistoryRow", b =>
+            modelBuilder.Entity("Prismedia.Infrastructure.Persistence.Entities.ReleaseCandidateRow", b =>
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<bool>("Accepted")
+                        .HasColumnType("boolean")
+                        .HasColumnName("accepted");
+
+                    b.Property<Guid>("AcquisitionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("acquisition_id");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
-                    b.Property<string>("ExternalId")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)")
-                        .HasColumnName("external_id");
+                    b.Property<string>("DownloadUrl")
+                        .HasMaxLength(4096)
+                        .HasColumnType("character varying(4096)")
+                        .HasColumnName("download_url");
 
-                    b.Property<string>("Kind")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
-                        .HasColumnName("kind");
-
-                    b.Property<bool>("Monitored")
-                        .HasColumnType("boolean")
-                        .HasColumnName("monitored");
-
-                    b.Property<string>("PosterUrl")
-                        .HasMaxLength(2048)
-                        .HasColumnType("character varying(2048)")
-                        .HasColumnName("poster_url");
-
-                    b.PrimitiveCollection<string[]>("SelectedChildIds")
-                        .IsRequired()
-                        .HasColumnType("text[]")
-                        .HasColumnName("selected_child_ids");
-
-                    b.Property<Guid?>("ServiceInstanceId")
+                    b.Property<Guid?>("IndexerConfigId")
                         .HasColumnType("uuid")
-                        .HasColumnName("service_instance_id");
+                        .HasColumnName("indexer_config_id");
 
-                    b.Property<string>("ServiceName")
+                    b.Property<string>("IndexerName")
                         .IsRequired()
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)")
-                        .HasColumnName("service_name");
+                        .HasColumnName("indexer_name");
 
-                    b.Property<string>("Source")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
-                        .HasColumnName("source");
+                    b.Property<string>("InfoHash")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("info_hash");
 
-                    b.Property<string>("Status")
+                    b.Property<string>("InfoUrl")
+                        .HasMaxLength(4096)
+                        .HasColumnType("character varying(4096)")
+                        .HasColumnName("info_url");
+
+                    b.Property<string>("MagnetUrl")
+                        .HasColumnType("text")
+                        .HasColumnName("magnet_url");
+
+                    b.Property<int?>("Peers")
+                        .HasColumnType("integer")
+                        .HasColumnName("peers");
+
+                    b.Property<string>("Protocol")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(32)
                         .HasColumnType("character varying(32)")
-                        .HasDefaultValue("submitted")
-                        .HasColumnName("status");
+                        .HasDefaultValue("torrent")
+                        .HasColumnName("protocol");
 
-                    b.Property<string>("StatusMessage")
-                        .HasMaxLength(2048)
-                        .HasColumnType("character varying(2048)")
-                        .HasColumnName("status_message");
+                    b.Property<DateTimeOffset?>("PublishedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("published_at");
 
-                    b.Property<string>("Subtitle")
-                        .HasMaxLength(1024)
-                        .HasColumnType("character varying(1024)")
-                        .HasColumnName("subtitle");
+                    b.Property<string>("RejectionsJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("rejections_json");
+
+                    b.Property<double>("Score")
+                        .HasColumnType("double precision")
+                        .HasColumnName("score");
+
+                    b.Property<int?>("Seeders")
+                        .HasColumnType("integer")
+                        .HasColumnName("seeders");
+
+                    b.Property<long>("SizeBytes")
+                        .HasColumnType("bigint")
+                        .HasColumnName("size_bytes");
 
                     b.Property<string>("Title")
                         .IsRequired()
-                        .HasMaxLength(1024)
-                        .HasColumnType("character varying(1024)")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)")
                         .HasColumnName("title");
-
-                    b.Property<DateTimeOffset>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("updated_at");
-
-                    b.Property<string>("UpstreamId")
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)")
-                        .HasColumnName("upstream_id");
-
-                    b.Property<int?>("Year")
-                        .HasColumnType("integer")
-                        .HasColumnName("year");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("CreatedAt");
+                    b.HasIndex("IndexerConfigId");
 
-                    b.HasIndex("ServiceInstanceId");
+                    b.HasIndex("AcquisitionId", "Score");
 
-                    b.HasIndex("Source", "Kind", "ExternalId");
-
-                    b.ToTable("request_history", (string)null);
+                    b.ToTable("release_candidates", (string)null);
                 });
 
-            modelBuilder.Entity("Prismedia.Infrastructure.Persistence.Entities.RequestServiceCredentialRow", b =>
+            modelBuilder.Entity("Prismedia.Infrastructure.Persistence.Entities.RemotePathMappingRow", b =>
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid")
@@ -2384,94 +3437,21 @@ namespace Prismedia.Infrastructure.Persistence.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
-                    b.Property<string>("CredentialKey")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)")
-                        .HasColumnName("credential_key");
-
-                    b.Property<string>("EncryptedValue")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("encrypted_value");
-
-                    b.Property<Guid>("ServiceInstanceId")
+                    b.Property<Guid>("DownloadClientConfigId")
                         .HasColumnType("uuid")
-                        .HasColumnName("service_instance_id");
+                        .HasColumnName("download_client_config_id");
 
-                    b.Property<DateTimeOffset>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("updated_at");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ServiceInstanceId", "CredentialKey")
-                        .IsUnique();
-
-                    b.ToTable("request_service_credentials", (string)null);
-                });
-
-            modelBuilder.Entity("Prismedia.Infrastructure.Persistence.Entities.RequestServiceInstanceRow", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<string>("BaseUrl")
+                    b.Property<string>("LocalPath")
                         .IsRequired()
                         .HasMaxLength(2048)
                         .HasColumnType("character varying(2048)")
-                        .HasColumnName("base_url");
+                        .HasColumnName("local_path");
 
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at");
-
-                    b.Property<int?>("DefaultMetadataProfileId")
-                        .HasColumnType("integer")
-                        .HasColumnName("default_metadata_profile_id");
-
-                    b.Property<int?>("DefaultQualityProfileId")
-                        .HasColumnType("integer")
-                        .HasColumnName("default_quality_profile_id");
-
-                    b.Property<string>("DefaultRootFolderPath")
-                        .HasMaxLength(1024)
-                        .HasColumnType("character varying(1024)")
-                        .HasColumnName("default_root_folder_path");
-
-                    b.PrimitiveCollection<int[]>("DefaultTagIds")
+                    b.Property<string>("RemotePath")
                         .IsRequired()
-                        .HasColumnType("integer[]")
-                        .HasColumnName("default_tag_ids");
-
-                    b.Property<string>("DisplayName")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)")
-                        .HasColumnName("display_name");
-
-                    b.Property<bool>("IsDefault")
-                        .HasColumnType("boolean")
-                        .HasColumnName("is_default");
-
-                    b.Property<string>("Kind")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
-                        .HasColumnName("kind");
-
-                    b.Property<string>("MinimumAvailability")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)")
-                        .HasDefaultValue("released")
-                        .HasColumnName("minimum_availability");
-
-                    b.Property<bool>("SearchOnRequest")
-                        .HasColumnType("boolean")
-                        .HasColumnName("search_on_request");
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)")
+                        .HasColumnName("remote_path");
 
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .HasColumnType("timestamp with time zone")
@@ -2479,9 +3459,9 @@ namespace Prismedia.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("Kind", "IsDefault");
+                    b.HasIndex("DownloadClientConfigId");
 
-                    b.ToTable("request_service_instances", (string)null);
+                    b.ToTable("remote_path_mappings", (string)null);
                 });
 
             modelBuilder.Entity("Prismedia.Infrastructure.Persistence.Entities.ScannedFileRow", b =>
@@ -2647,6 +3627,88 @@ namespace Prismedia.Infrastructure.Persistence.Migrations
                     b.ToTable("video_series_details", (string)null);
                 });
 
+            modelBuilder.Entity("Prismedia.Infrastructure.Persistence.Entities.WantedSuppressionRow", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("ItemId")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)")
+                        .HasColumnName("item_id");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasDefaultValue("book")
+                        .HasColumnName("kind");
+
+                    b.Property<string>("Provider")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("provider");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)")
+                        .HasColumnName("title");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Provider", "ItemId")
+                        .IsUnique();
+
+                    b.ToTable("wanted_suppressions", (string)null);
+                });
+
+            modelBuilder.Entity("Prismedia.Infrastructure.Persistence.Entities.AcquisitionBlocklistRow", b =>
+                {
+                    b.HasOne("Prismedia.Infrastructure.Persistence.Entities.AcquisitionRow", null)
+                        .WithMany()
+                        .HasForeignKey("AcquisitionId")
+                        .OnDelete(DeleteBehavior.SetNull);
+                });
+
+            modelBuilder.Entity("Prismedia.Infrastructure.Persistence.Entities.AcquisitionHistoryRow", b =>
+                {
+                    b.HasOne("Prismedia.Infrastructure.Persistence.Entities.AcquisitionRow", null)
+                        .WithMany()
+                        .HasForeignKey("AcquisitionId")
+                        .OnDelete(DeleteBehavior.SetNull);
+                });
+
+            modelBuilder.Entity("Prismedia.Infrastructure.Persistence.Entities.AcquisitionImportHintRow", b =>
+                {
+                    b.HasOne("Prismedia.Infrastructure.Persistence.Entities.AcquisitionRow", null)
+                        .WithMany()
+                        .HasForeignKey("AcquisitionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Prismedia.Infrastructure.Persistence.Entities.AcquisitionRow", b =>
+                {
+                    b.HasOne("Prismedia.Infrastructure.Persistence.Entities.BookAcquisitionProfileRow", null)
+                        .WithMany()
+                        .HasForeignKey("ProfileId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("Prismedia.Infrastructure.Persistence.Entities.AcquisitionRow", null)
+                        .WithMany()
+                        .HasForeignKey("UpgradeOfAcquisitionId")
+                        .OnDelete(DeleteBehavior.SetNull);
+                });
+
             modelBuilder.Entity("Prismedia.Infrastructure.Persistence.Entities.AudioLibraryDetailRow", b =>
                 {
                     b.HasOne("Prismedia.Infrastructure.Persistence.Entities.EntityRow", null)
@@ -2667,6 +3729,15 @@ namespace Prismedia.Infrastructure.Persistence.Migrations
                         .WithOne()
                         .HasForeignKey("Prismedia.Infrastructure.Persistence.Entities.AudioTrackDetailRow", "EntityId")
                         .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Prismedia.Infrastructure.Persistence.Entities.BookAcquisitionProfileRow", b =>
+                {
+                    b.HasOne("Prismedia.Infrastructure.Persistence.Entities.LibraryRootRow", null)
+                        .WithMany()
+                        .HasForeignKey("TargetLibraryRootId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 
@@ -2724,6 +3795,29 @@ namespace Prismedia.Infrastructure.Persistence.Migrations
                         .HasForeignKey("ItemEntityId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("Prismedia.Infrastructure.Persistence.Entities.DownloadClientCredentialRow", b =>
+                {
+                    b.HasOne("Prismedia.Infrastructure.Persistence.Entities.DownloadClientConfigRow", null)
+                        .WithMany()
+                        .HasForeignKey("DownloadClientConfigId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Prismedia.Infrastructure.Persistence.Entities.DownloadTransferRow", b =>
+                {
+                    b.HasOne("Prismedia.Infrastructure.Persistence.Entities.AcquisitionRow", null)
+                        .WithMany()
+                        .HasForeignKey("AcquisitionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Prismedia.Infrastructure.Persistence.Entities.DownloadClientConfigRow", null)
+                        .WithMany()
+                        .HasForeignKey("DownloadClientConfigId")
+                        .OnDelete(DeleteBehavior.SetNull);
                 });
 
             modelBuilder.Entity("Prismedia.Infrastructure.Persistence.Entities.EntityClassificationRow", b =>
@@ -2975,6 +4069,24 @@ namespace Prismedia.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.SetNull);
                 });
 
+            modelBuilder.Entity("Prismedia.Infrastructure.Persistence.Entities.IndexerCredentialRow", b =>
+                {
+                    b.HasOne("Prismedia.Infrastructure.Persistence.Entities.IndexerConfigRow", null)
+                        .WithMany()
+                        .HasForeignKey("IndexerConfigId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Prismedia.Infrastructure.Persistence.Entities.IndexerStatusRow", b =>
+                {
+                    b.HasOne("Prismedia.Infrastructure.Persistence.Entities.IndexerConfigRow", null)
+                        .WithOne()
+                        .HasForeignKey("Prismedia.Infrastructure.Persistence.Entities.IndexerStatusRow", "IndexerConfigId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Prismedia.Infrastructure.Persistence.Entities.JellyfinSessionRow", b =>
                 {
                     b.HasOne("Prismedia.Infrastructure.Persistence.Entities.JellyfinProfileRow", null)
@@ -3022,6 +4134,14 @@ namespace Prismedia.Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Prismedia.Infrastructure.Persistence.Entities.MonitorRow", b =>
+                {
+                    b.HasOne("Prismedia.Infrastructure.Persistence.Entities.AcquisitionRow", null)
+                        .WithMany()
+                        .HasForeignKey("AcquisitionId")
+                        .OnDelete(DeleteBehavior.SetNull);
+                });
+
             modelBuilder.Entity("Prismedia.Infrastructure.Persistence.Entities.MusicArtistDetailRow", b =>
                 {
                     b.HasOne("Prismedia.Infrastructure.Persistence.Entities.EntityRow", null)
@@ -3054,19 +4174,25 @@ namespace Prismedia.Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("Prismedia.Infrastructure.Persistence.Entities.RequestHistoryRow", b =>
+            modelBuilder.Entity("Prismedia.Infrastructure.Persistence.Entities.ReleaseCandidateRow", b =>
                 {
-                    b.HasOne("Prismedia.Infrastructure.Persistence.Entities.RequestServiceInstanceRow", null)
+                    b.HasOne("Prismedia.Infrastructure.Persistence.Entities.AcquisitionRow", null)
                         .WithMany()
-                        .HasForeignKey("ServiceInstanceId")
+                        .HasForeignKey("AcquisitionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Prismedia.Infrastructure.Persistence.Entities.IndexerConfigRow", null)
+                        .WithMany()
+                        .HasForeignKey("IndexerConfigId")
                         .OnDelete(DeleteBehavior.SetNull);
                 });
 
-            modelBuilder.Entity("Prismedia.Infrastructure.Persistence.Entities.RequestServiceCredentialRow", b =>
+            modelBuilder.Entity("Prismedia.Infrastructure.Persistence.Entities.RemotePathMappingRow", b =>
                 {
-                    b.HasOne("Prismedia.Infrastructure.Persistence.Entities.RequestServiceInstanceRow", null)
+                    b.HasOne("Prismedia.Infrastructure.Persistence.Entities.DownloadClientConfigRow", null)
                         .WithMany()
-                        .HasForeignKey("ServiceInstanceId")
+                        .HasForeignKey("DownloadClientConfigId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

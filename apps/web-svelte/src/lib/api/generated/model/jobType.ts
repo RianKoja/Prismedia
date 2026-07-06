@@ -35,4 +35,12 @@ export const JobType = {
   'bulk-identify': 'bulk-identify',
   'auto-identify': 'auto-identify',
   'identify-cascade': 'identify-cascade',
+  'acquisition-search': 'acquisition-search',
+  'acquisition-monitor': 'acquisition-monitor',
+  'acquisition-import': 'acquisition-import',
+  'acquisition-failed-handle': 'acquisition-failed-handle',
+  'monitored-search': 'monitored-search',
+  'acquisition-upgrade-replace': 'acquisition-upgrade-replace',
+  'acquisition-enrich': 'acquisition-enrich',
+  'recycle-bin-cleanup': 'recycle-bin-cleanup',
 } as const;

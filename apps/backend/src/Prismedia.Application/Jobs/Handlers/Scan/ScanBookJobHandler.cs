@@ -19,7 +19,8 @@ public sealed class ScanBookJobHandler(
     IScanSnapshotStore? snapshots = null,
     IComicInfoMetadataReader? comicInfoReader = null,
     IScanMetadataPersistence? scanMetadata = null,
-    IBookFileMetadataReader? bookFileMetadata = null) : ScanJobHandler(logger, fileDiscovery, roots, snapshots) {
+    IBookFileMetadataReader? bookFileMetadata = null,
+    Acquisition.IAcquisitionHintApplier? acquisitionHints = null) : ScanJobHandler(logger, fileDiscovery, roots, snapshots) {
     private static readonly HashSet<string> ImageExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
         ".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".tiff", ".tif"
@@ -75,6 +76,11 @@ public sealed class ScanBookJobHandler(
             var first = bookGroup.First();
             var bookMetadata = BestBookMetadata(bookGroup);
             var bookIsNsfw = root.IsNsfw || bookGroup.Any(item => item.MarksNsfw);
+            // Bind a request-created wanted entity to this path first, so the path-keyed upsert finds it
+            // (attaching the imported file to the wanted entity) instead of creating a duplicate.
+            if (acquisitionHints is not null) {
+                await acquisitionHints.BindWantedEntityAsync(EntityKind.Book, first.BookPath, cancellationToken);
+            }
             var bookId = await books.UpsertBookAsync(first.BookPath, first.BookTitle, root.Id, bookIsNsfw, cancellationToken);
             if (bookMetadata is not null && scanMetadata is not null) {
                 await scanMetadata.ApplyComicInfoMetadataAsync(
@@ -85,6 +91,11 @@ public sealed class ScanBookJobHandler(
             }
             validBookPaths.Add(first.BookPath);
             archiveBookPaths.Add(first.BookPath);
+
+            // Stamp acquisition-supplied identity (plugin/external ids) before auto-identify so it resolves ID-first.
+            if (acquisitionHints is not null) {
+                await acquisitionHints.ApplyAsync(bookId, first.BookPath, cancellationToken);
+            }
 
             // A book is the top-level root of its volumes/chapters/pages, so identify it directly.
             var bookAutoIdentify = AutoIdentifyScanEnqueue.RequestFor(
@@ -166,6 +177,8 @@ public sealed class ScanBookJobHandler(
         await ScanSingleFileBooksAsync(context, root, settings, excludedPaths, validBookPaths, archiveBookPaths, cancellationToken);
 
         await books.RemoveStaleBooksInRootAsync(root.Id, validBookPaths, cancellationToken);
+        // Author groupings whose books were all removed (or that used to be the old "series" parents) are pruned.
+        await books.RemoveEmptyBookAuthorsAsync(cancellationToken);
         await Roots.RemoveEntitiesInExcludedPathsAsync(root.Id, cancellationToken);
     }
 
@@ -207,7 +220,7 @@ public sealed class ScanBookJobHandler(
         }
 
         foreach (var looseItem in items
-            .Where(item => item.SeriesPath is null)
+            .Where(item => item.AuthorPath is null)
             .OrderBy(item => item.SourcePath, NaturalPathComparer.Instance)) {
             await UpsertSingleFileBookAsync(
                 context,
@@ -220,38 +233,43 @@ public sealed class ScanBookJobHandler(
                 cancellationToken);
         }
 
-        foreach (var seriesGroup in items
-            .Where(item => item.SeriesPath is not null)
-            .GroupBy(item => item.SeriesPath!, StringComparer.OrdinalIgnoreCase)
+        // Books under an `Author/` folder are grouped under a folder-backed author entity (like
+        // Artist/Album for music). Each book is parented to its author; empty authors are pruned later.
+        foreach (var authorGroup in items
+            .Where(item => item.AuthorPath is not null)
+            .GroupBy(item => item.AuthorPath!, StringComparer.OrdinalIgnoreCase)
             .OrderBy(group => group.Key, NaturalPathComparer.Instance)) {
-            var first = seriesGroup.First();
-            var seriesIsNsfw = root.IsNsfw || seriesGroup.Any(item => item.IsNsfw);
-            var seriesId = await books.UpsertBookSeriesAsync(
-                first.SeriesPath!,
-                first.SeriesTitle!,
-                root.Id,
-                seriesIsNsfw,
-                DefaultBookTypeFor(first.Format),
-                first.Format,
-                cancellationToken);
-            validBookPaths.Add(first.SeriesPath!);
-
-            if (!archiveBookPaths.Contains(first.SeriesPath!)) {
-                await books.RemoveStaleBookChaptersAsync(seriesId, new HashSet<string>(StringComparer.OrdinalIgnoreCase), cancellationToken);
-                await books.RemoveStaleBookVolumesAsync(seriesId, new HashSet<string>(StringComparer.OrdinalIgnoreCase), cancellationToken);
+            var first = authorGroup.First();
+            var authorIsNsfw = root.IsNsfw || authorGroup.Any(item => item.IsNsfw);
+            // Name the author from the first book that carried embedded creator metadata (i.e. whose title
+            // differs from the folder name); fall back to the folder name when none of them did.
+            var folderName = Path.GetFileName(first.AuthorPath!);
+            var authorTitle = authorGroup
+                .Select(item => item.AuthorTitle!)
+                .FirstOrDefault(name => !string.Equals(name, folderName, StringComparison.OrdinalIgnoreCase))
+                ?? folderName;
+            // Bind a request-created wanted author to this folder first, so the upsert reuses that entity.
+            if (acquisitionHints is not null) {
+                await acquisitionHints.BindWantedParentAsync(EntityKind.BookAuthor, first.AuthorPath!, cancellationToken);
             }
+            var authorId = await books.UpsertBookAuthorAsync(
+                first.AuthorPath!,
+                authorTitle,
+                sortOrder: null,
+                authorIsNsfw,
+                cancellationToken);
 
-            var booksInSeries = seriesGroup
+            var booksByAuthor = authorGroup
                 .OrderBy(item => item.SourcePath, NaturalPathComparer.Instance)
                 .ToArray();
-            for (var index = 0; index < booksInSeries.Length; index++) {
+            for (var index = 0; index < booksByAuthor.Length; index++) {
                 await UpsertSingleFileBookAsync(
                     context,
                     settings,
                     root,
-                    booksInSeries[index],
+                    booksByAuthor[index],
                     validBookPaths,
-                    seriesId,
+                    authorId,
                     index,
                     cancellationToken);
             }
@@ -267,6 +285,11 @@ public sealed class ScanBookJobHandler(
         Guid? parentBookEntityId,
         int? sortOrder,
         CancellationToken cancellationToken) {
+        // Bind a request-created wanted entity to this path first, so the path-keyed upsert finds it
+        // (attaching the imported file to the wanted entity) instead of creating a duplicate.
+        if (acquisitionHints is not null) {
+            await acquisitionHints.BindWantedEntityAsync(EntityKind.Book, item.SourcePath, cancellationToken);
+        }
         var bookId = await books.UpsertSingleFileBookAsync(
             item.SourcePath,
             item.Title,
@@ -279,6 +302,11 @@ public sealed class ScanBookJobHandler(
             sortOrder,
             cancellationToken);
         validBookPaths.Add(item.SourcePath);
+
+        // Stamp acquisition-supplied identity before auto-identify so it resolves ID-first.
+        if (acquisitionHints is not null) {
+            await acquisitionHints.ApplyAsync(bookId, item.SourcePath, cancellationToken);
+        }
 
         if (item.Metadata is not null && scanMetadata is not null) {
             await scanMetadata.ApplyComicInfoMetadataAsync(bookId, item.Metadata, item.IsNsfw, cancellationToken);
@@ -455,8 +483,8 @@ public sealed class ScanBookJobHandler(
         bool IsNsfw,
         BookFormat Format,
         ComicInfoMetadata? Metadata,
-        string? SeriesPath,
-        string? SeriesTitle) {
+        string? AuthorPath,
+        string? AuthorTitle) {
         public static SingleFileBookItem From(
             string rootPath,
             string sourcePath,
@@ -471,8 +499,13 @@ public sealed class ScanBookJobHandler(
                 return new SingleFileBookItem(sourcePath, title, isNsfw, format, metadata, null, null);
             }
 
-            var seriesPath = Path.Combine(rootPath, segments[0]);
-            return new SingleFileBookItem(sourcePath, title, isNsfw, format, metadata, seriesPath, segments[0]);
+            // The top-level folder under the root groups a single-file book's author (e.g. Author/Title/book.epub),
+            // mirroring Artist/Album for music. The display name prefers the embedded author (EPUB dc:creator /
+            // PDF Author) so a series- or title-named folder (e.g. "Game of Thrones") still shows the real
+            // author ("George R.R. Martin"); the folder name is the fallback when no creator metadata exists.
+            var authorPath = Path.Combine(rootPath, segments[0]);
+            var authorTitle = FirstNonEmpty(metadata?.Creators.Count > 0 ? metadata.Creators[0] : null) ?? segments[0];
+            return new SingleFileBookItem(sourcePath, title, isNsfw, format, metadata, authorPath, authorTitle);
         }
     }
 

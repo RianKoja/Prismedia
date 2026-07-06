@@ -33,6 +33,7 @@
     type EntityMetadataUpdateRequest,
   } from "$lib/components/entities/EntityDetail.svelte";
   import EntityGrid from "$lib/components/entities/EntityGrid.svelte";
+  import EntityAcquisitionCard from "$lib/components/acquisitions/EntityAcquisitionCard.svelte";
   import { useIdentifyDetailAction } from "$lib/components/identify/use-identify-detail-action.svelte";
   import { redirectHiddenEntityNotFound } from "$lib/nsfw/hidden-entity";
   import { useNsfw } from "$lib/nsfw/store.svelte";
@@ -70,6 +71,8 @@
   });
 
   const identifyAction = useIdentifyDetailAction(() => artist?.id, () => artist?.kind);
+  // Monitoring lives in the EntityAcquisitionCard below the detail. It works for scanned-in and
+  // requested artists alike; it needs a provider identity a plugin can track.
   const heroActions = $derived.by((): EntityDetailActionButton[] => {
     const actions: EntityDetailActionButton[] = [];
     if (albumCards.length > 0) {
@@ -241,6 +244,15 @@
       {/snippet}
 
     </EntityDetail>
+
+    <!-- Follow the artist for new works ("Check for new works" runs the discovery sync now; the page
+         reloads to show any new phantoms). Hidden when no plugin can track this artist. -->
+    <EntityAcquisitionCard
+      entityId={artist?.id}
+      capabilities={artist?.capabilities}
+      childCards={albumCards}
+      onChanged={() => void loadArtist()}
+    />
 
     {#if albumCards.length > 0}
       <section class="content-section">

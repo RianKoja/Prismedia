@@ -2,6 +2,7 @@ using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Prismedia.Application.Jobs;
 using Prismedia.Contracts.Settings;
+using Prismedia.Domain.Entities;
 
 namespace Prismedia.Application.Settings;
 
@@ -170,6 +171,43 @@ public sealed partial class SettingsService {
         return new ScanSettings(
             GetBoolean(values, AppSettingKeys.ScanAutoScanEnabled),
             GetInt(values, AppSettingKeys.ScanIntervalMinutes));
+    }
+
+    /// <summary>Returns the cadence settings for re-searching monitored items.</summary>
+    public async Task<MonitoredSearchSettings> GetMonitoredSearchSettingsAsync(CancellationToken cancellationToken) {
+        var values = await GetValueMapAsync([
+            AppSettingKeys.MonitoringSearchEnabled,
+            AppSettingKeys.MonitoringIntervalMinutes,
+        ], cancellationToken);
+
+        return new MonitoredSearchSettings(
+            GetBoolean(values, AppSettingKeys.MonitoringSearchEnabled),
+            GetInt(values, AppSettingKeys.MonitoringIntervalMinutes));
+    }
+
+    /// <summary>Returns the acquisition recycle-bin settings (a blank path disables the bin).</summary>
+    public async Task<RecycleBinSettings> GetRecycleBinSettingsAsync(CancellationToken cancellationToken) {
+        var values = await GetValueMapAsync([
+            AppSettingKeys.AcquisitionRecycleBinPath,
+            AppSettingKeys.AcquisitionRecycleBinCleanupDays,
+        ], cancellationToken);
+
+        var path = GetString(values, AppSettingKeys.AcquisitionRecycleBinPath);
+        return new RecycleBinSettings(
+            string.IsNullOrWhiteSpace(path) ? null : path.Trim(),
+            GetInt(values, AppSettingKeys.AcquisitionRecycleBinCleanupDays));
+    }
+
+    /// <summary>
+    /// Returns the proper/repack download policy. Decodes the stored
+    /// <see cref="ProperDownloadPolicy"/> code, falling back to
+    /// <see cref="ProperDownloadPolicy.PreferAndUpgrade"/> when the value is missing or unknown.
+    /// </summary>
+    public async Task<ProperDownloadSettings> GetProperDownloadSettingsAsync(CancellationToken cancellationToken) {
+        var values = await GetValueMapAsync([AppSettingKeys.AcquisitionDownloadPropers], cancellationToken);
+        var code = GetString(values, AppSettingKeys.AcquisitionDownloadPropers);
+        var policy = code.TryDecodeAs<ProperDownloadPolicy>(out var decoded) ? decoded : ProperDownloadPolicy.PreferAndUpgrade;
+        return new ProperDownloadSettings(policy);
     }
 
     /// <summary>

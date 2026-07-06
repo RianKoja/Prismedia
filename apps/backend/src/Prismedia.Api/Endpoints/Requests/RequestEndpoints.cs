@@ -1,3 +1,4 @@
+using Prismedia.Application.Acquisition;
 using Prismedia.Application.Requests;
 using Prismedia.Contracts.Requests;
 using Prismedia.Contracts.System;
@@ -9,59 +10,6 @@ public static class RequestEndpoints {
     public static RouteGroupBuilder MapRequestEndpoints(this IEndpointRouteBuilder routes) {
         var group = routes.MapGroup("/api/requests")
             .WithTags("Requests");
-
-        group.MapGet("/services", (
-            RequestServiceInstanceCommandService services,
-            CancellationToken cancellationToken) =>
-            services.ListAsync(cancellationToken))
-            .WithName("ListRequestServices")
-            .WithSummary("Lists configured request service instances with credentials redacted.")
-            .Produces<IReadOnlyList<RequestServiceInstanceSummary>>();
-
-        group.MapPost("/services", async (
-            RequestServiceInstanceSaveRequest request,
-            RequestServiceInstanceCommandService services,
-            CancellationToken cancellationToken) =>
-            await SaveRequestServiceAsync(request, services, cancellationToken))
-            .WithName("SaveRequestService")
-            .WithSummary("Creates or updates a request service instance.")
-            .Produces<RequestServiceInstanceSummary>()
-            .Produces<ApiProblem>(StatusCodes.Status400BadRequest);
-
-        group.MapPut("/services/{id:guid}", async (
-            Guid id,
-            RequestServiceInstanceSaveRequest request,
-            RequestServiceInstanceCommandService services,
-            CancellationToken cancellationToken) =>
-            await SaveRequestServiceAsync(request with { Id = id }, services, cancellationToken))
-            .WithName("UpdateRequestService")
-            .WithSummary("Updates an existing request service instance.")
-            .Produces<RequestServiceInstanceSummary>()
-            .Produces<ApiProblem>(StatusCodes.Status400BadRequest);
-
-        group.MapDelete("/services/{id:guid}", async (
-            Guid id,
-            RequestServiceInstanceCommandService services,
-            CancellationToken cancellationToken) =>
-            await services.DeleteAsync(id, cancellationToken)
-                ? Results.NoContent()
-                : Results.NotFound(new ApiProblem(ApiProblemCodes.NotFound, "Request service instance was not found.")))
-            .WithName("DeleteRequestService")
-            .WithSummary("Deletes a configured request service instance.")
-            .Produces(StatusCodes.Status204NoContent)
-            .Produces<ApiProblem>(StatusCodes.Status404NotFound);
-
-        group.MapPost("/services/test", async (
-            RequestServiceTestRequest request,
-            RequestServiceTestService tester,
-            CancellationToken cancellationToken) =>
-            ValidateBaseUrl(request.BaseUrl) is { } problem
-                ? Results.BadRequest(problem)
-                : Results.Ok(await tester.TestAsync(request, cancellationToken)))
-            .WithName("TestRequestService")
-            .WithSummary("Tests connectivity for a request service configuration and returns its selectable options on success. A successful test gates saving the service.")
-            .Produces<RequestServiceTestResponse>()
-            .Produces<ApiProblem>(StatusCodes.Status400BadRequest);
 
         group.MapGet("/search", (
             string query,
@@ -77,34 +25,16 @@ public static class RequestEndpoints {
                 hideNsfw ?? false),
                 cancellationToken))
             .WithName("SearchRequests")
-            .WithSummary("Searches configured request providers for requestable external media. Adults-only certifications are filtered out when hideNsfw is set.")
+            .WithSummary("Searches Prismedia's plugin metadata providers for requestable books and authors. Adults-only results are filtered out when hideNsfw is set.")
             .Produces<RequestSearchResponse>();
-
-        group.MapGet("/history", (
-            RequestHistoryService history,
-            CancellationToken cancellationToken) =>
-            history.ListAsync(cancellationToken))
-            .WithName("ListRequestHistory")
-            .WithSummary("Lists submitted request history with statuses refreshed live from each upstream service.")
-            .Produces<RequestHistoryResponse>();
-
-        group.MapDelete("/history/{id:guid}", async (
-            Guid id,
-            RequestHistoryService history,
-            CancellationToken cancellationToken) =>
-            await history.DeleteAsync(id, cancellationToken)
-                ? Results.NoContent()
-                : Results.NotFound(new ApiProblem(ApiProblemCodes.NotFound, "Request history entry was not found.")))
-            .WithName("DeleteRequestHistoryEntry")
-            .WithSummary("Deletes a request history entry.")
-            .Produces(StatusCodes.Status204NoContent)
-            .Produces<ApiProblem>(StatusCodes.Status404NotFound);
 
         group.MapGet("/details/{source}/{kind}/{externalId}", async (
             string source,
             string kind,
             string externalId,
             Guid? serviceId,
+            bool? hideNsfw,
+            HttpContext httpContext,
             RequestDetailService details,
             CancellationToken cancellationToken) => {
                 try {
@@ -113,6 +43,7 @@ public static class RequestEndpoints {
                         kind.DecodeAs<RequestMediaKind>(),
                         externalId,
                         serviceId,
+                        NsfwVisibility.ShouldHide(hideNsfw, httpContext),
                         cancellationToken);
                     return detail is null
                         ? Results.NotFound(new ApiProblem(ApiProblemCodes.NotFound, "Request detail was not found."))
@@ -123,45 +54,99 @@ public static class RequestEndpoints {
                 }
             })
             .WithName("GetRequestDetail")
-            .WithSummary("Gets rich detail metadata for a requestable external item.")
+            .WithSummary("Gets rich detail metadata for a requestable external item, including its selectable child works.")
             .Produces<RequestDetailResponse>()
             .Produces<ApiProblem>(StatusCodes.Status404NotFound);
 
-        group.MapPost("/", async (
-            RequestSubmitRequest request,
-            RequestSubmitService submit,
+        group.MapPost("/commit", async (
+            RequestCommitRequest request,
+            bool? hideNsfw,
+            HttpContext httpContext,
+            RequestCommitService commits,
             CancellationToken cancellationToken) => {
-                var response = await submit.SubmitAsync(request, cancellationToken);
+                if (string.IsNullOrWhiteSpace(request.ExternalId)) {
+                    return Results.BadRequest(new ApiProblem(ApiProblemCodes.RequestInvalid, "A provider-qualified external id is required."));
+                }
+
+                var descriptor = RequestKindRegistry.Find(request.Kind);
+                if (descriptor is null || !descriptor.Committable) {
+                    return Results.BadRequest(new ApiProblem(ApiProblemCodes.RequestInvalid, "This kind can't be requested yet."));
+                }
+
+                // A container commit needs either an explicit child selection or a monitoring preset that
+                // derives one (Future/None legitimately select nothing now — the container watch handles
+                // the rest). Only an empty selection with no preset is a mistake to reject.
+                if (descriptor.IsContainer && request.SelectedChildIds.Count == 0 && request.Preset is null) {
+                    return Results.BadRequest(new ApiProblem(ApiProblemCodes.RequestInvalid, "Select at least one item to request, or choose a monitoring preset."));
+                }
+
+                var response = await commits.CommitAsync(request, NsfwVisibility.ShouldHide(hideNsfw, httpContext), cancellationToken);
                 return response is null
-                    ? Results.NotFound(new ApiProblem(ApiProblemCodes.NotFound, "Request service instance was not found."))
+                    ? Results.NotFound(new ApiProblem(ApiProblemCodes.NotFound, "The requested item could not be resolved from its provider."))
                     : Results.Ok(response);
             })
-            .WithName("SubmitRequest")
-            .WithSummary("Submits a media request to the selected upstream service instance.")
-            .Produces<RequestSubmitResponse>()
+            .WithName("CommitRequest")
+            .WithSummary("Commits a reviewed request: creates the wanted library entities for the picked items up front and starts one acquisition per requested book.")
+            .Produces<RequestCommitResponse>()
+            .Produces<ApiProblem>(StatusCodes.Status400BadRequest)
+            .Produces<ApiProblem>(StatusCodes.Status404NotFound);
+
+        group.MapPost("/commit-entity", async (
+            RequestEntityCommitRequest request,
+            bool? hideNsfw,
+            HttpContext httpContext,
+            RequestCommitService commits,
+            CancellationToken cancellationToken) => {
+                var response = await commits.RequestEntityAsync(
+                    request.EntityId,
+                    NsfwVisibility.ShouldHide(hideNsfw, httpContext),
+                    cancellationToken,
+                    new Prismedia.Application.Acquisition.AcquisitionTargeting(request.TargetLibraryRootId, request.ProfileId));
+                return response is null
+                    ? Results.NotFound(new ApiProblem(ApiProblemCodes.NotFound, "The entity could not be requested — it may be gone, not a requestable kind, or unresolvable from its providers."))
+                    : Results.Ok(response);
+            })
+            .WithName("CommitEntityRequest")
+            .WithSummary("Requests an existing library entity (a wanted placeholder's Search-for-release): the server resolves its provider identity and starts the auto-grabbing acquisition.")
+            .Produces<RequestCommitResponse>()
+            .Produces<ApiProblem>(StatusCodes.Status404NotFound);
+
+        group.MapPost("/remove-wanted", async (
+            WantedRemovalRequest request,
+            RequestCommitService commits,
+            CancellationToken cancellationToken) => {
+                if (request.EntityIds.Count == 0) {
+                    return Results.BadRequest(new ApiProblem(ApiProblemCodes.RequestInvalid, "Select at least one wanted item to remove."));
+                }
+
+                var removed = await commits.RemoveWantedAsync(request.EntityIds, cancellationToken);
+                return Results.Ok(new WantedRemovalResponse(removed));
+            })
+            .WithName("RemoveWanted")
+            .WithSummary("Removes wanted placeholders: deletes each (tearing down in-flight downloads) and blacklists it from discovery; requesting it again later clears the blacklist entry.")
+            .Produces<WantedRemovalResponse>()
+            .Produces<ApiProblem>(StatusCodes.Status400BadRequest);
+
+        group.MapPost("/sync-container", async (
+            RequestEntityCommitRequest request,
+            RequestCommitService commits,
+            MonitorService monitors,
+            CancellationToken cancellationToken) => {
+                // The manual counterpart to the daily sweep for one container: discover new works now.
+                var synced = await commits.SyncContainerAsync(request.EntityId, cancellationToken);
+                if (!synced) {
+                    return Results.NotFound(new ApiProblem(ApiProblemCodes.NotFound, "The container could not be synced — it may be gone, not a followable kind, or unresolvable from its providers."));
+                }
+
+                await monitors.MarkEntitySearchedAsync(request.EntityId, cancellationToken);
+                return Results.NoContent();
+            })
+            .WithName("SyncContainerRequest")
+            .WithSummary("Immediately re-syncs a followed author/artist from its provider, surfacing newly discovered works as wanted placeholders.")
+            .Produces(StatusCodes.Status204NoContent)
             .Produces<ApiProblem>(StatusCodes.Status404NotFound);
 
         return group;
-    }
-
-    private static async Task<IResult> SaveRequestServiceAsync(
-        RequestServiceInstanceSaveRequest request,
-        RequestServiceInstanceCommandService services,
-        CancellationToken cancellationToken) {
-        try {
-            return Results.Ok(await services.SaveAsync(request, cancellationToken));
-        } catch (RequestServiceConfigurationException ex) {
-            return Results.BadRequest(new ApiProblem(ex.Code, ex.Message));
-        }
-    }
-
-    private static ApiProblem? ValidateBaseUrl(string value) {
-        if (!Uri.TryCreate(value, UriKind.Absolute, out var baseUrl) ||
-            (baseUrl.Scheme != Uri.UriSchemeHttp && baseUrl.Scheme != Uri.UriSchemeHttps)) {
-            return new ApiProblem(ApiProblemCodes.RequestServiceInvalid, "The base URL must be an absolute http or https URL.");
-        }
-
-        return null;
     }
 
     private static IReadOnlyList<TEnum> DecodeMany<TEnum>(IReadOnlyList<string>? values)

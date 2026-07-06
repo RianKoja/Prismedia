@@ -14,6 +14,7 @@ public static class EndpointRouteBuilderExtensions {
         routes.MapImageEndpoints();
         routes.MapGalleryEndpoints();
         routes.MapBookEndpoints();
+        routes.MapBookAuthorEndpoints();
         routes.MapOpdsEndpoints();
         routes.MapMusicArtistEndpoints();
         routes.MapAudioLibraryEndpoints();
@@ -37,6 +38,8 @@ public static class EndpointRouteBuilderExtensions {
         routes.MapIdentifyEndpoints();
         routes.MapOrganizeEndpoints();
         routes.MapRequestEndpoints();
+        routes.MapAcquisitionEndpoints();
+        routes.MapMonitorEndpoints();
 
         return routes;
     }

@@ -17,6 +17,7 @@ using Prismedia.Application.Audio;
 using Prismedia.Application.Backups;
 using Prismedia.Application.Plugins;
 using Prismedia.Application.Playback;
+using Prismedia.Application.Acquisition;
 using Prismedia.Application.Requests;
 using Prismedia.Application.Security;
 using Prismedia.Application.Videos;
@@ -38,6 +39,7 @@ using Prismedia.Infrastructure.Plugins;
 using Prismedia.Infrastructure.Playback;
 using Prismedia.Infrastructure.Processes;
 using Prismedia.Infrastructure.Queue;
+using Prismedia.Infrastructure.Acquisition;
 using Prismedia.Infrastructure.Requests;
 using Prismedia.Infrastructure.Settings;
 using Prismedia.Infrastructure.Security;
@@ -83,6 +85,7 @@ public static class DependencyInjection {
         RegisterFilesAndOrganization(services);
         RegisterPlayback(services, configuration, cacheDir, mediaToolOptions);
         RegisterRequests(services);
+        RegisterAcquisition(services);
         RegisterJobsSettingsAndState(services, configuration, dataDir, connectionString, pathBase);
 
         return services;
@@ -313,19 +316,58 @@ public static class DependencyInjection {
     }
 
     private static void RegisterRequests(IServiceCollection services) {
-        services.AddScoped<IRequestServiceInstanceStore, EfRequestServiceInstanceStore>();
-        services.AddScoped<IRequestHistoryStore, EfRequestHistoryStore>();
-        services.AddScoped<IAdultMovieSearchSource>(provider =>
-            new TmdbAdultMovieSearchSource(new HttpClient(), provider.GetRequiredService<PrismediaDbContext>()));
-        services.AddScoped<IRequestDetailEnrichmentSource>(provider =>
-            new TmdbRequestEnrichmentSource(new HttpClient(), provider.GetRequiredService<PrismediaDbContext>()));
-        services.AddScoped(_ => new RadarrRequestProviderClient(new HttpClient()));
-        services.AddScoped(_ => new SonarrRequestProviderClient(new HttpClient()));
-        services.AddScoped(_ => new LidarrRequestProviderClient(new HttpClient()));
-        services.AddScoped<IRequestProviderClient>(provider => provider.GetRequiredService<RadarrRequestProviderClient>());
-        services.AddScoped<IRequestProviderClient>(provider => provider.GetRequiredService<SonarrRequestProviderClient>());
-        services.AddScoped<IRequestProviderClient>(provider => provider.GetRequiredService<LidarrRequestProviderClient>());
-        services.AddScoped<IRequestProviderClientFactory, RequestProviderClientFactory>();
+        // Prismedia fulfils all requests itself through its plugin-backed acquisition pipeline; the
+        // request layer is the kind-registry-driven metadata search + detail surface that feeds
+        // acquisitions. One source class serves every requestable kind.
+        services.AddScoped<IRequestMetadataSearchSource, PluginRequestMetadataSource>();
+        services.AddScoped<IRequestMetadataEnricher, PluginRequestMetadataSource>();
+        services.AddScoped<IPluginRequestDetailSource, PluginRequestMetadataSource>();
+        services.AddScoped<IPluginRequestProposalSource, PluginRequestMetadataSource>();
+        services.AddScoped<IWantedEntityWriter, WantedEntityWriter>();
+        services.AddScoped<IWantedSuppressionStore, EfWantedSuppressionStore>();
+        services.AddScoped<IProviderTrackingCatalog, PluginProviderTrackingCatalog>();
+    }
+
+    private static void RegisterAcquisition(IServiceCollection services) {
+        services.AddScoped<IIndexerConfigStore, EfIndexerConfigStore>();
+        services.AddScoped<IIndexerStatusStore, EfIndexerStatusStore>();
+        services.AddSingleton<IndexerQueryWindow>();
+        services.AddScoped<IRemotePathMappingStore, EfRemotePathMappingStore>();
+        services.AddScoped<RemotePathMapper>();
+        services.AddScoped<IRecycleBin, RecycleBin>();
+        services.AddScoped<IDownloadClientConfigStore, EfDownloadClientConfigStore>();
+        services.AddScoped<IBookAcquisitionProfileStore, EfBookAcquisitionProfileStore>();
+        services.AddScoped<ICustomFormatStore, EfCustomFormatStore>();
+        services.AddScoped<IAcquisitionStore, EfAcquisitionStore>();
+        services.AddScoped<IAcquisitionBlocklistStore, EfAcquisitionBlocklistStore>();
+        services.AddScoped<IAcquisitionHistoryStore, EfAcquisitionHistoryStore>();
+        services.AddScoped<IMonitorStore, EfMonitorStore>();
+        services.AddScoped(_ => new ProwlarrIndexerClient(new HttpClient()));
+        services.AddScoped<IIndexerSearchClient>(provider => provider.GetRequiredService<ProwlarrIndexerClient>());
+        services.AddScoped(_ => new TorznabIndexerClient(new HttpClient()));
+        services.AddScoped<IIndexerSearchClient>(provider => provider.GetRequiredService<TorznabIndexerClient>());
+        services.AddScoped(_ => new NewznabIndexerClient(new HttpClient()));
+        services.AddScoped<IIndexerSearchClient>(provider => provider.GetRequiredService<NewznabIndexerClient>());
+        services.AddScoped<IIndexerSearchClientFactory, IndexerSearchClientFactory>();
+        // UseCookies=false keeps the default handler from swallowing qBittorrent's Set-Cookie SID,
+        // so the client can read and re-send the session cookie explicitly.
+        services.AddScoped(_ => new QBittorrentDownloadClient(new HttpClient(new HttpClientHandler { UseCookies = false })));
+        services.AddScoped<IDownloadClient>(provider => provider.GetRequiredService<QBittorrentDownloadClient>());
+        services.AddScoped(_ => new SabnzbdDownloadClient(new HttpClient()));
+        services.AddScoped<IDownloadClient>(provider => provider.GetRequiredService<SabnzbdDownloadClient>());
+        services.AddScoped(_ => new TransmissionDownloadClient(new HttpClient()));
+        services.AddScoped<IDownloadClient>(provider => provider.GetRequiredService<TransmissionDownloadClient>());
+        services.AddScoped<IDownloadClientFactory, DownloadClientFactory>();
+        services.AddScoped<IAcquisitionImportPlanner, AcquisitionImportPlanner>();
+        services.AddScoped<IImportFileMover, ImportFileMover>();
+        services.AddScoped<IOwnedFileReplacer, OwnedFileReplacer>();
+        services.AddScoped<IAcquisitionHintApplier, AcquisitionHintApplier>();
+        services.AddScoped<IImportedFilesReader, ImportedFilesReader>();
+        services.AddScoped<IDownloadPayloadReader, DownloadPayloadReader>();
+        // No auto-redirect: the resolver validates the destination host is public before fetching, and a
+        // redirect could hop to a private address that bypasses that check (SSRF defense for the LAN host).
+        services.AddScoped<IReleaseLinkResolver>(_ => new ReleaseLinkResolver(
+            new HttpClient(new SocketsHttpHandler { AllowAutoRedirect = false }) { Timeout = TimeSpan.FromSeconds(20) }));
     }
 
     private static void RegisterThumbnailContributors(IServiceCollection services) {

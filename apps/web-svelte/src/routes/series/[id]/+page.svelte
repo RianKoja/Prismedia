@@ -15,6 +15,8 @@
     toggleOptimisticEntityFlag,
     updateOptimisticEntityRating,
   } from "$lib/entities/entity-detail-state";
+  import EntityAcquisitionCard from "$lib/components/acquisitions/EntityAcquisitionCard.svelte";
+  import SeasonPassEditor from "$lib/components/acquisitions/SeasonPassEditor.svelte";
   import { useIdentifyDetailAction } from "$lib/components/identify/use-identify-detail-action.svelte";
   import type { EntityDetailCredit, EntityDetailTag } from "$lib/entities/entity-detail";
   import { entityCardToDetailCard, type EntityDetailCardFull } from "$lib/entities/entity-detail";
@@ -67,7 +69,9 @@
   });
 
   const identifyAction = useIdentifyDetailAction(() => card?.entity.id, () => card?.entity.kind);
-  const heroActions = $derived.by((): EntityDetailActionButton[] => identifyAction.action ? [identifyAction.action] : []);
+  // Following the series for new seasons/episodes lives in the EntityAcquisitionCard below the detail.
+  const heroActions = $derived.by((): EntityDetailActionButton[] =>
+    identifyAction.action ? [identifyAction.action] : []);
 
   const dates = $derived(card?.dates ?? []);
 
@@ -262,7 +266,17 @@
 
     </EntityDetail>
 
+    <!-- Follow the series for new seasons/episodes — the same monitor control authors and artists carry. -->
+    <EntityAcquisitionCard
+      entityId={series?.id}
+      capabilities={series?.capabilities}
+      childCards={seasonCards}
+      onChanged={() => void loadSeries()}
+    />
+
     {#if hasSeasons}
+      <SeasonPassEditor {seasonCards} {seasonEpisodeCounts} />
+
       <EntityGridSection
         title="Seasons"
         count={seasonCards.length}
