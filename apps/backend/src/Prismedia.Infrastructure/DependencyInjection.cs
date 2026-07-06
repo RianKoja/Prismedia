@@ -217,7 +217,12 @@ public static class DependencyInjection {
         RegisterThumbnailContributors(services);
         services.AddScoped<EfEntityRepository>();
         services.AddScoped<IEntityWriteRepository>(provider => provider.GetRequiredService<EfEntityRepository>());
-        services.AddScoped<IEntityReadService, EfEntityReadService>();
+        // Concrete registration shared by the interface alias and the visibility checker so all
+        // three see the same per-request hidden-roots memoization.
+        services.AddScoped<EfEntityReadService>();
+        services.AddScoped<IEntityReadService>(provider => provider.GetRequiredService<EfEntityReadService>());
+        services.AddScoped<IEntityVisibilityChecker, EfEntityVisibilityChecker>();
+        services.AddScoped<ILibraryAccessReader, EfLibraryAccessReader>();
         services.AddScoped<IEntityFileContentService, EfEntityFileContentService>();
         services.AddScoped<IGridThumbnailService>(provider =>
             new GridThumbnailService(
@@ -313,6 +318,7 @@ public static class DependencyInjection {
         services.AddScoped<IBrowserSessionPersistence, EfBrowserSessionPersistence>();
         services.AddScoped<ISecurityPersistence, EfSecurityPersistence>();
         services.AddSingleton<IPasswordHasher, IdentityPasswordHasher>();
+        services.AddScoped<IUserEngagementCloner, EfUserEngagementCloner>();
         services.AddScoped<IJellyfinImageFileService, JellyfinImageFileService>();
     }
 

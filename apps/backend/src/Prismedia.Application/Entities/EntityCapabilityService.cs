@@ -17,6 +17,7 @@ namespace Prismedia.Application.Entities;
 /// </summary>
 public sealed class EntityCapabilityService {
     private readonly IEntityWriteRepository _entities;
+    private readonly IEntityVisibilityChecker? _visibility;
     private readonly IPlaybackEventStore _playbackEvents;
     private readonly TimeProvider _timeProvider;
 
@@ -26,9 +27,11 @@ public sealed class EntityCapabilityService {
     /// <param name="entities">Entity write repository implemented by Infrastructure.</param>
     public EntityCapabilityService(
         IEntityWriteRepository entities,
+        IEntityVisibilityChecker? visibility = null,
         IPlaybackEventStore? playbackEvents = null,
         TimeProvider? timeProvider = null) {
         _entities = entities;
+        _visibility = visibility;
         _playbackEvents = playbackEvents ?? NullPlaybackEventStore.Instance;
         _timeProvider = timeProvider ?? TimeProvider.System;
     }
@@ -372,6 +375,12 @@ public sealed class EntityCapabilityService {
         Guid id,
         Func<Entity, bool> mutate,
         CancellationToken cancellationToken) {
+        // Entities hidden from the current user (library access, disabled roots) must be
+        // unmutatable and indistinguishable from missing ones.
+        if (_visibility is not null && !await _visibility.IsVisibleAsync(id, cancellationToken)) {
+            return null;
+        }
+
         // Reload-and-reapply on conflict: rapid playback reports (Infuse fires pause/unpause within
         // milliseconds) race to write the same entity's state, and a lost optimistic-concurrency
         // write must be retried against the latest row rather than surfaced as a 500.
@@ -394,6 +403,10 @@ public sealed class EntityCapabilityService {
         Guid id,
         Func<Entity, PlaybackEventAppend?> mutate,
         CancellationToken cancellationToken) {
+        if (_visibility is not null && !await _visibility.IsVisibleAsync(id, cancellationToken)) {
+            return null;
+        }
+
         // Playback counters and playback history describe the same user action. Stage the
         // event before saving so EF persists both inside the entity repository transaction.
         for (var attempt = 0; ; attempt++) {

@@ -18,10 +18,6 @@ public sealed class EntityRow {
 
     public int? SortOrder { get; set; }
 
-    public int? RatingValue { get; set; }
-
-    public bool IsFavorite { get; set; }
-
     public bool IsNsfw { get; set; }
 
     public bool IsOrganized { get; set; }

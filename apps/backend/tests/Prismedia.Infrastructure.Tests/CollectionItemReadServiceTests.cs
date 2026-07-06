@@ -130,8 +130,8 @@ public sealed class CollectionItemReadServiceTests {
                     null,
                     [],
                     [],
-                    row.RatingValue,
-                    row.IsFavorite,
+                    null,
+                    false,
                     row.IsNsfw,
                     row.IsOrganized))
                 .ToArray();

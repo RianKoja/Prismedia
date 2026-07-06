@@ -437,8 +437,8 @@ public sealed class LibraryScanPersistenceServiceTests {
             Value = "/media/The Chair Company",
             UpdatedAt = now
         });
-        var seriesEntity = await db.Entities.FindAsync(seriesId);
-        seriesEntity!.RatingValue = 4;
+        db.UserEntityStates.Add(new UserEntityStateRow {
+            UserId = TestUserContext.UserId, EntityId = seriesId, RatingValue = 4, UpdatedAt = now });
         await db.SaveChangesAsync();
 
         var service = new LibraryScanPersistenceService(db);
@@ -456,7 +456,7 @@ public sealed class LibraryScanPersistenceServiceTests {
 
         var videoId = Assert.Single(ids);
         Assert.Equal(seriesId, Assert.Single(db.Entities.Where(entity => entity.KindCode == EntityKindRegistry.VideoSeries.Code)).Id);
-        Assert.Equal(4, db.Entities.Single(entity => entity.Id == seriesId).RatingValue);
+        Assert.Equal(4, db.UserEntityStates.Single(state => state.EntityId == seriesId).RatingValue);
 
         var season = Assert.Single(db.Entities.Where(entity => entity.KindCode == EntityKindRegistry.VideoSeason.Code));
         Assert.Equal(1, season.SortOrder);
@@ -573,7 +573,7 @@ public sealed class LibraryScanPersistenceServiceTests {
             source.Code == "folder" &&
             source.Value == "/media/Friendship");
         Assert.Equal("Movie description", (await db.EntityDescriptions.FindAsync([movie.Id]))?.Value);
-        Assert.Null(movie.RatingValue);
+        Assert.False(db.UserEntityStates.Any(state => state.EntityId == movie.Id));
         Assert.Contains(db.EntityDates, date =>
             date.EntityId == movie.Id &&
             date.Code == "release" &&
@@ -1614,7 +1614,8 @@ public sealed class LibraryScanPersistenceServiceTests {
         SeedVideo(db, videoId, "/media/movie.mkv");
         var video = await db.Entities.FindAsync([videoId]);
         video!.Title = "movie";
-        video.RatingValue = 4;
+        db.UserEntityStates.Add(new UserEntityStateRow {
+            UserId = TestUserContext.UserId, EntityId = videoId, RatingValue = 4, UpdatedAt = DateTimeOffset.UtcNow });
         db.EntityDescriptions.Add(new EntityDescriptionRow {
             EntityId = videoId,
             Value = "User description",
@@ -1639,7 +1640,7 @@ public sealed class LibraryScanPersistenceServiceTests {
             CancellationToken.None);
 
         Assert.Equal("Sidecar Title", video.Title);
-        Assert.Equal(4, video.RatingValue);
+        Assert.Equal(4, db.UserEntityStates.Single(state => state.EntityId == videoId).RatingValue);
         Assert.Equal("User description", (await db.EntityDescriptions.FindAsync([videoId]))?.Value);
         var release = await db.EntityDates.FindAsync([videoId, "release"]);
         Assert.Equal("2026-05-01", release?.Value);

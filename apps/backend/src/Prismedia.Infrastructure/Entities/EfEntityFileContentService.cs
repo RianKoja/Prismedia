@@ -7,15 +7,21 @@ using Prismedia.Infrastructure.Persistence;
 namespace Prismedia.Infrastructure.Entities;
 
 /// <summary>
-/// EF-backed resolver for files attached to entities.
+/// EF-backed resolver for files attached to entities. Entities hidden from the current
+/// user (library access, disabled roots) resolve as missing, closing original-file
+/// streaming, OPDS downloads, and book/gallery page serving in one place.
 /// </summary>
-public sealed class EfEntityFileContentService(PrismediaDbContext db) : IEntityFileContentService {
+public sealed class EfEntityFileContentService(PrismediaDbContext db, IEntityVisibilityChecker visibility) : IEntityFileContentService {
     /// <inheritdoc />
     public async Task<EntityFileContent?> GetContentAsync(
         Guid entityId,
         string role,
         CancellationToken cancellationToken) {
         if (string.IsNullOrWhiteSpace(role) || !role.TryDecodeAs<EntityFileRole>(out var decodedRole)) {
+            return null;
+        }
+
+        if (!await visibility.IsVisibleAsync(entityId, cancellationToken)) {
             return null;
         }
 

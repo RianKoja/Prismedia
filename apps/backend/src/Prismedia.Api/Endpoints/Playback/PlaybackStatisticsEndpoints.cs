@@ -1,3 +1,4 @@
+using Prismedia.Api.Security;
 using Prismedia.Application.Playback;
 using Prismedia.Contracts.Playback;
 using Prismedia.Contracts.System;
@@ -13,6 +14,7 @@ internal static class PlaybackStatisticsEndpoints {
             string? kind,
             string? eventKind,
             bool? hideNsfw,
+            bool? allUsers,
             HttpContext httpContext,
             IPlaybackStatisticsService statistics,
             TimeProvider timeProvider,
@@ -37,7 +39,9 @@ internal static class PlaybackStatisticsEndpoints {
                         upper,
                         decodedKind,
                         decodedEventKind,
-                        NsfwVisibility.ShouldHide(hideNsfw, httpContext)),
+                        NsfwVisibility.ShouldHide(hideNsfw, httpContext),
+                        AllUsers: allUsers == true &&
+                            httpContext.GetCurrentUser() is { Role: UserRole.Admin }),
                     cancellationToken);
 
                 return Results.Ok(response);

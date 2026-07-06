@@ -36,7 +36,7 @@ public sealed class PrismediaDbContext : DbContext {
 
     public DbSet<EntityFileFingerprintRow> EntityFileFingerprints => Set<EntityFileFingerprintRow>();
 
-    public DbSet<EntityPlaybackRow> EntityPlayback => Set<EntityPlaybackRow>();
+    public DbSet<UserEntityStateRow> UserEntityStates => Set<UserEntityStateRow>();
 
     public DbSet<EntityPlaybackEventRow> EntityPlaybackEvents => Set<EntityPlaybackEventRow>();
 
@@ -53,8 +53,6 @@ public sealed class PrismediaDbContext : DbContext {
     public DbSet<TrickplayInfoRow> TrickplayInfos => Set<TrickplayInfoRow>();
 
     public DbSet<EntitySourceRow> EntitySources => Set<EntitySourceRow>();
-
-    public DbSet<EntityProgressRow> EntityProgress => Set<EntityProgressRow>();
 
     public DbSet<EntityPositionRow> EntityPositions => Set<EntityPositionRow>();
 
@@ -99,6 +97,8 @@ public sealed class PrismediaDbContext : DbContext {
     public DbSet<UserRow> Users => Set<UserRow>();
 
     public DbSet<UserSessionRow> UserSessions => Set<UserSessionRow>();
+
+    public DbSet<UserLibraryAccessRow> UserLibraryAccess => Set<UserLibraryAccessRow>();
 
     public DbSet<UiPreferenceRow> UiPreferences => Set<UiPreferenceRow>();
 

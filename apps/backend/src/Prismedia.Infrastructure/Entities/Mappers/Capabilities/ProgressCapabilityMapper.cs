@@ -1,16 +1,26 @@
 using Microsoft.EntityFrameworkCore;
+using Prismedia.Application.Security;
 using Prismedia.Domain.Capabilities;
 using Prismedia.Domain.Entities;
 using Prismedia.Infrastructure.Persistence;
-using Prismedia.Infrastructure.Persistence.Entities;
 
 namespace Prismedia.Infrastructure.Entities.Mappers.Capabilities;
 
-internal sealed class ProgressCapabilityMapper(PrismediaDbContext db) : IEntityCapabilityMapper {
+/// <summary>
+/// Hydrates and persists the reading-progress capability against the current user's
+/// <c>user_entity_states</c> row. Without an authenticated user the capability hydrates
+/// empty and persists nothing.
+/// </summary>
+internal sealed class ProgressCapabilityMapper(PrismediaDbContext db, ICurrentUserContext currentUser) : IEntityCapabilityMapper {
     public async Task HydrateAsync(Entity entity, CancellationToken cancellationToken) {
-        var row = await db.EntityProgress.AsNoTracking()
-            .FirstOrDefaultAsync(r => r.EntityId == entity.Id, cancellationToken);
-        if (row is null) {
+        var userId = currentUser.UserId;
+        if (userId == Guid.Empty) {
+            return;
+        }
+
+        var row = await db.UserEntityStates.AsNoTracking()
+            .FirstOrDefaultAsync(r => r.UserId == userId && r.EntityId == entity.Id, cancellationToken);
+        if (row is null || !UserEntityStateColumns.HasProgress(row)) {
             return;
         }
 
@@ -19,37 +29,36 @@ internal sealed class ProgressCapabilityMapper(PrismediaDbContext db) : IEntityC
         // (e.g. mode "paginated" from earlier EPUB saves); those hydrate to the safe defaults
         // instead of failing the whole entity read.
         entity.AddCapability(new CapabilityProgress(
-            row.CurrentEntityId,
-            row.Unit.TryDecodeAs<ProgressUnit>(out var unit) ? unit : ProgressUnit.Item,
-            row.Index,
-            row.Total,
-            row.Mode is not null && row.Mode.TryDecodeAs<ReaderMode>(out var mode) ? mode : null,
-            row.CompletedAt,
+            row.ProgressCurrentEntityId,
+            row.ProgressUnit.TryDecodeAs<ProgressUnit>(out var unit) ? unit : ProgressUnit.Item,
+            row.ProgressIndex,
+            row.ProgressTotal,
+            row.ProgressMode is not null && row.ProgressMode.TryDecodeAs<ReaderMode>(out var mode) ? mode : null,
+            row.ProgressCompletedAt,
             row.UpdatedAt,
-            row.Location));
+            row.ProgressLocation));
     }
 
-    public Task ClearAsync(Entity entity, CancellationToken cancellationToken) {
-        db.EntityProgress.RemoveRange(db.EntityProgress.Where(r => r.EntityId == entity.Id));
-        return Task.CompletedTask;
-    }
+    // No-op by design: PersistAsync upserts the user-state row in place; clearing would wipe
+    // the row's playback/favorite columns that other mappers own.
+    public Task ClearAsync(Entity entity, CancellationToken cancellationToken) => Task.CompletedTask;
 
-    public Task PersistAsync(Entity entity, CancellationToken cancellationToken) {
-        if (entity.Progress is { } progress &&
-            (progress.UpdatedAt is not null || progress.CurrentEntityId is not null || progress.Index != 0 || progress.Total != 0 || progress.Location is not null)) {
-            db.EntityProgress.Add(new EntityProgressRow {
-                EntityId = entity.Id,
-                CurrentEntityId = progress.CurrentEntityId,
-                Unit = progress.Unit.ToCode(),
-                Index = progress.Index,
-                Total = progress.Total,
-                Mode = progress.Mode?.ToCode(),
-                Location = progress.Location,
-                CompletedAt = progress.CompletedAt,
-                UpdatedAt = progress.UpdatedAt ?? DateTimeOffset.UtcNow,
-            });
+    public async Task PersistAsync(Entity entity, CancellationToken cancellationToken) {
+        var userId = currentUser.UserId;
+        if (userId == Guid.Empty ||
+            entity.Progress is not { } progress ||
+            progress.UpdatedAt is null && progress.CurrentEntityId is null && progress.Index == 0 && progress.Total == 0 && progress.Location is null) {
+            return;
         }
 
-        return Task.CompletedTask;
+        var row = await UserEntityStateColumns.GetOrAddAsync(db, userId, entity.Id, cancellationToken);
+        row.ProgressCurrentEntityId = progress.CurrentEntityId;
+        row.ProgressUnit = progress.Unit.ToCode();
+        row.ProgressIndex = progress.Index;
+        row.ProgressTotal = progress.Total;
+        row.ProgressMode = progress.Mode?.ToCode();
+        row.ProgressLocation = progress.Location;
+        row.ProgressCompletedAt = progress.CompletedAt;
+        row.UpdatedAt = progress.UpdatedAt ?? DateTimeOffset.UtcNow;
     }
 }

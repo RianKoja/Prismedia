@@ -52,7 +52,7 @@ public sealed class EfEntityRepositoryTests {
             });
         await db.SaveChangesAsync();
 
-        var repository = new EfEntityRepository(db, EntityMappers.Kinds(db), EntityMappers.Capabilities(db));
+        var repository = new EfEntityRepository(db, TestUserContext.Admin(), EntityMappers.Kinds(db), EntityMappers.Capabilities(db, TestUserContext.Admin()));
         var series = await repository.RequireAsync<VideoSeries>(seriesId, CancellationToken.None);
 
         Assert.Equal(EntityKind.VideoSeries, series.Kind);
@@ -77,7 +77,7 @@ public sealed class EfEntityRepositoryTests {
         series.AddRelationship(tag);
         series.Credits!.Add(person, CreditRole.Actor, "Detective");
 
-        var repository = new EfEntityRepository(db, EntityMappers.Kinds(db), EntityMappers.Capabilities(db));
+        var repository = new EfEntityRepository(db, TestUserContext.Admin(), EntityMappers.Kinds(db), EntityMappers.Capabilities(db, TestUserContext.Admin()));
         await repository.SaveAsync(series, CancellationToken.None);
 
         Assert.Equal("video-series", Assert.Single(db.Entities.Where(row => row.Id == series.Id)).KindCode);
@@ -105,7 +105,7 @@ public sealed class EfEntityRepositoryTests {
         db.AudioTrackDetails.Add(new AudioTrackDetailRow { EntityId = trackId });
         await db.SaveChangesAsync();
 
-        var repository = new EfEntityRepository(db, EntityMappers.Kinds(db), EntityMappers.Capabilities(db));
+        var repository = new EfEntityRepository(db, TestUserContext.Admin(), EntityMappers.Kinds(db), EntityMappers.Capabilities(db, TestUserContext.Admin()));
         var track = await repository.FindShallowAsync(trackId, CancellationToken.None);
 
         Assert.NotNull(track);
@@ -118,7 +118,9 @@ public sealed class EfEntityRepositoryTests {
         var row = await db.Entities.SingleAsync(entity => entity.Id == trackId);
         Assert.Equal(libraryId, row.ParentEntityId);
         Assert.Equal(7, row.SortOrder);
-        Assert.Equal(4, row.RatingValue);
+        var state = await db.UserEntityStates.SingleAsync(s => s.EntityId == trackId);
+        Assert.Equal(TestUserContext.UserId, state.UserId);
+        Assert.Equal(4, state.RatingValue);
     }
 
     [Fact]
@@ -143,7 +145,7 @@ public sealed class EfEntityRepositoryTests {
         Set(video, new CapabilityClassification("R", "MPAA"));
         Set(video, new CapabilityProgress(currentEntityId: null, unit: ProgressUnit.Chapter, index: 4, total: 10, mode: ReaderMode.Paged, updatedAt: DateTimeOffset.UtcNow));
 
-        var repository = new EfEntityRepository(db, EntityMappers.Kinds(db), EntityMappers.Capabilities(db));
+        var repository = new EfEntityRepository(db, TestUserContext.Admin(), EntityMappers.Kinds(db), EntityMappers.Capabilities(db, TestUserContext.Admin()));
         await repository.SaveAsync(video, CancellationToken.None);
 
         var loaded = await repository.RequireAsync<Video>(id, CancellationToken.None);
@@ -173,7 +175,7 @@ public sealed class EfEntityRepositoryTests {
         // idempotent so retries cannot accumulate duplicate capability rows.
         await using var db = CreateContext();
         var id = Guid.Parse("cccccccc-cccc-cccc-cccc-cccccccccccc");
-        var repository = new EfEntityRepository(db, EntityMappers.Kinds(db), EntityMappers.Capabilities(db));
+        var repository = new EfEntityRepository(db, TestUserContext.Admin(), EntityMappers.Kinds(db), EntityMappers.Capabilities(db, TestUserContext.Admin()));
 
         for (var i = 0; i < 3; i++) {
             var video = new Video(id, "Retried");
@@ -210,7 +212,7 @@ public sealed class EfEntityRepositoryTests {
         });
         await db.SaveChangesAsync();
 
-        var repository = new EfEntityRepository(db, EntityMappers.Kinds(db), EntityMappers.Capabilities(db));
+        var repository = new EfEntityRepository(db, TestUserContext.Admin(), EntityMappers.Kinds(db), EntityMappers.Capabilities(db, TestUserContext.Admin()));
         var loaded = await repository.RequireAsync<Video>(id, CancellationToken.None);
 
         Assert.Empty(loaded.SubtitleCapability!.Items);
@@ -219,7 +221,7 @@ public sealed class EfEntityRepositoryTests {
     [Fact]
     public async Task SaveThenFindRoundTripsKindSpecificDetail() {
         await using var db = CreateContext();
-        var repository = new EfEntityRepository(db, EntityMappers.Kinds(db), EntityMappers.Capabilities(db));
+        var repository = new EfEntityRepository(db, TestUserContext.Admin(), EntityMappers.Kinds(db), EntityMappers.Capabilities(db, TestUserContext.Admin()));
         var cover = Guid.Parse("12121212-1212-1212-1212-121212121212");
         var refreshed = DateTimeOffset.UtcNow;
 
@@ -273,7 +275,7 @@ public sealed class EfEntityRepositoryTests {
     [Fact]
     public async Task MissingOptionalAndRequiredLoadsUseDifferentPaths() {
         await using var db = CreateContext();
-        var repository = new EfEntityRepository(db, EntityMappers.Kinds(db), EntityMappers.Capabilities(db));
+        var repository = new EfEntityRepository(db, TestUserContext.Admin(), EntityMappers.Kinds(db), EntityMappers.Capabilities(db, TestUserContext.Admin()));
         var id = Guid.Parse("99999999-9999-9999-9999-999999999999");
 
         Assert.Null(await repository.FindAsync<Video>(id, CancellationToken.None));

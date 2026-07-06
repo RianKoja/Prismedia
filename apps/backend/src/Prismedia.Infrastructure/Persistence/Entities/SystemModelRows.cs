@@ -73,6 +73,13 @@ public sealed class UserRow {
     public DateTimeOffset UpdatedAt { get; set; }
 }
 
+/// <summary>Grants one member user visibility into one library root (admins bypass this table).</summary>
+public sealed class UserLibraryAccessRow {
+    public Guid UserId { get; set; }
+    public Guid LibraryRootId { get; set; }
+    public DateTimeOffset CreatedAt { get; set; }
+}
+
 public sealed class UserSessionRow {
     public Guid Id { get; set; }
     public Guid UserId { get; set; }

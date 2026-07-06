@@ -43,8 +43,6 @@ internal static class BaseEntityModelConfiguration {
                     stored: true);
             entity.Property(row => row.ParentEntityId).HasColumnName("parent_entity_id");
             entity.Property(row => row.SortOrder).HasColumnName("sort_order");
-            entity.Property(row => row.RatingValue).HasColumnName("rating_value");
-            entity.Property(row => row.IsFavorite).HasColumnName("is_favorite").HasDefaultValue(false);
             entity.Property(row => row.IsNsfw).HasColumnName("is_nsfw").HasDefaultValue(false);
             entity.Property(row => row.IsOrganized).HasColumnName("is_organized").HasDefaultValue(false);
             entity.Property(row => row.IsWanted).HasColumnName("is_wanted").HasDefaultValue(false);

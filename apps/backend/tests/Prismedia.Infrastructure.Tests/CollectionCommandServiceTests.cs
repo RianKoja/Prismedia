@@ -400,8 +400,8 @@ public sealed class CollectionCommandServiceTests {
                     null,
                     [],
                     [],
-                    row.RatingValue,
-                    row.IsFavorite,
+                    null,
+                    false,
                     row.IsNsfw,
                     row.IsOrganized))
                 .ToArray());

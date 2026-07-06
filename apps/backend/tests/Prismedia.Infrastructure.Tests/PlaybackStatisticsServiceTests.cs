@@ -17,7 +17,7 @@ public sealed class PlaybackStatisticsServiceTests {
         await using var db = CreateContext();
         var now = DateTimeOffset.Parse("2026-06-18T12:00:00Z");
         Seed(db, now);
-        var service = new EfPlaybackStatisticsService(db);
+        var service = new EfPlaybackStatisticsService(db, TestUserContext.Admin());
 
         var visible = await service.GetAsync(
             new PlaybackStatisticsQuery(

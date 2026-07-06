@@ -8,20 +8,40 @@ public sealed class EntityDescriptionRow {
     public DateTimeOffset UpdatedAt { get; set; }
 }
 
-public sealed class EntityPlaybackRow {
+/// <summary>
+/// One user's engagement with one entity: playback state (videos/audio), reading
+/// progress (books/comics), favorite, and rating — all user opinions, kept apart from
+/// the entity's curation facts. One wide row per (user, entity) so shelves, filters,
+/// and Jellyfin UserData resolve with a single join.
+/// </summary>
+public sealed class UserEntityStateRow {
+    public Guid UserId { get; set; }
     public Guid EntityId { get; set; }
+    public bool IsFavorite { get; set; }
+    public int? RatingValue { get; set; }
     public int PlayCount { get; set; }
     public int SkipCount { get; set; }
     public double PlayDurationSeconds { get; set; }
     public double ResumeSeconds { get; set; }
     public DateTimeOffset? LastPlayedAt { get; set; }
     public DateTimeOffset? CompletedAt { get; set; }
+    public Guid? ProgressCurrentEntityId { get; set; }
+    public string ProgressUnit { get; set; } = "item";
+    public int ProgressIndex { get; set; }
+    public int ProgressTotal { get; set; }
+    public string? ProgressMode { get; set; }
+    public string? ProgressLocation { get; set; }
+    public DateTimeOffset? ProgressCompletedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
 }
 
 public sealed class EntityPlaybackEventRow {
     public Guid Id { get; set; }
     public Guid EntityId { get; set; }
+
+    /// <summary>Null marks pre-multi-user household history (counted for every user's stats).</summary>
+    public Guid? UserId { get; set; }
+
     public PlaybackEventKind Kind { get; set; }
     public DateTimeOffset OccurredAt { get; set; }
     public double? PositionSeconds { get; set; }
@@ -64,18 +84,6 @@ public sealed class EntitySourceRow {
     public Guid EntityId { get; set; }
     public string Code { get; set; } = string.Empty;
     public string Value { get; set; } = string.Empty;
-    public DateTimeOffset UpdatedAt { get; set; }
-}
-
-public sealed class EntityProgressRow {
-    public Guid EntityId { get; set; }
-    public Guid? CurrentEntityId { get; set; }
-    public string Unit { get; set; } = "item";
-    public int Index { get; set; }
-    public int Total { get; set; }
-    public string? Mode { get; set; }
-    public string? Location { get; set; }
-    public DateTimeOffset? CompletedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
 }
 

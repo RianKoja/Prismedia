@@ -21,9 +21,14 @@ public interface IPlaybackStatisticsService {
 /// <param name="Kind">Optional entity kind filter.</param>
 /// <param name="EventKind">Optional playback event kind filter.</param>
 /// <param name="HideNsfw">Whether NSFW entities should be hidden.</param>
+/// <param name="AllUsers">
+/// When true (admins only, enforced at the endpoint), includes every user's events
+/// instead of the caller's own plus pre-multi-user household history.
+/// </param>
 public sealed record PlaybackStatisticsQuery(
     DateTimeOffset From,
     DateTimeOffset To,
     EntityKind? Kind,
     PlaybackEventKind? EventKind,
-    bool HideNsfw);
+    bool HideNsfw,
+    bool AllUsers = false);

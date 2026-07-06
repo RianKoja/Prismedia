@@ -78,7 +78,7 @@ public sealed class MapperCoverageTests {
     public void MapperFactoryDiscoversEveryRegisteredMapper() {
         using var db = CreateInMemoryContext();
         var kindMappers = EntityMappers.Kinds(db);
-        var capabilityMappers = EntityMappers.Capabilities(db);
+        var capabilityMappers = EntityMappers.Capabilities(db, TestUserContext.Admin());
 
         var expectedKindCount = EntityKindRegistry.All.Count(descriptor => descriptor.ClrType is not null);
         var expectedCapabilityCount = DiscoverConcreteCapabilityMapperTypes().Length;

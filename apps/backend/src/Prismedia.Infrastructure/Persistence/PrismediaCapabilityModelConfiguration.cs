@@ -15,18 +15,37 @@ internal static partial class PrismediaModelConfiguration {
             entity.HasOne<EntityRow>().WithOne().HasForeignKey<EntityDescriptionRow>(row => row.EntityId).OnDelete(DeleteBehavior.Cascade);
         });
 
-        modelBuilder.Entity<EntityPlaybackRow>(entity => {
-            entity.ToTable("entity_playback");
-            entity.HasKey(row => row.EntityId);
+        modelBuilder.Entity<UserEntityStateRow>(entity => {
+            entity.ToTable("user_entity_states");
+            entity.HasKey(row => new { row.UserId, row.EntityId });
+            entity.Property(row => row.UserId).HasColumnName("user_id");
             entity.Property(row => row.EntityId).HasColumnName("entity_id");
+            entity.Property(row => row.IsFavorite).HasColumnName("is_favorite");
+            entity.Property(row => row.RatingValue).HasColumnName("rating_value");
             entity.Property(row => row.PlayCount).HasColumnName("play_count");
             entity.Property(row => row.SkipCount).HasColumnName("skip_count");
             entity.Property(row => row.PlayDurationSeconds).HasColumnName("play_duration_seconds");
             entity.Property(row => row.ResumeSeconds).HasColumnName("resume_seconds");
             entity.Property(row => row.LastPlayedAt).HasColumnName("last_played_at");
             entity.Property(row => row.CompletedAt).HasColumnName("completed_at");
+            entity.Property(row => row.ProgressCurrentEntityId).HasColumnName("progress_current_entity_id");
+            entity.Property(row => row.ProgressUnit).HasColumnName("progress_unit").HasMaxLength(64).IsRequired();
+            entity.Property(row => row.ProgressIndex).HasColumnName("progress_index");
+            entity.Property(row => row.ProgressTotal).HasColumnName("progress_total");
+            entity.Property(row => row.ProgressMode).HasColumnName("progress_mode").HasMaxLength(64);
+            entity.Property(row => row.ProgressLocation).HasColumnName("progress_location");
+            entity.Property(row => row.ProgressCompletedAt).HasColumnName("progress_completed_at");
             entity.Property(row => row.UpdatedAt).HasColumnName("updated_at");
-            entity.HasOne<EntityRow>().WithOne().HasForeignKey<EntityPlaybackRow>(row => row.EntityId).OnDelete(DeleteBehavior.Cascade);
+            // Continue-watching shelves: one user's engagement ordered by recency.
+            entity.HasIndex(row => new { row.UserId, row.LastPlayedAt })
+                .HasFilter("last_played_at IS NOT NULL");
+            entity.HasIndex(row => new { row.UserId, row.IsFavorite })
+                .HasFilter("is_favorite");
+            entity.HasIndex(row => row.EntityId);
+            entity.HasOne<UserRow>().WithMany().HasForeignKey(row => row.UserId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne<EntityRow>().WithMany().HasForeignKey(row => row.EntityId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne<EntityRow>().WithMany().HasForeignKey(row => row.ProgressCurrentEntityId).OnDelete(DeleteBehavior.SetNull);
+            entity.ToTable(table => table.HasCheckConstraint("ck_user_entity_states_progress_bounds", "progress_index >= 0 AND progress_total >= 0"));
         });
 
         modelBuilder.Entity<EntityPlaybackEventRow>(entity => {
@@ -34,6 +53,7 @@ internal static partial class PrismediaModelConfiguration {
             entity.HasKey(row => row.Id);
             entity.Property(row => row.Id).HasColumnName("id").ValueGeneratedNever();
             entity.Property(row => row.EntityId).HasColumnName("entity_id");
+            entity.Property(row => row.UserId).HasColumnName("user_id");
             entity.Property(row => row.Kind)
                 .HasColumnName("kind")
                 .HasMaxLength(64)
@@ -46,7 +66,9 @@ internal static partial class PrismediaModelConfiguration {
             entity.HasIndex(row => row.OccurredAt);
             entity.HasIndex(row => new { row.EntityId, row.OccurredAt });
             entity.HasIndex(row => new { row.Kind, row.OccurredAt });
+            entity.HasIndex(row => new { row.UserId, row.OccurredAt });
             entity.HasOne<EntityRow>().WithMany().HasForeignKey(row => row.EntityId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne<UserRow>().WithMany().HasForeignKey(row => row.UserId).OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<EntityStatRow>(entity => {
@@ -98,23 +120,6 @@ internal static partial class PrismediaModelConfiguration {
             entity.Property(row => row.Value).HasColumnName("value").IsRequired();
             entity.Property(row => row.UpdatedAt).HasColumnName("updated_at");
             entity.HasOne<EntityRow>().WithMany().HasForeignKey(row => row.EntityId).OnDelete(DeleteBehavior.Cascade);
-        });
-
-        modelBuilder.Entity<EntityProgressRow>(entity => {
-            entity.ToTable("entity_progress");
-            entity.HasKey(row => row.EntityId);
-            entity.Property(row => row.EntityId).HasColumnName("entity_id");
-            entity.Property(row => row.CurrentEntityId).HasColumnName("current_entity_id");
-            entity.Property(row => row.Unit).HasColumnName("unit").HasMaxLength(64).IsRequired();
-            entity.Property(row => row.Index).HasColumnName("index");
-            entity.Property(row => row.Total).HasColumnName("total");
-            entity.Property(row => row.Mode).HasColumnName("mode").HasMaxLength(64);
-            entity.Property(row => row.Location).HasColumnName("location");
-            entity.Property(row => row.CompletedAt).HasColumnName("completed_at");
-            entity.Property(row => row.UpdatedAt).HasColumnName("updated_at");
-            entity.HasOne<EntityRow>().WithOne().HasForeignKey<EntityProgressRow>(row => row.EntityId).OnDelete(DeleteBehavior.Cascade);
-            entity.HasOne<EntityRow>().WithMany().HasForeignKey(row => row.CurrentEntityId).OnDelete(DeleteBehavior.SetNull);
-            entity.ToTable(table => table.HasCheckConstraint("ck_entity_progress_bounds", "index >= 0 AND total >= 0"));
         });
 
         modelBuilder.Entity<EntityPositionRow>(entity => {

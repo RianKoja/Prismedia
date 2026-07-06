@@ -22,14 +22,17 @@ public sealed class EfEntityRepository : IEntityWriteRepository {
     private static readonly string RelatedRelationshipCode = RelationshipKind.Related.ToCode();
 
     private readonly PrismediaDbContext _db;
+    private readonly Prismedia.Application.Security.ICurrentUserContext _currentUser;
     private readonly IReadOnlyDictionary<EntityKind, IEntityKindMapper> _kindMappers;
     private readonly IReadOnlyList<IEntityCapabilityMapper> _capabilityMappers;
 
     public EfEntityRepository(
         PrismediaDbContext db,
+        Prismedia.Application.Security.ICurrentUserContext currentUser,
         IEnumerable<IEntityKindMapper> kindMappers,
         IEnumerable<IEntityCapabilityMapper> capabilityMappers) {
         _db = db;
+        _currentUser = currentUser;
         _kindMappers = kindMappers.ToDictionary(mapper => mapper.Kind);
         _capabilityMappers = capabilityMappers.ToArray();
     }
@@ -384,27 +387,54 @@ public sealed class EfEntityRepository : IEntityWriteRepository {
                 Title = entity.Title,
                 ParentEntityId = entity.ParentEntityId,
                 SortOrder = entity.SortOrder,
-                RatingValue = entity.RatingValue,
-                IsFavorite = entity.IsFavorite ?? false,
                 IsNsfw = entity.IsNsfw ?? false,
                 IsOrganized = entity.IsOrganized ?? false,
                 IsWanted = entity.IsWanted ?? false,
                 CreatedAt = now,
                 UpdatedAt = now,
             });
+        } else {
+            row.KindCode = EntityKindRegistry.ToCode(entity.Kind);
+            row.Title = entity.Title;
+            row.ParentEntityId = entity.ParentEntityId;
+            row.SortOrder = entity.SortOrder;
+            row.IsNsfw = entity.IsNsfw ?? false;
+            row.IsOrganized = entity.IsOrganized ?? false;
+            row.IsWanted = entity.IsWanted ?? false;
+            row.UpdatedAt = now;
+        }
+
+        await UpsertUserOpinionAsync(entity, cancellationToken);
+    }
+
+    /// <summary>
+    /// Persists the current user's favorite/rating opinion of this entity. System saves
+    /// (worker, no user) skip this entirely so per-user state is never touched by scans.
+    /// </summary>
+    private async Task UpsertUserOpinionAsync(Entity entity, CancellationToken cancellationToken) {
+        var userId = _currentUser.UserId;
+        if (userId == Guid.Empty) {
             return;
         }
 
-        row.KindCode = EntityKindRegistry.ToCode(entity.Kind);
-        row.Title = entity.Title;
-        row.ParentEntityId = entity.ParentEntityId;
-        row.SortOrder = entity.SortOrder;
-        row.RatingValue = entity.RatingValue;
-        row.IsFavorite = entity.IsFavorite ?? false;
-        row.IsNsfw = entity.IsNsfw ?? false;
-        row.IsOrganized = entity.IsOrganized ?? false;
-        row.IsWanted = entity.IsWanted ?? false;
-        row.UpdatedAt = now;
+        var isFavorite = entity.IsFavorite ?? false;
+        var rating = entity.RatingValue;
+        var state = await _db.UserEntityStates.FindAsync([userId, entity.Id], cancellationToken);
+        if (state is null) {
+            if (!isFavorite && rating is null) {
+                return;
+            }
+
+            state = new UserEntityStateRow {
+                UserId = userId,
+                EntityId = entity.Id,
+            };
+            _db.UserEntityStates.Add(state);
+        }
+
+        state.IsFavorite = isFavorite;
+        state.RatingValue = rating;
+        state.UpdatedAt = DateTimeOffset.UtcNow;
     }
 
     private async Task HydrateUniversalPropertiesAsync(
@@ -426,9 +456,16 @@ public sealed class EfEntityRepository : IEntityWriteRepository {
             .Select(r => new EntityFile(r.Role, r.Path, r.MimeType))
             .ToArrayAsync(cancellationToken);
 
+        // Favorite and rating are the current user's opinion, not entity facts.
+        var userId = _currentUser.UserId;
+        var state = userId == Guid.Empty
+            ? null
+            : await _db.UserEntityStates.AsNoTracking()
+                .FirstOrDefaultAsync(s => s.UserId == userId && s.EntityId == entity.Id, cancellationToken);
+
         entity.HydrateUniversalProperties(
-            row.RatingValue,
-            row.IsFavorite,
+            state?.RatingValue,
+            state?.IsFavorite ?? false,
             row.IsNsfw,
             row.IsOrganized,
             urls,

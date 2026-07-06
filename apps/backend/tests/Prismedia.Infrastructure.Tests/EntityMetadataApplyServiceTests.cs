@@ -29,6 +29,18 @@ public sealed class EntityMetadataApplyServiceTests {
         });
         await db.SaveChangesAsync();
 
+        db.Users.Add(new UserRow {
+            Id = TestUserContext.UserId,
+            Username = "admin",
+            NormalizedUsername = "admin",
+            DisplayName = "Admin",
+            Role = UserRole.Admin,
+            Enabled = true,
+            CreatedAt = DateTimeOffset.UtcNow,
+            UpdatedAt = DateTimeOffset.UtcNow
+        });
+        await db.SaveChangesAsync();
+
         var service = new EntityMetadataApplyService(db, new PluginArtworkServiceOptions(Path.GetTempPath()));
         var applied = await service.ApplyPatchAsync(
             entityId,
@@ -47,10 +59,13 @@ public sealed class EntityMetadataApplyServiceTests {
         Assert.Null(await db.EntityDescriptions.FindAsync([entityId]));
         Assert.Equal("https://new.example.test", await db.EntityUrls.Where(row => row.EntityId == entityId).Select(row => row.Url).SingleAsync());
         var entityRow = await db.Entities.FindAsync([entityId]);
-        Assert.Null(entityRow?.RatingValue);
-        Assert.True(entityRow?.IsFavorite);
         Assert.False(entityRow?.IsNsfw);
         Assert.True(entityRow?.IsOrganized);
+        // Imported favorites are applied to admin accounts' own state rows.
+        var adminState = await db.UserEntityStates.SingleAsync(state => state.EntityId == entityId);
+        Assert.Equal(TestUserContext.UserId, adminState.UserId);
+        Assert.True(adminState.IsFavorite);
+        Assert.Null(adminState.RatingValue);
     }
 
     [Fact]
@@ -60,7 +75,8 @@ public sealed class EntityMetadataApplyServiceTests {
         var unratedId = Guid.Parse("42424242-4242-4242-4242-424242424242");
         SeedEntity(db, ratedId, "video", "Rated");
         SeedEntity(db, unratedId, "video", "Unrated");
-        (await db.Entities.FindAsync([ratedId]))!.RatingValue = 3;
+        db.UserEntityStates.Add(new UserEntityStateRow {
+            UserId = TestUserContext.UserId, EntityId = ratedId, RatingValue = 3, UpdatedAt = DateTimeOffset.UtcNow });
         await db.SaveChangesAsync();
 
         var service = new EntityMetadataApplyService(db, new PluginArtworkServiceOptions(Path.GetTempPath()));
@@ -78,8 +94,8 @@ public sealed class EntityMetadataApplyServiceTests {
                 Patch: EmptyPatch() with { Rating = 4 }),
             CancellationToken.None));
 
-        Assert.Equal(3, (await db.Entities.FindAsync([ratedId]))?.RatingValue);
-        Assert.Null((await db.Entities.FindAsync([unratedId]))?.RatingValue);
+        Assert.Equal(3, db.UserEntityStates.Single(state => state.EntityId == ratedId).RatingValue);
+        Assert.False(db.UserEntityStates.Any(state => state.EntityId == unratedId));
     }
 
     [Fact]
@@ -87,7 +103,8 @@ public sealed class EntityMetadataApplyServiceTests {
         await using var db = CreateContext();
         var entityId = Guid.Parse("43434343-4343-4343-4343-434343434343");
         SeedEntity(db, entityId, "movie", "Movie");
-        (await db.Entities.FindAsync([entityId]))!.RatingValue = 2;
+        db.UserEntityStates.Add(new UserEntityStateRow {
+            UserId = TestUserContext.UserId, EntityId = entityId, RatingValue = 2, UpdatedAt = DateTimeOffset.UtcNow });
         await db.SaveChangesAsync();
 
         var service = new EntityMetadataApplyService(db, new PluginArtworkServiceOptions(Path.GetTempPath()));
@@ -111,7 +128,7 @@ public sealed class EntityMetadataApplyServiceTests {
         var entity = await db.Entities.FindAsync([entityId]);
         Assert.True(applied);
         Assert.Equal("Provider Title", entity?.Title);
-        Assert.Equal(2, entity?.RatingValue);
+        Assert.Equal(2, db.UserEntityStates.Single(state => state.EntityId == entityId).RatingValue);
     }
 
     [Fact]

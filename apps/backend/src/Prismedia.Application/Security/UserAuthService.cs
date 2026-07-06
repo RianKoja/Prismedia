@@ -32,11 +32,17 @@ public sealed class UserAuthService {
     private readonly ISecurityPersistence _persistence;
     private readonly IPasswordHasher _hasher;
     private readonly AuthAttemptThrottle _throttle;
+    private readonly IUserEngagementCloner? _engagementCloner;
 
-    public UserAuthService(ISecurityPersistence persistence, IPasswordHasher hasher, AuthAttemptThrottle throttle) {
+    public UserAuthService(
+        ISecurityPersistence persistence,
+        IPasswordHasher hasher,
+        AuthAttemptThrottle throttle,
+        IUserEngagementCloner? engagementCloner = null) {
         _persistence = persistence;
         _hasher = hasher;
         _throttle = throttle;
+        _engagementCloner = engagementCloner;
     }
 
     /// <summary>Gets the server identity used by Jellyfin protocol responses.</summary>
@@ -183,6 +189,11 @@ public sealed class UserAuthService {
                 canCreateLibraries: true,
                 enabled: true,
                 cancellationToken);
+            if (_engagementCloner is not null) {
+                // Upgraded installs: the new admin inherits the pre-multi-user household
+                // watch state (every migrated account holds an identical copy).
+                await _engagementCloner.CloneFromAnyUserAsync(admin.Id, cancellationToken);
+            }
         }
 
         _throttle.RecordSuccess(bucket);

@@ -31,6 +31,10 @@ internal static class TestAuth {
             builder.ConfigureServices(services => {
                 services.RemoveAll<ISecurityPersistence>();
                 services.AddSingleton<ISecurityPersistence>(new FakeSecurityPersistence(allowSfw, allowNsfw));
+                // Endpoint tests swap repositories/read services for fakes; the DB-backed
+                // library-visibility guard would otherwise 404 every mutation.
+                services.RemoveAll<IEntityVisibilityChecker>();
+                services.AddSingleton<IEntityVisibilityChecker>(new AllVisibleEntityChecker());
             });
         });
 
@@ -38,6 +42,11 @@ internal static class TestAuth {
         var client = factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-Prismedia-Api-Key", Token);
         return client;
+    }
+
+    internal sealed class AllVisibleEntityChecker : IEntityVisibilityChecker {
+        public Task<bool> IsVisibleAsync(Guid entityId, CancellationToken cancellationToken) =>
+            Task.FromResult(true);
     }
 
     internal sealed class VisibleEntityReadService : IEntityReadService {

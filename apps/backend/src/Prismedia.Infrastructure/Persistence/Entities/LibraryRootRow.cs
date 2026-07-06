@@ -29,6 +29,9 @@ public sealed class LibraryRootRow {
 
     public DateTimeOffset? LastScannedAt { get; set; }
 
+    /// <summary>User that created this root; null for roots predating multi-user or system-created ones.</summary>
+    public Guid? CreatedByUserId { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; }
 
     public DateTimeOffset UpdatedAt { get; set; }

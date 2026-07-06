@@ -26,23 +26,33 @@ public sealed partial class EfEntityReadService : IEntityReadService {
     private const int MaxThumbnailMeta = 5;
 
     private readonly PrismediaDbContext _db;
+    private readonly Prismedia.Application.Security.ICurrentUserContext _currentUser;
     private readonly EfEntityRepository _repository;
     private readonly IReadOnlyDictionary<EntityKind, IEntityKindMapper> _kindMappers;
     private readonly IReadOnlyList<Thumbnails.IThumbnailContributor> _thumbnailContributors;
     private readonly AssetPathService? _assets;
 
+    // Memoized per request: library roots hidden from the caller (disabled roots plus,
+    // for members, roots they were not granted). Null once resolved means unrestricted.
+    private Guid[]? _hiddenRootIds;
+    private bool _hiddenRootsResolved;
+
     public EfEntityReadService(
         PrismediaDbContext db,
+        Prismedia.Application.Security.ICurrentUserContext currentUser,
         EfEntityRepository repository,
         IEnumerable<IEntityKindMapper> kindMappers,
         IEnumerable<Thumbnails.IThumbnailContributor> thumbnailContributors,
         AssetPathService? assets = null) {
         _db = db;
+        _currentUser = currentUser;
         _repository = repository;
         _kindMappers = kindMappers.ToDictionary(mapper => mapper.Kind);
         _thumbnailContributors = thumbnailContributors.ToArray();
         _assets = assets;
     }
+
+    private Guid CurrentUserId => _currentUser.UserId;
 
     public async Task<EntityListResponse> ListAsync(
         string? kind,
@@ -205,46 +215,60 @@ public sealed partial class EfEntityReadService : IEntityReadService {
     /// Applies a deterministic ORDER BY for the non-random sorts. Each strategy ends
     /// with a stable identifier tiebreaker so offset paging never skips or repeats a
     /// row, and rating always pushes unrated entities to the end regardless of
-    /// direction.
+    /// direction. Ratings are the current user's opinion, resolved per row from the
+    /// user-state table.
     /// </summary>
-    private static IQueryable<EntityRow> ApplyOrdering(IQueryable<EntityRow> query, ListSort sort, bool descending) =>
-        sort switch {
+    private IQueryable<EntityRow> ApplyOrdering(IQueryable<EntityRow> query, ListSort sort, bool descending) {
+        if (sort == ListSort.Rating) {
+            var states = _db.UserEntityStates;
+            var userId = CurrentUserId;
+            var keyed = query.Select(entity => new {
+                entity,
+                rating = states
+                    .Where(state => state.UserId == userId && state.EntityId == entity.Id)
+                    .Select(state => state.RatingValue)
+                    .FirstOrDefault()
+            });
+            var ordered = descending
+                ? keyed.OrderBy(item => item.rating == null)
+                    .ThenByDescending(item => item.rating)
+                    .ThenBy(item => item.entity.SortName)
+                    .ThenBy(item => item.entity.Id)
+                : keyed.OrderBy(item => item.rating == null)
+                    .ThenBy(item => item.rating)
+                    .ThenBy(item => item.entity.SortName)
+                    .ThenBy(item => item.entity.Id);
+            return ordered.Select(item => item.entity);
+        }
+
+        return sort switch {
             ListSort.DateAdded => descending
                 ? query.OrderByDescending(entity => entity.CreatedAt).ThenByDescending(entity => entity.Id)
                 : query.OrderBy(entity => entity.CreatedAt).ThenBy(entity => entity.Id),
-            ListSort.Rating => descending
-                ? query.OrderBy(entity => entity.RatingValue == null)
-                    .ThenByDescending(entity => entity.RatingValue)
-                    .ThenBy(entity => entity.SortName)
-                    .ThenBy(entity => entity.Id)
-                : query.OrderBy(entity => entity.RatingValue == null)
-                    .ThenBy(entity => entity.RatingValue)
-                    .ThenBy(entity => entity.SortName)
-                    .ThenBy(entity => entity.Id),
             _ => descending
                 ? query.OrderByDescending(entity => entity.SortName).ThenByDescending(entity => entity.Id)
                 : query.OrderBy(entity => entity.SortName).ThenBy(entity => entity.Id),
         };
+    }
 
     /// <summary>
-    /// Orders entities by most recent engagement — the playback last-played time (videos/audio,
-    /// falling back to the playback row's update time) or the reading-progress update time
-    /// (books/comics). Entities with no engagement sort last regardless of direction, so the
-    /// "recently played/watched" surfaces only lead with things the user has actually touched.
+    /// Orders entities by the current user's most recent engagement — the playback
+    /// last-played time (videos/audio) or the reading-progress update time (books/comics).
+    /// Entities with no engagement sort last regardless of direction, so the "recently
+    /// played/watched" surfaces only lead with things the user has actually touched.
     /// </summary>
     private IQueryable<EntityRow> ApplyLastPlayedOrdering(IQueryable<EntityRow> query, bool descending) {
-        var playback = _db.Set<EntityPlaybackRow>();
-        var progress = _db.Set<EntityProgressRow>();
+        var states = _db.UserEntityStates;
+        var userId = CurrentUserId;
         var keyed = query.Select(entity => new {
             entity,
-            recency = playback
-                          .Where(row => row.EntityId == entity.Id)
-                          .Select(row => (DateTimeOffset?)(row.LastPlayedAt ?? row.UpdatedAt))
-                          .FirstOrDefault()
-                      ?? progress
-                          .Where(row => row.EntityId == entity.Id)
-                          .Select(row => (DateTimeOffset?)row.UpdatedAt)
-                          .FirstOrDefault()
+            recency = states
+                .Where(state => state.UserId == userId && state.EntityId == entity.Id)
+                .Select(state => state.LastPlayedAt ??
+                    (state.ProgressIndex > 0 || state.ProgressCompletedAt != null
+                        ? (DateTimeOffset?)state.UpdatedAt
+                        : null))
+                .FirstOrDefault()
         });
 
         var ordered = descending
@@ -292,9 +316,10 @@ public sealed partial class EfEntityReadService : IEntityReadService {
     /// <summary>
     /// Applies the server-side library filters that span the whole matching set:
     /// favorite and organized flags, rating bounds (including the explicit unrated
-    /// case), and the adaptive engagement status. Status is resolved against both the
-    /// playback capability (videos/audio) and the progress capability (books/comics)
-    /// so a single control reads correctly for every kind that records engagement.
+    /// case), and the adaptive engagement status. Favorite, rating, and engagement are
+    /// the current user's state; status is resolved against both playback (videos/audio)
+    /// and reading progress (books/comics) so a single control reads correctly for every
+    /// kind that records engagement.
     /// </summary>
     private IQueryable<EntityRow> ApplyListFilters(
         IQueryable<EntityRow> query,
@@ -311,8 +336,11 @@ public sealed partial class EfEntityReadService : IEntityReadService {
         bool? played = null,
         bool? orphaned = null,
         bool? wanted = null) {
+        var userId = CurrentUserId;
+        var states = _db.UserEntityStates;
         if (favorite == true) {
-            query = query.Where(entity => entity.IsFavorite);
+            query = query.Where(entity => states.Any(state =>
+                state.UserId == userId && state.EntityId == entity.Id && state.IsFavorite));
         }
 
         if (wanted is { } wantsWanted) {
@@ -343,32 +371,30 @@ public sealed partial class EfEntityReadService : IEntityReadService {
         }
 
         if (played is { } wantsPlayed) {
-            var playbackRows = _db.Set<EntityPlaybackRow>();
-            var progressRows = _db.Set<EntityProgressRow>();
             var entities = _db.Entities;
-            // "Played" means any recorded engagement: a play/resume/completion (videos/audio) or
-            // started/completed reading progress (books/comics). Mirrors the unwatched status logic.
-            // Movies also honor direct child playback because a Prismedia movie is browsed as the
-            // movie entity but can stream through its child video entity.
+            // "Played" means any recorded engagement for this user: a play/resume/completion
+            // (videos/audio) or started/completed reading progress (books/comics). Mirrors the
+            // unwatched status logic. Movies also honor direct child playback because a Prismedia
+            // movie is browsed as the movie entity but can stream through its child video entity.
             query = wantsPlayed
                 ? query.Where(entity =>
-                    playbackRows.Any(row => row.EntityId == entity.Id &&
-                        (row.CompletedAt != null || row.PlayCount > 0 || row.ResumeSeconds > 0)) ||
+                    states.Any(state => state.UserId == userId && state.EntityId == entity.Id &&
+                        (state.CompletedAt != null || state.PlayCount > 0 || state.ResumeSeconds > 0)) ||
                     (entity.KindCode == EntityKindRegistry.Movie.Code &&
                         entities.Any(child => child.ParentEntityId == entity.Id &&
-                            playbackRows.Any(row => row.EntityId == child.Id &&
-                                (row.CompletedAt != null || row.PlayCount > 0 || row.ResumeSeconds > 0)))) ||
-                    progressRows.Any(row => row.EntityId == entity.Id &&
-                        (row.CompletedAt != null || row.Index > 0)))
+                            states.Any(state => state.UserId == userId && state.EntityId == child.Id &&
+                                (state.CompletedAt != null || state.PlayCount > 0 || state.ResumeSeconds > 0)))) ||
+                    states.Any(state => state.UserId == userId && state.EntityId == entity.Id &&
+                        (state.ProgressCompletedAt != null || state.ProgressIndex > 0)))
                 : query.Where(entity =>
-                    !playbackRows.Any(row => row.EntityId == entity.Id &&
-                        (row.CompletedAt != null || row.PlayCount > 0 || row.ResumeSeconds > 0)) &&
+                    !states.Any(state => state.UserId == userId && state.EntityId == entity.Id &&
+                        (state.CompletedAt != null || state.PlayCount > 0 || state.ResumeSeconds > 0)) &&
                     !(entity.KindCode == EntityKindRegistry.Movie.Code &&
                         entities.Any(child => child.ParentEntityId == entity.Id &&
-                            playbackRows.Any(row => row.EntityId == child.Id &&
-                                (row.CompletedAt != null || row.PlayCount > 0 || row.ResumeSeconds > 0)))) &&
-                    !progressRows.Any(row => row.EntityId == entity.Id &&
-                        (row.CompletedAt != null || row.Index > 0)));
+                            states.Any(state => state.UserId == userId && state.EntityId == child.Id &&
+                                (state.CompletedAt != null || state.PlayCount > 0 || state.ResumeSeconds > 0)))) &&
+                    !states.Any(state => state.UserId == userId && state.EntityId == entity.Id &&
+                        (state.ProgressCompletedAt != null || state.ProgressIndex > 0)));
         }
 
         var bookTypes = ParseCodeList<BookType>(bookType);
@@ -390,15 +416,20 @@ public sealed partial class EfEntityReadService : IEntityReadService {
         }
 
         if (unrated == true) {
-            query = query.Where(entity => entity.RatingValue == null);
+            query = query.Where(entity => !states.Any(state =>
+                state.UserId == userId && state.EntityId == entity.Id && state.RatingValue != null));
         }
 
         if (ratingMin is { } min) {
-            query = query.Where(entity => entity.RatingValue != null && entity.RatingValue >= min);
+            query = query.Where(entity => states.Any(state =>
+                state.UserId == userId && state.EntityId == entity.Id &&
+                state.RatingValue != null && state.RatingValue >= min));
         }
 
         if (ratingMax is { } max) {
-            query = query.Where(entity => entity.RatingValue != null && entity.RatingValue <= max);
+            query = query.Where(entity => states.Any(state =>
+                state.UserId == userId && state.EntityId == entity.Id &&
+                state.RatingValue != null && state.RatingValue <= max));
         }
 
         var normalizedStatus = status?.Trim().ToLowerInvariant();
@@ -406,37 +437,35 @@ public sealed partial class EfEntityReadService : IEntityReadService {
             return query;
         }
 
-        var playback = _db.Set<EntityPlaybackRow>();
-        var progress = _db.Set<EntityProgressRow>();
         var entityRows = _db.Entities;
         return normalizedStatus switch {
             "watched" or "read" or "completed" or "finished" =>
                 query.Where(entity =>
-                    playback.Any(row => row.EntityId == entity.Id && row.CompletedAt != null) ||
+                    states.Any(state => state.UserId == userId && state.EntityId == entity.Id && state.CompletedAt != null) ||
                     (entity.KindCode == EntityKindRegistry.Movie.Code &&
                         entityRows.Any(child => child.ParentEntityId == entity.Id &&
-                            playback.Any(row => row.EntityId == child.Id && row.CompletedAt != null))) ||
-                    progress.Any(row => row.EntityId == entity.Id && row.CompletedAt != null)),
+                            states.Any(state => state.UserId == userId && state.EntityId == child.Id && state.CompletedAt != null))) ||
+                    states.Any(state => state.UserId == userId && state.EntityId == entity.Id && state.ProgressCompletedAt != null)),
             "unwatched" or "unread" or "unstarted" or "new" =>
                 query.Where(entity =>
-                    !playback.Any(row => row.EntityId == entity.Id &&
-                        (row.CompletedAt != null || row.PlayCount > 0 || row.ResumeSeconds > 0)) &&
+                    !states.Any(state => state.UserId == userId && state.EntityId == entity.Id &&
+                        (state.CompletedAt != null || state.PlayCount > 0 || state.ResumeSeconds > 0)) &&
                     !(entity.KindCode == EntityKindRegistry.Movie.Code &&
                         entityRows.Any(child => child.ParentEntityId == entity.Id &&
-                            playback.Any(row => row.EntityId == child.Id &&
-                                (row.CompletedAt != null || row.PlayCount > 0 || row.ResumeSeconds > 0)))) &&
-                    !progress.Any(row => row.EntityId == entity.Id &&
-                        (row.CompletedAt != null || row.Index > 0))),
+                            states.Any(state => state.UserId == userId && state.EntityId == child.Id &&
+                                (state.CompletedAt != null || state.PlayCount > 0 || state.ResumeSeconds > 0)))) &&
+                    !states.Any(state => state.UserId == userId && state.EntityId == entity.Id &&
+                        (state.ProgressCompletedAt != null || state.ProgressIndex > 0))),
             "in-progress" or "inprogress" or "in_progress" or "reading" or "watching" =>
                 query.Where(entity =>
-                    playback.Any(row => row.EntityId == entity.Id &&
-                        row.CompletedAt == null && row.ResumeSeconds > 0) ||
+                    states.Any(state => state.UserId == userId && state.EntityId == entity.Id &&
+                        state.CompletedAt == null && state.ResumeSeconds > 0) ||
                     (entity.KindCode == EntityKindRegistry.Movie.Code &&
                         entityRows.Any(child => child.ParentEntityId == entity.Id &&
-                            playback.Any(row => row.EntityId == child.Id &&
-                                row.CompletedAt == null && row.ResumeSeconds > 0))) ||
-                    progress.Any(row => row.EntityId == entity.Id &&
-                        row.CompletedAt == null && row.Index > 0 && row.Index < row.Total)),
+                            states.Any(state => state.UserId == userId && state.EntityId == child.Id &&
+                                state.CompletedAt == null && state.ResumeSeconds > 0))) ||
+                    states.Any(state => state.UserId == userId && state.EntityId == entity.Id &&
+                        state.ProgressCompletedAt == null && state.ProgressIndex > 0 && state.ProgressIndex < state.ProgressTotal)),
             _ => query,
         };
     }
@@ -571,28 +600,58 @@ public sealed partial class EfEntityReadService : IEntityReadService {
             ? query.Where(entity => !entity.IsNsfw)
             : query;
 
-    private async Task<bool> HasDisabledLibraryRootsAsync(CancellationToken cancellationToken) =>
-        await _db.LibraryRoots.AsNoTracking().AnyAsync(root => !root.Enabled, cancellationToken);
+    /// <summary>
+    /// Resolves (once per request) which library roots the caller must not see: disabled
+    /// roots for everyone, plus every root a member was not granted. Returns true when
+    /// any hiding applies; admins and the system context only ever hide disabled roots.
+    /// </summary>
+    private async Task<bool> HasDisabledLibraryRootsAsync(CancellationToken cancellationToken) {
+        if (_hiddenRootsResolved) {
+            return _hiddenRootIds is not null;
+        }
+
+        var disabledRootIds = await _db.LibraryRoots.AsNoTracking()
+            .Where(root => !root.Enabled)
+            .Select(root => root.Id)
+            .ToArrayAsync(cancellationToken);
+        var hidden = new HashSet<Guid>(disabledRootIds);
+
+        var allowedRootIds = await _currentUser.GetAllowedLibraryRootIdsAsync(cancellationToken);
+        if (allowedRootIds is not null) {
+            var allRootIds = await _db.LibraryRoots.AsNoTracking()
+                .Select(root => root.Id)
+                .ToArrayAsync(cancellationToken);
+            foreach (var rootId in allRootIds) {
+                if (!allowedRootIds.Contains(rootId)) {
+                    hidden.Add(rootId);
+                }
+            }
+        }
+
+        _hiddenRootIds = hidden.Count > 0 ? hidden.ToArray() : null;
+        _hiddenRootsResolved = true;
+        return _hiddenRootIds is not null;
+    }
 
     private IQueryable<Guid> DisabledRootedEntityIds() {
-        var disabledRootIds = _db.LibraryRoots
-            .Where(root => !root.Enabled)
-            .Select(root => root.Id);
+        // Materialized set (tiny) so PostgreSQL probes the detail LibraryRootId indexes
+        // with = ANY(@hiddenRootIds) instead of correlating a roots subquery.
+        var hiddenRootIds = _hiddenRootIds ?? [];
 
         return _db.VideoDetails
-            .Where(detail => detail.LibraryRootId != null && disabledRootIds.Contains(detail.LibraryRootId.Value))
+            .Where(detail => detail.LibraryRootId != null && hiddenRootIds.Contains(detail.LibraryRootId.Value))
             .Select(detail => detail.EntityId)
             .Concat(_db.GalleryDetails
-                .Where(detail => detail.LibraryRootId != null && disabledRootIds.Contains(detail.LibraryRootId.Value))
+                .Where(detail => detail.LibraryRootId != null && hiddenRootIds.Contains(detail.LibraryRootId.Value))
                 .Select(detail => detail.EntityId))
             .Concat(_db.BookDetails
-                .Where(detail => detail.LibraryRootId != null && disabledRootIds.Contains(detail.LibraryRootId.Value))
+                .Where(detail => detail.LibraryRootId != null && hiddenRootIds.Contains(detail.LibraryRootId.Value))
                 .Select(detail => detail.EntityId))
             .Concat(_db.MusicArtistDetails
-                .Where(detail => detail.LibraryRootId != null && disabledRootIds.Contains(detail.LibraryRootId.Value))
+                .Where(detail => detail.LibraryRootId != null && hiddenRootIds.Contains(detail.LibraryRootId.Value))
                 .Select(detail => detail.EntityId))
             .Concat(_db.AudioLibraryDetails
-                .Where(detail => detail.LibraryRootId != null && disabledRootIds.Contains(detail.LibraryRootId.Value))
+                .Where(detail => detail.LibraryRootId != null && hiddenRootIds.Contains(detail.LibraryRootId.Value))
                 .Select(detail => detail.EntityId));
     }
 
@@ -749,6 +808,18 @@ public sealed partial class EfEntityReadService : IEntityReadService {
             !_db.Entities.Any(parent =>
                 parent.Id == entity.ParentEntityId &&
                 parent.KindCode == EntityKindRegistry.Movie.Code));
+
+    /// <summary>
+    /// Library-visibility check for mutation/streaming guards: true when the entity
+    /// exists and no hidden-root rule (disabled or not granted to this user) hides it.
+    /// </summary>
+    internal async Task<bool> IsEntityVisibleToCurrentUserAsync(Guid id, CancellationToken cancellationToken) {
+        if (!await HasDisabledLibraryRootsAsync(cancellationToken)) {
+            return await _db.Entities.AsNoTracking().AnyAsync(entity => entity.Id == id, cancellationToken);
+        }
+
+        return await IsEntityVisibleInEnabledLibraryAsync(id, cancellationToken);
+    }
 
     private async Task<bool> IsEntityHiddenAsync(Guid id, CancellationToken cancellationToken) =>
         await _db.Entities.AsNoTracking()

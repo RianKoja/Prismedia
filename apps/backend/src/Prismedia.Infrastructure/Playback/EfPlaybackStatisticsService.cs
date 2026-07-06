@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Prismedia.Application.Playback;
+using Prismedia.Application.Security;
 using Prismedia.Contracts.Playback;
 using Prismedia.Domain.Entities;
 using Prismedia.Infrastructure.Entities;
@@ -9,9 +10,10 @@ using Prismedia.Infrastructure.Persistence.Entities;
 namespace Prismedia.Infrastructure.Playback;
 
 /// <summary>
-/// EF Core read projection for playback statistics.
+/// EF Core read projection for playback statistics, scoped to the current user's events
+/// plus null-stamped pre-multi-user household history (unless the query asks for all users).
 /// </summary>
-public sealed class EfPlaybackStatisticsService(PrismediaDbContext db) : IPlaybackStatisticsService {
+public sealed class EfPlaybackStatisticsService(PrismediaDbContext db, ICurrentUserContext currentUser) : IPlaybackStatisticsService {
     private const int TopEntityLimit = 12;
     private const int RecentEventLimit = 30;
 
@@ -107,6 +109,11 @@ public sealed class EfPlaybackStatisticsService(PrismediaDbContext db) : IPlayba
     private IQueryable<PlaybackStatisticsRow> QueryRows(PlaybackStatisticsQuery query) {
         var events = db.EntityPlaybackEvents.AsNoTracking()
             .Where(evt => evt.OccurredAt >= query.From && evt.OccurredAt < query.To);
+        if (!query.AllUsers) {
+            var userId = currentUser.UserId;
+            events = events.Where(evt => evt.UserId == null || evt.UserId == userId);
+        }
+
         if (query.EventKind is { } eventKind) {
             events = events.Where(evt => evt.Kind == eventKind);
         }

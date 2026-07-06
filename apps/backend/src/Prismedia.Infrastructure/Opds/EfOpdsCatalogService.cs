@@ -18,7 +18,12 @@ namespace Prismedia.Infrastructure.Opds;
 public sealed class EfOpdsCatalogService(
     PrismediaDbContext db,
     AssetPathService assets,
-    IEntityReadService entityReadService) : IOpdsCatalogService {
+    IEntityReadService entityReadService,
+    Prismedia.Application.Security.ICurrentUserContext currentUser) : IOpdsCatalogService {
+    // Memoized per request: roots hidden from the caller (member library grants).
+    private Guid[]? _hiddenRootIds;
+    private bool _accessResolved;
+
     private static readonly string BookKindCode = EntityKindRegistry.Book.Code;
     private static readonly string PersonKindCode = EntityKindRegistry.Person.Code;
     private static readonly string CollectionKindCode = EntityKindRegistry.Collection.Code;
@@ -28,14 +33,14 @@ public sealed class EfOpdsCatalogService(
     private static readonly string TagsRelationshipCode = RelationshipKind.Tags.ToCode();
 
     public async Task<int> CountVisibleBooksAsync(bool hideNsfw, CancellationToken cancellationToken) =>
-        await VisibleBooksQuery(hideNsfw).CountAsync(cancellationToken);
+        await (await VisibleBooksQueryAsync(hideNsfw, cancellationToken)).CountAsync(cancellationToken);
 
-    public Task<OpdsCatalogPage<OpdsBookEntry>> ListRecentAsync(
+    public async Task<OpdsCatalogPage<OpdsBookEntry>> ListRecentAsync(
         bool hideNsfw,
         OpdsPageRequest page,
         CancellationToken cancellationToken) =>
-        PageBooksAsync(
-            VisibleBooksQuery(hideNsfw)
+        await PageBooksAsync(
+            (await VisibleBooksQueryAsync(hideNsfw, cancellationToken))
                 .OrderByDescending(book => book.CreatedAt)
                 .ThenBy(book => book.Id),
             hideNsfw,
@@ -53,6 +58,13 @@ public sealed class EfOpdsCatalogService(
         bool hideNsfw,
         OpdsPageRequest page,
         CancellationToken cancellationToken) {
+        // Resolves the caller's library access memo as a side effect, so the hidden
+        // check below sees the member's grants.
+        var books = (await VisibleBooksQueryAsync(hideNsfw, cancellationToken))
+            .Where(book => book.LibraryRootId == libraryId)
+            .OrderBy(book => book.SortName)
+            .ThenBy(book => book.Id);
+
         var rootVisible = await db.LibraryRoots.AsNoTracking()
             .AnyAsync(root =>
                 root.Id == libraryId &&
@@ -60,18 +72,11 @@ public sealed class EfOpdsCatalogService(
                 root.ScanBooks &&
                 (!hideNsfw || !root.IsNsfw),
                 cancellationToken);
-        if (!rootVisible) {
+        if (!rootVisible || (_hiddenRootIds?.Contains(libraryId) ?? false)) {
             return null;
         }
 
-        return await PageBooksAsync(
-            VisibleBooksQuery(hideNsfw)
-                .Where(book => book.LibraryRootId == libraryId)
-                .OrderBy(book => book.SortName)
-                .ThenBy(book => book.Id),
-            hideNsfw,
-            page,
-            cancellationToken);
+        return await PageBooksAsync(books, hideNsfw, page, cancellationToken);
     }
 
     public async Task<OpdsCatalogPage<OpdsNavigationEntry>> ListAuthorsAsync(
@@ -90,7 +95,7 @@ public sealed class EfOpdsCatalogService(
         }
 
         var linkedBookIds = await AuthorBookIdsAsync(authorId, cancellationToken);
-        var query = VisibleBooksQuery(hideNsfw)
+        var query = (await VisibleBooksQueryAsync(hideNsfw, cancellationToken))
             .Where(book => linkedBookIds.Contains(book.Id));
         if (!await query.AnyAsync(cancellationToken)) {
             return null;
@@ -120,7 +125,7 @@ public sealed class EfOpdsCatalogService(
             return null;
         }
 
-        var query = VisibleBooksQuery(hideNsfw)
+        var query = (await VisibleBooksQueryAsync(hideNsfw, cancellationToken))
             .Where(book => book.SeriesId == seriesId);
         if (!await query.AnyAsync(cancellationToken)) {
             return null;
@@ -151,7 +156,7 @@ public sealed class EfOpdsCatalogService(
         }
 
         var linkedBookIds = await CollectionBookIdsAsync(collectionId, cancellationToken);
-        var query = VisibleBooksQuery(hideNsfw)
+        var query = (await VisibleBooksQueryAsync(hideNsfw, cancellationToken))
             .Where(book => linkedBookIds.Contains(book.Id));
         if (!await query.AnyAsync(cancellationToken)) {
             return null;
@@ -182,7 +187,7 @@ public sealed class EfOpdsCatalogService(
         }
 
         var linkedBookIds = await TagBookIdsAsync(tagId, cancellationToken);
-        var query = VisibleBooksQuery(hideNsfw)
+        var query = (await VisibleBooksQueryAsync(hideNsfw, cancellationToken))
             .Where(book => linkedBookIds.Contains(book.Id));
         if (!await query.AnyAsync(cancellationToken)) {
             return null;
@@ -207,7 +212,7 @@ public sealed class EfOpdsCatalogService(
         }
 
         var term = query.Trim().ToLower();
-        var visible = VisibleBooksQuery(hideNsfw)
+        var visible = (await VisibleBooksQueryAsync(hideNsfw, cancellationToken))
             .Where(book =>
                 book.Title.ToLower().Contains(term) ||
                 db.EntityDescriptions.Any(description =>
@@ -233,7 +238,7 @@ public sealed class EfOpdsCatalogService(
         Guid bookId,
         bool hideNsfw,
         CancellationToken cancellationToken) {
-        var row = await VisibleBooksQuery(hideNsfw)
+        var row = await (await VisibleBooksQueryAsync(hideNsfw, cancellationToken))
             .Where(book => book.Id == bookId)
             .FirstOrDefaultAsync(cancellationToken);
         if (row is null) {
@@ -247,7 +252,7 @@ public sealed class EfOpdsCatalogService(
         Guid bookId,
         bool hideNsfw,
         CancellationToken cancellationToken) {
-        var row = await VisibleBooksQuery(hideNsfw)
+        var row = await (await VisibleBooksQueryAsync(hideNsfw, cancellationToken))
             .Where(book => book.Id == bookId)
             .FirstOrDefaultAsync(cancellationToken);
         if (row is null) {
@@ -268,14 +273,28 @@ public sealed class EfOpdsCatalogService(
         Guid bookId,
         bool hideNsfw,
         CancellationToken cancellationToken) {
-        if (!await VisibleBooksQuery(hideNsfw).AnyAsync(book => book.Id == bookId, cancellationToken)) {
+        if (!await (await VisibleBooksQueryAsync(hideNsfw, cancellationToken)).AnyAsync(book => book.Id == bookId, cancellationToken)) {
             return null;
         }
 
         return await ResolveThumbnailCoverFileAsync(bookId, hideNsfw, cancellationToken);
     }
 
-    private IQueryable<VisibleBookRow> VisibleBooksQuery(bool hideNsfw) {
+    private async Task<IQueryable<VisibleBookRow>> VisibleBooksQueryAsync(bool hideNsfw, CancellationToken cancellationToken) {
+        if (!_accessResolved) {
+            var allowedRootIds = await currentUser.GetAllowedLibraryRootIdsAsync(cancellationToken);
+            if (allowedRootIds is not null) {
+                _hiddenRootIds = (await db.LibraryRoots.AsNoTracking()
+                        .Select(root => root.Id)
+                        .ToArrayAsync(cancellationToken))
+                    .Where(rootId => !allowedRootIds.Contains(rootId))
+                    .ToArray();
+            }
+
+            _accessResolved = true;
+        }
+
+        var hiddenRootIds = _hiddenRootIds ?? [];
         var sourceRows = db.EntityFiles.AsNoTracking()
             .Where(file => file.Role == EntityFileRole.Source);
 
@@ -289,6 +308,7 @@ public sealed class EfOpdsCatalogService(
             from parent in parentRows.DefaultIfEmpty()
             where entity.KindCode == BookKindCode &&
                   (detail.LibraryRootId == null || (root != null && root.Enabled)) &&
+                  (detail.LibraryRootId == null || !hiddenRootIds.Contains(detail.LibraryRootId.Value)) &&
                   (detail.Format == BookFormat.Epub ||
                    detail.Format == BookFormat.Pdf ||
                    detail.Format == BookFormat.ImageArchive) &&
@@ -319,7 +339,7 @@ public sealed class EfOpdsCatalogService(
     private async Task<IReadOnlyList<NavigationProjection>> LibraryNavigationRowsAsync(
         bool hideNsfw,
         CancellationToken cancellationToken) {
-        var visible = await VisibleBooksQuery(hideNsfw)
+        var visible = await (await VisibleBooksQueryAsync(hideNsfw, cancellationToken))
             .Where(book => book.LibraryRootId != null)
             .ToArrayAsync(cancellationToken);
         if (visible.Length == 0) {
@@ -366,7 +386,7 @@ public sealed class EfOpdsCatalogService(
     private async Task<IReadOnlyList<NavigationProjection>> SeriesNavigationRowsAsync(
         bool hideNsfw,
         CancellationToken cancellationToken) {
-        var visible = await VisibleBooksQuery(hideNsfw)
+        var visible = await (await VisibleBooksQueryAsync(hideNsfw, cancellationToken))
             .Where(book => book.SeriesId != null)
             .ToArrayAsync(cancellationToken);
         if (visible.Length == 0) {
@@ -403,7 +423,7 @@ public sealed class EfOpdsCatalogService(
     private async Task<IReadOnlyList<NavigationProjection>> CollectionNavigationRowsAsync(
         bool hideNsfw,
         CancellationToken cancellationToken) {
-        var visible = await VisibleBooksQuery(hideNsfw).ToArrayAsync(cancellationToken);
+        var visible = await (await VisibleBooksQueryAsync(hideNsfw, cancellationToken)).ToArrayAsync(cancellationToken);
         if (visible.Length == 0) {
             return [];
         }
@@ -459,7 +479,7 @@ public sealed class EfOpdsCatalogService(
         string targetKindCode,
         IReadOnlyCollection<string> relationshipCodes,
         CancellationToken cancellationToken) {
-        var visible = await VisibleBooksQuery(hideNsfw).ToArrayAsync(cancellationToken);
+        var visible = await (await VisibleBooksQueryAsync(hideNsfw, cancellationToken)).ToArrayAsync(cancellationToken);
         if (visible.Length == 0) {
             return [];
         }

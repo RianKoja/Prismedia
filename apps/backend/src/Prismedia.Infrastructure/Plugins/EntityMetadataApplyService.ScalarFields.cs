@@ -276,10 +276,33 @@ public sealed partial class EntityMetadataApplyService {
         if (patch is null) return;
         var row = await _db.Entities.FindAsync([entityId], cancellationToken);
         if (row is null) return;
-        if (patch.IsFavorite.HasValue) row.IsFavorite = patch.IsFavorite.Value;
         if (patch.IsNsfw.HasValue) row.IsNsfw = patch.IsNsfw.Value;
         if (patch.IsOrganized.HasValue) row.IsOrganized = patch.IsOrganized.Value;
         row.UpdatedAt = now;
+
+        // Favorite is a per-user opinion. An imported favorite (Stash metadata) is applied to
+        // every admin account: imports are admin-run curation and members keep their own state.
+        if (patch.IsFavorite is { } isFavorite) {
+            var adminRole = Prismedia.Domain.Entities.UserRole.Admin;
+            var adminIds = await _db.Users
+                .Where(user => user.Role == adminRole)
+                .Select(user => user.Id)
+                .ToArrayAsync(cancellationToken);
+            foreach (var adminId in adminIds) {
+                var state = await _db.UserEntityStates.FindAsync([adminId, entityId], cancellationToken);
+                if (state is null) {
+                    if (!isFavorite) {
+                        continue;
+                    }
+
+                    state = new UserEntityStateRow { UserId = adminId, EntityId = entityId };
+                    _db.UserEntityStates.Add(state);
+                }
+
+                state.IsFavorite = isFavorite;
+                state.UpdatedAt = now;
+            }
+        }
     }
 
     /// <summary>

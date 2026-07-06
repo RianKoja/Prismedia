@@ -240,14 +240,15 @@ public sealed class OpdsCatalogServiceTests : IDisposable {
 
     private EfOpdsCatalogService CreateService(PrismediaDbContext db) {
         var assets = new AssetPathService(_tempDir, Path.Combine(_tempDir, "cache"));
-        var repository = new EfEntityRepository(db, EntityMappers.Kinds(db), EntityMappers.Capabilities(db));
+        var repository = new EfEntityRepository(db, TestUserContext.Admin(), EntityMappers.Kinds(db), EntityMappers.Capabilities(db, TestUserContext.Admin()));
         var entityReadService = new EfEntityReadService(
             db,
+            TestUserContext.Admin(),
             repository,
             EntityMappers.Kinds(db),
             ThumbnailContributors.For(db),
             assets);
-        return new EfOpdsCatalogService(db, assets, entityReadService);
+        return new EfOpdsCatalogService(db, assets, entityReadService, TestUserContext.Admin());
     }
 
     private static PrismediaDbContext CreateContext() =>

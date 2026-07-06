@@ -87,19 +87,19 @@ public sealed partial class EfEntityReadService {
         var gridThumbByEntity = await _db.EntityFiles.AsNoTracking()
             .Where(file => ids.Contains(file.EntityId) && file.Role == EntityFileRole.GridThumbnail)
             .ToDictionaryAsync(file => file.EntityId, file => file.Path, cancellationToken);
-        var playbackByEntity = await _db.Set<EntityPlaybackRow>().AsNoTracking()
-            .Where(row => ids.Contains(row.EntityId))
-            .ToDictionaryAsync(row => row.EntityId, cancellationToken);
+        var currentUserId = CurrentUserId;
+        var stateByEntity = currentUserId == Guid.Empty
+            ? new Dictionary<Guid, UserEntityStateRow>()
+            : await _db.UserEntityStates.AsNoTracking()
+                .Where(state => state.UserId == currentUserId && ids.Contains(state.EntityId))
+                .ToDictionaryAsync(state => state.EntityId, cancellationToken);
         var movieIds = rows
             .Where(row => row.KindCode == EntityKindRegistry.Movie.Code)
             .Select(row => row.Id)
             .ToArray();
-        var childPlaybackByMovie = movieIds.Length == 0
-            ? new Dictionary<Guid, EntityPlaybackRow>()
-            : await LoadMovieChildPlaybackAsync(movieIds, cancellationToken);
-        var progressByEntity = await _db.Set<EntityProgressRow>().AsNoTracking()
-            .Where(row => ids.Contains(row.EntityId))
-            .ToDictionaryAsync(row => row.EntityId, cancellationToken);
+        var childStateByMovie = movieIds.Length == 0 || currentUserId == Guid.Empty
+            ? new Dictionary<Guid, UserEntityStateRow>()
+            : await LoadMovieChildStateAsync(movieIds, cancellationToken);
 
         // For wanted placeholders only, the latest acquisition's status, so a grid thumbnail can show
         // what the item is doing (searching / downloading / failed). Scoped to the wanted subset of this
@@ -137,9 +137,11 @@ public sealed partial class EfEntityReadService {
                     .ToArray());
 
         var baseThumbnails = rows.Select(row => {
-            playbackByEntity.TryGetValue(row.Id, out var ownPlayback);
-            childPlaybackByMovie.TryGetValue(row.Id, out var childPlayback);
-            var playback = ownPlayback ?? childPlayback;
+            stateByEntity.TryGetValue(row.Id, out var ownState);
+            childStateByMovie.TryGetValue(row.Id, out var childState);
+            var playbackState = ownState is not null && Mappers.Capabilities.UserEntityStateColumns.HasPlayback(ownState)
+                ? ownState
+                : childState ?? ownState;
             var hoverUrl = hoverByEntity.GetValueOrDefault(row.Id);
             var hoverImages = hoverImagesByEntity.GetValueOrDefault(row.Id) ?? [];
             var coverUrl = coverByEntity.GetValueOrDefault(row.Id);
@@ -177,8 +179,8 @@ public sealed partial class EfEntityReadService {
                     technicalByEntity.GetValueOrDefault(row.Id),
                     sectionByEntity.GetValueOrDefault(row.Id),
                     bookType),
-                row.RatingValue,
-                row.IsFavorite,
+                ownState?.RatingValue,
+                ownState?.IsFavorite ?? false,
                 row.IsNsfw,
                 row.IsOrganized) {
                 ParentKind = row.ParentEntityId is { } parentId
@@ -191,11 +193,10 @@ public sealed partial class EfEntityReadService {
                     ? wantedStatus
                     : null,
                 CreatedAt = row.CreatedAt,
-                PlayCount = playback?.PlayCount,
+                PlayCount = playbackState?.PlayCount,
                 Genres = tagsByEntity.GetValueOrDefault(row.Id),
                 Progress = ResolveThumbnailProgress(
-                    playback,
-                    progressByEntity.GetValueOrDefault(row.Id),
+                    playbackState,
                     technicalByEntity.GetValueOrDefault(row.Id)?.DurationSeconds)
             };
         }).ToArray();
@@ -223,7 +224,7 @@ public sealed partial class EfEntityReadService {
         }).ToArray();
     }
 
-    private async Task<Dictionary<Guid, EntityPlaybackRow>> LoadMovieChildPlaybackAsync(
+    private async Task<Dictionary<Guid, UserEntityStateRow>> LoadMovieChildStateAsync(
         IReadOnlyCollection<Guid> movieIds,
         CancellationToken cancellationToken) {
         var childRows = await _db.Entities.AsNoTracking()
@@ -231,23 +232,25 @@ public sealed partial class EfEntityReadService {
             .Select(child => new { child.Id, ParentId = child.ParentEntityId!.Value })
             .ToArrayAsync(cancellationToken);
         if (childRows.Length == 0) {
-            return new Dictionary<Guid, EntityPlaybackRow>();
+            return new Dictionary<Guid, UserEntityStateRow>();
         }
 
         var parentByChild = childRows.ToDictionary(child => child.Id, child => child.ParentId);
         var childIds = parentByChild.Keys.ToArray();
-        var playbackRows = await _db.Set<EntityPlaybackRow>().AsNoTracking()
-            .Where(row => childIds.Contains(row.EntityId))
+        var userId = CurrentUserId;
+        var stateRows = await _db.UserEntityStates.AsNoTracking()
+            .Where(state => state.UserId == userId && childIds.Contains(state.EntityId))
             .ToArrayAsync(cancellationToken);
 
-        return playbackRows
-            .GroupBy(row => parentByChild[row.EntityId])
+        return stateRows
+            .Where(Mappers.Capabilities.UserEntityStateColumns.HasPlayback)
+            .GroupBy(state => parentByChild[state.EntityId])
             .ToDictionary(
                 group => group.Key,
                 group => group
-                    .OrderByDescending(row => row.CompletedAt is not null)
-                    .ThenByDescending(row => row.PlayCount)
-                    .ThenByDescending(row => row.ResumeSeconds)
+                    .OrderByDescending(state => state.CompletedAt is not null)
+                    .ThenByDescending(state => state.PlayCount)
+                    .ThenByDescending(state => state.ResumeSeconds)
                     .First());
     }
 
@@ -406,36 +409,37 @@ public sealed partial class EfEntityReadService {
     }
 
     /// <summary>
-    /// Computes the 0..1 progress meter fraction for a thumbnail from its playback and reading
-    /// progress rows. Playback (video/audio) takes precedence: a completed item reads 1.0, an
-    /// item with a stored resume position reads its fraction of the known runtime, and anything
-    /// else reads <c>null</c>. Reading progress (books) falls back to completed → 1.0 or the
+    /// Computes the 0..1 progress meter fraction for a thumbnail from the user's state row.
+    /// Playback (video/audio) takes precedence: a completed item reads 1.0, an item with a
+    /// stored resume position reads its fraction of the known runtime, and anything else
+    /// reads <c>null</c>. Reading progress (books) falls back to completed → 1.0 or the
     /// current index over the total. Returns <c>null</c> when there is nothing meaningful to show.
     /// </summary>
     private static double? ResolveThumbnailProgress(
-        EntityPlaybackRow? playback,
-        EntityProgressRow? progress,
+        UserEntityStateRow? state,
         double? durationSeconds) {
-        if (playback is not null) {
-            if (playback.CompletedAt is not null) {
+        if (state is null) {
+            return null;
+        }
+
+        if (Mappers.Capabilities.UserEntityStateColumns.HasPlayback(state)) {
+            if (state.CompletedAt is not null) {
                 return 1.0;
             }
 
-            if (playback.ResumeSeconds > 0 && durationSeconds is > 0) {
-                return Math.Clamp(playback.ResumeSeconds / durationSeconds.Value, 0, 1);
+            if (state.ResumeSeconds > 0 && durationSeconds is > 0) {
+                return Math.Clamp(state.ResumeSeconds / durationSeconds.Value, 0, 1);
             }
 
             return null;
         }
 
-        if (progress is not null) {
-            if (progress.CompletedAt is not null) {
-                return 1.0;
-            }
+        if (state.ProgressCompletedAt is not null) {
+            return 1.0;
+        }
 
-            if (progress.Total > 0 && progress.Index > 0) {
-                return Math.Clamp((double)progress.Index / progress.Total, 0, 1);
-            }
+        if (state.ProgressTotal > 0 && state.ProgressIndex > 0) {
+            return Math.Clamp((double)state.ProgressIndex / state.ProgressTotal, 0, 1);
         }
 
         return null;

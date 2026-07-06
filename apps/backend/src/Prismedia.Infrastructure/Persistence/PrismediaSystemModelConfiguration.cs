@@ -21,9 +21,22 @@ internal static partial class PrismediaModelConfiguration {
             entity.Property(row => row.IsNsfw).HasColumnName("is_nsfw");
             entity.Property(row => row.AutoIdentify).HasColumnName("auto_identify").HasDefaultValue(true);
             entity.Property(row => row.LastScannedAt).HasColumnName("last_scanned_at");
+            entity.Property(row => row.CreatedByUserId).HasColumnName("created_by_user_id");
             entity.Property(row => row.CreatedAt).HasColumnName("created_at");
             entity.Property(row => row.UpdatedAt).HasColumnName("updated_at");
             entity.HasIndex(row => row.Path).IsUnique();
+            entity.HasOne<UserRow>().WithMany().HasForeignKey(row => row.CreatedByUserId).OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<UserLibraryAccessRow>(entity => {
+            entity.ToTable("user_library_access");
+            entity.HasKey(row => new { row.UserId, row.LibraryRootId });
+            entity.Property(row => row.UserId).HasColumnName("user_id");
+            entity.Property(row => row.LibraryRootId).HasColumnName("library_root_id");
+            entity.Property(row => row.CreatedAt).HasColumnName("created_at");
+            entity.HasIndex(row => row.LibraryRootId);
+            entity.HasOne<UserRow>().WithMany().HasForeignKey(row => row.UserId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne<LibraryRootRow>().WithMany().HasForeignKey(row => row.LibraryRootId).OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<MediaFileIgnoreRow>(entity => {
