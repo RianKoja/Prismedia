@@ -14,7 +14,7 @@ function isPublicPath(pathname: string): boolean {
 }
 
 /** Only same-origin absolute paths survive as post-login destinations. */
-export function safeReturnTo(url: URL): string {
+function safeReturnTo(url: URL): string {
   const value = url.searchParams.get("returnTo");
   return value && value.startsWith("/") && !value.startsWith("//") ? value : "/";
 }

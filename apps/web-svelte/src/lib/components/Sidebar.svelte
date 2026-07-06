@@ -21,7 +21,10 @@
   import { appShellNavIconMap } from "./app-shell-nav-icon-map";
   import LogoMark from "./LogoMark.svelte";
   import ChangelogDialog from "./ChangelogDialog.svelte";
+  import UserChip from "./auth/UserChip.svelte";
   import { useNsfw } from "$lib/nsfw/store.svelte";
+  import { useSession } from "$lib/stores/session.svelte";
+  import { navItemVisible } from "$lib/nav/nav-visibility";
   import { APP_VERSION, fetchReleaseUpdateStatus, type ReleaseUpdateStatus } from "$lib/version";
 
   interface Props {
@@ -33,6 +36,7 @@
 
   const nav = useNavCustomization();
   const nsfw = useNsfw();
+  const session = useSession();
 
   let hovered = $state(false);
   let releaseStatus = $state<ReleaseUpdateStatus | null>(null);
@@ -52,10 +56,13 @@
   const pathname = $derived(page.url.pathname);
   const docsHref = "https://pauljoda.github.io/Prismedia/";
 
-  // Normal-mode rendering: drop hidden items and empty sections.
+  // Normal-mode rendering: drop hidden items, permission-gated items, and empty sections.
   const visibleSections = $derived(
     nav.resolvedSections
-      .map((section) => ({ ...section, items: section.items.filter((i) => !i.hidden) }))
+      .map((section) => ({
+        ...section,
+        items: section.items.filter((i) => !i.hidden && navItemVisible(i.href, session)),
+      }))
       .filter((section) => section.items.length > 0),
   );
 
@@ -487,6 +494,9 @@
           {/if}
         </button>
       {/if}
+    </div>
+    <div class="mt-1 border-t border-border-subtle pt-2">
+      <UserChip expanded={isExpanded} />
     </div>
   </div>
 </aside>

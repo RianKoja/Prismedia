@@ -4,6 +4,7 @@
   import { cn } from "@prismedia/ui-svelte";
   import { keepFlyoutOnScreen } from "$lib/actions/keep-flyout-on-screen";
   import { useAppChrome } from "$lib/stores/app-chrome.svelte";
+  import { useSession } from "$lib/stores/session.svelte";
   import { useSearch } from "$lib/stores/search.svelte";
   import { getCanvasHeaderBreadcrumbItems } from "./canvas-header-breadcrumbs";
   import LogoMark from "./LogoMark.svelte";
@@ -49,6 +50,7 @@
   const mobileCrumbItems = $derived(getCanvasHeaderBreadcrumbItems(crumbs, 1));
 
   const search = useSearch();
+  const session = useSession();
 
   let appleMod = $state(false);
   let breadcrumbMenuOpen = $state(false);
@@ -203,12 +205,14 @@
         {searchShortcutKbd}
       </kbd>
     </button>
-    <a
-      href="/settings"
-      class="flex h-8 w-8 items-center justify-center rounded-sm text-text-muted hover:text-text-primary hover:bg-surface-2 transition-colors duration-fast"
-    >
-      <Settings class="h-4 w-4" />
-    </a>
+    {#if session.canManageServer}
+      <a
+        href="/settings"
+        class="flex h-8 w-8 items-center justify-center rounded-sm text-text-muted hover:text-text-primary hover:bg-surface-2 transition-colors duration-fast"
+      >
+        <Settings class="h-4 w-4" />
+      </a>
+    {/if}
   </div>
 
   {#if breadcrumbMenuOpen}

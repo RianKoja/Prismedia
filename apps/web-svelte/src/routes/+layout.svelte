@@ -35,14 +35,9 @@
   }
 
   const defaultLayoutData: Required<
-    Pick<
-      App.PageData,
-      "hasNsfwModeCookie" | "initialNsfwMode" | "lanAutoEnable" | "initialCollapsed"
-    >
+    Pick<App.PageData, "initialNsfwMode" | "initialCollapsed">
   > = {
-    hasNsfwModeCookie: readNsfwCookie() !== null,
     initialNsfwMode: readNsfwCookie() ?? "off",
-    lanAutoEnable: false,
     initialCollapsed: false,
   };
 
@@ -81,8 +76,7 @@
 
   provideNsfw(() => ({
     initialMode: readNsfwCookie() ?? layoutData.initialNsfwMode ?? "off",
-    lanAutoEnable: layoutData.lanAutoEnable,
-    hasExplicitMode: readNsfwCookie() !== null || layoutData.hasNsfwModeCookie,
+    allowed: session.allowNsfw,
   }));
   const chrome = provideAppChrome(() => layoutData.initialCollapsed);
   provideNavCustomization();

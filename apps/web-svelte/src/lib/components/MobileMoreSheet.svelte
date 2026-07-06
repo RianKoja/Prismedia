@@ -9,6 +9,7 @@
     Eye,
     EyeOff,
     FolderInput,
+    LogOut,
     Pencil,
     Plus,
     RotateCcw,
@@ -20,6 +21,9 @@
   import { page } from "$app/state";
   import { cn } from "@prismedia/ui-svelte";
   import { useNavCustomization } from "$lib/stores/nav-customization.svelte";
+  import { useSession } from "$lib/stores/session.svelte";
+  import { navItemVisible } from "$lib/nav/nav-visibility";
+  import UserAvatar from "./auth/UserAvatar.svelte";
   import { appShellNavIconMap } from "./app-shell-nav-icon-map";
   import ChangelogDialog from "./ChangelogDialog.svelte";
   import RenameSectionDialog from "./nav/RenameSectionDialog.svelte";
@@ -42,6 +46,7 @@
   let { mounted, progress, dragging, reduceMotion, onClose, onHandlePointerDown }: Props = $props();
 
   const nav = useNavCustomization();
+  const session = useSession();
   const pathname = $derived(page.url.pathname);
   const sections = $derived(nav.resolvedSections);
   const favorites = $derived(nav.resolvedFavorites);
@@ -263,7 +268,7 @@
       style:scrollbar-width="thin"
     >
       {#each sections as section, sectionIndex (section.id)}
-        {@const visibleItems = editing ? section.items : section.items.filter((i) => !i.hidden)}
+        {@const visibleItems = editing ? section.items : section.items.filter((i) => !i.hidden && navItemVisible(i.href, session))}
         {#if editing || visibleItems.length > 0}
           <div class="mb-3 last:mb-0">
             <!-- Section header -->
@@ -458,6 +463,31 @@
             <BookOpen class="h-4 w-4 shrink-0" />
             <span class="flex-1">Docs</span>
           </a>
+          {#if session.user}
+            <div class="flex items-center gap-1 border-t border-border-subtle pt-2">
+              <a
+                href={resolve("/account")}
+                class="flex min-w-0 flex-1 items-center gap-3 rounded-sm px-2.5 py-2.5 text-sm text-text-muted active:bg-surface-2"
+                onclick={onClose}
+              >
+                <UserAvatar displayName={session.user.displayName} username={session.user.username} size="md" />
+                <span class="flex min-w-0 flex-col">
+                  <span class="truncate text-text-primary">{session.user.displayName}</span>
+                  <span class="font-mono text-[0.6rem] uppercase tracking-wide text-text-disabled">
+                    {session.isAdmin ? "Administrator" : "Member"}
+                  </span>
+                </span>
+              </a>
+              <button
+                type="button"
+                class="flex h-10 w-10 shrink-0 items-center justify-center rounded-sm text-text-muted active:bg-surface-2"
+                aria-label="Sign out"
+                onclick={() => void session.logout()}
+              >
+                <LogOut class="h-4 w-4" />
+              </button>
+            </div>
+          {/if}
         </div>
       {/if}
     </nav>

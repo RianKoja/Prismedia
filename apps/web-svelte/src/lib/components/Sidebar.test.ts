@@ -19,6 +19,27 @@ vi.mock("$lib/nsfw/store.svelte", () => ({
   useNsfw: () => ({ mode: nsfwMode.value }),
 }));
 
+vi.mock("$lib/stores/session.svelte", () => ({
+  useSession: () => ({
+    user: {
+      id: "test-admin",
+      username: "admin",
+      displayName: "Admin",
+      role: "admin",
+      allowNsfw: true,
+      canCreateLibraries: true,
+      enabled: true,
+    },
+    status: "authed",
+    isAdmin: true,
+    allowNsfw: true,
+    canCreateLibraries: true,
+    canManageServer: true,
+    logout: () => Promise.resolve(),
+    refresh: () => Promise.resolve(),
+  }),
+}));
+
 vi.mock("$lib/stores/nav-customization.svelte", async () => {
   const { buildNavCatalog, resolveNav, defaultNavPrefs } = await import("$lib/nav/nav-catalog");
   const catalog = buildNavCatalog();
