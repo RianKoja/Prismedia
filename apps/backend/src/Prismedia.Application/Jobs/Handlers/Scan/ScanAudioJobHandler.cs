@@ -210,6 +210,20 @@ public sealed class ScanAudioJobHandler(
             root.Id, layout.Artists.Select(artist => artist.Path).ToHashSet(StringComparer.OrdinalIgnoreCase), cancellationToken);
 
         await AutoIdentifyScanEnqueue.EnqueueRootsAsync(context, settings, downstreamNeeds, autoIdentifyIds, cancellationToken);
+
+        // Acquisition-imported albums: stamp the acquisition's provider ids onto the owning entities and
+        // identify each affected root — bypassing the auto-identify gates, because an acquisition import
+        // is explicit user intent and the stamped ids let identify resolve ID-first.
+        if (acquisitionHints is not null) {
+            foreach (var owner in await acquisitionHints.ApplyToFolderOwnersAsync(cancellationToken)) {
+                await context.EnqueueIfNeededAsync(new EnqueueJobRequest(
+                    JobType.AutoIdentify,
+                    TargetEntityKind: owner.TopLevelKindCode,
+                    TargetEntityId: owner.TopLevelEntityId.ToString(),
+                    TargetLabel: owner.TopLevelTitle,
+                    Priority: JobPriorities.AutoIdentify), cancellationToken);
+            }
+        }
     }
 
     /// <summary>Queues probe and fingerprint jobs for a freshly upserted track when needed.</summary>

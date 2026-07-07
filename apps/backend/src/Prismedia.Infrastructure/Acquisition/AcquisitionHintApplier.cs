@@ -38,30 +38,7 @@ public sealed class AcquisitionHintApplier(PrismediaDbContext db) : IAcquisition
             return false;
         }
 
-        var externalIds = DecodeExternalIds(match);
-        if (externalIds.Count > 0) {
-            var existing = await db.EntityExternalIds
-                .Where(row => row.EntityId == entityId)
-                .Select(row => row.Provider)
-                .ToArrayAsync(cancellationToken);
-            var existingProviders = new HashSet<string>(existing, StringComparer.OrdinalIgnoreCase);
-
-            var now = DateTimeOffset.UtcNow;
-            foreach (var (provider, value) in externalIds) {
-                if (existingProviders.Contains(provider)) {
-                    continue;
-                }
-
-                db.EntityExternalIds.Add(new EntityExternalIdRow {
-                    Id = Guid.NewGuid(),
-                    EntityId = entityId,
-                    Provider = provider,
-                    Value = value,
-                    Url = null,
-                    CreatedAt = now
-                });
-            }
-        }
+        await StampExternalIdsAsync(entityId, match, cancellationToken);
 
         // Record the owned source tier on the book's detail row (the format tier is derived from the row's
         // Format, never stored). This is the provenance half of the owned quality the upgrade loop compares
@@ -224,6 +201,129 @@ public sealed class AcquisitionHintApplier(PrismediaDbContext db) : IAcquisition
     private Task<bool> HasSourceFileAsync(Guid entityId, CancellationToken cancellationToken) =>
         db.EntityFiles.AsNoTracking()
             .AnyAsync(file => file.EntityId == entityId && file.Role == EntityFileRole.Source, cancellationToken);
+
+    public async Task<IReadOnlyList<StampedHintOwner>> ApplyToFolderOwnersAsync(CancellationToken cancellationToken) {
+        var hints = await db.AcquisitionImportHints
+            .Where(hint => !hint.Consumed)
+            .ToArrayAsync(cancellationToken);
+        if (hints.Length == 0) {
+            return [];
+        }
+
+        var owners = new Dictionary<Guid, StampedHintOwner>();
+        var changed = false;
+        foreach (var hint in hints) {
+            // The entity owning the imported path: exact Source match first (the season/album folder or
+            // the episode/movie file the scan keyed), else the nearest ancestor folder that owns one —
+            // a merged import's hint may name a freshly created folder inside an existing tree.
+            var entityId = await FindOwnerBySourcePathAsync(hint.SourcePath, cancellationToken);
+            if (entityId is null) {
+                continue; // not scanned yet — the hint stays for a later pass
+            }
+
+            var owner = await db.Entities.AsNoTracking()
+                .Where(row => row.Id == entityId)
+                .Select(row => new { row.Id, row.KindCode })
+                .FirstOrDefaultAsync(cancellationToken);
+            if (owner is null) {
+                continue;
+            }
+
+            // Book hints keep the book scan's ApplyAsync path (which also records the owned source tier).
+            if (string.Equals(owner.KindCode, EntityKindRegistry.Book.Code, StringComparison.Ordinal)
+                || string.Equals(owner.KindCode, EntityKindRegistry.BookAuthor.Code, StringComparison.Ordinal)) {
+                continue;
+            }
+
+            await StampExternalIdsAsync(owner.Id, hint, cancellationToken);
+            hint.Consumed = true;
+            hint.UpdatedAt = DateTimeOffset.UtcNow;
+            changed = true;
+
+            var top = await ResolveTopLevelAsync(owner.Id, cancellationToken);
+            owners.TryAdd(top.TopLevelEntityId, top);
+        }
+
+        if (changed) {
+            await db.SaveChangesAsync(cancellationToken);
+        }
+
+        return owners.Values.ToArray();
+    }
+
+    /// <summary>The entity owning the exact path, else the nearest ancestor folder with a Source row (bounded walk).</summary>
+    private async Task<Guid?> FindOwnerBySourcePathAsync(string sourcePath, CancellationToken cancellationToken) {
+        var probe = sourcePath;
+        for (var depth = 0; !string.IsNullOrEmpty(probe) && depth < 4; depth++) {
+            var owner = await db.EntityFiles.AsNoTracking()
+                .Where(file => file.Role == EntityFileRole.Source && file.Path == probe)
+                .Select(file => (Guid?)file.EntityId)
+                .FirstOrDefaultAsync(cancellationToken);
+            if (owner is not null) {
+                return owner;
+            }
+
+            probe = Path.GetDirectoryName(probe);
+        }
+
+        return null;
+    }
+
+    /// <summary>Writes the hint's external/plugin ids onto the entity, skipping providers it already carries.</summary>
+    private async Task StampExternalIdsAsync(Guid entityId, AcquisitionImportHintRow hint, CancellationToken cancellationToken) {
+        var externalIds = DecodeExternalIds(hint);
+        if (externalIds.Count == 0) {
+            return;
+        }
+
+        var existing = await db.EntityExternalIds
+            .Where(row => row.EntityId == entityId)
+            .Select(row => row.Provider)
+            .ToArrayAsync(cancellationToken);
+        var existingProviders = new HashSet<string>(existing, StringComparer.OrdinalIgnoreCase);
+
+        var now = DateTimeOffset.UtcNow;
+        foreach (var (provider, value) in externalIds) {
+            if (existingProviders.Contains(provider)) {
+                continue;
+            }
+
+            db.EntityExternalIds.Add(new EntityExternalIdRow {
+                Id = Guid.NewGuid(),
+                EntityId = entityId,
+                Provider = provider,
+                Value = value,
+                Url = null,
+                CreatedAt = now
+            });
+        }
+    }
+
+    /// <summary>The stamped entity's top-level ancestor (a series, an artist, the movie itself) for the identify kick.</summary>
+    private async Task<StampedHintOwner> ResolveTopLevelAsync(Guid entityId, CancellationToken cancellationToken) {
+        var currentId = entityId;
+        var kindCode = string.Empty;
+        var title = string.Empty;
+        for (var depth = 0; depth < 6; depth++) {
+            var current = await db.Entities.AsNoTracking()
+                .Where(row => row.Id == currentId)
+                .Select(row => new { row.KindCode, row.Title, row.ParentEntityId })
+                .FirstOrDefaultAsync(cancellationToken);
+            if (current is null) {
+                break;
+            }
+
+            kindCode = current.KindCode;
+            title = current.Title;
+            if (current.ParentEntityId is not { } parentId) {
+                break;
+            }
+
+            currentId = parentId;
+        }
+
+        return new StampedHintOwner(currentId, kindCode, title);
+    }
 
     /// <summary>Content type for a bound single-file book, mirroring what the scan stamps on creation. Null for folders/archives.</summary>
     private static string? ContentTypeForPath(string path) =>

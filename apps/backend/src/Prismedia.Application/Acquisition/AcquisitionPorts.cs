@@ -201,7 +201,20 @@ public interface IAcquisitionHintApplier {
     /// Returns true when a phantom was bound.
     /// </summary>
     Task<bool> BindWantedChildBySortOrderAsync(EntityKind childKind, string parentPath, int sortOrder, string childPath, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Applies every unconsumed hint to the entity that owns its imported path (video/audio kinds; book
+    /// hints keep <see cref="ApplyAsync"/>): stamps the acquisition's external/plugin ids onto the owning
+    /// entity so identify resolves it ID-first, consumes the hint, and reports each owner's TOP-LEVEL
+    /// ancestor — the scan enqueues one identify job per reported root for imported content. Hints whose
+    /// path is not yet owned by any entity are left unconsumed for a later pass. Call AFTER the scan's
+    /// upserts, when the imported paths have owners.
+    /// </summary>
+    Task<IReadOnlyList<StampedHintOwner>> ApplyToFolderOwnersAsync(CancellationToken cancellationToken);
 }
+
+/// <summary>A stamped import hint's top-level owner (a series, an artist, the movie itself), for the post-import identify kick.</summary>
+public sealed record StampedHintOwner(Guid TopLevelEntityId, string TopLevelKindCode, string TopLevelTitle);
 
 /// <summary>One season of an existing on-disk series: its folder and the episode files it already owns, keyed by episode number.</summary>
 public sealed record TvSeasonDiskLayout(

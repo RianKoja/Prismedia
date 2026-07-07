@@ -187,6 +187,21 @@ public sealed class ScanLibraryJobHandler(
         // identifies the whole tree and episodes are filled by cascading from it.
         await AutoIdentifyScanEnqueue.EnqueueRootsAsync(context, settings, downstreamNeeds, allEntityIds, cancellationToken);
 
+        // Acquisition-imported content: stamp the acquisition's provider ids onto the entities owning the
+        // imported paths and identify each affected root — deliberately bypassing the global/per-root
+        // auto-identify gates, because an acquisition import is explicit user intent and the stamped ids
+        // let identify resolve ID-first instead of leaving the imported tree metadata-less.
+        if (acquisitionHints is not null) {
+            foreach (var owner in await acquisitionHints.ApplyToFolderOwnersAsync(cancellationToken)) {
+                await context.EnqueueIfNeededAsync(new EnqueueJobRequest(
+                    JobType.AutoIdentify,
+                    TargetEntityKind: owner.TopLevelKindCode,
+                    TargetEntityId: owner.TopLevelEntityId.ToString(),
+                    TargetLabel: owner.TopLevelTitle,
+                    Priority: JobPriorities.AutoIdentify), cancellationToken);
+            }
+        }
+
         int removed;
         int orphans;
         using (timer.Phase("cleanup")) {
