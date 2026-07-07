@@ -35,6 +35,29 @@ export async function fetchSetupStatus(): Promise<SetupStatusResponse> {
   );
 }
 
+/**
+ * Setup status with a short retry, for boot paths: a fresh install must never be
+ * misread as "setup done" because of one transient failure while the server (or a
+ * proxy in front of it) is still settling. Null when every attempt failed — callers
+ * treat that as unknown, not as "no setup needed".
+ */
+export async function fetchSetupStatusWithRetry(
+  attempts = 3,
+  delayMs = 400,
+): Promise<SetupStatusResponse | null> {
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    try {
+      return await fetchSetupStatus();
+    } catch {
+      if (attempt < attempts - 1) {
+        await new Promise((resolve) => setTimeout(resolve, delayMs * (attempt + 1)));
+      }
+    }
+  }
+
+  return null;
+}
+
 export async function submitSetup(request: CreateFirstAdminRequest): Promise<LoginResponse> {
   return unwrapGenerated<LoginResponse>(
     await completeSetup(request, IGNORE_401),

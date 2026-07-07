@@ -1,11 +1,12 @@
 <script lang="ts">
+  import { onMount } from "svelte";
   import { page } from "$app/state";
   import { KeyRound, Loader2, UserRound } from "@lucide/svelte";
   import { Button } from "@prismedia/ui-svelte";
   import AuthShell from "$lib/components/auth/AuthShell.svelte";
   import TextField from "$lib/components/forms/TextField.svelte";
   import PasswordField from "$lib/components/forms/PasswordField.svelte";
-  import { login } from "$lib/api/auth";
+  import { fetchSetupStatusWithRetry, login } from "$lib/api/auth";
   import { ApiError } from "$lib/api/orval-fetch";
 
   let username = $state("");
@@ -14,6 +15,16 @@
   let error = $state<string | null>(null);
 
   const expired = page.url.searchParams.get("expired") === "1";
+
+  // Self-healing net: however this page was reached (including a boot-time failure that
+  // made the root guard fall through), a fresh install must end up on the setup wizard.
+  onMount(() => {
+    void fetchSetupStatusWithRetry().then((setup) => {
+      if (setup?.needsSetup) {
+        window.location.replace("/setup");
+      }
+    });
+  });
 
   function safeReturnTo(): string {
     const value = page.url.searchParams.get("returnTo");

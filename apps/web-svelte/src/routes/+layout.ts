@@ -1,6 +1,6 @@
 import { redirect } from "@sveltejs/kit";
 import type { LayoutLoad } from "./$types";
-import { fetchCurrentUser, fetchSetupStatus, type AuthUser } from "$lib/api/auth";
+import { fetchCurrentUser, fetchSetupStatusWithRetry, type AuthUser } from "$lib/api/auth";
 import { fetchSettingsValues } from "$lib/api/settings";
 import { settingKeys, valuesToLibrarySettings } from "$lib/settings/app-settings";
 import { readSidebarCookie } from "$lib/stores/app-chrome.svelte";
@@ -26,23 +26,25 @@ export const load: LayoutLoad = async ({ url, untrack }) => {
   const search = untrack(() => url.search);
   const initialCollapsed = readSidebarCookie();
 
-  let needsSetup = false;
-  let user: AuthUser | null = null;
-  try {
-    const [setup, currentUser] = await Promise.all([fetchSetupStatus(), fetchCurrentUser()]);
-    needsSetup = setup.needsSetup;
-    user = currentUser;
-  } catch {
-    // API unreachable during boot: render anonymously; individual calls surface errors.
-    return { initialCollapsed, user: null, needsSetup: false };
-  }
+  // The two probes are independent: a failed "me" must not poison setup detection and
+  // vice versa. Setup status retries briefly — a fresh install misread as "setup done"
+  // because of one transient failure would strand the user on the login page.
+  const [setup, userResult] = await Promise.all([
+    fetchSetupStatusWithRetry(),
+    fetchCurrentUser().catch(() => null),
+  ]);
+  const needsSetup = setup?.needsSetup ?? false;
+  const user: AuthUser | null = userResult;
 
   // Setup outranks everything: an install without an admin only shows the wizard.
+  // When setup state is UNKNOWN (setup === null, API unreachable) we fall through to the
+  // login route rather than guessing — the login page re-checks setup status on mount
+  // and forwards to the wizard as soon as the server answers.
   if (needsSetup && !pathname.startsWith("/setup")) {
     redirect(307, "/setup");
   }
 
-  if (!needsSetup && pathname.startsWith("/setup")) {
+  if (setup !== null && !needsSetup && pathname.startsWith("/setup")) {
     redirect(307, "/");
   }
 

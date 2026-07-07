@@ -72,4 +72,57 @@ describe("root layout load", () => {
     expect((data as App.PageData).user).toMatchObject({ username: "paul" });
     expect((data as App.PageData).needsSetup).toBe(false);
   });
+
+  it("retries setup status through a boot-time failure and still reaches the wizard", async () => {
+    // First attempt fails (server settling), the retry answers needsSetup — a fresh
+    // install must never be misread as "setup done" because of one transient error.
+    let setupCalls = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes("/auth/setup-status")) {
+          setupCalls++;
+          if (setupCalls === 1) {
+            return new Response(null, { status: 500 });
+          }
+
+          return new Response(JSON.stringify({ needsSetup: true, hasUsers: false }), {
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+
+        return new Response(null, { status: 401 });
+      }),
+    );
+
+    await expect(load(loadEvent("/"))).rejects.toMatchObject({
+      status: 307,
+      location: "/setup",
+    });
+    expect(setupCalls).toBeGreaterThan(1);
+  });
+
+  it("falls through to login without guessing when setup status stays unreachable", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes("/auth/setup-status")) {
+          return new Response(null, { status: 500 });
+        }
+
+        return new Response(null, { status: 401 });
+      }),
+    );
+
+    // Unknown setup state: route to login (which re-checks and forwards to the wizard),
+    // and critically do NOT bounce a /setup visitor back to "/" on a guess.
+    await expect(load(loadEvent("/movies"))).rejects.toMatchObject({
+      status: 307,
+      location: "/login?returnTo=%2Fmovies",
+    });
+    const setupData = await load(loadEvent("/setup"));
+    expect((setupData as App.PageData).needsSetup).toBe(false);
+  });
 });
