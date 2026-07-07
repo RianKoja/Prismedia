@@ -29,6 +29,7 @@ public sealed class JobScheduler(
                 await ScheduleMonitoredSearchAsync(stoppingToken);
                 await RecoverStuckSearchesAsync(stoppingToken);
                 await ScheduleRecycleBinCleanupAsync(stoppingToken);
+                await ScheduleGridThumbnailSweepAsync(stoppingToken);
             } catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) {
                 break;
             } catch (Exception ex) {
@@ -239,6 +240,38 @@ public sealed class JobScheduler(
                 cancellationToken);
             logger.LogWarning("Recovered acquisition {AcquisitionId} stuck in Searching with no live search job.", acquisitionId);
         }
+    }
+
+    /// <summary>
+    /// True once the startup grid-thumbnail sweep has been enqueued for this worker run;
+    /// afterwards the sweep only recurs on its daily window.
+    /// </summary>
+    private bool _gridThumbnailSweepQueuedOnStartup;
+
+    /// <summary>
+    /// Enqueues the grid-thumbnail sweep once at worker startup (so existing libraries heal
+    /// immediately after an upgrade) and daily thereafter. The sweep job itself no-ops
+    /// quickly when every entity's grid variants are current.
+    /// </summary>
+    internal async Task ScheduleGridThumbnailSweepAsync(CancellationToken cancellationToken) {
+        if (_gridThumbnailSweepQueuedOnStartup) {
+            var now = (timeProvider ?? TimeProvider.System).GetUtcNow();
+            var windowStart = GetWindowStart(now, TimeSpan.FromDays(1));
+            if (now - windowStart >= CheckInterval) {
+                return;
+            }
+        }
+
+        await using var scope = scopeFactory.CreateAsyncScope();
+        var queue = scope.ServiceProvider.GetRequiredService<IJobQueueService>();
+        if (!await queue.HasPendingAsync(JobType.GridThumbnailSweep, null, cancellationToken)) {
+            await queue.EnqueueAsync(
+                new EnqueueJobRequest(JobType.GridThumbnailSweep, TargetLabel: "Grid thumbnail sweep", Priority: -50),
+                cancellationToken);
+            logger.LogInformation("Scheduled grid-thumbnail sweep.");
+        }
+
+        _gridThumbnailSweepQueuedOnStartup = true;
     }
 
     internal async Task ScheduleRecycleBinCleanupAsync(CancellationToken cancellationToken) {

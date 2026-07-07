@@ -80,7 +80,8 @@ public sealed class GenerateImageThumbnailJobHandlerTests : IDisposable {
             assets,
             new RecordingImageThumbnailGenerator(),
             persistence,
-            persistence);
+            persistence,
+            new NoopGridThumbnailService());
 
     private static JobRunSnapshot Job(Guid entityId, string label) =>
         new(

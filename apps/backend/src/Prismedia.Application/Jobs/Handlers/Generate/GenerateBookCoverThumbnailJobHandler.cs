@@ -14,7 +14,8 @@ public sealed class GenerateBookCoverThumbnailJobHandler(
     IMediaAssetGenerator assets,
     IImageThumbnailGenerator imageThumbnails,
     IBookCoverImageExtractor coverExtractor,
-    IMediaProcessingStatePersistence persistence) : EntityFileJobHandler(logger, persistence) {
+    IMediaProcessingStatePersistence persistence,
+    IGridThumbnailService gridThumbnails) : EntityFileJobHandler(logger, persistence) {
     public override JobType Type => JobType.GenerateBookCoverThumbnail;
 
     protected override async Task ExecuteAsync(
@@ -44,6 +45,7 @@ public sealed class GenerateBookCoverThumbnailJobHandler(
                 await Persistence.UpsertEntityFileAsync(
                     entityId, EntityFileRole.Thumbnail, assets.BookCoverThumbnailUrl(entityId),
                     MediaContentTypes.ImageJpeg, size, cancellationToken);
+                await gridThumbnails.EnsureAsync(entityId, cancellationToken);
                 logger.LogInformation("GenerateBookCoverThumbnail: created cover for {Label}", context.Job.TargetLabel);
             }
         } finally {

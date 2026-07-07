@@ -70,6 +70,7 @@ public sealed partial class LibraryScanPersistenceService {
             cancellationToken);
 
         var hasGridThumbnail = await LoadUsableAssetIdsAsync(ids, [EntityFileRole.GridThumbnail], cancellationToken);
+        var hasGridThumbnail2x = await LoadUsableAssetIdsAsync(ids, [EntityFileRole.GridThumbnail2x], cancellationToken);
 
         var hasWaveform = await LoadUsableAssetIdsAsync(ids, [EntityFileRole.Waveform], cancellationToken);
 
@@ -112,9 +113,10 @@ public sealed partial class LibraryScanPersistenceService {
                 NeedsPreview: needsPreview,
                 NeedsTrickplay: !hasTrickplay.Contains(id),
                 NeedsSubtitleExtraction: !hasUsableSubtitleState.Contains(id),
-                // Backfill: an existing cover with no small variant yet. New entities
+                // Backfill: an existing cover missing either small variant. New entities
                 // (no cover at scan time) get theirs from GeneratePreview instead.
-                NeedsGridThumbnail: hasCover.Contains(id) && !hasGridThumbnail.Contains(id));
+                NeedsGridThumbnail: hasCover.Contains(id) &&
+                    (!hasGridThumbnail.Contains(id) || !hasGridThumbnail2x.Contains(id)));
         }
 
         return result;

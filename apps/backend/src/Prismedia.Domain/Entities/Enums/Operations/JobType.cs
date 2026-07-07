@@ -61,6 +61,10 @@ public enum JobType {
     [Code("generate-grid-thumbnail")]
     GenerateGridThumbnail,
 
+    /// <summary>Backfills and refreshes grid-card cover variants for every entity whose variants are missing or stale.</summary>
+    [Code("grid-thumbnail-sweep")]
+    GridThumbnailSweep,
+
     /// <summary>Generates thumbnails for comic book pages.</summary>
     [Code("generate-book-page-thumbnail")]
     GenerateBookPageThumbnail,

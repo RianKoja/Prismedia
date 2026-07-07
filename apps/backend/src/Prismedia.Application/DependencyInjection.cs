@@ -123,6 +123,7 @@ public static class DependencyInjection {
         // Preview / asset generation
         services.AddTransient<IJobHandler, GeneratePreviewJobHandler>();
         services.AddTransient<IJobHandler, GenerateGridThumbnailJobHandler>();
+        services.AddTransient<IJobHandler, GridThumbnailSweepJobHandler>();
         services.AddTransient<IJobHandler, GenerateImageThumbnailJobHandler>();
         services.AddTransient<IJobHandler, GenerateBookPageThumbnailJobHandler>();
         services.AddTransient<IJobHandler, GenerateBookCoverThumbnailJobHandler>();

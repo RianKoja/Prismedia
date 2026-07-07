@@ -15,7 +15,8 @@ public sealed class GenerateImageThumbnailJobHandler(
     IMediaAssetGenerator assets,
     IImageThumbnailGenerator imageThumbnails,
     IMediaProcessingStatePersistence persistence,
-    ILibraryScanRootPersistence roots) : EntityFileJobHandler(logger, persistence) {
+    ILibraryScanRootPersistence roots,
+    IGridThumbnailService gridThumbnails) : EntityFileJobHandler(logger, persistence) {
     public override JobType Type => JobType.GenerateImageThumbnail;
 
     protected override async Task ExecuteAsync(
@@ -28,6 +29,7 @@ public sealed class GenerateImageThumbnailJobHandler(
         if (success) {
             var size = new FileInfo(thumbPath).Length;
             await Persistence.UpsertEntityFileAsync(entityId, EntityFileRole.Thumbnail, assets.ImageThumbnailUrl(entityId), MediaContentTypes.ImageJpeg, size, cancellationToken);
+            await gridThumbnails.EnsureAsync(entityId, cancellationToken);
             logger.LogInformation("GenerateImageThumbnail: created thumbnail for {Label}", context.Job.TargetLabel);
         } else {
             logger.LogWarning("GenerateImageThumbnail: failed for {Label}", context.Job.TargetLabel);

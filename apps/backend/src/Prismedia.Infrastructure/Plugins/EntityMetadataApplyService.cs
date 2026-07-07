@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Prismedia.Application.Entities;
+using Prismedia.Application.Jobs.Ports;
 using Prismedia.Application.Plugins;
 using Prismedia.Contracts.Entities;
 using Prismedia.Contracts.Plugins;
@@ -28,6 +29,7 @@ public sealed partial class EntityMetadataApplyService : IEntityMetadataPatchSer
 
     private readonly PrismediaDbContext _db;
     private readonly PluginArtworkDownloader _artwork;
+    private readonly IGridThumbnailService? _gridThumbnails;
 
     /// <summary>
     /// Creates an apply service over EF Core rows and optional artwork downloading.
@@ -35,12 +37,34 @@ public sealed partial class EntityMetadataApplyService : IEntityMetadataPatchSer
     /// <param name="db">Database context that owns entity capability tables.</param>
     /// <param name="options">Filesystem settings for downloaded artwork.</param>
     /// <param name="http">Optional HTTP client for tests or configured hosts.</param>
+    /// <param name="gridThumbnails">
+    /// Optional grid-thumbnail generator; when present, entities that receive artwork get
+    /// their grid-card cover variants regenerated as part of the apply.
+    /// </param>
     public EntityMetadataApplyService(
         PrismediaDbContext db,
         PluginArtworkServiceOptions options,
-        HttpClient? http = null) {
+        HttpClient? http = null,
+        IGridThumbnailService? gridThumbnails = null) {
         _db = db;
         _artwork = new PluginArtworkDownloader(db, options, http);
+        _gridThumbnails = gridThumbnails;
+    }
+
+    /// <summary>
+    /// Regenerates grid-card cover variants for every entity that received artwork during
+    /// this apply. Runs after <see cref="PrismediaDbContext.SaveChangesAsync(CancellationToken)"/>
+    /// so the variants derive from the committed covers rather than tracked-but-unsaved rows.
+    /// </summary>
+    private async Task RefreshGridThumbnailsForDownloadedArtworkAsync(CancellationToken cancellationToken) {
+        var entityIds = _artwork.DrainArtworkEntityIds();
+        if (_gridThumbnails is null) {
+            return;
+        }
+
+        foreach (var entityId in entityIds) {
+            await _gridThumbnails.EnsureAsync(entityId, cancellationToken);
+        }
     }
 
     /// <summary>
@@ -105,6 +129,7 @@ public sealed partial class EntityMetadataApplyService : IEntityMetadataPatchSer
 
         entity.UpdatedAt = now;
         await _db.SaveChangesAsync(cancellationToken);
+        await RefreshGridThumbnailsForDownloadedArtworkAsync(cancellationToken);
         return EntityMetadataPatchResult.Applied;
     }
 
@@ -267,6 +292,7 @@ public sealed partial class EntityMetadataApplyService : IEntityMetadataPatchSer
 
         entity.UpdatedAt = now;
         await _db.SaveChangesAsync(cancellationToken);
+        await RefreshGridThumbnailsForDownloadedArtworkAsync(cancellationToken);
         return true;
     }
 

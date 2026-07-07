@@ -19,6 +19,7 @@ public sealed class PluginArtworkDownloader {
     private readonly PrismediaDbContext _db;
     private readonly PluginArtworkServiceOptions _options;
     private readonly HttpClient _http;
+    private readonly HashSet<Guid> _artworkEntityIds = [];
 
     public PluginArtworkDownloader(
         PrismediaDbContext db,
@@ -81,6 +82,17 @@ public sealed class PluginArtworkDownloader {
     }
 
     /// <summary>
+    /// Returns the entities that received artwork since the last drain and clears the set.
+    /// The apply service reads this after saving so grid-thumbnail variants can be
+    /// regenerated from the newly committed covers.
+    /// </summary>
+    public IReadOnlyCollection<Guid> DrainArtworkEntityIds() {
+        var ids = _artworkEntityIds.ToArray();
+        _artworkEntityIds.Clear();
+        return ids;
+    }
+
+    /// <summary>
     /// Fetches remote artwork bytes, returning null when the image is unreachable, blocked, or times
     /// out so callers can skip it without aborting the surrounding metadata apply.
     /// </summary>
@@ -113,6 +125,7 @@ public sealed class PluginArtworkDownloader {
         await File.WriteAllBytesAsync(physicalPath, bytes, cancellationToken);
 
         var publicPath = $"/assets/{relativePath.Replace(Path.DirectorySeparatorChar, '/')}";
+        _artworkEntityIds.Add(entityId);
         var existing = await FindEntityFileAsync(entityId, role, cancellationToken);
         if (existing is null) {
             _db.EntityFiles.Add(new EntityFileRow {
