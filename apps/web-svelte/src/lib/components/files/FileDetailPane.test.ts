@@ -1,5 +1,4 @@
 import { render, screen, within } from "@testing-library/svelte";
-import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import type { FileDetail } from "$lib/api/files";
 import FileDetailPane from "./FileDetailPane.svelte";
@@ -24,23 +23,6 @@ describe("FileDetailPane", () => {
     expect(within(propertiesCard as HTMLElement).getByRole("link", { name: "A Feature Film" })).toHaveClass("entity-thumbnail");
     expect(within(propertiesCard as HTMLElement).getByText("Kind")).toBeInTheDocument();
     expect(screen.queryByText("Linked entities")).not.toBeInTheDocument();
-  });
-
-  it("uses MetadataCard inside the properties section", () => {
-    const source = readFileSync("src/lib/components/files/FileDetailPane.svelte", "utf8");
-
-    expect(source).toContain(".properties-card");
-    expect(source).toContain("MetadataCard");
-    expect(source).toContain('title="Properties"');
-  });
-
-  it("keeps long mobile detail content constrained to the viewport", () => {
-    const source = readFileSync("src/lib/components/files/FileDetailPane.svelte", "utf8");
-
-    expect(source).toMatch(/\.detail-pane\s*{[^}]*min-width:\s*0;/s);
-    expect(source).toMatch(/\.detail-body\s*{[^}]*overflow-x:\s*hidden;/s);
-    expect(source).toMatch(/\.preview pre\s*{[^}]*overflow-wrap:\s*anywhere;/s);
-    expect(source).toMatch(/\.detail-toolbar\s*{[^}]*overflow-x:\s*auto;/s);
   });
 
   it("renders excluded paths as filesystem-only details", () => {

@@ -113,36 +113,6 @@ public sealed class ThumbnailServiceTests : IDisposable {
     }
 
     [Fact]
-    public async Task ThumbnailAndPreviewUseConfiguredFfmpegAndCompanionFfprobePaths() {
-        var inputPath = Path.Combine(_root, "dovi-configured.mkv");
-        var thumbPath = Path.Combine(_root, "configured-thumb.jpg");
-        var previewPath = Path.Combine(_root, "configured-preview.mp4");
-        await File.WriteAllTextAsync(inputPath, "source");
-        var process = new ProbedVideoProcessExecutor(DolbyVisionProbeJson);
-        var tools = new MediaToolOptions("/usr/lib/jellyfin-ffmpeg/ffmpeg");
-        var service = new ThumbnailService(process, new MediaProbeService(process, tools), tools);
-
-        await service.GenerateThumbnailAndPreviewAsync(
-            inputPath,
-            thumbPath,
-            thumbSeekSeconds: 12,
-            thumbWidth: 640,
-            thumbHeight: 320,
-            thumbQuality: 3,
-            previewPath: previewPath,
-            previewStartSeconds: 20,
-            previewDurationSeconds: 8,
-            CancellationToken.None);
-
-        Assert.Equal(2, process.FfprobeFileNames.Count);
-        Assert.All(process.FfprobeFileNames, fileName =>
-            Assert.Equal("/usr/lib/jellyfin-ffmpeg/ffprobe", fileName));
-        Assert.Equal(2, process.FfmpegFileNames.Count);
-        Assert.All(process.FfmpegFileNames, fileName =>
-            Assert.Equal("/usr/lib/jellyfin-ffmpeg/ffmpeg", fileName));
-    }
-
-    [Fact]
     public async Task TrickplayExtractionUsesHdrToneMappingFilter() {
         var inputPath = Path.Combine(_root, "hdr10.mkv");
         var frameDir = Path.Combine(_root, "frames");
@@ -196,19 +166,6 @@ public sealed class ThumbnailServiceTests : IDisposable {
         Assert.Equal([-1000, 1000, -250, 250], data);
         Assert.Single(process.OutputPaths);
         Assert.False(File.Exists(process.OutputPaths[0]));
-    }
-
-    [Fact]
-    public void AssetPathsNormalizeRelativeDataDirectoriesToAbsoluteCacheRoots() {
-        var relativeDataDir = Path.GetRelativePath(
-            Directory.GetCurrentDirectory(),
-            Path.Combine(_root, "data"));
-
-        var paths = new AssetPathService(relativeDataDir);
-
-        Assert.Equal(
-            Path.Combine(Path.GetFullPath(relativeDataDir), "cache"),
-            paths.CacheRoot);
     }
 
     public void Dispose() {

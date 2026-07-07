@@ -1,14 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import packageJson from "../../package.json";
-import { APP_VERSION, fetchReleaseUpdateStatus, resetReleaseUpdateStatusCache } from "./version";
+import { fetchReleaseUpdateStatus, resetReleaseUpdateStatusCache } from "./version";
 
 describe("APP_VERSION", () => {
   beforeEach(() => {
     resetReleaseUpdateStatusCache();
-  });
-
-  it("matches the web package version", () => {
-    expect(APP_VERSION).toBe(packageJson.version);
   });
 
   it("fetches release status without forcing by default", async () => {

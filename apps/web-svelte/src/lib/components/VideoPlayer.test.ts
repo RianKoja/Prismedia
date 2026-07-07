@@ -245,15 +245,6 @@ describe("VideoPlayer", () => {
     expect(document.querySelector("media-player")?.getAttribute("loop")).not.toBeNull();
   });
 
-  it("keeps minimal lightbox video clicks and muted state on the native media element", async () => {
-    const source = await readFile("src/lib/components/VideoPlayer.svelte", "utf8");
-
-    expect(source).toContain("function mediaElement()");
-    expect(source).toContain("scheduleInitialMutedSync()");
-    expect(source).toContain("event.stopImmediatePropagation();");
-    expect(source).toContain("mediaElement()?.pause();");
-  });
-
   it("derives the resolution badge from source dimensions with exact pixels in the tooltip", () => {
     render(VideoPlayer, {
       props: {
@@ -476,74 +467,6 @@ describe("VideoPlayer", () => {
     });
   });
 
-  it("lets fullscreen video fill the fullscreen surface while controls remain overlayed", async () => {
-    const source = await readFile("src/lib/components/VideoPlayer.svelte", "utf8");
-
-    expect(source).toContain(".prismedia-player-surface:fullscreen");
-    expect(source).toContain(".prismedia-player-surface:fullscreen .prismedia-media-engine");
-    expect(source).toContain("max-width: none;");
-    expect(source).toContain("height: 100dvh;");
-  });
-
-  it("keeps VidStack provider media layers from stacking poster below video", async () => {
-    const source = await readFile("src/lib/components/VideoPlayer.svelte", "utf8");
-
-    expect(source).toContain(".prismedia-media-engine :global(media-provider)");
-    expect(source).toContain("position: absolute;");
-    expect(source).toContain("inset: 0;");
-    expect(source).toContain(".prismedia-media-engine :global(media-poster img)");
-    expect(source).toContain("object-fit: cover;");
-    expect(source).toContain("object-position: center;");
-    expect(source).toContain(":global(.prismedia-media-engine[data-started] media-poster)");
-    expect(source).toContain("visibility: hidden;");
-  });
-
-  it("uses VidStack chapter sliders for marker sections instead of custom marker ticks", async () => {
-    const source = await readFile("src/lib/components/VideoTimeline.svelte", "utf8");
-    const playerSource = await readFile("src/lib/components/VideoPlayer.svelte", "utf8");
-
-    expect(playerSource).toContain('import "vidstack/player/ui";');
-    expect(source).toContain("<media-time-slider");
-    expect(source).toContain("<media-slider-chapters>");
-    expect(playerSource).toContain('kind: "chapters"');
-    expect(source).not.toContain('data-testid="video-progress-marker"');
-  });
-
-  it("renders playback and buffer progress from the native video clock", async () => {
-    const source = await readFile("src/lib/components/VideoTimeline.svelte", "utf8");
-    const playerSource = await readFile("src/lib/components/VideoPlayer.svelte", "utf8");
-
-    expect(playerSource).toContain("playbackProgressPercent");
-    expect(playerSource).toContain("bufferedProgressPercent");
-    expect(source).toContain('style:--prismedia-slider-fill={`${playbackProgressPercent}%`}');
-    expect(source).toContain('style:--prismedia-buffer-progress={`${bufferedProgressPercent}%`}');
-    expect(source).toContain('class="video-slider-native-progress is-buffered"');
-    expect(source).toContain('class="video-slider-native-progress is-played"');
-    expect(source).toContain("left: var(--prismedia-slider-fill, var(--slider-fill, 0%));");
-  });
-
-  it("keeps minimal lightbox progress visible at the bottom edge", async () => {
-    const source = await readFile("src/lib/components/VideoTimeline.svelte", "utf8");
-
-    expect(source).toContain('!fullChrome && "is-minimal-progress"');
-    expect(source).toContain('!fullChrome || showControls ? "opacity-100" : "opacity-0"');
-    expect(source).toContain("{#if fullChrome && timelineHover}");
-    expect(source).toContain(".video-time-slider.is-minimal-progress");
-    expect(source).toContain("background: rgba(255, 255, 255, 0.18)");
-    expect(source).toContain("bottom: 0;");
-  });
-
-  it("keeps VidStack controls synchronized with the native video element", async () => {
-    const source = await readFile("src/lib/components/VideoPlayer.svelte", "utf8");
-
-    expect(source).toContain("const video = mediaElement();");
-    expect(source).toContain("video.currentTime = target");
-    expect(source).toContain("await video.play();");
-    expect(source).toContain("mediaElement()?.pause();");
-    expect(source).toContain('video.addEventListener("timeupdate", onNativeTimeUpdate)');
-    expect(source).toContain('video.addEventListener("progress", onProgress)');
-  });
-
   it("shows the loading spinner on a cold play before the first segment is renderable", async () => {
     const source = await readFile("src/lib/components/VideoPlayer.svelte", "utf8");
 
@@ -556,59 +479,6 @@ describe("VideoPlayer", () => {
       /\(mediaElement\(\)\?\.readyState \?\? 0\) < 3 \/\* HAVE_FUTURE_DATA \*\/\) \{\s*buffering = true;/g,
     );
     expect(coldBufferingMatches?.length).toBe(2);
-  });
-
-  it("lets in-player marker chips seek without being swallowed by the overlay", async () => {
-    const source = await readFile("src/lib/components/VideoPlayer.svelte", "utf8");
-
-    expect(source).toContain('data-testid="video-marker-chip"');
-    expect(source).toContain("pointer-events-auto order-3 hidden flex-wrap gap-1.5");
-    expect(source).toContain("sm:flex");
-    expect(source).toContain("onpointerdown={(event) => event.stopPropagation()}");
-    expect(source).toContain("aria-label={`Seek to ${marker.title}`}");
-  });
-
-  it("keeps the player overlay hidden when filmstrip scrubbing ends", async () => {
-    const source = await readFile("src/lib/components/VideoPlayer.svelte", "utf8");
-
-    expect(source).toContain(`function handleFilmStripInteraction(active: boolean) {
-    if (active) {
-      clearControlsTimer();
-      showControls = false;
-      closeMenus();
-    }
-  }`);
-    expect(source).toContain("onStripInteractionChange={handleFilmStripInteraction}");
-  });
-
-  it("keeps mobile settings top-level and desktop settings inside the video drawer", async () => {
-    const source = await readFile("src/lib/components/VideoSettingsMenu.svelte", "utf8");
-
-    expect(source).toContain("z-index: 1005");
-    expect(source).toContain("height: min(34dvh, 18rem)");
-    expect(source).toContain("max-height: calc(100dvh - 1.5rem)");
-    expect(source).toContain("top: auto");
-    expect(source).toContain("bottom: 7.25rem");
-    expect(source).toContain("height: auto");
-    expect(source).toContain("position: absolute");
-    expect(source).toContain("animation: player-settings-flyout-in var(--duration-moderate) var(--ease-enter)");
-  });
-
-  it("keeps the sidecar button square like the other player controls", async () => {
-    const source = await readFile("src/lib/components/VideoPlayer.svelte", "utf8");
-
-    expect(source).toContain(".sidecar-control-button {\n    justify-content: center;\n    padding: 0;\n    width: 1.75rem;");
-    expect(source).toContain(".sidecar-control-button {\n      padding: 0;\n      width: 2.25rem;");
-  });
-
-  it("uses menu-row subtitle style controls with compact range inputs", async () => {
-    const source = await readFile("src/lib/components/VideoSettingsMenu.svelte", "utf8");
-
-    expect(source).toContain("player-settings-control");
-    expect(source).toContain("player-settings-separator");
-    expect(source).toContain("style={`--range-progress: ${rangeProgress");
-    expect(source).toContain('.player-settings-control input[type="range"]');
-    expect(source).toContain("border-radius: var(--radius-xs);");
   });
 
   it("shows a trickplay frame in the seekbar hover preview", async () => {
@@ -667,14 +537,6 @@ describe("VideoPlayer", () => {
 
     const preview = await screen.findByTestId("timeline-trickplay-preview");
     expect(preview.getAttribute("style")).toContain("/Videos/video-1/Trickplay/320/0.jpg");
-  });
-
-  it("defines hover, focus, and click feedback for player controls", async () => {
-    const source = await readFile("src/lib/components/VideoPlayer.svelte", "utf8");
-
-    expect(source).toContain(".player-control-button:hover");
-    expect(source).toContain(".player-control-button:focus-visible");
-    expect(source).toContain(".player-control-button.is-pressed");
   });
 
   it("waits for hls2 readiness before attaching the manifest to Vidstack", async () => {

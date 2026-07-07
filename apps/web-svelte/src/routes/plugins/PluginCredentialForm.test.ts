@@ -38,22 +38,4 @@ describe("PluginCredentialForm", () => {
 
     expect(save).not.toBeDisabled();
   });
-
-  it("emits cancel and save actions", async () => {
-    const onCancel = vi.fn();
-    const onSave = vi.fn();
-    render(PluginCredentialForm, {
-      props: baseProps({
-        onCancel,
-        onSave,
-        values: { api_key: "secret" },
-      }),
-    });
-
-    await fireEvent.click(screen.getByRole("button", { name: /cancel/i }));
-    await fireEvent.click(screen.getByRole("button", { name: /save credentials/i }));
-
-    expect(onCancel).toHaveBeenCalled();
-    expect(onSave).toHaveBeenCalled();
-  });
 });

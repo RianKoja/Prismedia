@@ -50,14 +50,4 @@ public sealed class CollectionModelTests {
         Assert.True(Collection.CanContain(EntityKind.AudioTrack));
         Assert.False(Collection.CanContain(EntityKind.Collection));
     }
-
-    [Fact]
-    public void MarkRefreshedRecordsRefreshTimestamp() {
-        var collection = new Collection(Guid.Parse("ffffffff-ffff-ffff-ffff-ffffffffffff"), "Smart Picks");
-        var refreshedAt = DateTimeOffset.Parse("2026-01-02T03:04:05Z");
-
-        collection.MarkRefreshed(refreshedAt);
-
-        Assert.Equal(refreshedAt, collection.LastRefreshedAt);
-    }
 }

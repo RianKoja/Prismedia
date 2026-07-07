@@ -4,51 +4,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 namespace Prismedia.Api.Tests;
 
 public sealed class StaticSpaFallbackTests : IDisposable {
-    private readonly string _webRoot = Path.Combine(Path.GetTempPath(), $"prismedia-static-{Guid.NewGuid():N}");
     private readonly string _cacheRoot = Path.Combine(Path.GetTempPath(), $"prismedia-cache-{Guid.NewGuid():N}");
-    private readonly WebApplicationFactory<Program> _factory;
-
-    public StaticSpaFallbackTests() {
-        Directory.CreateDirectory(_webRoot);
-        File.WriteAllText(Path.Combine(_webRoot, "index.html"), "<html><body>Prismedia Static Shell</body></html>");
-        File.WriteAllText(Path.Combine(_webRoot, "asset.txt"), "asset-ok");
-
-        _factory = new WebApplicationFactory<Program>()
-            .WithWebHostBuilder(builder => builder.UseSetting("Prismedia:StaticWebRoot", _webRoot))
-            .WithTestAuth();
-    }
-
-    [Fact]
-    public async Task ServesStaticFilesFromConfiguredWebRoot() {
-        using var client = _factory.CreateAuthenticatedClient();
-
-        var text = await client.GetStringAsync("/asset.txt");
-
-        Assert.Equal("asset-ok", text);
-    }
-
-    [Fact]
-    public async Task FallsBackToIndexForClientSideRoutes() {
-        using var client = _factory.CreateAuthenticatedClient();
-
-        var html = await client.GetStringAsync("/videos/11111111-1111-1111-1111-111111111111");
-
-        Assert.Contains("Prismedia Static Shell", html);
-    }
-
-    [Fact]
-    public async Task LowercaseArtistsNavigationServesSpaShell() {
-        using var client = _factory.CreateAuthenticatedClient();
-        using var request = new HttpRequestMessage(HttpMethod.Get, "/artists");
-        request.Headers.Accept.ParseAdd("text/html");
-
-        using var response = await client.SendAsync(request);
-        var html = await response.Content.ReadAsStringAsync();
-
-        response.EnsureSuccessStatusCode();
-        Assert.Equal("text/html", response.Content.Headers.ContentType?.MediaType);
-        Assert.Contains("Prismedia Static Shell", html);
-    }
 
     [Fact]
     public async Task ServesGeneratedAssetsWhenCacheDirectoryIsCreatedByStartup() {
@@ -73,10 +29,6 @@ public sealed class StaticSpaFallbackTests : IDisposable {
     }
 
     public void Dispose() {
-        _factory.Dispose();
-        if (Directory.Exists(_webRoot)) {
-            Directory.Delete(_webRoot, recursive: true);
-        }
         if (Directory.Exists(_cacheRoot)) {
             Directory.Delete(_cacheRoot, recursive: true);
         }

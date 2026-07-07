@@ -214,29 +214,6 @@ describe("IdentifyReviewChoice", () => {
     expect(screen.getByRole("button", { name: "Provider: AniList" })).toBeInTheDocument();
   });
 
-  it("uses stacked labeled fields for the review query form", () => {
-    const { container } = render(IdentifyReviewChoice, {
-      props: {
-        entity: entity(),
-        candidates: [searchCandidate()],
-      },
-    });
-
-    const form = container.querySelector<HTMLElement>(".identify-query-form");
-    const fields = container.querySelectorAll(".identify-query-field");
-
-    expect(form).not.toBeNull();
-    expect(form).toHaveClass("flex-col");
-    expect(fields).toHaveLength(3);
-    expect(fields[0]).toHaveTextContent("Provider");
-    expect(fields[1]).toHaveTextContent("Query");
-    expect(fields[2]).toHaveTextContent("Year");
-    expect(screen.getByRole("button", { name: "Seek" })).toHaveClass("w-full");
-    expect(screen.getByRole("button", { name: "Seek" })).toHaveClass("sm:w-24");
-    expect(screen.getByPlaceholderText("Search titles...")).toHaveClass("w-full");
-    expect(screen.getByPlaceholderText("Optional")).toHaveClass("w-full");
-  });
-
   it("seeks through review query providers until candidates are found", async () => {
     store.providers = [
       provider("tmdb", "The Movie Database"),

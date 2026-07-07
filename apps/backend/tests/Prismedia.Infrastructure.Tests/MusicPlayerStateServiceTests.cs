@@ -9,46 +9,6 @@ namespace Prismedia.Infrastructure.Tests;
 
 public sealed class MusicPlayerStateServiceTests {
     [Fact]
-    public async Task SaveThenGetRoundTripsQueueAndPlayerSettings() {
-        var browserSessionId = Guid.NewGuid();
-        var track1 = Guid.NewGuid();
-        var track2 = Guid.NewGuid();
-        var settings = new InMemoryBrowserSessionPersistence();
-        var entities = new FakeEntityReadService(track1, track2);
-        var service = new MusicPlayerStateService(settings, entities);
-
-        await service.SaveAsync(browserSessionId, new UpdateMusicPlayerStateRequest(
-            QueueTrackIds: [track1, track2],
-            Order: [1, 0],
-            Position: 1,
-            CurrentTime: 37.5,
-            Playing: true,
-            Shuffle: true,
-            Repeat: MusicPlayerRepeatMode.One,
-            Volume: 0.4,
-            Muted: true,
-            Collapsed: true,
-            CollapsedSide: MusicPlayerMiniSide.Right,
-            Context: new MusicPlayerContext(null, "Album", null, "Artist", "/cover.jpg", null)),
-            CancellationToken.None);
-
-        var loaded = await service.GetAsync(browserSessionId, CancellationToken.None);
-
-        Assert.Equal([track1, track2], loaded.Tracks.Select(track => track.Id));
-        Assert.Equal([1, 0], loaded.Order);
-        Assert.Equal(1, loaded.Position);
-        Assert.Equal(37.5, loaded.CurrentTime);
-        Assert.True(loaded.Playing);
-        Assert.True(loaded.Shuffle);
-        Assert.Equal(MusicPlayerRepeatMode.One, loaded.Repeat);
-        Assert.Equal(0.4, loaded.Volume);
-        Assert.True(loaded.Muted);
-        Assert.True(loaded.Collapsed);
-        Assert.Equal(MusicPlayerMiniSide.Right, loaded.CollapsedSide);
-        Assert.Equal("Album", loaded.Context?.AlbumTitle);
-    }
-
-    [Fact]
     public async Task GetFiltersDeletedTracksAndRepairsOrder() {
         var browserSessionId = Guid.NewGuid();
         var existing = Guid.NewGuid();

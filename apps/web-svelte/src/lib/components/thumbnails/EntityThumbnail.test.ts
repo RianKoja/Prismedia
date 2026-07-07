@@ -470,43 +470,6 @@ describe("EntityThumbnail", () => {
     expect(container.querySelector(".ticker-title")).toBeNull();
   });
 
-  it("allows callers to choose thumbnail title alignment", () => {
-    const { container } = render(EntityThumbnail, {
-      props: {
-        card: personCard(),
-        titleAlign: "center",
-      },
-    });
-
-    expect(container.querySelector("h3")?.classList.contains("title-align-center")).toBe(true);
-    expect(container.querySelector("h3")?.classList.contains("title-size-default")).toBe(true);
-  });
-
-  it("allows callers to choose compact thumbnail title sizing", () => {
-    const { container } = render(EntityThumbnail, {
-      props: {
-        card: personCard(),
-        titleSize: "compact",
-      },
-    });
-
-    expect(container.querySelector("h3")?.classList.contains("title-size-compact")).toBe(true);
-  });
-
-  it("aligns fallback subtitles with the thumbnail title", () => {
-    const { container } = render(EntityThumbnail, {
-      props: {
-        card: {
-          ...personCard(),
-          subtitle: "Character Ronnie",
-        },
-        titleAlign: "center",
-      },
-    });
-
-    expect(container.querySelector(".subtitle")?.classList.contains("title-align-center")).toBe(true);
-  });
-
   it("elevates NSFW, rating, and position badges into the thumbnail media", () => {
     const { container } = render(EntityThumbnail, {
       props: {

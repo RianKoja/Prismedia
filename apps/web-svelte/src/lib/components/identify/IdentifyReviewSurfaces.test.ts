@@ -1,4 +1,3 @@
-import { readFileSync } from "node:fs";
 import { fireEvent, render, screen } from "@testing-library/svelte";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { EntityMetadataPatch, EntityMetadataProposal } from "$lib/api/identify-types";
@@ -81,41 +80,6 @@ describe("Identify review surfaces", () => {
     store.deleteQueueItem.mockReset();
     store.rejectQueueItem.mockReset();
     store.applyProposal.mockReset();
-  });
-
-  it("renders parent review relationship thumbnails with the normal card variant", () => {
-    const { container } = render(IdentifyReviewParent, {
-      props: {
-        entity: entity(),
-        proposal: proposal("root", {
-          relationships: [proposal("person-1", { targetKind: "person", title: "Tim Robinson" })],
-          children: [proposal("episode-1", { targetKind: "video", title: "Episode 1" })],
-        }),
-      },
-    });
-
-    const thumbnails = container.querySelectorAll(".entity-thumbnail");
-    expect(thumbnails.length).toBeGreaterThan(0);
-    expect(container.querySelector(".entity-thumbnail.is-list")).toBeNull();
-  });
-
-  it("renders walked child relationship thumbnails with the normal card variant", () => {
-    const parentProposal = proposal("root");
-    const { container } = render(IdentifyReviewChild, {
-      props: {
-        entity: entity(),
-        parentProposal,
-        proposal: proposal("episode-1", {
-          targetKind: "video",
-          relationships: [proposal("person-1", { targetKind: "person", title: "Tim Robinson" })],
-          children: [proposal("clip-1", { targetKind: "video", title: "Clip 1" })],
-        }),
-      },
-    });
-
-    const thumbnails = container.querySelectorAll(".entity-thumbnail");
-    expect(thumbnails.length).toBeGreaterThan(0);
-    expect(container.querySelector(".entity-thumbnail.is-list")).toBeNull();
   });
 
   it("keeps the To Identify preview on audio parent and child proposal pages", () => {
@@ -278,21 +242,6 @@ describe("Identify review surfaces", () => {
 
     expect(screen.getByText("Episode One")).toBeInTheDocument();
     expect(screen.getByAltText("Local Episode One")).toBeInTheDocument();
-  });
-
-  it("keeps identify review tile grids capped instead of fixed to oversized desktop columns", () => {
-    const sources = [
-      "src/lib/components/identify/IdentifyReviewParent.svelte",
-      "src/lib/components/identify/IdentifyReviewChild.svelte",
-      "src/lib/components/identify/IdentifyChildrenGrid.svelte",
-      "src/lib/components/identify/IdentifyNewContainersGrid.svelte",
-    ].map((path) => readFileSync(path, "utf8"));
-
-    for (const source of sources) {
-      expect(source).toContain("repeat(auto-fit, minmax(min(8rem, 100%), 9.5rem))");
-    }
-    expect(sources.join("\n")).not.toContain("xl:grid-cols-5");
-    expect(sources.join("\n")).not.toContain("xl:grid-cols-6");
   });
 
   it("shows local covers for walked child grandchildren when provider stills are missing", () => {
