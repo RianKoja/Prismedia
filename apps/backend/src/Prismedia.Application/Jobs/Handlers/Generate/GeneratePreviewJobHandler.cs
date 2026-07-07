@@ -171,11 +171,21 @@ public sealed class GeneratePreviewJobHandler(
         return seekTime;
     }
 
+    /// <summary>
+    /// Maximum generated-thumbnail width per quality preset (1 = Best … 5 = Lowest),
+    /// never upscaling past the source. Detail/hero surfaces are the largest consumers
+    /// of this image; grid cards use the separate 480/960 grid variants derived from it,
+    /// so scaling to near-source resolution only produces oversized files.
+    /// </summary>
     private static int ScaleWidth(int sourceWidth, int quality) {
-        var min = 320;
-        var max = sourceWidth;
-        var factor = Math.Clamp(quality, 1, 31);
-        return min + (max - min) * (31 - factor) / 30;
+        var maxWidth = Math.Clamp(quality, 1, 5) switch {
+            1 => 1920,
+            2 => 1280,
+            3 => 1024,
+            4 => 800,
+            _ => 640
+        };
+        return Math.Min(sourceWidth, maxWidth);
     }
 
     private static int ScaleHeight(int sourceHeight, int sourceWidth, int targetWidth) {
@@ -203,7 +213,11 @@ public sealed class GeneratePreviewJobHandler(
         return (targetWidth, Math.Max(2, targetHeight));
     }
 
-    private static int QualityToJpeg(int quality) => Math.Clamp(quality, 1, 10);
+    /// <summary>
+    /// Maps the 1–5 quality preset onto ffmpeg's inverse -q:v scale (2 ≈ visually
+    /// lossless, 31 = worst). Preset 1 (Best) → 2, preset 5 (Lowest) → 6.
+    /// </summary>
+    private static int QualityToJpeg(int quality) => Math.Clamp(quality + 1, 2, 6);
 
     private static int EstimateTrickplayBandwidth(string tileDir, int tileCount, int thumbnailCount, int interval) {
         var totalBytes = Directory.GetFiles(tileDir, "*.jpg")

@@ -312,7 +312,7 @@ public static class AppSettingsRegistry {
                 "Control what the worker creates for newly discovered media.",
                 30,
                 "Thumbnail quality",
-                "JPEG quality preset for generated thumbnails.",
+                "Resolution and JPEG quality preset for generated thumbnails.",
                 "2",
                 90,
                 QualityPresetOptions()),
