@@ -616,18 +616,21 @@
           {#if indexerForm && indexerForm.id === item.id}
             {@render indexerEditor()}
           {:else}
-            <div class="flex items-center justify-between rounded-sm border border-border-subtle bg-surface-1 px-3 py-2">
-              <div class="flex items-center gap-2">
-                <StatusLed status={item.enabled ? "active" : "idle"} />
-                <span class="text-sm text-text-primary">{item.displayName}</span>
-                <Badge variant="default">{indexerKindLabel(item.kind)}</Badge>
-                <span class="text-xs text-text-muted">{item.baseUrl}</span>
-                {#if item.hasApiKey}<Badge variant="default">key set</Badge>{/if}
+            <!-- Stacked card on mobile (name row, then URL), single row on sm+. -->
+            <div class="flex items-start justify-between gap-2 rounded-sm border border-border-subtle bg-surface-1 px-3 py-2 sm:items-center">
+              <div class="flex min-w-0 flex-1 flex-col gap-1 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-2 sm:gap-y-1">
+                <div class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                  <StatusLed status={item.enabled ? "active" : "idle"} />
+                  <span class="text-sm text-text-primary">{item.displayName}</span>
+                  <Badge variant="default">{indexerKindLabel(item.kind)}</Badge>
+                  {#if item.hasApiKey}<Badge variant="default">key set</Badge>{/if}
+                </div>
+                <span class="min-w-0 truncate text-xs text-text-muted" title={item.baseUrl}>{item.baseUrl}</span>
                 {#if item.disabledUntil}
-                  <Badge variant="warning" title={item.lastFailureMessage ?? undefined}>backing off until {new Date(item.disabledUntil).toLocaleTimeString()}</Badge>
+                  <div class="min-w-0"><Badge variant="warning" title={item.lastFailureMessage ?? undefined}>backing off until {new Date(item.disabledUntil).toLocaleTimeString()}</Badge></div>
                 {/if}
               </div>
-              <div class="flex items-center gap-1">
+              <div class="flex shrink-0 items-center gap-1">
                 <Button size="sm" variant="ghost" onclick={() => editIndexer(item)} disabled={busy}><Pencil class="h-3.5 w-3.5" /></Button>
                 <Button size="sm" variant="ghost" onclick={() => removeIndexer(item.id)} disabled={busy}><Trash2 class="h-3.5 w-3.5" /></Button>
               </div>
@@ -693,15 +696,18 @@
           {#if clientForm && clientForm.id === item.id}
             {@render clientEditor()}
           {:else}
-            <div class="flex items-center justify-between rounded-sm border border-border-subtle bg-surface-1 px-3 py-2">
-              <div class="flex items-center gap-2">
-                <StatusLed status={item.enabled ? "active" : "idle"} />
-                <span class="text-sm text-text-primary">{item.displayName}</span>
-                <Badge variant="default">{clientKindLabel(item.kind)}</Badge>
-                <span class="text-xs text-text-muted">{item.baseUrl}</span>
-                <Badge variant="default">{item.category}</Badge>
+            <!-- Stacked card on mobile (name row, then URL), single row on sm+. -->
+            <div class="flex items-start justify-between gap-2 rounded-sm border border-border-subtle bg-surface-1 px-3 py-2 sm:items-center">
+              <div class="flex min-w-0 flex-1 flex-col gap-1 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-2 sm:gap-y-1">
+                <div class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                  <StatusLed status={item.enabled ? "active" : "idle"} />
+                  <span class="text-sm text-text-primary">{item.displayName}</span>
+                  <Badge variant="default">{clientKindLabel(item.kind)}</Badge>
+                  <Badge variant="default">{item.category}</Badge>
+                </div>
+                <span class="min-w-0 truncate text-xs text-text-muted" title={item.baseUrl}>{item.baseUrl}</span>
               </div>
-              <div class="flex items-center gap-1">
+              <div class="flex shrink-0 items-center gap-1">
                 <Button size="sm" variant="ghost" onclick={() => editClient(item)} disabled={busy}><Pencil class="h-3.5 w-3.5" /></Button>
                 <Button size="sm" variant="ghost" onclick={() => removeClient(item.id)} disabled={busy}><Trash2 class="h-3.5 w-3.5" /></Button>
               </div>
@@ -727,12 +733,12 @@
             Map the client's path prefix to where the same files are visible to Prismedia.
           </p>
           {#each pathMappings as mapping (mapping.id)}
-            <div class="flex items-center justify-between rounded-sm border border-border-subtle bg-surface-1 px-3 py-2">
-              <div class="flex items-center gap-2 text-sm">
-                <Badge variant="default">{clientNameOf(mapping.downloadClientConfigId)}</Badge>
-                <span class="font-mono text-xs text-text-muted">{mapping.remotePath}</span>
-                <span class="text-xs text-text-muted">→</span>
-                <span class="font-mono text-xs text-text-primary">{mapping.localPath}</span>
+            <!-- Stacked card on mobile (client badge, then each path on its own line), single row on sm+. -->
+            <div class="flex items-start justify-between gap-2 rounded-sm border border-border-subtle bg-surface-1 px-3 py-2 sm:items-center">
+              <div class="flex min-w-0 flex-1 flex-col gap-1 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-2 sm:gap-y-1">
+                <div><Badge variant="default">{clientNameOf(mapping.downloadClientConfigId)}</Badge></div>
+                <span class="min-w-0 break-all font-mono text-xs text-text-muted">{mapping.remotePath}</span>
+                <span class="min-w-0 break-all font-mono text-xs text-text-primary"><span class="text-text-muted">→ </span>{mapping.localPath}</span>
               </div>
               <Button size="sm" variant="ghost" onclick={() => removeMapping(mapping.id)} disabled={busy}><Trash2 class="h-3.5 w-3.5" /></Button>
             </div>
@@ -768,13 +774,13 @@
           Named, scored release classifiers. Define conditions here, then score each format per profile below.
         </p>
         {#each customFormats as f (f.id)}
-          <div class="flex items-center justify-between rounded-sm border border-border-subtle bg-surface-1 px-3 py-2">
-            <div class="flex items-center gap-2">
+          <div class="flex items-center justify-between gap-2 rounded-sm border border-border-subtle bg-surface-1 px-3 py-2">
+            <div class="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1">
               <Badge variant="default">{profileKindLabels[f.kind] ?? f.kind}</Badge>
-              <span class="text-sm text-text-primary">{f.name}</span>
-              <span class="text-xs text-text-muted">{f.conditions.length} condition(s)</span>
+              <span class="min-w-0 truncate text-sm text-text-primary">{f.name}</span>
+              <span class="whitespace-nowrap text-xs text-text-muted">{f.conditions.length} condition(s)</span>
             </div>
-            <div class="flex items-center gap-1">
+            <div class="flex shrink-0 items-center gap-1">
               <Button size="sm" variant="ghost" onclick={() => editFormat(f)} disabled={busy}><Pencil class="h-3.5 w-3.5" /></Button>
               <Button size="sm" variant="ghost" onclick={() => removeFormat(f.id)} disabled={busy}><Trash2 class="h-3.5 w-3.5" /></Button>
             </div>
@@ -793,7 +799,7 @@
               {#each formatForm.conditions as condition, i (i)}
                 <div class="flex flex-wrap items-center gap-2 rounded-sm border border-border-subtle bg-surface-1 px-2 py-1.5">
                   <Select size="sm" value={condition.type} options={conditionTypeOptions} onchange={(v) => formatForm && (formatForm.conditions[i].type = v as CustomFormatConditionView["type"])} />
-                  <TextInput size="sm" value={condition.value} oninput={(e) => formatForm && (formatForm.conditions[i].value = e.currentTarget.value)} placeholder={conditionPlaceholder(condition.type)} class="flex-1" />
+                  <TextInput size="sm" value={condition.value} oninput={(e) => formatForm && (formatForm.conditions[i].value = e.currentTarget.value)} placeholder={conditionPlaceholder(condition.type)} class="min-w-40 flex-1" />
                   <label class="flex items-center gap-1.5"><Checkbox checked={condition.negate} onchange={(e) => formatForm && (formatForm.conditions[i].negate = e.currentTarget.checked)} /><span class="text-[0.72rem] text-text-muted">Negate</span></label>
                   <label class="flex items-center gap-1.5"><Checkbox checked={condition.required} onchange={(e) => formatForm && (formatForm.conditions[i].required = e.currentTarget.checked)} /><span class="text-[0.72rem] text-text-muted">Required</span></label>
                   {#if formatForm.conditions.length > 1}
@@ -823,14 +829,14 @@
           <p class="text-[0.78rem] text-text-muted">Add a library root first to create an acquisition profile.</p>
         {/if}
         {#each profiles as p (p.id)}
-          <div class="flex items-center justify-between rounded-sm border border-border-subtle bg-surface-1 px-3 py-2">
-            <div class="flex items-center gap-2">
+          <div class="flex items-center justify-between gap-2 rounded-sm border border-border-subtle bg-surface-1 px-3 py-2">
+            <div class="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1">
               <Badge variant="default">{profileKindLabels[p.kind] ?? p.kind}</Badge>
-              <span class="text-sm text-text-primary">{p.displayName}</span>
+              <span class="min-w-0 truncate text-sm text-text-primary">{p.displayName}</span>
               {#if p.isDefault}<Badge variant="accent">default</Badge>{/if}
-              <span class="text-xs text-text-muted">→ {allRoots.find((r) => r.id === p.targetLibraryRootId)?.label ?? "root"}</span>
+              <span class="min-w-0 truncate text-xs text-text-muted">→ {allRoots.find((r) => r.id === p.targetLibraryRootId)?.label ?? "root"}</span>
             </div>
-            <div class="flex items-center gap-1">
+            <div class="flex shrink-0 items-center gap-1">
               <Button size="sm" variant="ghost" onclick={() => editProfile(p)} disabled={busy}><Pencil class="h-3.5 w-3.5" /></Button>
               <Button size="sm" variant="ghost" onclick={() => removeProfile(p.id)} disabled={busy}><Trash2 class="h-3.5 w-3.5" /></Button>
             </div>
@@ -940,11 +946,12 @@
           <p class="text-[0.78rem] text-text-muted">No blocklisted releases.</p>
         {/if}
         {#each blocklist as entry (entry.id)}
-          <div class="flex items-center justify-between rounded-sm border border-border-subtle bg-surface-1 px-3 py-2">
-            <div class="flex min-w-0 items-center gap-2">
+          <div class="flex items-center justify-between gap-2 rounded-sm border border-border-subtle bg-surface-1 px-3 py-2">
+            <!-- The release title takes its own full line on mobile so the badge never crushes it. -->
+            <div class="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1">
               <Badge variant="default">{reasonLabels[entry.reason] ?? entry.reason}</Badge>
-              <span class="truncate text-sm text-text-primary">{entry.title ?? "Unknown release"}</span>
-              {#if entry.indexerName}<span class="shrink-0 text-xs text-text-muted">{entry.indexerName}</span>{/if}
+              {#if entry.indexerName}<span class="text-xs text-text-muted">{entry.indexerName}</span>{/if}
+              <span class="min-w-0 basis-full truncate text-sm text-text-primary sm:flex-1" title={entry.title ?? undefined}>{entry.title ?? "Unknown release"}</span>
             </div>
             <Button size="sm" variant="ghost" onclick={() => removeBlocklistEntry(entry.id)} disabled={busy}><Trash2 class="h-3.5 w-3.5" /></Button>
           </div>

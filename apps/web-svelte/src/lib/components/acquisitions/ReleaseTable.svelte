@@ -119,7 +119,11 @@
   }
 </script>
 
-<!-- Controls: relevance filter (hides rejected releases) + mobile sort (headers hidden on cards). -->
+<!-- The table/cards split queries this container's width (not the viewport): the picker mounts inside
+     entity detail panels and the request hub, so available width is what decides whether the fixed-column
+     table actually fits. Same approach as AcquisitionCard. -->
+<div class="release-list">
+<!-- Controls: relevance filter (hides rejected releases) + card-mode sort (table headers hidden on cards). -->
 <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
   {#if hiddenCount > 0}
     <label class="flex items-center gap-2 text-[0.78rem] text-text-secondary">
@@ -137,16 +141,16 @@
   {:else}
     <span></span>
   {/if}
-  <label class="flex items-center gap-2 sm:hidden">
+  <label class="card-sort flex items-center gap-2">
     <span class="text-label text-text-muted">Sort</span>
     <Select size="sm" value={mobileSortValue} options={mobileSortOptions} onchange={setMobileSort} />
   </label>
 </div>
 
-<!-- ── Desktop: sortable table ── -->
+<!-- ── Wide container: sortable table ── -->
 <!-- Fixed layout so a long release title truncates to its column rather than widening the table into a
      horizontal scroll. Release takes ~half the width; the remaining columns share the rest. -->
-<div class="hidden rounded-sm border border-border-subtle sm:block">
+<div class="release-table rounded-sm border border-border-subtle">
   <table class="w-full table-fixed text-sm">
     <!-- Fixed widths for every column except the release title, which flexes to fill. This guarantees the
          actions column always fits the external-link, Download, and Block controls so they never overlap
@@ -233,8 +237,8 @@
   </table>
 </div>
 
-<!-- ── Mobile: stacked cards (type+title, info, actions) ── -->
-<div class="space-y-2 sm:hidden">
+<!-- ── Narrow container: stacked cards (type+title, info, actions) ── -->
+<div class="release-cards space-y-2">
   {#each sorted as row (row.candidate.id)}
     {@const c = row.candidate}
     {@const CatIcon = categoryIcon(row.category)}
@@ -282,3 +286,25 @@
     </div>
   {/each}
 </div>
+</div>
+
+<style>
+  .release-list {
+    container-type: inline-size;
+  }
+
+  /* Cards by default; the fixed-column table needs ~48rem (34rem of fixed columns plus a readable
+     title column) before it stops crushing the release title, so that is the switch point. */
+  .release-table {
+    display: none;
+  }
+  @container (min-width: 48rem) {
+    .release-table {
+      display: block;
+    }
+    .release-cards,
+    .card-sort {
+      display: none;
+    }
+  }
+</style>
