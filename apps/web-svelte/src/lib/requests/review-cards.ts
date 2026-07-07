@@ -43,6 +43,7 @@ function syntheticEntityCard(id: string, kind: EntityKind, title: string, poster
       kind: CAPABILITY_KIND.images,
       supportedKinds: [],
       thumbnailUrl: posterUrl,
+      thumbnail2xUrl: null,
       coverUrl: posterUrl,
       items: [{ kind: ENTITY_FILE_ROLE.poster, path: posterUrl, mimeType: "image/jpeg" }],
     } as EntityCapability);

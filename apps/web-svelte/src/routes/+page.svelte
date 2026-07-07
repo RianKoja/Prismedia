@@ -317,10 +317,13 @@
           style:height="clamp(280px, 38vh, 420px)"
         >
           {#if heroCard.cover?.src}
-            <!-- The artwork fills the entire banner; scrims keep the text legible. -->
+            <!-- The artwork fills the entire banner; scrims keep the text legible.
+                 This is the page's LCP image, so it loads eagerly at high priority. -->
             <img
               src={heroCard.cover.src}
               alt=""
+              decoding="async"
+              fetchpriority="high"
               class="absolute inset-0 h-full w-full object-cover"
             />
             <div

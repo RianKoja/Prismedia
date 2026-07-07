@@ -39,6 +39,8 @@ export interface EntityThumbnail {
   isFavorite: boolean;
   isNsfw: boolean;
   isOrganized: boolean;
+  /** @nullable */
+  coverThumb2xUrl?: string | null;
   parentKind?: null | EntityKind;
   isWanted?: boolean;
   wantedStatus?: null | AcquisitionStatus;

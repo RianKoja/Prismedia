@@ -15,6 +15,7 @@ const imageCapability = {
   kind: "images",
   supportedKinds: [],
   thumbnailUrl: "/assets/images/image-1/thumb.jpg",
+  thumbnail2xUrl: null,
   coverUrl: "/assets/images/image-1/cover.jpg",
   items: [
     { kind: "cover", path: "/assets/images/image-1/cover.jpg", mimeType: "image/jpeg" },

@@ -25,6 +25,7 @@ function images(
     kind: "images",
     supportedKinds: ["cover", "poster", "thumbnail"],
     thumbnailUrl: posterSrc ?? coverSrc,
+    thumbnail2xUrl: null,
     coverUrl: coverSrc,
     items: [
       { kind: "cover", path: coverSrc, mimeType: "image/svg+xml" },

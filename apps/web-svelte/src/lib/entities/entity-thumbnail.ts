@@ -20,11 +20,17 @@ export interface EntityThumbnailAsset {
   alt: string;
   role?: string;
   /**
-   * Optional small grid-sized variant of {@link src}. When present the cover
-   * `<img>` exposes it via `srcset` so the browser fetches the low-res image for
-   * small cards and the full-resolution `src` only at large sizes.
+   * Optional small grid-sized variant of {@link src} (480w). When present the
+   * cover `<img>` uses it (with {@link thumbSrc2x}) as the srcset, so cards
+   * never download the full-resolution `src`; the original stays reserved for
+   * detail heroes and the lightbox.
    */
   thumbSrc?: string;
+  /**
+   * Optional double-density companion of {@link thumbSrc} (960w) for
+   * high-DPI displays.
+   */
+  thumbSrc2x?: string;
   /**
    * Owning entity id when this asset is the cover/preview frame of a distinct
    * child entity (e.g. a gallery's representative cover image). Carried so the

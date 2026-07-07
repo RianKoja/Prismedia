@@ -111,6 +111,7 @@ describe("extractVideoPlayerProps", () => {
         kind: "images",
         supportedKinds: ["thumbnail", "trickplay"],
         thumbnailUrl: null,
+        thumbnail2xUrl: null,
         coverUrl: null,
         items: [
           {

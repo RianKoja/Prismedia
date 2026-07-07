@@ -33,6 +33,7 @@ function image(): EntityCapability {
     kind: "images",
     supportedKinds: ["cover", "preview"],
     thumbnailUrl: "/cover.jpg",
+    thumbnail2xUrl: null,
     coverUrl: "/cover.jpg",
     items: [
       { kind: "cover", path: "/cover.jpg", mimeType: "image/jpeg" },
@@ -96,6 +97,7 @@ describe("entity grid helpers", () => {
         kind: "images",
         supportedKinds: ["logo"],
         thumbnailUrl: null,
+        thumbnail2xUrl: null,
         coverUrl: null,
         items: [{ kind: "logo", path: "/assets/studios/hbo-logo.png", mimeType: "image/png" }],
       },
@@ -252,6 +254,7 @@ describe("entity grid helpers", () => {
         kind: "images",
         supportedKinds: ["thumbnail", "trickplay"],
         thumbnailUrl: "/assets/videos/5/thumb.jpg",
+        thumbnail2xUrl: null,
         coverUrl: "/assets/videos/5/thumb.jpg",
         items: [
           { kind: "thumbnail", path: "/assets/videos/5/thumb.jpg", mimeType: "image/jpeg" },

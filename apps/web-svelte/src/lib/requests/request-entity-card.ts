@@ -20,6 +20,7 @@ export function requestDetailToEntityCard(detail: RequestDetailResponse): Entity
       kind: CAPABILITY_KIND.images,
       supportedKinds: [],
       thumbnailUrl: detail.posterUrl ?? null,
+      thumbnail2xUrl: null,
       coverUrl: detail.posterUrl ?? detail.backdropUrl ?? null,
       items: [
         ...(detail.backdropUrl

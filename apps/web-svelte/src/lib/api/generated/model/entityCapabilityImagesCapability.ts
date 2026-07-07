@@ -14,5 +14,7 @@ export interface EntityCapabilityImagesCapability {
   /** @nullable */
   thumbnailUrl: string | null;
   /** @nullable */
+  thumbnail2xUrl: string | null;
+  /** @nullable */
   coverUrl: string | null;
 }

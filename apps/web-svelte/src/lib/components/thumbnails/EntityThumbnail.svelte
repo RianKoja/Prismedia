@@ -30,6 +30,7 @@
     placeholderGradient,
     resolveEntityThumbnailHref,
     toAspectRatioValue,
+    type EntityThumbnailAsset,
     type EntityThumbnailCard,
     type EntityThumbnailMetaIcon,
   } from "$lib/entities/entity-thumbnail";
@@ -132,6 +133,20 @@
   );
   const gradient = $derived(placeholderGradient(card.entity.title));
 
+  // Cards draw from the small grid variants whenever they exist: the srcset
+  // carries only the 480w/960w pair (never the original), and the plain src
+  // falls back to the smallest variant so no code path downloads full-res
+  // artwork into a card. Originals stay reserved for detail heroes/lightbox.
+  function coverSrcset(cover: EntityThumbnailAsset): string | undefined {
+    if (!cover.thumbSrc) return undefined;
+    return cover.thumbSrc2x ? `${cover.thumbSrc} 480w, ${cover.thumbSrc2x} 960w` : `${cover.thumbSrc} 480w`;
+  }
+
+  // "auto" lets srcset-aware browsers measure the rendered card (valid only on
+  // lazy-loaded images); the 240px fallback approximates a typical card width
+  // for browsers without sizes=auto so they never jump to the largest candidate.
+  const coverSizes = $derived(imageLoading === "lazy" ? "auto, 240px" : "240px");
+
   const activeSequenceIndex = $derived.by(() => {
     if (!isImageSequenceHover || hoverBroken || pointerRatio === null || sequenceAssets.length === 0) return -1;
     const clamped = Math.max(0, Math.min(1, pointerRatio));
@@ -143,7 +158,11 @@
   const currentImageSrc = $derived(
     activeSequenceAsset?.src ??
       sequenceRestCover?.src ??
-      (isSpriteHover && card.cover ? card.cover.src : asset?.src),
+      (isSpriteHover && card.cover
+        ? card.cover.thumbSrc ?? card.cover.src
+        : asset
+          ? asset.thumbSrc ?? asset.src
+          : undefined),
   );
   const showImageLoading = $derived(Boolean(currentImageSrc) && !showPlaceholder && !imageLoaded && !imageFailed);
 
@@ -576,9 +595,9 @@
       />
     {:else if isSpriteHover && card.cover}
       <img
-        src={card.cover.src}
-        srcset={card.cover.thumbSrc ? `${card.cover.thumbSrc} 480w, ${card.cover.src} 1600w` : undefined}
-        sizes={card.cover.thumbSrc ? "auto" : undefined}
+        src={card.cover.thumbSrc ?? card.cover.src}
+        srcset={coverSrcset(card.cover)}
+        sizes={card.cover.thumbSrc ? coverSizes : undefined}
         alt={card.cover.alt}
         decoding="async"
         loading={imageLoading}
@@ -590,9 +609,9 @@
       />
     {:else if asset && !showPlaceholder}
       <img
-        src={asset.src}
-        srcset={asset.thumbSrc ? `${asset.thumbSrc} 480w, ${asset.src} 1600w` : undefined}
-        sizes={asset.thumbSrc ? "auto" : undefined}
+        src={asset.thumbSrc ?? asset.src}
+        srcset={coverSrcset(asset)}
+        sizes={asset.thumbSrc ? coverSizes : undefined}
         alt={asset.alt}
         decoding="async"
         loading={imageLoading}

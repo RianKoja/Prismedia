@@ -493,7 +493,7 @@ describe("identify review helpers", () => {
         { kind: "images", supportedKinds: ["poster", "backdrop"], items: [
           { kind: "poster", path: "/assets/poster.jpg", mimeType: "image/jpeg" },
           { kind: "backdrop", path: "/assets/backdrop.jpg", mimeType: "image/jpeg" },
-        ], thumbnailUrl: null, coverUrl: null },
+        ], thumbnailUrl: null, thumbnail2xUrl: null, coverUrl: null },
       ],
       childrenByKind: [],
       relationships: [

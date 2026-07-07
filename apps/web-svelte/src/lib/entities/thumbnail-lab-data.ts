@@ -54,6 +54,7 @@ function images(
     kind: "images",
     supportedKinds,
     thumbnailUrl: cover.src,
+    thumbnail2xUrl: null,
     coverUrl: cover.src,
     items: [
       { kind: "cover", path: cover.src, mimeType: "image/svg+xml" },

@@ -39,6 +39,7 @@ describe("entity detail view model", () => {
           kind: "images",
           supportedKinds: ["poster", "backdrop", "logo"],
           thumbnailUrl: null,
+          thumbnail2xUrl: null,
           coverUrl: "/assets/series/series-1/poster.jpg",
           items: [
             { kind: "poster", path: "/assets/series/series-1/poster.jpg", mimeType: "image/jpeg" },
@@ -67,6 +68,7 @@ describe("entity detail view model", () => {
           kind: "images",
           supportedKinds: ["poster"],
           thumbnailUrl: null,
+          thumbnail2xUrl: null,
           coverUrl: "/assets/seasons/season-1/poster.jpg",
           items: [
             { kind: "poster", path: "/assets/seasons/season-1/poster.jpg", mimeType: "image/jpeg" },
@@ -93,6 +95,7 @@ describe("entity detail view model", () => {
           kind: "images",
           supportedKinds: ["cover"],
           thumbnailUrl: null,
+          thumbnail2xUrl: null,
           coverUrl: "/assets/books/book-1/cover.jpg",
           items: [],
         },
@@ -117,6 +120,7 @@ describe("entity detail view model", () => {
           kind: "images",
           supportedKinds: ["logo"],
           thumbnailUrl: null,
+          thumbnail2xUrl: null,
           coverUrl: null,
           items: [{ kind: "logo", path: "/assets/studios/hbo-logo.png", mimeType: "image/png" }],
         },
@@ -140,6 +144,7 @@ describe("entity detail view model", () => {
           kind: "images",
           supportedKinds: ["thumbnail"],
           thumbnailUrl: "/assets/gallery/cover.jpg",
+          thumbnail2xUrl: null,
           coverUrl: "/assets/gallery/cover.jpg",
           items: [
             { kind: "thumbnail", path: "/assets/gallery/cover.jpg", mimeType: "image/jpeg" },
@@ -190,6 +195,7 @@ describe("entity detail view model", () => {
           kind: "images",
           supportedKinds: ["cover"],
           thumbnailUrl: "/assets/comics/comic-1/cover.jpg",
+          thumbnail2xUrl: null,
           coverUrl: "/assets/comics/comic-1/cover.jpg",
           items: [
             { kind: "cover", path: "/assets/comics/comic-1/cover.jpg", mimeType: "image/jpeg" },

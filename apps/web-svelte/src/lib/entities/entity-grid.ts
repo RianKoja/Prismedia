@@ -397,8 +397,8 @@ export function entityCardToThumbnailCard(
   // a static cover image, and source files are not displayable thumbnails.
   const coverPath =
     (!isFullEntityCard(entity) ? entity.coverUrl : null) ??
-    getThumbnailUrl(capabilities) ??
     images?.coverUrl ??
+    getThumbnailUrl(capabilities) ??
     images?.items.find(
       (item) =>
         item.kind === ENTITY_FILE_ROLE.cover ||
@@ -408,8 +408,17 @@ export function entityCardToThumbnailCard(
     )?.path ??
     null;
 
-  // Small grid variant paired with the list cover, used for responsive srcset.
-  const coverThumbPath = !isFullEntityCard(entity) ? entity.coverThumbUrl ?? null : null;
+  // Small grid variants paired with the cover, used for the responsive srcset.
+  // Full cards carry them on the images capability; list thumbnails inline them.
+  // The capability's thumbnailUrl falls back to the full cover when no grid
+  // variant exists yet, so an echo of the cover is treated as "no small variant".
+  const coverThumbCandidate = isFullEntityCard(entity)
+    ? images?.thumbnailUrl ?? null
+    : entity.coverThumbUrl ?? null;
+  const coverThumbPath = coverThumbCandidate === coverPath ? null : coverThumbCandidate;
+  const coverThumb2xPath = isFullEntityCard(entity)
+    ? images?.thumbnail2xUrl ?? null
+    : entity.coverThumb2xUrl ?? null;
 
   // When the cover stands in for a distinct child entity (a gallery's
   // representative cover image), keep that child's id on the cover asset so the
@@ -435,6 +444,7 @@ export function entityCardToThumbnailCard(
       ? {
           ...assetFromPath(coverPath, entity.title, ENTITY_FILE_ROLE.cover, coverChildEntityId),
           thumbSrc: coverThumbPath ?? undefined,
+          thumbSrc2x: coverThumbPath ? coverThumb2xPath ?? undefined : undefined,
         }
       : null,
     custom: customOverlayForEntity(entity),

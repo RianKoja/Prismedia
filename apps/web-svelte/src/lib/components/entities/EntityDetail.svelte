@@ -1321,14 +1321,14 @@
     {@render assetBusyOverlay(ENTITY_FILE_ROLE.backdrop)}
 
     {#if heroMode === "image"}
-      <!-- Sharp banner, mask fades bottom 10% -->
+      <!-- Sharp banner, mask fades bottom 10%; the page's LCP image, loaded at high priority. -->
       <div class="hero-banner">
-        <img src={displayHero!.src} alt="Banner" />
+        <img src={displayHero!.src} alt="Banner" decoding="async" fetchpriority="high" />
       </div>
-      <!-- Lower zone: reflection bg + content on top -->
+      <!-- Lower zone: reflection bg + content on top (same URL as the banner, so it reuses the fetch) -->
       <div class="hero-lower">
         <div class="hero-reflection">
-          <img src={displayHero!.src} alt="" aria-hidden="true" />
+          <img src={displayHero!.src} alt="" aria-hidden="true" decoding="async" />
         </div>
         <div class="hero-blur-overlay"></div>
         {@render heroContent()}
