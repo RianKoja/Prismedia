@@ -8,6 +8,14 @@ internal static class EntityFileResults {
         ".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".tiff", ".tif", ".avif"
     };
 
+    /// <summary>
+    /// Entity file URLs are stable across file replacement (same id + role), so give
+    /// browsers a bounded freshness window instead of immutable caching; conditional
+    /// revalidation via Last-Modified/ETag takes over after it expires. Private because
+    /// the endpoint is per-user authorized.
+    /// </summary>
+    private const string FileCacheControl = "private, max-age=3600";
+
     internal static async Task<IResult> StreamAsync(
         string path,
         string contentType,
@@ -18,7 +26,14 @@ internal static class EntityFileResults {
             var archiveStream = await OpenArchiveEntryAsync(archivePath, memberPath, cancellationToken);
             return archiveStream is null
                 ? notFound()
-                : Results.File(archiveStream, contentType, fileDownloadName, enableRangeProcessing: true);
+                : new CachedResult(
+                    Results.File(
+                        archiveStream,
+                        contentType,
+                        fileDownloadName,
+                        lastModified: File.GetLastWriteTimeUtc(archivePath),
+                        enableRangeProcessing: true),
+                    FileCacheControl);
         }
 
         if (Directory.Exists(path)) {
@@ -35,11 +50,21 @@ internal static class EntityFileResults {
             return notFound();
         }
 
-        return Results.File(
-            File.OpenRead(path),
-            contentType,
-            fileDownloadName,
-            enableRangeProcessing: true);
+        return new CachedResult(
+            Results.File(
+                path,
+                contentType,
+                fileDownloadName,
+                enableRangeProcessing: true),
+            FileCacheControl);
+    }
+
+    /// <summary>Decorates an inner file result with a Cache-Control header.</summary>
+    private sealed class CachedResult(IResult inner, string cacheControl) : IResult {
+        public Task ExecuteAsync(HttpContext httpContext) {
+            httpContext.Response.Headers.CacheControl = cacheControl;
+            return inner.ExecuteAsync(httpContext);
+        }
     }
 
     private static IEnumerable<string> EnumerateDirectoryComicFiles(string directory) {

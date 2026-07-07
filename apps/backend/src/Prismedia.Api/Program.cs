@@ -107,6 +107,18 @@ app.UseStaticFiles(new StaticFileOptions {
     FileProvider = new PhysicalFileProvider(cacheDir),
     RequestPath = "/assets",
     ServeUnknownFileTypes = false,
+    OnPrepareResponse = context => {
+        // Downloaded artwork filenames embed a content hash (plugins) or upload timestamp
+        // (custom), so a changed image always gets a new URL and the old one may cache forever.
+        // Generated assets (grid/video thumbs, previews) are overwritten in place at stable
+        // URLs, so they get a day of freshness and then revalidate via ETag/Last-Modified.
+        var path = context.Context.Request.Path.Value ?? string.Empty;
+        var immutable = path.Contains("/plugins/artwork/", StringComparison.OrdinalIgnoreCase) ||
+            path.Contains("/custom/artwork/", StringComparison.OrdinalIgnoreCase);
+        context.Context.Response.Headers.CacheControl = immutable
+            ? "public, max-age=31536000, immutable"
+            : "public, max-age=86400";
+    },
 });
 
 app.UsePrismediaApiAuthentication();
