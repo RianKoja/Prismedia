@@ -167,12 +167,12 @@ public sealed class TvAcquisitionImportEngineTests : IDisposable {
             EntityKind.VideoSeason,
             store,
             new EfBookAcquisitionProfileStore(db),
-            new SingleRootPersistence(libraryRoot),
+            new MergedImportTestSupport.SingleRootPersistence(libraryRoot),
             new DownloadPayloadReader(),
             new ImportFileMover(),
-            new ImportedTorrentRemover(store, new ThrowingClientConfigStore(), new ThrowingClientFactory(), NullLogger<ImportedTorrentRemover>.Instance),
+            new ImportedTorrentRemover(store, new MergedImportTestSupport.ThrowingClientConfigStore(), new MergedImportTestSupport.ThrowingClientFactory(), NullLogger<ImportedTorrentRemover>.Instance),
             new EfImportTargetIndex(db),
-            new OwnedFileReplacer(new NoRecycleBin(), NullLogger<OwnedFileReplacer>.Instance),
+            new OwnedFileReplacer(new MergedImportTestSupport.NoRecycleBin(), NullLogger<OwnedFileReplacer>.Instance),
             new EfAcquisitionBlocklistStore(db),
             history,
             NullLogger<TvAcquisitionImportEngine>.Instance);
@@ -181,7 +181,7 @@ public sealed class TvAcquisitionImportEngineTests : IDisposable {
             Guid.NewGuid(), JobType.AcquisitionImport, JobRunStatus.Running, 0, null, "{}",
             null, null, null, now, now, null);
         return new Harness(
-            engine, new JobContext(job, new RecordingJobQueue()), import,
+            engine, new JobContext(job, new MergedImportTestSupport.RecordingJobQueue()), import,
             libraryRoot, seriesFolder, seasonFolder, ownedEpisodePath);
     }
 
@@ -204,71 +204,4 @@ public sealed class TvAcquisitionImportEngineTests : IDisposable {
 
     private static PrismediaDbContext CreateContext() =>
         new(new DbContextOptionsBuilder<PrismediaDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
-
-    private sealed class SingleRootPersistence(string path) : ILibraryScanRootPersistence {
-        private readonly LibraryRootData _root = new(
-            Guid.NewGuid(), path, "Videos", Enabled: true, Recursive: true,
-            ScanVideos: true, ScanImages: false, ScanAudio: false, ScanBooks: false, IsNsfw: false);
-
-        public Task<LibraryRootData?> GetLibraryRootAsync(Guid rootId, CancellationToken cancellationToken) =>
-            Task.FromResult<LibraryRootData?>(rootId == _root.Id ? _root : null);
-        public Task<IReadOnlyList<LibraryRootData>> GetEnabledRootsAsync(CancellationToken cancellationToken) =>
-            Task.FromResult<IReadOnlyList<LibraryRootData>>([_root]);
-        public Task<LibrarySettingsData> GetSettingsAsync(CancellationToken cancellationToken) => throw new NotSupportedException();
-        public Task UpdateRootLastScannedAsync(Guid rootId, CancellationToken cancellationToken) => throw new NotSupportedException();
-        public Task<IReadOnlySet<string>> GetExcludedPathsForRootAsync(Guid rootId, CancellationToken cancellationToken) => throw new NotSupportedException();
-        public Task<int> RemoveEntitiesInExcludedPathsAsync(Guid rootId, CancellationToken cancellationToken) => throw new NotSupportedException();
-        public Task<int> RemoveEntitiesOutsideLibraryRootsAsync(CancellationToken cancellationToken) => throw new NotSupportedException();
-        public Task<int> RemoveOrphanTagsAsync(CancellationToken cancellationToken) => throw new NotSupportedException();
-    }
-
-    private sealed class NoRecycleBin : IRecycleBin {
-        public Task<string?> TryMoveToBinAsync(string filePath, CancellationToken cancellationToken) => Task.FromResult<string?>(null);
-        public Task<int> CleanupAsync(CancellationToken cancellationToken) => Task.FromResult(0);
-    }
-
-    private sealed class ThrowingClientConfigStore : Prismedia.Application.Acquisition.IDownloadClientConfigStore {
-        public Task<Prismedia.Contracts.Acquisition.DownloadClientDetail?> GetAsync(Guid id, CancellationToken cancellationToken) => throw new NotSupportedException();
-        public Task<Prismedia.Contracts.Acquisition.DownloadClientDetail?> GetDefaultAsync(CancellationToken cancellationToken) => throw new NotSupportedException();
-        public Task<Prismedia.Contracts.Acquisition.DownloadClientDetail?> GetDefaultAsync(DownloadProtocol protocol, CancellationToken cancellationToken) => throw new NotSupportedException();
-        public Task<IReadOnlyList<Prismedia.Contracts.Acquisition.DownloadClientDetail>> ListEnabledAsync(DownloadProtocol protocol, CancellationToken cancellationToken) => throw new NotSupportedException();
-        public Task<IReadOnlyList<DownloadProtocol>> GetEnabledProtocolsAsync(CancellationToken cancellationToken) => throw new NotSupportedException();
-        public Task<IReadOnlyList<Prismedia.Contracts.Acquisition.DownloadClientSummary>> ListAsync(CancellationToken cancellationToken) => throw new NotSupportedException();
-        public Task<IReadOnlyList<Prismedia.Contracts.Acquisition.DownloadClientDetail>> ListDetailsAsync(CancellationToken cancellationToken) => throw new NotSupportedException();
-        public Task<Prismedia.Contracts.Acquisition.DownloadClientSummary> SaveAsync(Prismedia.Application.Acquisition.DownloadClientSaveCommand command, CancellationToken cancellationToken) => throw new NotSupportedException();
-        public Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken) => throw new NotSupportedException();
-    }
-
-    private sealed class ThrowingClientFactory : IDownloadClientFactory {
-        public IDownloadClient Get(DownloadClientKind kind) => throw new NotSupportedException();
-    }
-
-    private sealed class RecordingJobQueue : IJobQueueService {
-        public List<EnqueueJobRequest> Enqueued { get; } = [];
-
-        public Task<JobRunSnapshot> EnqueueAsync(EnqueueJobRequest request, CancellationToken cancellationToken) {
-            Enqueued.Add(request);
-            var now = DateTimeOffset.UtcNow;
-            return Task.FromResult(new JobRunSnapshot(
-                Guid.NewGuid(), request.Type, JobRunStatus.Queued, 0, null, request.PayloadJson ?? "{}",
-                request.TargetEntityKind, request.TargetEntityId, request.TargetLabel, now, null, null));
-        }
-
-        public Task<bool> HasPendingAsync(JobType type, string? targetEntityId, CancellationToken cancellationToken) =>
-            Task.FromResult(Enqueued.Any(request => request.Type == type && request.TargetEntityId == targetEntityId));
-        public Task UpdateProgressAsync(Guid id, int progress, string? message, CancellationToken cancellationToken) => Task.CompletedTask;
-
-        public Task<IReadOnlyList<JobRunSnapshot>> ListAsync(bool hideNsfw, CancellationToken cancellationToken) => throw new NotSupportedException();
-        public Task<JobRunSnapshot> EnqueueAsync(JobType type, CancellationToken cancellationToken) => throw new NotSupportedException();
-        public Task<int> EnqueueBatchAsync(IReadOnlyList<EnqueueJobRequest> requests, CancellationToken cancellationToken) => throw new NotSupportedException();
-        public Task<int> CancelAsync(JobType? type, CancellationToken cancellationToken) => throw new NotSupportedException();
-        public Task<bool> CancelRunAsync(Guid id, CancellationToken cancellationToken) => throw new NotSupportedException();
-        public Task<int> ClearFailuresAsync(JobType? type, CancellationToken cancellationToken) => throw new NotSupportedException();
-        public Task<JobRunSnapshot?> ClaimNextAsync(string workerId, CancellationToken cancellationToken, JobRunLane? lane = null) => throw new NotSupportedException();
-        public Task<int> RecoverStaleRunningAsync(string currentWorkerId, TimeSpan staleAfter, CancellationToken cancellationToken) => throw new NotSupportedException();
-        public Task CompleteAsync(Guid id, string? message, CancellationToken cancellationToken) => throw new NotSupportedException();
-        public Task FailAsync(Guid id, string message, TimeSpan retryDelay, CancellationToken cancellationToken) => throw new NotSupportedException();
-        public Task<IReadOnlyList<JobQueueCount>> GetQueueCountsAsync(bool hideNsfw, CancellationToken cancellationToken) => throw new NotSupportedException();
-        public Task<int> PruneHistoryAsync(TimeSpan retention, CancellationToken cancellationToken) => throw new NotSupportedException();
-    }
 }
