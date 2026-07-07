@@ -174,6 +174,7 @@ public static class QBittorrentProtocol {
     public const string LoginEndpoint = "api/v2/auth/login";
     public const string VersionEndpoint = "api/v2/app/version";
     public const string CreateCategoryEndpoint = "api/v2/torrents/createCategory";
+    public const string CategoriesEndpoint = "api/v2/torrents/categories";
     public const string AddEndpoint = "api/v2/torrents/add";
     public const string InfoEndpoint = "api/v2/torrents/info";
     public const string DeleteEndpoint = "api/v2/torrents/delete";

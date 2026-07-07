@@ -14,6 +14,9 @@ namespace Prismedia.Infrastructure.Acquisition;
 public sealed class QBittorrentDownloadClient(HttpClient http) : IDownloadClient {
     public DownloadClientKind Kind => DownloadClientKind.QBittorrent;
 
+    /// <summary>Delay between add-correlation polls. Internal so tests don't wait out the real cadence.</summary>
+    internal TimeSpan AddPollDelay { get; init; } = TimeSpan.FromSeconds(1);
+
     public async Task<string> AddAsync(DownloadClientConnection connection, DownloadAddRequest request, CancellationToken cancellationToken) {
         var session = await LoginAsync(connection, cancellationToken);
 
@@ -37,7 +40,7 @@ public sealed class QBittorrentDownloadClient(HttpClient http) : IDownloadClient
         }
 
         for (var attempt = 0; attempt < 15; attempt++) {
-            await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
+            await Task.Delay(AddPollDelay, cancellationToken);
             var after = await CategoryHashesAsync(connection, session, request.Category, cancellationToken);
             after.ExceptWith(before);
             if (after.Count > 0) {
@@ -45,10 +48,26 @@ public sealed class QBittorrentDownloadClient(HttpClient http) : IDownloadClient
             }
         }
 
-        throw new InvalidOperationException("qBittorrent accepted the release but the torrent did not appear in the category.");
+        // No new hash appeared even though the add was accepted. The overwhelmingly common cause is a
+        // DUPLICATE: qBittorrent answers 200 for a torrent it already has but creates nothing. Correlate
+        // against the category's existing torrents by normalized name — a confident match means the
+        // release is already in the client and that torrent serves this add too. This is never a category
+        // problem (the category was just listed successfully), so don't report it as one.
+        if (await FindByNormalizedNameAsync(connection, session, request.Category, request.Title, cancellationToken) is { } duplicate) {
+            return duplicate;
+        }
+
+        throw new InvalidOperationException(
+            "qBittorrent accepted the add but created no new torrent — the release is likely already present in the client (duplicate add).");
     }
 
-    private async Task<HashSet<string>> CategoryHashesAsync(DownloadClientConnection connection, string? session, string category, CancellationToken cancellationToken) {
+    private async Task<HashSet<string>> CategoryHashesAsync(DownloadClientConnection connection, string? session, string category, CancellationToken cancellationToken) =>
+        (await CategoryTorrentsAsync(connection, session, category, cancellationToken))
+        .Select(torrent => torrent.Hash)
+        .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+    private async Task<IReadOnlyList<(string Hash, string? Name)>> CategoryTorrentsAsync(
+        DownloadClientConnection connection, string? session, string category, CancellationToken cancellationToken) {
         var path = $"{QBittorrentProtocol.InfoEndpoint}?{QBittorrentProtocol.CategoryField}={Uri.EscapeDataString(category)}";
         using var request = BuildRequest(connection, session, HttpMethod.Get, path, content: null);
         using var response = await http.SendAsync(request, cancellationToken);
@@ -56,17 +75,44 @@ public sealed class QBittorrentDownloadClient(HttpClient http) : IDownloadClient
 
         await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
         using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
-        var hashes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var torrents = new List<(string, string?)>();
         if (document.RootElement.ValueKind == JsonValueKind.Array) {
             foreach (var item in document.RootElement.EnumerateArray()) {
                 if (Text(item, QBittorrentProtocol.Hash) is { } hash) {
-                    hashes.Add(hash);
+                    torrents.Add((hash, Text(item, QBittorrentProtocol.Name)));
                 }
             }
         }
 
-        return hashes;
+        return torrents;
     }
+
+    /// <summary>
+    /// The hash of the ONE category torrent whose normalized name matches <paramref name="title"/>, or
+    /// null when there is no title to match, no match, or more than one (ambiguity never guesses).
+    /// </summary>
+    private async Task<string?> FindByNormalizedNameAsync(
+        DownloadClientConnection connection, string? session, string category, string? title, CancellationToken cancellationToken) {
+        if (string.IsNullOrWhiteSpace(title)) {
+            return null;
+        }
+
+        var normalizedTitle = NormalizeTorrentName(title);
+        if (normalizedTitle.Length == 0) {
+            return null;
+        }
+
+        var matches = (await CategoryTorrentsAsync(connection, session, category, cancellationToken))
+            .Where(torrent => torrent.Name is not null && NormalizeTorrentName(torrent.Name) == normalizedTitle)
+            .Select(torrent => torrent.Hash)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        return matches.Length == 1 ? matches[0] : null;
+    }
+
+    /// <summary>Case-folds and strips everything but letters and digits, so punctuation/spacing variants of the same release name compare equal.</summary>
+    private static string NormalizeTorrentName(string name) =>
+        new(name.Where(char.IsLetterOrDigit).Select(char.ToLowerInvariant).ToArray());
 
     public async Task<DownloadItemStatus?> GetItemAsync(DownloadClientConnection connection, string clientItemId, CancellationToken cancellationToken) {
         var session = await LoginAsync(connection, cancellationToken);
@@ -141,7 +187,7 @@ public sealed class QBittorrentDownloadClient(HttpClient http) : IDownloadClient
         response.EnsureSuccessStatusCode();
 
         for (var attempt = 0; attempt < 15; attempt++) {
-            await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
+            await Task.Delay(AddPollDelay, cancellationToken);
             var after = await CategoryHashesAsync(connection, session, connection.Category, cancellationToken);
             after.ExceptWith(before);
             if (after.Count > 0) {
@@ -149,7 +195,15 @@ public sealed class QBittorrentDownloadClient(HttpClient http) : IDownloadClient
             }
         }
 
-        throw new InvalidOperationException("qBittorrent accepted the uploaded torrent but it did not appear in the category.");
+        // Same duplicate correlation as the URL add: an accepted upload that created nothing usually
+        // means the torrent already exists; match it by the file's name before failing.
+        if (await FindByNormalizedNameAsync(
+                connection, session, connection.Category, Path.GetFileNameWithoutExtension(fileName), cancellationToken) is { } duplicate) {
+            return duplicate;
+        }
+
+        throw new InvalidOperationException(
+            "qBittorrent accepted the upload but created no new torrent — the torrent is likely already present in the client (duplicate add).");
     }
 
     public async Task<IReadOnlyList<DownloadItemFile>> GetFilesAsync(DownloadClientConnection connection, string clientItemId, CancellationToken cancellationToken) {
@@ -247,14 +301,38 @@ public sealed class QBittorrentDownloadClient(HttpClient http) : IDownloadClient
             var session = await LoginAsync(connection, cancellationToken);
             using var request = BuildRequest(connection, session, HttpMethod.Get, QBittorrentProtocol.VersionEndpoint, content: null);
             using var response = await http.SendAsync(request, cancellationToken);
-            return response.IsSuccessStatusCode
-                ? new DownloadClientConnectionTest(true, "Connected to qBittorrent.")
-                : new DownloadClientConnectionTest(false, $"qBittorrent returned {(int)response.StatusCode} {response.ReasonPhrase}.");
+            if (!response.IsSuccessStatusCode) {
+                return new DownloadClientConnectionTest(false, $"qBittorrent returned {(int)response.StatusCode} {response.ReasonPhrase}.");
+            }
+
+            // Verify the configured category can actually exist: create it (conflict = already there),
+            // then read the categories list back. A real category problem surfaces HERE, at test time,
+            // so add-time failures are never misattributed to the category.
+            await PostAsync(connection, session, QBittorrentProtocol.CreateCategoryEndpoint, new Dictionary<string, string> {
+                [QBittorrentProtocol.CategoryField] = connection.Category
+            }, cancellationToken, allowConflict: true);
+            if (!await CategoryExistsAsync(connection, session, connection.Category, cancellationToken)) {
+                return new DownloadClientConnectionTest(
+                    false, $"qBittorrent connected, but the category \"{connection.Category}\" could not be created or found.");
+            }
+
+            return new DownloadClientConnectionTest(true, $"Connected to qBittorrent; category \"{connection.Category}\" is ready.");
         } catch (QBittorrentAuthException ex) {
             return new DownloadClientConnectionTest(false, ex.Message);
         } catch (Exception ex) when (ex is not OperationCanceledException) {
             return new DownloadClientConnectionTest(false, ex.Message);
         }
+    }
+
+    private async Task<bool> CategoryExistsAsync(DownloadClientConnection connection, string? session, string category, CancellationToken cancellationToken) {
+        using var request = BuildRequest(connection, session, HttpMethod.Get, QBittorrentProtocol.CategoriesEndpoint, content: null);
+        using var response = await http.SendAsync(request, cancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+        using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
+        return document.RootElement.ValueKind == JsonValueKind.Object
+            && document.RootElement.TryGetProperty(category, out _);
     }
 
     /// <summary>Authenticates and returns the session cookie, or null when the client requires no credentials.</summary>

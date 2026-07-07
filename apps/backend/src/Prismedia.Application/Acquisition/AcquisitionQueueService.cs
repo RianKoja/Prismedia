@@ -58,7 +58,8 @@ public sealed class AcquisitionQueueService(
         try {
             var (client, clientItemId) = await AddWithFallbackAsync(
                 eligible,
-                (downloadClient, connection) => downloadClient.AddAsync(connection, new DownloadAddRequest(url, candidate.InfoHash, category ?? connection.Category), cancellationToken));
+                (downloadClient, connection) => downloadClient.AddAsync(
+                    connection, new DownloadAddRequest(url, candidate.InfoHash, category ?? connection.Category, candidate.Title), cancellationToken));
             var seedGoal = await ResolveSeedGoalAsync(candidate, client, cancellationToken);
             await acquisitions.CreateTransferAsync(acquisitionId, client.Id, clientItemId, category ?? client.Category, cancellationToken, seedGoal);
             // Snapshot the chosen release so a later failure can blocklist exactly it (and pick the next-best).

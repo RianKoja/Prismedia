@@ -17,7 +17,8 @@ public sealed record DownloadClientConnection(
 /// <summary>A release to add to a download client.</summary>
 /// <param name="Url">The download/magnet URL (for Prowlarr, a self-authenticating proxy URL).</param>
 /// <param name="InfoHash">The release info hash, used to track the resulting torrent. Null when unknown.</param>
-public sealed record DownloadAddRequest(string Url, string? InfoHash, string Category);
+/// <param name="Title">The selected release's title; lets a client correlate a duplicate add (accepted but no new torrent created) with the already-present torrent by name.</param>
+public sealed record DownloadAddRequest(string Url, string? InfoHash, string Category, string? Title = null);
 
 /// <summary>Current state of an item in a download client.</summary>
 /// <param name="Progress">Transfer progress in the range 0..1.</param>
