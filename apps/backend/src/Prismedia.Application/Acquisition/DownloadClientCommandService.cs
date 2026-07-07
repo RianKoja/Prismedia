@@ -20,16 +20,15 @@ public sealed class DownloadClientCommandService(
     public async Task<DownloadClientTestResponse> TestAsync(DownloadClientTestRequest request, CancellationToken cancellationToken) {
         ValidateBaseUrl(request.BaseUrl);
 
-        var password = request.Password;
-        var apiKey = request.ApiKey;
-        if ((string.IsNullOrWhiteSpace(password) || string.IsNullOrWhiteSpace(apiKey)) && request.Id is { } id) {
-            var stored = await store.GetAsync(id, cancellationToken);
-            password = string.IsNullOrWhiteSpace(password) ? stored?.Password : password;
-            apiKey = string.IsNullOrWhiteSpace(apiKey) ? stored?.ApiKey : apiKey;
-        }
+        // Testing a SAVED client reuses its stored secrets (the form never echoes them back) and its
+        // stored category, so the test validates the category the client will actually add under. A
+        // pre-save test carries no category and checks connectivity only.
+        var stored = request.Id is { } id ? await store.GetAsync(id, cancellationToken) : null;
+        var password = string.IsNullOrWhiteSpace(request.Password) ? stored?.Password : request.Password;
+        var apiKey = string.IsNullOrWhiteSpace(request.ApiKey) ? stored?.ApiKey : request.ApiKey;
 
         var connection = new DownloadClientConnection(
-            request.Id ?? Guid.Empty, request.Kind, request.BaseUrl.Trim().TrimEnd('/'), request.Username, password, string.Empty, apiKey);
+            request.Id ?? Guid.Empty, request.Kind, request.BaseUrl.Trim().TrimEnd('/'), request.Username, password, stored?.Category ?? string.Empty, apiKey);
         var result = await clients.Get(request.Kind).TestAsync(connection, cancellationToken);
         return new DownloadClientTestResponse(result.Connected, result.Message);
     }

@@ -62,6 +62,17 @@ public sealed class QBittorrentDownloadClientTests {
     }
 
     [Fact]
+    public async Task CategorylessConnectionTestChecksConnectivityOnly() {
+        // A pre-save test carries no category; posting createCategory with an empty name would be
+        // rejected by qBittorrent and misread as a connection/auth failure.
+        var categoryless = Connection with { Category = string.Empty };
+
+        var result = await NewClient(new StubHandler()).TestAsync(categoryless, CancellationToken.None);
+
+        Assert.True(result.Connected);
+    }
+
+    [Fact]
     public async Task ConnectionTestValidatesTheCategoryExplicitly() {
         var handler = new StubHandler { Categories = """{"prismedia":{"name":"prismedia","savePath":""}}""" };
         var ready = await NewClient(handler).TestAsync(Connection, CancellationToken.None);

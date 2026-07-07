@@ -305,6 +305,12 @@ public sealed class QBittorrentDownloadClient(HttpClient http) : IDownloadClient
                 return new DownloadClientConnectionTest(false, $"qBittorrent returned {(int)response.StatusCode} {response.ReasonPhrase}.");
             }
 
+            // A connection without a category (a pre-save test) verifies connectivity only — an empty
+            // category name would be rejected by qBittorrent and misread as an auth/connection failure.
+            if (string.IsNullOrWhiteSpace(connection.Category)) {
+                return new DownloadClientConnectionTest(true, "Connected to qBittorrent.");
+            }
+
             // Verify the configured category can actually exist: create it (conflict = already there),
             // then read the categories list back. A real category problem surfaces HERE, at test time,
             // so add-time failures are never misattributed to the category.
