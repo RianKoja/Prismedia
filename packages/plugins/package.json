@@ -12,7 +12,6 @@
   },
   "dependencies": {
     "@prismedia/contracts": "workspace:*",
-    "@prismedia/media-core": "workspace:*",
     "@prismedia/stash-compat": "workspace:*",
     "js-yaml": "^4.1.1"
   },

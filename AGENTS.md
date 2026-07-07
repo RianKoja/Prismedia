@@ -165,7 +165,7 @@ control or layout, find the block that owns the pattern and use it.
 
 - Presentational, domain-free primitives live in `packages/ui-svelte`
   (`Button`, `TextInput`, `Select`, `Checkbox`, `Toggle`, `Badge`, `Meter`,
-  `MediaCard`, plus shared overlays/inputs as they land). Membership test: no `$lib`,
+  plus shared overlays/inputs as they land). Membership test: no `$lib`,
   `$app`, or `$lib/api` imports.
 - Domain-aware field wrappers live in `apps/web-svelte/src/lib/components/forms`
   (`TextField`, `SearchSelect`, `TagSelect`, `EntityPicker`, `DateField`,

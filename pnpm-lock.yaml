@@ -14,18 +14,12 @@ importers:
       '@testing-library/jest-dom':
         specifier: ^6.9.1
         version: 6.9.1
-      '@testing-library/user-event':
-        specifier: ^14.6.1
-        version: 14.6.1(@testing-library/dom@10.4.1)
       '@vitest/coverage-v8':
         specifier: ^4.1.7
         version: 4.1.7(vitest@4.1.7)
       jsdom:
         specifier: ^29.1.1
         version: 29.1.1
-      postgres:
-        specifier: ^3.4.9
-        version: 3.4.9
       turbo:
         specifier: ^2.9.14
         version: 2.9.14
@@ -44,9 +38,6 @@ importers:
       '@prismedia/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
-      '@prismedia/media-core':
-        specifier: workspace:*
-        version: link:../../packages/media-core
       '@prismedia/ui-svelte':
         specifier: workspace:*
         version: link:../../packages/ui-svelte
@@ -117,9 +108,6 @@ importers:
       '@testing-library/svelte':
         specifier: ^5.3.1
         version: 5.3.1(svelte@5.55.9)(vite@6.4.2(@types/node@22.19.19)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.48.0)(tsx@4.21.0)(yaml@2.9.0))(vitest@4.1.7)
-      '@testing-library/user-event':
-        specifier: ^14.6.1
-        version: 14.6.1(@testing-library/dom@10.4.1)
       '@types/node':
         specifier: ^22.19.19
         version: 22.19.19
@@ -232,9 +220,6 @@ importers:
       '@prismedia/contracts':
         specifier: workspace:*
         version: link:../contracts
-      '@prismedia/media-core':
-        specifier: workspace:*
-        version: link:../media-core
       '@prismedia/stash-compat':
         specifier: workspace:*
         version: link:../stash-compat
@@ -257,9 +242,6 @@ importers:
       '@prismedia/contracts':
         specifier: workspace:*
         version: link:../contracts
-      '@prismedia/media-core':
-        specifier: workspace:*
-        version: link:../media-core
       js-yaml:
         specifier: ^4.1.1
         version: 4.1.1
@@ -3299,12 +3281,6 @@ packages:
         optional: true
       vitest:
         optional: true
-
-  '@testing-library/user-event@14.6.1':
-    resolution: {integrity: sha512-vq7fv0rnt+QTXgPxr5Hjc210p6YKq2kmdziLgnsZGgLJ9e6VAShx1pACLuRjd/AS/sr7phAR58OIIpf0LlmQNw==}
-    engines: {node: '>=12', npm: '>=6'}
-    peerDependencies:
-      '@testing-library/dom': '>=7.21.4'
 
   '@tiptap/core@3.23.6':
     resolution: {integrity: sha512-MRB3pHz4Oxqmcawh0cQ5iOGdY5xtNYp/1CoK7hdTLzw5K0C6/gTC2VvanB1R4INaB6EpBkxG/GiWkVirDRnuXw==}
@@ -6989,10 +6965,6 @@ packages:
   postcss@8.5.15:
     resolution: {integrity: sha512-FfR8sjd4em2T6fb3I2MwAJU7HWVMr9zba+enmQeeWFfCbm+UOC/0X4DS8XtpUTMwWMGbjKYP7xjfNekzyGmB3A==}
     engines: {node: ^10 || ^12 || >=14}
-
-  postgres@3.4.9:
-    resolution: {integrity: sha512-GD3qdB0x1z9xgFI6cdRD6xu2Sp2WCOEoe3mtnyB5Ee0XrrL5Pe+e4CCnJrRMnL1zYtRDZmQQVbvOttLnKDLnaw==}
-    engines: {node: '>=12'}
 
   preact-render-to-string@6.6.5:
     resolution: {integrity: sha512-O6MHzYNIKYaiSX3bOw0gGZfEbOmlIDtDfWwN1JJdc/T3ihzRT6tGGSEWE088dWrEDGa1u7101q+6fzQnO9XCPA==}
@@ -12311,10 +12283,6 @@ snapshots:
       vite: 6.4.2(@types/node@22.19.19)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.48.0)(tsx@4.21.0)(yaml@2.9.0)
       vitest: 4.1.7(@types/node@22.19.19)(@vitest/coverage-v8@4.1.7)(jsdom@26.1.0)(vite@6.4.2(@types/node@22.19.19)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.48.0)(tsx@4.21.0)(yaml@2.9.0))
 
-  '@testing-library/user-event@14.6.1(@testing-library/dom@10.4.1)':
-    dependencies:
-      '@testing-library/dom': 10.4.1
-
   '@tiptap/core@3.23.6(@tiptap/pm@3.23.6)':
     dependencies:
       '@tiptap/pm': 3.23.6
@@ -16636,8 +16604,6 @@ snapshots:
       nanoid: 3.3.12
       picocolors: 1.1.1
       source-map-js: 1.2.1
-
-  postgres@3.4.9: {}
 
   preact-render-to-string@6.6.5(preact@11.0.0-beta.0):
     dependencies:

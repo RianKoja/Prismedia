@@ -19,8 +19,6 @@ const legacyFrontendDtoNames = [
 
 const allowedTransitionalApiImports = new Set([
   "apps/web-svelte/src/lib/api/identify.ts",
-  "apps/web-svelte/src/lib/components/IdentifyButton.svelte",
-  "apps/web-svelte/src/lib/components/IdentifyButton.test.ts",
   "apps/web-svelte/src/lib/components/ImageLightboxDetails.svelte",
   "apps/web-svelte/src/lib/components/VideoMarkerEditor.svelte",
   "apps/web-svelte/src/lib/components/entities/EntityDetail.svelte",
@@ -46,7 +44,6 @@ const allowedTransitionalApiImports = new Set([
   "apps/web-svelte/src/lib/components/settings/DiagnosticsSection.svelte",
   "apps/web-svelte/src/lib/components/settings/SettingsControl.svelte",
   "apps/web-svelte/src/lib/components/settings/SettingsControl.test.ts",
-  "apps/web-svelte/src/lib/components/settings/SubtitlesSection.svelte",
   "apps/web-svelte/src/lib/components/settings/WatchedLibrariesSection.svelte",
   "apps/web-svelte/src/lib/components/universal-lightbox-media.test.ts",
   "apps/web-svelte/src/lib/components/universal-lightbox-media.ts",
@@ -57,7 +54,6 @@ const allowedTransitionalApiImports = new Set([
   "apps/web-svelte/src/lib/jobs/jobs-dashboard.ts",
   "apps/web-svelte/src/lib/jobs/worker-health.ts",
   "apps/web-svelte/src/lib/settings/app-settings.ts",
-  "apps/web-svelte/src/lib/video-card-data.ts",
   "apps/web-svelte/src/routes/+layout.ts",
   "apps/web-svelte/src/routes/audio/[id]/+page.svelte",
   "apps/web-svelte/src/routes/audio/tracks/[id]/+page.svelte",

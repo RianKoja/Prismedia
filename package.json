@@ -31,10 +31,8 @@
   "devDependencies": {
     "@playwright/test": "^1.60.0",
     "@testing-library/jest-dom": "^6.9.1",
-    "@testing-library/user-event": "^14.6.1",
     "@vitest/coverage-v8": "^4.1.7",
     "jsdom": "^29.1.1",
-    "postgres": "^3.4.9",
     "turbo": "^2.9.14",
     "vitest": "^4.1.7"
   }
