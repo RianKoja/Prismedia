@@ -248,6 +248,43 @@ public sealed class MediaReleaseDecisionEnginesTests {
     }
 
     [Fact]
+    public void SeasonSearchRanksExactSeasonAboveMarkerlessRegardlessOfQuality() {
+        // Regression (Bear in the Big Blue House): one marker-less DVD rip with high quality/seeders
+        // outscored the exact season packs for FOUR different season searches and was queued as the
+        // same torrent four times. Unit precision must dominate quality for auto-grabs.
+        var engine = new TvReleaseDecisionEngine(EntityKind.VideoSeason);
+        var rules = BookAcquisitionRules.Default with { SeasonNumber = 2 };
+
+        var scored = engine.Evaluate([
+            (Release("WALT DISNEYS BEAR IN THE BIG BLUE HOUSE SHAPES SOUNDS COLOURS KIDZCORNER DVDRIP[ENG]", seeders: 500), null, "Indexer"),
+            (Release("Bear in the Big Blue House 1997 S02 TVRip x264", seeders: 3), null, "Indexer"),
+            (Release("Bear in the Big Blue House COMPLETE SERIES DVDRip", seeders: 50), null, "Indexer"),
+        ], rules);
+
+        Assert.All(scored, candidate => Assert.True(candidate.Accepted));
+        Assert.Equal(
+            [
+                "Bear in the Big Blue House 1997 S02 TVRip x264",
+                "Bear in the Big Blue House COMPLETE SERIES DVDRip",
+                "WALT DISNEYS BEAR IN THE BIG BLUE HOUSE SHAPES SOUNDS COLOURS KIDZCORNER DVDRIP[ENG]",
+            ],
+            scored.Select(candidate => candidate.Release.Title).ToArray());
+    }
+
+    [Fact]
+    public void EpisodeSearchRanksTheExactEpisodeAboveMarkerlessTitles() {
+        var engine = new TvReleaseDecisionEngine(EntityKind.Video);
+        var rules = BookAcquisitionRules.Default with { SeasonNumber = 1, EpisodeNumber = 5 };
+
+        var scored = engine.Evaluate([
+            (Release("Show 2160p BluRay REMUX", seeders: 900), null, "Indexer"),
+            (Release("Show S01E05 720p WEB", seeders: 2), null, "Indexer"),
+        ], rules);
+
+        Assert.Equal("Show S01E05 720p WEB", scored[0].Release.Title);
+    }
+
+    [Fact]
     public void MediaEnginesRejectReleaseTitlesNamingDangerousFiles() {
         var engine = new MovieReleaseDecisionEngine();
 

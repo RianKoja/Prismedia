@@ -236,11 +236,24 @@ public sealed class MinFormatScoreSpecification : IReleaseSpecification {
 
 /// <summary>
 /// TV decision engine: the generic acceptance gates plus the unit-match rule, ranked like movies
-/// (resolution, then source provenance). One engine class serves both TV acquisition units — season
-/// packs (<see cref="EntityKind.VideoSeason"/>) and single episodes (<see cref="EntityKind.Video"/>) —
+/// (resolution, then source provenance) with a dominant unit-precision tier on top — a release that
+/// NAMES the sought season/episode outranks a complete-series pack, which outranks a marker-less
+/// title, regardless of their detected qualities. One engine class serves both TV acquisition units —
+/// season packs (<see cref="EntityKind.VideoSeason"/>) and single episodes (<see cref="EntityKind.Video"/>) —
 /// registered once per kind, since the vocabulary of a TV release is the same at either granularity.
 /// </summary>
 public sealed class TvReleaseDecisionEngine(EntityKind kind) : IAcquisitionDecisionEngine {
+    /// <summary>
+    /// Unit-precision score tiers. Sized to dominate every quality/revision/seeder difference (quality
+    /// tops out around 1.5M) while staying below deliberate heavy user weighted-terms (±10_000 weight →
+    /// ±100M), so unit precision decides auto-grabs unless the user explicitly tuned something stronger.
+    /// A marker-less title (no season/episode token at all) is the last resort, never the winner while a
+    /// unit-named or complete-series candidate exists — the fix for one marker-less DVD rip winning four
+    /// different season searches and being queued as the same torrent four times.
+    /// </summary>
+    private const double ExactUnitBoost = 10_000_000;
+    private const double CompleteSeriesBoost = 5_000_000;
+
     public EntityKind Kind => kind;
 
     private readonly IReleaseSpecification[] _specifications = [
@@ -262,7 +275,28 @@ public sealed class TvReleaseDecisionEngine(EntityKind kind) : IAcquisitionDecis
         IReadOnlyList<(IndexerRelease Release, Guid? IndexerConfigId, string IndexerName)> releases,
         BookAcquisitionRules rules,
         IReadOnlySet<string>? blocklistedIdentities = null) =>
-        MediaReleaseEvaluation.Evaluate(releases, rules, blocklistedIdentities, _specifications, MediaReleaseEvaluation.VideoReleaseScore);
+        MediaReleaseEvaluation.Evaluate(
+            releases, rules, blocklistedIdentities, _specifications,
+            static (release, rules) => MediaReleaseEvaluation.VideoReleaseScore(release, rules) + UnitPrecisionBoost(release, rules));
+
+    /// <summary>The unit-precision tier of one candidate for the sought TV unit; 0 outside TV searches.</summary>
+    internal static double UnitPrecisionBoost(IndexerRelease release, BookAcquisitionRules rules) {
+        if (rules.SeasonNumber is not { } season) {
+            return 0;
+        }
+
+        if (rules.EpisodeNumber is { } episode) {
+            // Single episode sought: only the exact SxxEyy earns the boost (other units are rejected by
+            // the unit specification; a marker-less single file ranks last).
+            return TvReleaseTokens.ParseEpisode(release.Title) == (season, episode) ? ExactUnitBoost : 0;
+        }
+
+        if (TvReleaseTokens.ParseSeason(release.Title) == season) {
+            return ExactUnitBoost;
+        }
+
+        return TvReleaseTokens.NamesCompleteSeries(release.Title) ? CompleteSeriesBoost : 0;
+    }
 }
 
 /// <summary>
