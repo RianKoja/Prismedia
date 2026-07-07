@@ -80,24 +80,42 @@ public sealed class AcquisitionSearchJobHandler(
     }
 
     /// <summary>
-    /// Best-effort auto-pick: queues the highest-scored accepted candidate. Failures (e.g. no download client
-    /// configured) are swallowed so the acquisition simply stays awaiting manual selection.
+    /// Auto-pick attempts are bounded so a broken client is not hammered with every candidate the
+    /// search returned; three best-scored releases is plenty to skate past a duplicate or a dead link.
+    /// </summary>
+    private const int MaxAutoQueueAttempts = 3;
+
+    /// <summary>
+    /// Best-effort auto-pick, best-scored first with fallback: a top candidate the download client
+    /// refuses (a duplicate add, a dead link) must not strand the acquisition when the next-best
+    /// accepted release would work. When every attempt fails, the acquisition is put back to
+    /// awaiting-selection — never left Failed while pickable candidates exist (QueueAsync marks
+    /// Failed internally on an add error, so the status must be restored here).
     /// </summary>
     private async Task TryAutoQueueAsync(Guid acquisitionId, CancellationToken cancellationToken) {
         var detail = await store.GetAsync(acquisitionId, cancellationToken);
-        var top = detail?.Candidates
+        var accepted = detail?.Candidates
             .Where(candidate => candidate.Accepted)
             .OrderByDescending(candidate => candidate.Score)
-            .FirstOrDefault();
-        if (top is null) {
-            return;
+            .Take(MaxAutoQueueAttempts)
+            .ToArray() ?? [];
+
+        foreach (var candidate in accepted) {
+            try {
+                await queue.QueueAsync(acquisitionId, candidate.Id, cancellationToken);
+                logger.LogInformation("AcquisitionSearch: auto-picked release {Candidate} for acquisition {Id}.", candidate.Id, acquisitionId);
+                return;
+            } catch (OperationCanceledException) {
+                throw;
+            } catch (Exception ex) {
+                logger.LogWarning(ex, "AcquisitionSearch: auto-pick candidate {Candidate} failed for acquisition {Id}; trying the next accepted release.", candidate.Id, acquisitionId);
+            }
         }
 
-        try {
-            await queue.QueueAsync(acquisitionId, top.Id, cancellationToken);
-            logger.LogInformation("AcquisitionSearch: auto-picked release {Candidate} for acquisition {Id}.", top.Id, acquisitionId);
-        } catch (Exception ex) when (ex is not OperationCanceledException) {
-            logger.LogWarning(ex, "AcquisitionSearch: auto-pick failed for acquisition {Id}; awaiting manual selection.", acquisitionId);
+        if (accepted.Length > 0) {
+            await store.SetStatusAsync(
+                acquisitionId, AcquisitionStatus.AwaitingSelection,
+                "Automatic download failed for the best releases; pick one manually.", cancellationToken);
         }
     }
 
