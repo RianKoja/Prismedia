@@ -1,4 +1,5 @@
 using Prismedia.Application.Acquisition;
+using Prismedia.Domain.Entities;
 
 namespace Prismedia.Application.Tests.Acquisition;
 
@@ -273,5 +274,168 @@ public sealed class ImportTargetResolverTests {
         var resolved = ImportTargetResolver.Resolve("/downloads/x", "/library/movies", plan);
 
         Assert.True(resolved.Blocked);
+    }
+}
+
+/// <summary>
+/// Covers the unit pass behind the TV plan (parity with <see cref="TvImportPlanBuilder.Plan"/>) and the
+/// existing-target merges: folder anchoring on the real on-disk tree and the per-file upgrade gate.
+/// </summary>
+public sealed class MediaImportMergeTests {
+    private static ImportCandidateFile File(string path, long size = 1_000_000) => new(path, size);
+
+    [Fact]
+    public void PlanUnitsMirrorsPlanWithParsedUnits() {
+        var files = new[] {
+            File("Andor.S01.1080p/Andor.S01E01.1080p.mkv"),
+            File("Andor.S01.1080p/Andor.S01E02.1080p.mkv"),
+        };
+
+        var plan = TvImportPlanBuilder.Plan(files, "Andor", seasonNumber: 1, episodeNumber: null);
+        var units = TvImportPlanBuilder.PlanUnits(files, "Andor", seasonNumber: 1, episodeNumber: null);
+
+        Assert.False(units.Blocked);
+        Assert.Equal(
+            plan.Items.Select(item => (item.SourceRelativePath, item.TargetRelativePath)).ToArray(),
+            units.Units.Select(unit => (unit.SourceRelativePath, unit.TargetRelativePath)).ToArray());
+        Assert.Equal([(1, 1), (1, 2)], units.Units.Select(unit => (unit.Season, unit.Episode)).ToArray());
+        Assert.Equal("Andor - S01E01.mkv", units.Units[0].FileName);
+    }
+
+    [Fact]
+    public void SeasonFolderSegmentRendersTheTemplatesMiddleSegment() {
+        Assert.Equal("Season 03", TvImportPlanBuilder.SeasonFolderSegment("Andor", 3));
+        Assert.Equal(
+            "S03",
+            TvImportPlanBuilder.SeasonFolderSegment("Andor", 3, "{Series}/S{Season:00}/{Series} {Season:00}x{Episode:00}.{ext}"));
+    }
+
+    // ── TvExistingTargetMerge: per-file collision gate against an existing on-disk series ──
+
+    private static TvSeriesDiskLayout Layout(Dictionary<int, string>? season1Episodes = null) =>
+        new(Guid.NewGuid(), "/media/tv/Andor (2022)", new Dictionary<int, TvSeasonDiskLayout> {
+            [1] = new(Guid.NewGuid(), "/media/tv/Andor (2022)/S01", season1Episodes ?? []),
+        });
+
+    private static IReadOnlyList<TvPlanUnit> Units(params (int Season, int Episode)[] units) =>
+        units.Select(unit => new TvPlanUnit(
+            $"pack/e{unit.Episode}.mkv", unit.Season, unit.Episode,
+            $"Andor/Season {unit.Season:00}/Andor - S{unit.Season:00}E{unit.Episode:00}.mkv")).ToArray();
+
+    private static string SeasonSegment(int season) => $"Season {season:00}";
+
+    [Fact]
+    public void NewEpisodesPlaceIntoTheExistingSeasonFolder() {
+        var merged = TvExistingTargetMerge.Plan(
+            Units((1, 2)), Layout(), SeasonSegment,
+            incomingQualityPosition: (int)VideoQuality.Webdl1080p, incomingRevision: 1, ProperDownloadPolicy.PreferAndUpgrade);
+
+        var item = Assert.Single(merged);
+        Assert.Equal(MergeFileAction.PlaceNew, item.Action);
+        Assert.Equal(Path.Combine("/media/tv/Andor (2022)/S01", "Andor - S01E02.mkv"), item.TargetAbsolutePath);
+    }
+
+    [Fact]
+    public void MissingSeasonGetsATemplateNamedFolderInsideTheExistingSeriesFolder() {
+        var merged = TvExistingTargetMerge.Plan(
+            Units((2, 1)), Layout(), SeasonSegment,
+            incomingQualityPosition: (int)VideoQuality.Webdl1080p, incomingRevision: 1, ProperDownloadPolicy.PreferAndUpgrade);
+
+        Assert.Equal(
+            Path.Combine("/media/tv/Andor (2022)", "Season 02", "Andor - S02E01.mkv"),
+            Assert.Single(merged).TargetAbsolutePath);
+    }
+
+    [Fact]
+    public void StrictlyBetterQualityReplacesTheOwnedFileInPlace() {
+        var layout = Layout(new Dictionary<int, string> { [1] = "/media/tv/Andor (2022)/S01/e01.720p.WEB.mkv" });
+
+        var merged = TvExistingTargetMerge.Plan(
+            Units((1, 1)), layout, SeasonSegment,
+            incomingQualityPosition: (int)VideoQuality.Bluray1080p, incomingRevision: 1, ProperDownloadPolicy.PreferAndUpgrade);
+
+        var item = Assert.Single(merged);
+        Assert.Equal(MergeFileAction.ReplaceUpgrade, item.Action);
+        Assert.Equal("/media/tv/Andor (2022)/S01/e01.720p.WEB.mkv", item.OwnedFilePath);
+        Assert.Equal(item.OwnedFilePath, item.TargetAbsolutePath);
+    }
+
+    [Fact]
+    public void EqualOrWorseQualityIsDropped() {
+        var layout = Layout(new Dictionary<int, string> { [1] = "/media/tv/Andor (2022)/S01/e01.1080p.BluRay.mkv" });
+
+        var merged = TvExistingTargetMerge.Plan(
+            Units((1, 1)), layout, SeasonSegment,
+            incomingQualityPosition: (int)VideoQuality.Webdl1080p, incomingRevision: 1, ProperDownloadPolicy.PreferAndUpgrade);
+
+        Assert.Equal(MergeFileAction.DropNotUpgrade, Assert.Single(merged).Action);
+    }
+
+    [Theory]
+    [InlineData(ProperDownloadPolicy.PreferAndUpgrade, MergeFileAction.ReplaceUpgrade)]
+    [InlineData(ProperDownloadPolicy.DoNotUpgrade, MergeFileAction.DropNotUpgrade)]
+    [InlineData(ProperDownloadPolicy.DoNotPrefer, MergeFileAction.DropNotUpgrade)]
+    public void EqualQualityProperReplacesOnlyUnderThePreferAndUpgradePolicy(ProperDownloadPolicy policy, MergeFileAction expected) {
+        var layout = Layout(new Dictionary<int, string> { [1] = "/media/tv/Andor (2022)/S01/e01.1080p.WEB-DL.mkv" });
+
+        var merged = TvExistingTargetMerge.Plan(
+            Units((1, 1)), layout, SeasonSegment,
+            incomingQualityPosition: (int)VideoQuality.Webdl1080p, incomingRevision: 2, policy);
+
+        Assert.Equal(expected, Assert.Single(merged).Action);
+    }
+
+    [Theory]
+    [InlineData(0, "/media/tv/Andor (2022)/S01/e01.1080p.WEB.mkv")] // incoming unrankable
+    [InlineData(10, "/media/tv/Andor (2022)/S01/Episode 1.mkv")] // owned unrankable
+    public void UnknownQualityOnEitherSideNeverReplaces(int incomingPosition, string ownedPath) {
+        var layout = Layout(new Dictionary<int, string> { [1] = ownedPath });
+
+        var merged = TvExistingTargetMerge.Plan(
+            Units((1, 1)), layout, SeasonSegment, incomingPosition, incomingRevision: 1, ProperDownloadPolicy.PreferAndUpgrade);
+
+        Assert.Equal(MergeFileAction.DropNotUpgrade, Assert.Single(merged).Action);
+    }
+
+    [Fact]
+    public void UpgradeThatChangesTheExtensionIsSurfacedNotSwapped() {
+        var layout = Layout(new Dictionary<int, string> { [1] = "/media/tv/Andor (2022)/S01/e01.720p.WEB.mp4" });
+
+        var merged = TvExistingTargetMerge.Plan(
+            Units((1, 1)), layout, SeasonSegment,
+            incomingQualityPosition: (int)VideoQuality.Bluray2160p, incomingRevision: 1, ProperDownloadPolicy.PreferAndUpgrade);
+
+        Assert.Equal(MergeFileAction.DropFormatChange, Assert.Single(merged).Action);
+    }
+
+    [Fact]
+    public void MultiSeasonPacksRoutePerFileToTheirOwnSeasons() {
+        var layout = Layout(new Dictionary<int, string> { [1] = "/media/tv/Andor (2022)/S01/e01.720p.WEB.mkv" });
+
+        var merged = TvExistingTargetMerge.Plan(
+            Units((1, 1), (1, 2), (2, 1)), layout, SeasonSegment,
+            incomingQualityPosition: (int)VideoQuality.Webdl1080p, incomingRevision: 1, ProperDownloadPolicy.PreferAndUpgrade);
+
+        Assert.Equal(
+            [MergeFileAction.ReplaceUpgrade, MergeFileAction.PlaceNew, MergeFileAction.PlaceNew],
+            merged.Select(item => item.Action).ToArray());
+        Assert.StartsWith(Path.Combine("/media/tv/Andor (2022)", "Season 02"), merged[2].TargetAbsolutePath);
+    }
+
+    // ── MusicExistingTargetMerge: re-anchor onto an existing album folder ──
+
+    [Fact]
+    public void MusicItemsReAnchorOntoTheExistingAlbumFolderAndSkipOwnedTracks() {
+        var items = new[] {
+            new ImportPlanItem("release/01 track.flac", "Artist/Album (2020)/01 track.flac"),
+            new ImportPlanItem("release/Disc 1/02 track.flac", "Artist/Album (2020)/Disc 1/02 track.flac"),
+        };
+        var existing = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "01 track.flac" };
+
+        var merged = MusicExistingTargetMerge.Plan(items, "/media/music/Artist/Album", existing);
+
+        Assert.Equal(MergeFileAction.DropNotUpgrade, merged[0].Action);
+        Assert.Equal(MergeFileAction.PlaceNew, merged[1].Action);
+        Assert.Equal(Path.Combine("/media/music/Artist/Album", "Disc 1/02 track.flac"), merged[1].TargetAbsolutePath);
     }
 }

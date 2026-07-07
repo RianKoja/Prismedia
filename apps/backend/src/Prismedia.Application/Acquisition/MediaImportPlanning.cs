@@ -18,6 +18,22 @@ public interface IDownloadPayloadReader {
 public sealed record DownloadPayload(string ContentRoot, IReadOnlyList<ImportCandidateFile> Files);
 
 /// <summary>
+/// One placeable TV file from a release: its payload-relative source, its decoded season/episode, and
+/// the template's full three-segment render for it. <see cref="FileName"/> is the render's file segment,
+/// reused when a merged import re-anchors the folders onto an existing series tree.
+/// </summary>
+public sealed record TvPlanUnit(string SourceRelativePath, int Season, int Episode, string TargetRelativePath) {
+    /// <summary>The template-rendered file name (the render's last segment).</summary>
+    public string FileName => TargetRelativePath.Split('/')[^1];
+}
+
+/// <summary>The unit-level TV plan: either blocked (same reasons as <see cref="ImportPlan"/>) or the placeable units.</summary>
+public sealed record TvUnitsPlan(bool Blocked, ImportBlockReason? BlockReason, IReadOnlyList<TvPlanUnit> Units) {
+    public static TvUnitsPlan Block(ImportBlockReason reason) => new(true, reason, []);
+    public static TvUnitsPlan For(IReadOnlyList<TvPlanUnit> units) => new(false, null, units);
+}
+
+/// <summary>
 /// Pure movie import planning: picks the single primary video file out of a downloaded release and
 /// renders its target path from the profile's naming template (default
 /// <c>{Title} ({Year})/{Title} ({Year}).{ext}</c>) under the library root. Sample files are skipped, and
@@ -217,15 +233,37 @@ public static partial class TvImportPlanBuilder {
         int? episodeNumber,
         string? template = null,
         string? quality = null) {
+        var units = PlanUnits(files, series, seasonNumber, episodeNumber, template, quality);
+        if (units.Blocked) {
+            return ImportPlan.Block(units.BlockReason!.Value);
+        }
+
+        return ImportPlan.For(units.Units
+            .Select(unit => new ImportPlanItem(unit.SourceRelativePath, unit.TargetRelativePath))
+            .ToArray());
+    }
+
+    /// <summary>
+    /// The unit pass behind <see cref="Plan"/>: the same filtering, token decode, and template render,
+    /// but returning each file's parsed season/episode alongside its render — so a merged import into
+    /// an existing series folder can re-anchor the folders while keeping the template's file naming.
+    /// </summary>
+    public static TvUnitsPlan PlanUnits(
+        IReadOnlyList<ImportCandidateFile> files,
+        string series,
+        int? seasonNumber,
+        int? episodeNumber,
+        string? template = null,
+        string? quality = null) {
         var videos = files
             .Where(file => VideoExtensions.Contains(Path.GetExtension(file.RelativePath)))
             .Where(file => !SampleTokenRegex().IsMatch(Path.GetFileNameWithoutExtension(file.RelativePath)))
             .ToArray();
         if (videos.Length == 0) {
-            return ImportPlan.Block(ImportBlockReason.NoSupportedPayload);
+            return TvUnitsPlan.Block(ImportBlockReason.NoSupportedPayload);
         }
 
-        var items = new List<ImportPlanItem>(videos.Length);
+        var units = new List<TvPlanUnit>(videos.Length);
         foreach (var video in videos.OrderBy(file => file.RelativePath, StringComparer.OrdinalIgnoreCase)) {
             var unit = TvReleaseTokens.ParseEpisode(Path.GetFileNameWithoutExtension(video.RelativePath));
             // A tokenless file is only placeable when the acquisition itself IS one episode.
@@ -235,12 +273,23 @@ public static partial class TvImportPlanBuilder {
 
             var (season, episode) = unit ?? (seasonNumber!.Value, episodeNumber!.Value);
             var naming = NamingContext(series, season, episode, quality, Path.GetExtension(video.RelativePath));
-            items.Add(new ImportPlanItem(video.RelativePath, MediaNamingTemplates.RenderTvPath(template, naming)));
+            units.Add(new TvPlanUnit(
+                video.RelativePath, season, episode, MediaNamingTemplates.RenderTvPath(template, naming)));
         }
 
         // No file declared a placeable unit — importing by guesswork would scatter episodes; stop for
         // a human instead.
-        return items.Count == 0 ? ImportPlan.Block(ImportBlockReason.AmbiguousMultiplePrimaries) : ImportPlan.For(items);
+        return units.Count == 0 ? TvUnitsPlan.Block(ImportBlockReason.AmbiguousMultiplePrimaries) : TvUnitsPlan.For(units);
+    }
+
+    /// <summary>
+    /// The season FOLDER NAME (single segment) the template renders for <paramref name="season"/> —
+    /// used to create a missing season folder inside an existing series folder with the user's naming.
+    /// </summary>
+    public static string SeasonFolderSegment(string series, int season, string? template = null) {
+        var context = NamingContext(series, season, episode: null, quality: null, extension: string.Empty);
+        var seasonFolder = MediaNamingTemplates.RenderTvSeasonFolder(template, context);
+        return seasonFolder.Split('/')[^1];
     }
 
     /// <summary>
