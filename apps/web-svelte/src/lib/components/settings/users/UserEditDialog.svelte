@@ -1,12 +1,11 @@
 <script lang="ts">
   import { Flame, FolderPlus, Loader2 } from "@lucide/svelte";
-  import { Button, Checkbox, Select, cn, flyUp, fadeIn } from "@prismedia/ui-svelte";
+  import { Button, Checkbox, Select, Toggle, cn, flyUp, fadeIn } from "@prismedia/ui-svelte";
   import { USER_ROLE, type UserRoleCode } from "$lib/api/generated/codes";
   import type { LibraryRoot, UserResponse } from "$lib/api/generated/model";
   import { createUser, replaceLibraryAccessForUser, updateUser } from "$lib/api/users";
   import TextField from "$lib/components/forms/TextField.svelte";
   import PasswordField from "$lib/components/forms/PasswordField.svelte";
-  import ToggleChip from "$lib/components/forms/ToggleChip.svelte";
 
   interface Props {
     open: boolean;
@@ -154,26 +153,51 @@
           />
         {/if}
 
-        <div class="grid gap-4 sm:grid-cols-2">
-          <label class="flex flex-col gap-1.5">
-            <span class="text-label text-text-muted">Role</span>
-            <Select
-              options={[
-                { value: USER_ROLE.member, label: "Member" },
-                { value: USER_ROLE.admin, label: "Administrator" },
-              ]}
-              value={role}
-              disabled={isSelf}
-              onchange={(value) => (role = value as UserRoleCode)}
-            />
-          </label>
-          <div class="flex flex-wrap items-end gap-2 pb-0.5">
-            <ToggleChip value={allowNsfw} onChange={setAllowNsfw} onLabel="NSFW allowed" offLabel="NSFW blocked" icon={Flame} variant="warning" />
-            <ToggleChip value={canCreateLibraries} onChange={(v) => (canCreateLibraries = v)} onLabel="Creates libraries" offLabel="No libraries" icon={FolderPlus} />
-            {#if !isSelf}
-              <ToggleChip value={enabled} onChange={(v) => (enabled = v)} onLabel="Enabled" offLabel="Disabled" />
-            {/if}
+        <label class="flex flex-col gap-1.5 sm:max-w-[50%]">
+          <span class="text-label text-text-muted">Role</span>
+          <Select
+            options={[
+              { value: USER_ROLE.member, label: "Member" },
+              { value: USER_ROLE.admin, label: "Administrator" },
+            ]}
+            value={role}
+            disabled={isSelf}
+            onchange={(value) => (role = value as UserRoleCode)}
+          />
+        </label>
+
+        <!-- Permission switches: explicit labeled toggles, never ambiguous chip buttons — each row
+             names the permission and the switch state reads on/off at a glance. -->
+        <div class="surface-well divide-y divide-border-subtle px-3">
+          <div class="flex items-center gap-3 py-2.5">
+            <Flame class="size-4 shrink-0 text-warning" />
+            <div class="min-w-0 flex-1">
+              <p class="text-sm text-text-secondary">Allow NSFW content</p>
+              <p class="text-[0.68rem] text-text-muted">See NSFW-flagged media and be granted NSFW libraries.</p>
+            </div>
+            <Toggle checked={allowNsfw} onchange={setAllowNsfw} ariaLabel="Allow NSFW content" />
           </div>
+          <div class="flex items-center gap-3 py-2.5">
+            <FolderPlus class="size-4 shrink-0 text-text-muted" />
+            <div class="min-w-0 flex-1">
+              <p class="text-sm text-text-secondary">Can create libraries</p>
+              <p class="text-[0.68rem] text-text-muted">Add and manage their own watched library folders.</p>
+            </div>
+            <Toggle
+              checked={canCreateLibraries}
+              onchange={(value) => (canCreateLibraries = value)}
+              ariaLabel="Can create libraries"
+            />
+          </div>
+          {#if !isSelf}
+            <div class="flex items-center gap-3 py-2.5">
+              <div class="min-w-0 flex-1">
+                <p class="text-sm text-text-secondary">Account enabled</p>
+                <p class="text-[0.68rem] text-text-muted">Disabling signs the user out everywhere and blocks sign-in.</p>
+              </div>
+              <Toggle checked={enabled} onchange={(value) => (enabled = value)} ariaLabel="Account enabled" />
+            </div>
+          {/if}
         </div>
 
         {#if isAdminRole}
