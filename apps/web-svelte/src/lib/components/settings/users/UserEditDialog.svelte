@@ -58,6 +58,19 @@
       : libraryRootIds.filter((id) => id !== rootId);
   }
 
+  // The NSFW wall: a user whose account blocks NSFW content can never hold an NSFW library grant
+  // (the server enforces the same rule). Blocking NSFW hides those libraries from the checklist and
+  // drops any selected ones on the spot.
+  const grantableLibraries = $derived(allowNsfw ? libraries : libraries.filter((library) => !library.isNsfw));
+
+  function setAllowNsfw(value: boolean) {
+    allowNsfw = value;
+    if (!value) {
+      const nsfwIds = new Set(libraries.filter((library) => library.isNsfw).map((library) => library.id));
+      libraryRootIds = libraryRootIds.filter((id) => !nsfwIds.has(id));
+    }
+  }
+
   async function save() {
     if (saving || !ready) return;
     saving = true;
@@ -155,7 +168,7 @@
             />
           </label>
           <div class="flex flex-wrap items-end gap-2 pb-0.5">
-            <ToggleChip value={allowNsfw} onChange={(v) => (allowNsfw = v)} onLabel="NSFW allowed" offLabel="NSFW blocked" icon={Flame} variant="warning" />
+            <ToggleChip value={allowNsfw} onChange={setAllowNsfw} onLabel="NSFW allowed" offLabel="NSFW blocked" icon={Flame} variant="warning" />
             <ToggleChip value={canCreateLibraries} onChange={(v) => (canCreateLibraries = v)} onLabel="Creates libraries" offLabel="No libraries" icon={FolderPlus} />
             {#if !isSelf}
               <ToggleChip value={enabled} onChange={(v) => (enabled = v)} onLabel="Enabled" offLabel="Disabled" />
@@ -171,7 +184,7 @@
           <div class="space-y-1.5">
             <span class="text-label text-text-muted">Library access</span>
             <div class="surface-well divide-y divide-border-subtle px-3">
-              {#each libraries as library (library.id)}
+              {#each grantableLibraries as library (library.id)}
                 <label class="flex cursor-pointer items-center gap-2.5 py-2 text-sm text-text-secondary">
                   <Checkbox
                     checked={libraryRootIds.includes(library.id)}
@@ -187,6 +200,11 @@
                 <p class="py-3 text-xs text-text-disabled">No libraries yet.</p>
               {/each}
             </div>
+            {#if !allowNsfw && libraries.some((library) => library.isNsfw)}
+              <p class="text-[0.68rem] text-text-disabled">
+                NSFW libraries are hidden while this account blocks NSFW content.
+              </p>
+            {/if}
           </div>
         {/if}
 

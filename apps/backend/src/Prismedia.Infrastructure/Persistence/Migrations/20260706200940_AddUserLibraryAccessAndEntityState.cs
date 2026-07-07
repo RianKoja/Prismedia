@@ -154,13 +154,16 @@ namespace Prismedia.Infrastructure.Persistence.Migrations
                 principalColumn: "id",
                 onDelete: ReferentialAction.SetNull);
 
-            // Migration default: every existing (migrated) user keeps access to every
-            // existing library. New users start with no grants; admins never need rows.
+            // Migration default: every existing (migrated) user keeps access to every existing
+            // library THEIR PERMISSIONS ALLOW — a profile that could not see NSFW content before the
+            // upgrade must never be granted an NSFW library by it. New users start with no grants;
+            // admins never need rows.
             migrationBuilder.Sql("""
                 INSERT INTO user_library_access (user_id, library_root_id, created_at)
                 SELECT u.id, r.id, now()
                 FROM users u
-                CROSS JOIN library_roots r;
+                CROSS JOIN library_roots r
+                WHERE u.allow_nsfw OR NOT r.is_nsfw;
                 """);
 
             // Fan-out copy: every user gets an identical copy of the global engagement

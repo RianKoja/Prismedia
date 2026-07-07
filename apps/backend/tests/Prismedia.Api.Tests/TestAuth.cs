@@ -119,6 +119,9 @@ internal static class TestAuth {
                 return Task.CompletedTask;
             }
         }
+
+        // The in-memory fake tracks no root NSFW flags; the NSFW wall is covered by the EF store's tests.
+        public Task RevokeNsfwAccessAsync(Guid userId, CancellationToken cancellationToken) => Task.CompletedTask;
     }
 
     internal sealed class VisibleEntityReadService : IEntityReadService {

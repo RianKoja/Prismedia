@@ -20,6 +20,8 @@
 
   let members = $state<UserResponse[]>([]);
   let grantedIds = $state<string[]>([]);
+  let isNsfwRoot = $state(false);
+  let hiddenBlockedMembers = $state(0);
   let loading = $state(true);
   let saving = $state(false);
   let error = $state<string | null>(null);
@@ -35,8 +37,14 @@
       ),
     ])
       .then(([users, roots]) => {
-        members = users.filter((user) => user.role !== USER_ROLE.admin);
-        grantedIds = [...(roots.find((root) => root.id === rootId)?.accessUserIds ?? [])];
+        const root = roots.find((candidate) => candidate.id === rootId);
+        isNsfwRoot = root?.isNsfw ?? false;
+        const nonAdmins = users.filter((user) => user.role !== USER_ROLE.admin);
+        // The NSFW wall: an NSFW library can only be granted to members whose account allows NSFW
+        // content (the server enforces the same rule on save).
+        members = isNsfwRoot ? nonAdmins.filter((user) => user.allowNsfw) : nonAdmins;
+        hiddenBlockedMembers = nonAdmins.length - members.length;
+        grantedIds = [...(root?.accessUserIds ?? [])];
       })
       .catch((err) => {
         error = err instanceof Error ? err.message : "Failed to load library access";
@@ -111,6 +119,12 @@
               </label>
             {/each}
           </div>
+        {/if}
+        {#if !loading && isNsfwRoot && hiddenBlockedMembers > 0}
+          <p class="mt-2 text-[0.68rem] text-text-disabled">
+            {hiddenBlockedMembers} member{hiddenBlockedMembers === 1 ? "" : "s"} whose account blocks NSFW
+            content cannot be granted this library.
+          </p>
         {/if}
         {#if error}
           <p class="mt-2 rounded-xs border border-error/40 bg-error/10 px-3 py-2 text-xs text-error" role="alert">{error}</p>

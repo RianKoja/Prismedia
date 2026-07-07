@@ -10,10 +10,12 @@ namespace Prismedia.Application.Security;
 public sealed class UserAdminService {
     private readonly ISecurityPersistence _persistence;
     private readonly IPasswordHasher _hasher;
+    private readonly ILibraryAccessStore? _libraryAccess;
 
-    public UserAdminService(ISecurityPersistence persistence, IPasswordHasher hasher) {
+    public UserAdminService(ISecurityPersistence persistence, IPasswordHasher hasher, ILibraryAccessStore? libraryAccess = null) {
         _persistence = persistence;
         _hasher = hasher;
+        _libraryAccess = libraryAccess;
     }
 
     /// <summary>Lists all user accounts including disabled ones.</summary>
@@ -83,7 +85,7 @@ public sealed class UserAdminService {
             await EnsureAnotherEnabledAdminExistsAsync(cancellationToken);
         }
 
-        return await _persistence.UpdateUserAsync(
+        var updated = await _persistence.UpdateUserAsync(
             userId,
             normalizedUsername,
             displayName?.Trim(),
@@ -93,6 +95,15 @@ public sealed class UserAdminService {
             canCreateLibraries,
             enabled,
             cancellationToken);
+
+        // Blocking a user's NSFW permission also revokes their NSFW library grants: the permission is
+        // the wall, and stale grants behind it would resurface the libraries the moment it was re-enabled
+        // by mistake — and read confusingly in the access editor meanwhile.
+        if (updated is not null && allowNsfw == false && _libraryAccess is not null) {
+            await _libraryAccess.RevokeNsfwAccessAsync(userId, cancellationToken);
+        }
+
+        return updated;
     }
 
     /// <summary>Resets a user's password and signs them out everywhere.</summary>
