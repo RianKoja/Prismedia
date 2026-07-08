@@ -13,6 +13,37 @@ using Prismedia.Infrastructure.StashCompat;
 namespace Prismedia.Infrastructure.Plugins;
 
 /// <summary>
+/// Memo for the community plugin index. The index changes rarely but is consulted by user-facing
+/// reads (the plugin browser), so a successful fetch is reused for a generous window and a failed one
+/// for a short backoff — a GitHub hiccup neither stalls nor hammers anything. Registered as a
+/// singleton so scoped catalog instances share one fetch; a catalog constructed without one (tests)
+/// gets a private instance and full isolation.
+/// </summary>
+public sealed class PluginIndexCache {
+    private static readonly TimeSpan SuccessTtl = TimeSpan.FromMinutes(15);
+    private static readonly TimeSpan FailureTtl = TimeSpan.FromMinutes(2);
+
+    /// <summary>Single-flight gate so concurrent cache misses produce one fetch.</summary>
+    internal SemaphoreSlim Gate { get; } = new(1, 1);
+
+    private (string Url, DateTimeOffset FetchedAt, IReadOnlyList<PluginIndexEntry> Entries, bool Success)? _entry;
+
+    /// <summary>The cached entries for the url, or null when absent, expired, or for a different url.</summary>
+    internal IReadOnlyList<PluginIndexEntry>? Cached(string indexUrl) {
+        if (_entry is not { } cache || !cache.Url.Equals(indexUrl, StringComparison.Ordinal)) {
+            return null;
+        }
+
+        var ttl = cache.Success ? SuccessTtl : FailureTtl;
+        return DateTimeOffset.UtcNow - cache.FetchedAt < ttl ? cache.Entries : null;
+    }
+
+    /// <summary>Records a fetch outcome (success or failure) for the url.</summary>
+    internal void Store(string indexUrl, IReadOnlyList<PluginIndexEntry> entries, bool success) =>
+        _entry = (indexUrl, DateTimeOffset.UtcNow, entries, success);
+}
+
+/// <summary>
 /// Remote index fetch, artifact download/extraction, and manifest parsing helpers for
 /// <see cref="PluginCatalogService"/>.
 /// </summary>
@@ -100,46 +131,28 @@ public sealed partial class PluginCatalogService {
         return path;
     }
 
-    // The remote index changes rarely and is consulted from user-facing reads (the plugin browser),
-    // so results are memoized process-wide: a successful fetch is reused for a generous window and a
-    // failed one for a short backoff, keeping a GitHub hiccup from stalling or hammering anything.
-    // The service itself is scoped, hence the static cache.
-    private static readonly SemaphoreSlim RemoteIndexGate = new(1, 1);
-    private static readonly TimeSpan RemoteIndexTtl = TimeSpan.FromMinutes(15);
-    private static readonly TimeSpan RemoteIndexFailureTtl = TimeSpan.FromMinutes(2);
-    private static (string Url, DateTimeOffset FetchedAt, IReadOnlyList<PluginIndexEntry> Entries, bool Success)? _remoteIndexCache;
-
     private async Task<IReadOnlyList<PluginIndexEntry>> FetchRemoteIndexAsync(CancellationToken cancellationToken) {
         if (string.IsNullOrWhiteSpace(_options.CommunityIndexUrl)) {
             return [];
         }
 
         var indexUrl = ResolveIndexUrl(_options.CommunityIndexUrl);
-        if (CachedRemoteIndex(indexUrl) is { } cached) {
+        if (_indexCache.Cached(indexUrl) is { } cached) {
             return cached;
         }
 
-        await RemoteIndexGate.WaitAsync(cancellationToken);
+        await _indexCache.Gate.WaitAsync(cancellationToken);
         try {
-            if (CachedRemoteIndex(indexUrl) is { } refreshed) {
+            if (_indexCache.Cached(indexUrl) is { } refreshed) {
                 return refreshed; // another caller fetched while we waited
             }
 
             var entries = await FetchRemoteIndexCoreAsync(indexUrl, cancellationToken);
-            _remoteIndexCache = (indexUrl, DateTimeOffset.UtcNow, entries.Entries, entries.Success);
+            _indexCache.Store(indexUrl, entries.Entries, entries.Success);
             return entries.Entries;
         } finally {
-            RemoteIndexGate.Release();
+            _indexCache.Gate.Release();
         }
-    }
-
-    private static IReadOnlyList<PluginIndexEntry>? CachedRemoteIndex(string indexUrl) {
-        if (_remoteIndexCache is not { } cache || !cache.Url.Equals(indexUrl, StringComparison.Ordinal)) {
-            return null;
-        }
-
-        var ttl = cache.Success ? RemoteIndexTtl : RemoteIndexFailureTtl;
-        return DateTimeOffset.UtcNow - cache.FetchedAt < ttl ? cache.Entries : null;
     }
 
     private async Task<(IReadOnlyList<PluginIndexEntry> Entries, bool Success)> FetchRemoteIndexCoreAsync(

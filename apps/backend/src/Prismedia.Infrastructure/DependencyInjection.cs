@@ -146,9 +146,11 @@ public static class DependencyInjection {
             new HttpClient { Timeout = TimeSpan.FromSeconds(30) },
             new StashScriptExecutor(provider.GetRequiredService<ProcessExecutor>())));
         services.AddSingleton<IdentifyRunnerSelector>();
+        services.AddSingleton<PluginIndexCache>();
         services.AddScoped(provider => new PluginCatalogService(
             provider.GetRequiredService<PrismediaDbContext>(),
-            provider.GetRequiredService<PluginCatalogOptions>()));
+            provider.GetRequiredService<PluginCatalogOptions>(),
+            indexCache: provider.GetRequiredService<PluginIndexCache>()));
         services.AddScoped<IPluginCatalogService>(provider =>
             provider.GetRequiredService<PluginCatalogService>());
         services.AddScoped<IdentifyMatchHintResolver>();

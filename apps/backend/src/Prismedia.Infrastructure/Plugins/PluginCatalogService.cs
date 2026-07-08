@@ -51,13 +51,16 @@ public sealed partial class PluginCatalogService : IPluginCatalogService {
     private readonly PrismediaDbContext _db;
     private readonly PluginCatalogOptions _options;
     private readonly HttpClient _http;
+    private readonly PluginIndexCache _indexCache;
 
-    public PluginCatalogService(PrismediaDbContext db, PluginCatalogOptions options, HttpClient? http = null) {
+    public PluginCatalogService(
+        PrismediaDbContext db, PluginCatalogOptions options, HttpClient? http = null, PluginIndexCache? indexCache = null) {
         _db = db;
         _options = options;
         // A bounded timeout: the remote index and artifact downloads ride this client, and a hung
         // remote must never stall a caller for the framework's default 100 seconds.
         _http = http ?? new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
+        _indexCache = indexCache ?? new PluginIndexCache();
     }
 
     /// <summary>

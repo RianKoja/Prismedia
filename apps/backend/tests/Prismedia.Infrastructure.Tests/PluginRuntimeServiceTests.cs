@@ -396,9 +396,9 @@ public sealed class PluginRuntimeServiceTests : IDisposable {
         var providers = await catalog.ListProvidersAsync(CancellationToken.None);
 
         Assert.Equal(2, providers.Count);
+        // No cache-buster query: the index rides plain CDN-cacheable GETs now that results are memoized.
         Assert.Contains(handler.Requests,
-            uri => uri.GetLeftPart(UriPartial.Path) == "https://raw.githubusercontent.com/pauljoda/Prismedia-Plugins/main/index.yml" &&
-                !string.IsNullOrWhiteSpace(uri.Query));
+            uri => uri.ToString() == "https://raw.githubusercontent.com/pauljoda/Prismedia-Plugins/main/index.yml");
         var tmdb = providers.Single(provider => provider.Id == "tmdb");
         Assert.Equal("The Movie Database", tmdb.Name);
         Assert.Equal("1.1.0", tmdb.Version);
