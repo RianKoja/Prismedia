@@ -190,6 +190,9 @@ public sealed partial class EfEntityReadService {
                 coverSourceId = hoverImages[0].EntityId;
             }
 
+            var coverThumbUrl = gridThumbByEntity.GetValueOrDefault(coverSourceId) ?? coverUrl;
+            var coverThumb2xUrl = gridThumb2xByEntity.GetValueOrDefault(coverSourceId) ?? coverThumbUrl;
+
             return new EntityThumbnail(
                 row.Id,
                 row.KindCode.DecodeAs<EntityKind>(),
@@ -197,7 +200,7 @@ public sealed partial class EfEntityReadService {
                 row.ParentEntityId,
                 row.SortOrder,
                 coverUrl,
-                gridThumbByEntity.GetValueOrDefault(coverSourceId),
+                coverThumbUrl,
                 hoverUrl is null ? ThumbnailHoverKind.None : ThumbnailHoverKind.Sprite,
                 hoverUrl,
                 hoverImages,
@@ -210,7 +213,7 @@ public sealed partial class EfEntityReadService {
                 ownState?.IsFavorite ?? false,
                 row.IsNsfw,
                 row.IsOrganized) {
-                CoverThumb2xUrl = gridThumb2xByEntity.GetValueOrDefault(coverSourceId),
+                CoverThumb2xUrl = coverThumb2xUrl,
                 ParentKind = row.ParentEntityId is { } parentId
                     && parentKindByEntity.TryGetValue(parentId, out var parentKindCode)
                     && parentKindCode.TryDecodeAs<EntityKind>(out var parentKind)

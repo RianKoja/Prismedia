@@ -42,7 +42,7 @@ public sealed record EntityThumbnail(
     bool IsOrganized) {
     /// <summary>
     /// Double-density companion of <see cref="CoverThumbUrl"/> for high-DPI displays.
-    /// Null when the 2x grid variant has not been generated yet.
+    /// Falls back to <see cref="CoverThumbUrl"/> when the 2x grid variant has not been generated yet.
     /// </summary>
     public string? CoverThumb2xUrl { get; init; }
 

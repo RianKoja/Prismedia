@@ -415,10 +415,21 @@
     .poster { align-self: start; }
     .select { align-items: start; padding-top: 0.15rem; }
     .titleblock { align-self: end; }
-    .actions { padding-top: 0.15rem; justify-content: flex-end; }
+    .statusblock,
+    .titleblock {
+      min-width: 0;
+      max-width: 100%;
+    }
+    .actions { padding-top: 0.15rem; justify-content: flex-end; flex-wrap: wrap; min-width: 0; }
     .action-label { display: none; }
     .action { padding: 0 0.65rem; }
-    .progress { max-width: none; }
+    .progress {
+      max-width: none;
+      min-width: 0;
+      width: 100%;
+    }
+    .progress-value { min-width: 2.2rem; }
+    .meta { overflow-wrap: anywhere; }
 
     /* Let the title, subtitle, and status description wrap to full text instead of truncating — on a
        narrow screen the row has the vertical room, and the failure reason especially must read in full. */
@@ -427,6 +438,7 @@
     .description {
       white-space: normal;
       overflow: visible;
+      overflow-wrap: anywhere;
     }
   }
 </style>

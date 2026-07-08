@@ -262,6 +262,9 @@ public static class EntityCardProjector {
 
         var gridThumb = entity.EntityFiles
             .FirstOrDefault(file => file.Role == EntityFileRole.GridThumbnail)?.Path;
+        var coverThumb = gridThumb ?? cover;
+        var coverThumb2x = entity.EntityFiles
+            .FirstOrDefault(file => file.Role == EntityFileRole.GridThumbnail2x)?.Path ?? coverThumb;
 
         return new EntityThumbnail(
             entity.Id,
@@ -270,7 +273,7 @@ public static class EntityCardProjector {
             entity.ParentEntityId,
             entity.SortOrder,
             cover,
-            gridThumb,
+            coverThumb,
             ThumbnailHoverKind.None,
             null,
             [],
@@ -279,8 +282,7 @@ public static class EntityCardProjector {
             entity.IsFavorite ?? false,
             entity.IsNsfw ?? false,
             entity.IsOrganized ?? false) {
-            CoverThumb2xUrl = entity.EntityFiles
-                .FirstOrDefault(file => file.Role == EntityFileRole.GridThumbnail2x)?.Path,
+            CoverThumb2xUrl = coverThumb2x,
             IsWanted = entity.IsWanted ?? false,
             Progress = ResolveThumbnailProgress(entity)
         };

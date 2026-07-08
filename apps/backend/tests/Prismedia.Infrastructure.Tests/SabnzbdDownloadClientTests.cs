@@ -47,6 +47,20 @@ public sealed class SabnzbdDownloadClientTests {
     }
 
     [Fact]
+    public async Task QueueSlotPrefersSabnzbdPercentageForProgress() {
+        var handler = new CannedHandler(uri => uri.Contains("mode=queue")
+            ? """{"queue": {"slots": [{"nzo_id": "SABnzbd_nzo_abc123", "filename": "My.Show.S01E01", "status": "Downloading", "percentage": "42.5", "mb": "0", "mbleft": "0", "cat": "prismedia"}]}}"""
+            : """{"history": {"slots": []}}""");
+        var client = new SabnzbdDownloadClient(new HttpClient(handler));
+
+        var status = await client.GetItemAsync(Connection, "SABnzbd_nzo_abc123", CancellationToken.None);
+
+        Assert.NotNull(status);
+        Assert.Equal(0.425, status.Progress, precision: 3);
+        Assert.False(status.IsComplete);
+    }
+
+    [Fact]
     public async Task OnlyACompletedHistorySlotIsCompleteAndCarriesTheStoragePath() {
         var handler = new CannedHandler(uri => uri.Contains("mode=queue")
             ? """{"queue": {"slots": []}}"""

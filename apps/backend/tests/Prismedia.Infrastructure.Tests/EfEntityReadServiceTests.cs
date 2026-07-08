@@ -484,6 +484,31 @@ public sealed class EfEntityReadServiceTests {
     }
 
     [Fact]
+    public async Task GetThumbnailsAsyncFallsBackToCoverWhenGridVariantsAreMissing() {
+        await using var db = CreateContext();
+        var movieId = Guid.Parse("aaaaaaaa-0000-0000-0000-000000000041");
+        var poster = "/assets/plugins/artwork/movie/poster.jpg";
+        var now = DateTimeOffset.UtcNow;
+
+        db.Entities.Add(new EntityRow {
+            Id = movieId,
+            KindCode = EntityKindRegistry.Movie.Code,
+            Title = "Poster Only Movie",
+            CreatedAt = now,
+            UpdatedAt = now
+        });
+        db.EntityFiles.Add(File(movieId, EntityFileRole.Poster, poster, now));
+        await db.SaveChangesAsync();
+
+        var response = await CreateService(db).GetThumbnailsAsync([movieId], hideNsfw: false, CancellationToken.None);
+
+        var item = Assert.Single(response.Items);
+        Assert.Equal(poster, item.CoverUrl);
+        Assert.Equal(poster, item.CoverThumbUrl);
+        Assert.Equal(poster, item.CoverThumb2xUrl);
+    }
+
+    [Fact]
     public async Task GetThumbnailsAsyncUsesEpisodeRepresentativeWhenSeriesPosterIsMissing() {
         var cacheRoot = CreateCacheRoot();
         try {

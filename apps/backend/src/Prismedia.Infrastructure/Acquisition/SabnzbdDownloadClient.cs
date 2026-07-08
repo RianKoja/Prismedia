@@ -191,18 +191,26 @@ public sealed class SabnzbdDownloadClient(HttpClient http) : IDownloadClient {
         }
     }
 
-    /// <summary>Projects a live queue slot: progress from mb/mbleft, never complete (completion is a history state).</summary>
+    /// <summary>Projects a live queue slot: progress from SAB's native percentage, falling back to mb/mbleft; never complete (completion is a history state).</summary>
     private static DownloadItemStatus MapQueueSlot(JsonElement slot) {
         var total = Number(slot, SabnzbdProtocol.Mb) ?? 0;
         var left = Number(slot, SabnzbdProtocol.MbLeft) ?? 0;
         return new DownloadItemStatus(
             Text(slot, SabnzbdProtocol.NzoId) ?? string.Empty,
             Text(slot, SabnzbdProtocol.Filename),
-            total > 0 ? Math.Clamp((total - left) / total, 0, 1) : 0,
+            QueueProgress(slot, total, left),
             Text(slot, SabnzbdProtocol.SlotStatus),
             IsComplete: false,
             SavePath: null,
             ContentPath: null);
+    }
+
+    private static double QueueProgress(JsonElement slot, double total, double left) {
+        if (Number(slot, SabnzbdProtocol.Percentage) is { } percentage) {
+            return Math.Clamp(percentage / 100d, 0, 1);
+        }
+
+        return total > 0 ? Math.Clamp((total - left) / total, 0, 1) : 0;
     }
 
     /// <summary>

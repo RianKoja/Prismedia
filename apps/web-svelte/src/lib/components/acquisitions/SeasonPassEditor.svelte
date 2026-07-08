@@ -48,6 +48,8 @@
   let error = $state<string | null>(null);
   /** Entity ids of seasons currently actively monitored (indexed from /api/monitors). */
   let monitoredIds = $state<Set<string>>(new Set());
+  /** Provider-only season keys that were just requested but may not have local entity ids until the parent refresh completes. */
+  let optimisticMonitoredKeys = $state<Set<string>>(new Set());
   let seriesMonitorPreset = $state<MonitorPresetCode | null>(null);
 
   // Seasons ordered by their number, reduced to the fields the rows and preset shortcuts need.
@@ -95,8 +97,43 @@
     if (open && !loading) void loadMonitors();
   }
 
-  function rowMonitored(season: SeasonPassRow): boolean {
+  function durablyMonitored(season: SeasonPassRow): boolean {
     return !!season.entityId && monitoredIds.has(season.entityId);
+  }
+
+  function rowMonitored(season: SeasonPassRow): boolean {
+    return optimisticMonitoredKeys.has(season.key) || durablyMonitored(season);
+  }
+
+  function optimisticallySetSeason(season: SeasonPassRow, monitored: boolean) {
+    const next = new Set(optimisticMonitoredKeys);
+    if (monitored && !season.entityId) {
+      next.add(season.key);
+    } else {
+      next.delete(season.key);
+    }
+    optimisticMonitoredKeys = next;
+
+    if (season.entityId) {
+      const nextIds = new Set(monitoredIds);
+      if (monitored) {
+        nextIds.add(season.entityId);
+      } else {
+        nextIds.delete(season.entityId);
+      }
+      monitoredIds = nextIds;
+    }
+  }
+
+  function reconcileOptimisticState() {
+    if (optimisticMonitoredKeys.size === 0) return;
+    const remaining = new Set<string>();
+    for (const season of seasons) {
+      if (optimisticMonitoredKeys.has(season.key) && !durablyMonitored(season)) {
+        remaining.add(season.key);
+      }
+    }
+    optimisticMonitoredKeys = remaining;
   }
 
   /** Monitor a season by requesting it (creates its acquisition + per-item monitor), or stop its monitor. */
@@ -136,11 +173,17 @@
     if (acting) return;
     acting = true;
     error = null;
+    const previousOptimistic = new Set(optimisticMonitoredKeys);
+    const previousMonitored = new Set(monitoredIds);
     try {
+      optimisticallySetSeason(season, monitored);
       await setSeasonMonitored(season, monitored);
       await onChanged?.();
       await loadMonitors();
+      reconcileOptimisticState();
     } catch (err) {
+      optimisticMonitoredKeys = previousOptimistic;
+      monitoredIds = previousMonitored;
       error = err instanceof Error ? err.message : "Failed to update monitoring";
     } finally {
       acting = false;
@@ -152,6 +195,8 @@
     if (acting) return;
     acting = true;
     error = null;
+    const previousOptimistic = new Set(optimisticMonitoredKeys);
+    const previousMonitored = new Set(monitoredIds);
     try {
       const wanted = new Set(resolvePresetSelection(preset, presetChildren));
       // Sequentially — like WantedList's bulk actions — so a large series never floods the search queue.
@@ -159,12 +204,16 @@
         const shouldMonitor = wanted.has(season.key);
         const isMonitored = rowMonitored(season);
         if (shouldMonitor !== isMonitored) {
+          optimisticallySetSeason(season, shouldMonitor);
           await setSeasonMonitored(season, shouldMonitor);
         }
       }
       await onChanged?.();
       await loadMonitors();
+      reconcileOptimisticState();
     } catch (err) {
+      optimisticMonitoredKeys = previousOptimistic;
+      monitoredIds = previousMonitored;
       error = err instanceof Error ? err.message : "Failed to apply preset";
     } finally {
       acting = false;

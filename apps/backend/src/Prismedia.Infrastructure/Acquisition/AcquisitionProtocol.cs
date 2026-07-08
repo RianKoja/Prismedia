@@ -118,6 +118,7 @@ public static class SabnzbdProtocol {
     public const string HistoryCategory = "category";
     public const string Mb = "mb";
     public const string MbLeft = "mbleft";
+    public const string Percentage = "percentage";
     public const string Bytes = "bytes";
     public const string TimeLeft = "timeleft";
     public const string KbPerSec = "kbpersec";
