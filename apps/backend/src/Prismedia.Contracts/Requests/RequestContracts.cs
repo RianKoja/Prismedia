@@ -167,6 +167,15 @@ public sealed record RequestCommitResponse(
 public sealed record RequestEntityCommitRequest(Guid EntityId, Guid? TargetLibraryRootId = null, Guid? ProfileId = null);
 
 /// <summary>
+/// Requests every still-wanted child phantom under an entity as its own monitored acquisition — a
+/// season's missing episodes after a season pack imported with gaps.
+/// </summary>
+public sealed record MissingChildrenCommitRequest(Guid EntityId);
+
+/// <summary>Outcome of a missing-children request: how many gaps are now covered by an acquisition, and how many exist.</summary>
+public sealed record MissingChildrenCommitResponse(int Covered, int Missing);
+
+/// <summary>
 /// Removes wanted placeholders the user no longer wants: each is deleted (with any in-flight
 /// acquisition torn down) and blacklisted from container discovery, so a followed author/artist sweep
 /// never resurrects it. Explicitly requesting the same work again clears its blacklist entry.

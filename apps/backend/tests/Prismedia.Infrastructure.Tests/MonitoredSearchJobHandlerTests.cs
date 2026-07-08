@@ -93,6 +93,8 @@ public sealed class MonitoredSearchJobHandlerTests {
         public Task<bool> DeleteIfWantedAsync(Guid entityId, CancellationToken cancellationToken) => Task.FromResult(false);
         public Task<Prismedia.Application.Requests.MonitorableContainer?> GetContainerAsync(Guid entityId, CancellationToken cancellationToken) =>
             Task.FromResult<Prismedia.Application.Requests.MonitorableContainer?>(null);
+        public Task<IReadOnlyList<Guid>> ListWantedChildIdsAsync(Guid parentEntityId, EntityKind childKind, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<Guid>>([]);
     }
 
     private sealed class NullAcquisitionRequestService : IAcquisitionRequestService {

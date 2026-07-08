@@ -114,6 +114,17 @@ public static class RequestEndpoints {
             .Produces<RequestCommitResponse>()
             .Produces<ApiProblem>(StatusCodes.Status404NotFound);
 
+        group.MapPost("/commit-missing-children", async (
+            MissingChildrenCommitRequest request,
+            RequestCommitService commits,
+            CancellationToken cancellationToken) => {
+                var (covered, missing) = await commits.RequestMissingChildrenAsync(request.EntityId, cancellationToken);
+                return Results.Ok(new MissingChildrenCommitResponse(covered, missing));
+            })
+            .WithName("CommitMissingChildrenRequest")
+            .WithSummary("Requests every still-wanted child under an entity — a season's missing episodes — each as its own monitored, auto-grabbing acquisition.")
+            .Produces<MissingChildrenCommitResponse>();
+
         group.MapPost("/remove-wanted", async (
             WantedRemovalRequest request,
             RequestCommitService commits,

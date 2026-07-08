@@ -200,6 +200,66 @@ public sealed class RequestCommitServiceTests {
     }
 
     [Fact]
+    public async Task RequestMissingChildrenRequestsEachWantedEpisodeIndividually() {
+        // A season pack imported with gaps: episodes 2 and 3 remain wanted phantoms under the season.
+        // The fallback requests each as its own monitored episode acquisition from the entity graph.
+        var (service, writer, acquisitions, monitors) = ServiceWithMonitors(Container(ProposalKind.VideoSeries, "Andor", "TV1"));
+        var seriesId = Guid.NewGuid();
+        var seasonId = Guid.NewGuid();
+        var episode2 = Guid.NewGuid();
+        var episode3 = Guid.NewGuid();
+        writer.Containers[seriesId] = new MonitorableContainer(seriesId, EntityKind.VideoSeries, "Andor", []);
+        writer.Containers[seasonId] = new MonitorableContainer(
+            seasonId, EntityKind.VideoSeason, "Season 1", [new ProviderRef(Provider, "S1")],
+            HasSourceFile: true, ParentEntityId: seriesId,
+            Positions: new Dictionary<string, int> { [EntityPositionCodes.Season] = 1 });
+        writer.Containers[episode2] = new MonitorableContainer(
+            episode2, EntityKind.Video, "Aftermath", [], ParentEntityId: seasonId,
+            Positions: new Dictionary<string, int> { [EntityPositionCodes.Season] = 1, [EntityPositionCodes.Episode] = 2 });
+        writer.Containers[episode3] = new MonitorableContainer(
+            episode3, EntityKind.Video, "Reckoning", [], ParentEntityId: seasonId,
+            Positions: new Dictionary<string, int> { [EntityPositionCodes.Season] = 1, [EntityPositionCodes.Episode] = 3 });
+        writer.WantedChildren[seasonId] = [episode2, episode3];
+
+        var (covered, missing) = await service.RequestMissingChildrenAsync(seasonId, CancellationToken.None);
+
+        Assert.Equal(2, missing);
+        Assert.Equal(2, covered);
+        Assert.Equal(2, acquisitions.Created.Count);
+        Assert.All(acquisitions.Created, request => Assert.Equal(EntityKind.Video, request.Kind));
+        Assert.All(acquisitions.Created, request => Assert.Equal("Andor", request.Series));
+        Assert.All(acquisitions.Created, request => Assert.Equal(1, request.SeasonNumber));
+        Assert.Equal([2, 3], acquisitions.Created.Select(request => request.EpisodeNumber).ToArray());
+        Assert.Equal(2, monitors.AcquisitionMonitors.Count);
+    }
+
+    [Fact]
+    public async Task RequestMissingChildrenCountsAnInFlightEpisodeAsCoveredWithoutDuplicating() {
+        var (service, writer, acquisitions, _) = ServiceWithMonitors(Container(ProposalKind.VideoSeries, "Andor", "TV1"));
+        var seasonId = Guid.NewGuid();
+        var episode2 = Guid.NewGuid();
+        var episode3 = Guid.NewGuid();
+        writer.Containers[seasonId] = new MonitorableContainer(
+            seasonId, EntityKind.VideoSeason, "Season 1", [new ProviderRef(Provider, "S1")],
+            HasSourceFile: true,
+            Positions: new Dictionary<string, int> { [EntityPositionCodes.Season] = 1 });
+        writer.Containers[episode2] = new MonitorableContainer(
+            episode2, EntityKind.Video, "Aftermath", [], ParentEntityId: seasonId,
+            Positions: new Dictionary<string, int> { [EntityPositionCodes.Season] = 1, [EntityPositionCodes.Episode] = 2 });
+        writer.Containers[episode3] = new MonitorableContainer(
+            episode3, EntityKind.Video, "Reckoning", [], ParentEntityId: seasonId,
+            Positions: new Dictionary<string, int> { [EntityPositionCodes.Season] = 1, [EntityPositionCodes.Episode] = 3 });
+        writer.WantedChildren[seasonId] = [episode2, episode3];
+        acquisitions.EntitiesWithAcquisitions.Add(episode2); // already chasing this gap
+
+        var (covered, missing) = await service.RequestMissingChildrenAsync(seasonId, CancellationToken.None);
+
+        Assert.Equal(2, missing);
+        Assert.Equal(2, covered); // the in-flight episode counts as covered, not duplicated
+        Assert.Equal(episode3, Assert.Single(acquisitions.Created).EntityId);
+    }
+
+    [Fact]
     public async Task OwnedPickIsReportedAlreadyOwnedAndNeitherAppliedNorAcquired() {
         var proposal = Container(ProposalKind.Person, "Author", "A1",
             Leaf(ProposalKind.Book, "Owned", "W1"), Leaf(ProposalKind.Book, "New", "W2"));
@@ -677,6 +737,12 @@ public sealed class RequestCommitServiceTests {
 
             return Task.FromResult(Container?.EntityId == entityId ? Container : null);
         }
+
+        /// <summary>Wanted child ids per parent, for missing-children fallback tests.</summary>
+        public Dictionary<Guid, IReadOnlyList<Guid>> WantedChildren { get; } = [];
+
+        public Task<IReadOnlyList<Guid>> ListWantedChildIdsAsync(Guid parentEntityId, EntityKind childKind, CancellationToken cancellationToken) =>
+            Task.FromResult(WantedChildren.GetValueOrDefault(parentEntityId, []));
     }
 
     private sealed class FakeMonitorStore : Prismedia.Application.Acquisition.IMonitorStore {

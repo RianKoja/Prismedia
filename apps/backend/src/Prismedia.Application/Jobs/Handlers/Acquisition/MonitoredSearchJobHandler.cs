@@ -33,6 +33,25 @@ public sealed class MonitoredSearchJobHandler(
         foreach (var monitor in due) {
             cancellationToken.ThrowIfCancellationRequested();
 
+            // An imported season pack that left gaps falls back to per-episode acquisitions: each
+            // still-wanted episode phantom under the season is requested through the ordinary request
+            // pipeline (its own auto-grabbing acquisition + monitor). Once every gap is covered the
+            // season monitor fulfills — the episode monitors own the chase from there, exactly like
+            // Sonarr's missing-episode search after a season pack comes up short.
+            if (monitor.EpisodeFallback && monitor.EntityId is { } seasonEntityId) {
+                var outcome = await requests.RequestMissingChildrenAsync(seasonEntityId, cancellationToken);
+                logger.LogInformation(
+                    "MonitoredSearch: '{Title}' imported with {Missing} missing episode(s); {Covered} covered by episode acquisitions.",
+                    monitor.Title, outcome.Missing, outcome.Covered);
+                if (outcome.Missing > 0 && outcome.Covered >= outcome.Missing) {
+                    await monitors.SetStatusAsync(monitor.MonitorId, MonitorStatus.Fulfilled, cancellationToken);
+                }
+
+                await monitors.MarkSearchedAsync(monitor.MonitorId, cancellationToken);
+                await context.ReportProgressAsync(++processed * 100 / due.Count, $"Filling {monitor.Title}", cancellationToken);
+                continue;
+            }
+
             // A container monitor is due for a discovery sync: re-resolve the author/artist from its
             // provider and surface missing works as wanted phantoms. A failed sync (entity deleted,
             // provider gone) pauses the monitor rather than retrying forever.

@@ -252,6 +252,7 @@ public sealed class AcquisitionServiceTests {
         public Task<WantedEntityResult> EnsureAsync(EntityKind kind, string providerId, string itemId, string title, Guid? parentEntityId, bool matchTitleKindWide, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task ApplyProposalAsync(Guid entityId, EntityMetadataProposal proposal, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<MonitorableContainer?> GetContainerAsync(Guid entityId, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<IReadOnlyList<Guid>> ListWantedChildIdsAsync(Guid parentEntityId, EntityKind childKind, CancellationToken cancellationToken) => Task.FromResult<IReadOnlyList<Guid>>([]);
     }
 
     private sealed class EmptyImportedFilesReader : IImportedFilesReader {

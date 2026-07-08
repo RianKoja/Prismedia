@@ -147,6 +147,19 @@ public sealed class WantedEntityWriter(PrismediaDbContext db, EntityMetadataAppl
             entity.ParentEntityId, positions);
     }
 
+    public async Task<IReadOnlyList<Guid>> ListWantedChildIdsAsync(
+        Guid parentEntityId, EntityKind childKind, CancellationToken cancellationToken) {
+        var kindCode = childKind.ToCode();
+        // IsWanted alone should imply fileless (the import bind clears the flag), but the file check
+        // guards against a bind raced by the caller — an owned child is never a gap to chase.
+        return await db.Entities.AsNoTracking()
+            .Where(row => row.ParentEntityId == parentEntityId && row.KindCode == kindCode && row.IsWanted)
+            .Where(row => !db.EntityFiles.Any(file => file.EntityId == row.Id && file.Role == EntityFileRole.Source))
+            .OrderBy(row => row.SortOrder)
+            .Select(row => row.Id)
+            .ToArrayAsync(cancellationToken);
+    }
+
     private Task<bool> HasSourceFileAsync(Guid entityId, CancellationToken cancellationToken) =>
         db.EntityFiles.AsNoTracking()
             .AnyAsync(file => file.EntityId == entityId && file.Role == EntityFileRole.Source, cancellationToken);

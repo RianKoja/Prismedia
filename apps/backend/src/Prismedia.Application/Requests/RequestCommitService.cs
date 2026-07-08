@@ -78,6 +78,12 @@ public interface IWantedEntityWriter {
     /// alike — an on-disk author identified from its files monitors exactly like a requested one.
     /// </summary>
     Task<MonitorableContainer?> GetContainerAsync(Guid entityId, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// The still-wanted, fileless children of the given kind under an entity, in sort order — a
+    /// season's missing episodes. These are the gaps a season-pack import left behind.
+    /// </summary>
+    Task<IReadOnlyList<Guid>> ListWantedChildIdsAsync(Guid parentEntityId, EntityKind childKind, CancellationToken cancellationToken);
 }
 
 /// <summary>
@@ -206,6 +212,42 @@ public sealed class RequestCommitService(
         }
 
         return await RequestFromEntityGraphAsync(descriptor, entity, targeting, hideNsfw, cancellationToken);
+    }
+
+    /// <summary>
+    /// Requests every still-wanted child phantom under an entity — the season-pack completeness
+    /// fallback. A season pack that imported with episodes missing chases each gap as its own
+    /// monitored, auto-grabbing acquisition through the ordinary request pipeline (Sonarr's
+    /// per-episode search); the manual "search missing" action rides the same path. A child already
+    /// carrying an acquisition counts as covered rather than starting a duplicate. Returns how many
+    /// gaps are now covered and how many exist; (0, 0) when the entity is gone or its kind has no
+    /// committable child kind.
+    /// </summary>
+    public async Task<(int Covered, int Missing)> RequestMissingChildrenAsync(Guid entityId, CancellationToken cancellationToken) {
+        var entity = await wanted.GetContainerAsync(entityId, cancellationToken);
+        if (entity is null) {
+            return (0, 0);
+        }
+
+        var descriptor = RequestKindRegistry.All.FirstOrDefault(candidate =>
+            candidate is { Committable: true } && candidate.WantedEntityKind == entity.Kind);
+        var child = descriptor is null ? null : RequestKindRegistry.ChildOf(descriptor);
+        if (child is not { Committable: true }) {
+            return (0, 0);
+        }
+
+        // Conservative SFW default, mirroring the discovery sweep: the fallback runs with no user
+        // session, and the phantoms it requests were materialized under the same rule.
+        var missing = await wanted.ListWantedChildIdsAsync(entityId, child.WantedEntityKind, cancellationToken);
+        var covered = 0;
+        foreach (var childId in missing) {
+            var response = await RequestEntityAsync(childId, hideNsfw: true, cancellationToken);
+            if (response is { Items.Count: > 0 }) {
+                covered++;
+            }
+        }
+
+        return (covered, missing.Count);
     }
 
     /// <summary>The stored library/profile choices of the entity's nearest monitored ancestor, or none.</summary>

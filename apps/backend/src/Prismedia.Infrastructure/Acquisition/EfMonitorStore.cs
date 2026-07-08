@@ -235,6 +235,14 @@ public sealed class EfMonitorStore(PrismediaDbContext db) : IMonitorStore {
             select new {
                 Monitor = monitor,
                 AcquisitionStatus = acquisition == null ? (AcquisitionStatus?)null : acquisition.Status,
+                AcquisitionEntityId = acquisition == null ? null : acquisition.EntityId,
+                // Only an imported season pack ever inspects this, so the subquery is gated to that shape:
+                // an unconsumed import hint means the library scan hasn't bound the pack's files yet, and
+                // episode completeness can't be judged until it has.
+                AwaitingImportReconcile = acquisition != null
+                    && acquisition.Status == AcquisitionStatus.Imported
+                    && monitor.Kind == EntityKind.VideoSeason
+                    && db.AcquisitionImportHints.Any(hint => hint.AcquisitionId == acquisition.Id && !hint.Consumed),
                 OwnedQuality = acquisition == null ? (BookQualityRank?)null : new BookQualityRank(acquisition.OwnedSourceTier, acquisition.OwnedFormatTier),
                 OwnedMediaQuality = acquisition == null ? null : acquisition.OwnedMediaQuality,
                 OwnedFormatScore = acquisition == null ? 0 : acquisition.OwnedFormatScore,
@@ -308,6 +316,33 @@ public sealed class EfMonitorStore(PrismediaDbContext db) : IMonitorStore {
                     continue;
 
                 case AcquisitionStatus.Imported:
+                    // A season pack is only truly "in hand" when the season is complete. Once the import
+                    // scan has reconciled the pack (its hint is consumed), any episode phantom still wanted
+                    // under the season is a gap the pack didn't cover — surface it as per-episode fallback
+                    // work (the handler requests each missing episode individually, Sonarr-style) instead
+                    // of fulfilling a monitor whose season has holes.
+                    if (monitor.Kind == EntityKind.VideoSeason && row.AcquisitionEntityId is { } packEntityId) {
+                        if (row.AwaitingImportReconcile) {
+                            continue; // judge completeness on a later sweep, after the import scan binds files
+                        }
+
+                        var episodeKindCode = EntityKind.Video.ToCode();
+                        var hasMissingEpisodes = await db.Entities.AnyAsync(
+                            entity => entity.ParentEntityId == packEntityId
+                                && entity.KindCode == episodeKindCode
+                                && entity.IsWanted,
+                            cancellationToken);
+                        if (hasMissingEpisodes) {
+                            if (monitor.LastSearchedAt is null || now - monitor.LastSearchedAt >= interval) {
+                                due.Add(new DueMonitor(
+                                    monitor.Id, acquisitionId, monitor.Title,
+                                    IsUpgrade: false, EntityId: packEntityId, EpisodeFallback: true));
+                            }
+
+                            continue;
+                        }
+                    }
+
                     // The wanted item is in hand. An upgrade-capable kind (a book, or a single-file movie/
                     // episode) with its profile's upgrade loop on keeps seeking a higher-quality release; every
                     // other kind — a season pack, an album, or any kind whose profile has upgrades off —

@@ -254,9 +254,12 @@ public sealed record AcquisitionCandidateRef(Guid CandidateId, string Title, str
 /// A monitor whose periodic action is due. <see cref="IsUpgrade"/> marks an imported book due for an
 /// upgrade re-search (a child acquisition is spawned to search). <see cref="EntityId"/> marks a
 /// container monitor due for a discovery sync (re-resolve the author/artist from its provider and
-/// request missing works); container dues carry no acquisition.
+/// request missing works); container dues carry no acquisition. <see cref="EpisodeFallback"/> marks an
+/// imported season pack that left episode phantoms wanted: <see cref="EntityId"/> then carries the
+/// season entity, and the handler requests each missing episode individually instead of fulfilling.
 /// </summary>
-public sealed record DueMonitor(Guid MonitorId, Guid? AcquisitionId, string Title, bool IsUpgrade = false, Guid? EntityId = null);
+public sealed record DueMonitor(
+    Guid MonitorId, Guid? AcquisitionId, string Title, bool IsUpgrade = false, Guid? EntityId = null, bool EpisodeFallback = false);
 
 /// <summary>
 /// The owned quality an upgrade child must beat, expressed in the vocabulary of the child's kind. A book
