@@ -244,9 +244,12 @@
 
     </EntityDetail>
 
+    <!-- Episodes ride along so a half-imported season surfaces its missing episodes as a roll-up
+         with a "Search N missing" action, the same way the series page rolls up its seasons. -->
     <EntityAcquisitionCard
       entityId={season?.id}
       capabilities={season?.capabilities}
+      childCards={episodeCards}
       onChanged={loadSeason}
       onCancelled={() => void loadSeason()}
     />
