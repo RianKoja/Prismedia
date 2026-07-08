@@ -151,7 +151,8 @@ public sealed class CollectionRuleEngineSqlTests {
         var query = new CollectionRuleEngine(null!).BuildQuery(group, "video");
 
         Assert.NotNull(query);
-        Assert.Contains("LEFT JOIN entity_playback pb ON pb.entity_id = e.id", query.Value.Sql, StringComparison.Ordinal);
+        Assert.Contains("FROM user_entity_states GROUP BY entity_id", query.Value.Sql, StringComparison.Ordinal);
+        Assert.DoesNotContain("entity_playback pb", query.Value.Sql, StringComparison.Ordinal);
         Assert.Contains("COALESCE(pb.skip_count, 0) >=", query.Value.Sql, StringComparison.Ordinal);
     }
 

@@ -246,7 +246,13 @@ public sealed class CollectionRuleEngine(PrismediaDbContext db) : ICollectionRul
     }
 
     private string? TranslatePlayback(string column, CollectionRuleCondition condition, SqlBuildContext ctx) {
-        ctx.EnsureJoin("LEFT JOIN entity_playback pb ON pb.entity_id = e.id");
+        // Playback state is per-user (user_entity_states); collections are shared, so rules
+        // filter on the household-level count: the highest count any user has for the entity.
+        // MAX also preserves pre-split semantics — the migration fan-out copied the old global
+        // counters identically to every user.
+        ctx.EnsureJoin(
+            "LEFT JOIN (SELECT entity_id, MAX(play_count) AS play_count, MAX(skip_count) AS skip_count " +
+            "FROM user_entity_states GROUP BY entity_id) pb ON pb.entity_id = e.id");
         return TranslateScalar($"COALESCE(pb.{column}, 0)", condition.Operator, condition.Value, ctx);
     }
 
