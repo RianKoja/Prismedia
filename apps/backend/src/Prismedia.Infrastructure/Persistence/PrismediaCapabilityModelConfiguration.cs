@@ -108,6 +108,7 @@ internal static partial class PrismediaModelConfiguration {
             entity.Property(row => row.Codec).HasColumnName("codec").HasMaxLength(128);
             entity.Property(row => row.Container).HasColumnName("container").HasMaxLength(128);
             entity.Property(row => row.Format).HasColumnName("format").HasMaxLength(128);
+            entity.Property(row => row.ProbeFailedAt).HasColumnName("probe_failed_at");
             entity.Property(row => row.UpdatedAt).HasColumnName("updated_at");
             entity.HasOne<EntityRow>().WithOne().HasForeignKey<EntityTechnicalRow>(row => row.EntityId).OnDelete(DeleteBehavior.Cascade);
         });

@@ -20,7 +20,9 @@ public sealed class ScanAudioJobHandler(
     IAudioScanPersistence audio,
     IDownstreamNeedsPersistence downstreamNeeds,
     IScanSnapshotStore? snapshots = null,
-    IAcquisitionHintApplier? acquisitionHints = null) : ScanJobHandler(logger, fileDiscovery, roots, snapshots) {
+    IAcquisitionHintApplier? acquisitionHints = null,
+    IMediaProcessingStatePersistence? processingState = null)
+    : ScanJobHandler(logger, fileDiscovery, roots, snapshots, processingState) {
     public override JobType Type => JobType.ScanAudio;
 
     protected override bool IsEligibleRoot(LibraryRootData root) => root.ScanAudio;

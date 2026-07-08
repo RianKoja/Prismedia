@@ -21,7 +21,9 @@ public sealed class ScanLibraryJobHandler(
     IScanSnapshotStore? snapshots = null,
     IVideoSidecarMetadataReader? sidecars = null,
     IScanMetadataPersistence? scanMetadata = null,
-    IAcquisitionHintApplier? acquisitionHints = null) : ScanJobHandler(logger, fileDiscovery, roots, snapshots) {
+    IAcquisitionHintApplier? acquisitionHints = null,
+    IMediaProcessingStatePersistence? processingState = null)
+    : ScanJobHandler(logger, fileDiscovery, roots, snapshots, processingState) {
     private const int BatchSize = 50;
     private static readonly Regex SeasonFolderPattern = new(
         @"^(?:Season\s*(?<season>\d{1,3})|S(?<season>\d{1,3}))$",

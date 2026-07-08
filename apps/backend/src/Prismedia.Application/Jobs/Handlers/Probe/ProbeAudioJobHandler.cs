@@ -23,8 +23,13 @@ public sealed class ProbeAudioJobHandler(
 
         var probe = await mediaProbe.ProbeAudioAsync(filePath, cancellationToken);
         if (probe is null) {
-            logger.LogWarning("ProbeAudio: ffprobe failed for {Path}", filePath);
-            return;
+            // Persist the marker BEFORE failing: it stops scans from re-enqueueing probe and
+            // waveform work for this entity until the file changes on disk, so one corrupt
+            // file surfaces here once instead of churning the queue forever.
+            await Persistence.MarkEntityProbeFailedAsync(entityId, cancellationToken);
+            throw new InvalidOperationException(
+                $"ffprobe could not read '{filePath}' — the file appears corrupt or truncated. " +
+                "Probing and waveform generation are paused for it until the file is repaired or replaced.");
         }
 
         await Persistence.UpsertEntityTechnicalAsync(entityId,

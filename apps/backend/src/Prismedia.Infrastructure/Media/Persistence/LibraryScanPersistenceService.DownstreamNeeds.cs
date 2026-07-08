@@ -25,6 +25,14 @@ public sealed partial class LibraryScanPersistenceService {
             .Select(t => t.EntityId)
             .ToListAsync(cancellationToken)).ToHashSet();
 
+        // Entities whose source file the probe could not read (corrupt media). No probe- or
+        // ffmpeg-based work can succeed for these until the file changes on disk, which clears
+        // the marker — so scans stop re-enqueueing the same doomed jobs on every pass.
+        var probeFailed = (await _db.EntityTechnical.AsNoTracking()
+            .Where(t => ids.Contains(t.EntityId) && t.ProbeFailedAt != null)
+            .Select(t => t.EntityId)
+            .ToListAsync(cancellationToken)).ToHashSet();
+
         var hasMediaSource = (await _db.MediaSources.AsNoTracking()
             .Where(source => ids.Contains(source.EntityId) && source.DurationSeconds != null)
             .Select(source => source.EntityId)
@@ -101,18 +109,19 @@ public sealed partial class LibraryScanPersistenceService {
         var result = new Dictionary<Guid, DownstreamNeeds>(ids.Count);
         foreach (var id in ids) {
             entityKinds.TryGetValue(id, out var kindCode);
+            var unreadable = probeFailed.Contains(id);
             var needsPreview = string.Equals(kindCode, EntityKindRegistry.AudioTrack.Code, StringComparison.OrdinalIgnoreCase)
                 ? !hasWaveform.Contains(id)
                 : !hasThumbnail.Contains(id) ||
                   (kindCode is not null && NeedsAnimatedImagePreviewClip(kindCode, id, sourcePaths, hasPreview));
 
             result[id] = new DownstreamNeeds(
-                NeedsProbe: !hasTechnical.Contains(id) || !hasMediaSource.Contains(id),
+                NeedsProbe: !unreadable && (!hasTechnical.Contains(id) || !hasMediaSource.Contains(id)),
                 MissingOshash: !hasOshash.Contains(id),
                 MissingMd5: !hasMd5.Contains(id),
-                NeedsPreview: needsPreview,
-                NeedsTrickplay: !hasTrickplay.Contains(id),
-                NeedsSubtitleExtraction: !hasUsableSubtitleState.Contains(id),
+                NeedsPreview: !unreadable && needsPreview,
+                NeedsTrickplay: !unreadable && !hasTrickplay.Contains(id),
+                NeedsSubtitleExtraction: !unreadable && !hasUsableSubtitleState.Contains(id),
                 // Backfill: an existing cover missing either small variant. New entities
                 // (no cover at scan time) get theirs from GeneratePreview instead.
                 NeedsGridThumbnail: hasCover.Contains(id) &&

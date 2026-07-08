@@ -265,6 +265,20 @@ public interface IMediaProcessingStatePersistence {
     Task UpsertAudioTrackTagsAsync(Guid entityId, string? artist, string? album, int? trackNumber, CancellationToken cancellationToken);
 
     Task<EntityTechnicalData?> GetEntityTechnicalAsync(Guid entityId, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Records that probing the entity's source file failed (corrupt or unreadable media). While the
+    /// marker is set, scans stop re-enqueueing probe and generation work for the entity so one bad
+    /// file cannot churn the queue forever. A later successful probe clears the marker.
+    /// </summary>
+    Task MarkEntityProbeFailedAsync(Guid entityId, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Clears probe-failure markers for entities whose source file is one of the given paths. Called
+    /// by scans for files whose on-disk signature changed, so a repaired or replaced file gets a
+    /// fresh probing chance.
+    /// </summary>
+    Task ClearProbeFailuresForPathsAsync(IReadOnlyCollection<string> sourcePaths, CancellationToken cancellationToken);
 }
 
 /// <summary>Reads entity trees for refresh jobs that re-queue processing work.</summary>
@@ -298,7 +312,8 @@ public sealed record EntityTechnicalData(
     int? SampleRate,
     int? Channels,
     string? Codec,
-    string? Container);
+    string? Container,
+    DateTimeOffset? ProbeFailedAt = null);
 
 public sealed record MediaSourceProbeData(
     double? DurationSeconds,

@@ -129,6 +129,54 @@ public sealed class GeneratePreviewJobHandlerTests : IDisposable {
         Assert.Equal(JobPriorities.Probe, probe.Priority);
     }
 
+    [Fact]
+    public async Task UnreadableSourceSkipsQuietlyInsteadOfFailingAndRequeuingProbe() {
+        var entityId = Guid.Parse("33333333-3333-3333-3333-333333333333");
+        var sourcePath = Path.Combine(_tempDir, "corrupt.mp4");
+        await File.WriteAllTextAsync(sourcePath, "not really video");
+        var assets = new RecordingMediaAssetGenerator(_tempDir);
+        var persistence = new PreviewPersistence(sourcePath) {
+            // The probe already ran and marked the source unreadable: no metadata, marker set.
+            Technical = new EntityTechnicalData(
+                DurationSeconds: null,
+                Width: null,
+                Height: null,
+                FrameRate: null,
+                BitRate: null,
+                SampleRate: null,
+                Channels: null,
+                Codec: null,
+                Container: null,
+                ProbeFailedAt: DateTimeOffset.UtcNow)
+        };
+        var handler = new GeneratePreviewJobHandler(
+            NullLogger<GeneratePreviewJobHandler>.Instance,
+            assets,
+            persistence,
+            persistence,
+            new NoopGridThumbnailService());
+        var job = new JobRunSnapshot(
+            Guid.NewGuid(),
+            JobType.GeneratePreview,
+            JobRunStatus.Running,
+            Progress: 0,
+            Message: null,
+            PayloadJson: "{}",
+            TargetEntityKind: "video",
+            TargetEntityId: entityId.ToString(),
+            TargetLabel: "Corrupt",
+            CreatedAt: DateTimeOffset.UtcNow,
+            StartedAt: DateTimeOffset.UtcNow,
+            FinishedAt: null);
+        var queue = new RecordingJobQueue();
+
+        await handler.HandleAsync(new JobContext(job, queue), CancellationToken.None);
+
+        Assert.False(assets.GeneratedThumbnailAndPreview);
+        Assert.Empty(persistence.EntityFiles);
+        Assert.Empty(queue.Enqueued);
+    }
+
     public void Dispose() {
         if (Directory.Exists(_tempDir)) {
             Directory.Delete(_tempDir, recursive: true);
@@ -282,6 +330,8 @@ public sealed class GeneratePreviewJobHandlerTests : IDisposable {
         public Task MarkSubtitlesExtractedAsync(Guid entityId, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task UpsertSubtitleAsync(Guid entityId, string language, string? label, string format, EntitySubtitleSource source, string storagePath, string sourceFormat, int streamIndex, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task UpsertAudioTrackTagsAsync(Guid entityId, string? artist, string? album, int? trackNumber, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task MarkEntityProbeFailedAsync(Guid entityId, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task ClearProbeFailuresForPathsAsync(IReadOnlyCollection<string> sourcePaths, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<IReadOnlyList<EntityRefreshTarget>> GetEntityTreeAsync(Guid entityId, CancellationToken cancellationToken) => throw new NotSupportedException();
     }
 

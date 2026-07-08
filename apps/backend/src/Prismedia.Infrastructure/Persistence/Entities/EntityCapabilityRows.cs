@@ -77,6 +77,14 @@ public sealed class EntityTechnicalRow {
     public string? Codec { get; set; }
     public string? Container { get; set; }
     public string? Format { get; set; }
+
+    /// <summary>
+    /// Set when the most recent probe could not read the source file (corrupt or truncated media).
+    /// While set, scans stop re-enqueueing probe and generation work for the entity; the marker is
+    /// cleared when the source file changes on disk or a later probe succeeds.
+    /// </summary>
+    public DateTimeOffset? ProbeFailedAt { get; set; }
+
     public DateTimeOffset UpdatedAt { get; set; }
 }
 

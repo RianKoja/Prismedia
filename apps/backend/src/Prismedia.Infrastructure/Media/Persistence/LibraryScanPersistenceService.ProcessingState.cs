@@ -32,6 +32,8 @@ public sealed partial class LibraryScanPersistenceService {
             existing.Codec = codec ?? existing.Codec;
             existing.Container = container ?? existing.Container;
             existing.Format = format ?? existing.Format;
+            // A successful probe supersedes any earlier unreadable-source marker.
+            existing.ProbeFailedAt = null;
             existing.UpdatedAt = now;
         } else {
             _db.EntityTechnical.Add(new EntityTechnicalRow {
@@ -321,7 +323,44 @@ public sealed partial class LibraryScanPersistenceService {
         if (row is null) return null;
 
         return new EntityTechnicalData(row.DurationSeconds, row.Width, row.Height, row.FrameRate,
-            row.BitRate, row.SampleRate, row.Channels, row.Codec, row.Container);
+            row.BitRate, row.SampleRate, row.Channels, row.Codec, row.Container, row.ProbeFailedAt);
+    }
+
+    public async Task MarkEntityProbeFailedAsync(Guid entityId, CancellationToken cancellationToken) {
+        var now = DateTimeOffset.UtcNow;
+        var existing = await _db.EntityTechnical.FindAsync([entityId], cancellationToken);
+        if (existing is not null) {
+            existing.ProbeFailedAt = now;
+            existing.UpdatedAt = now;
+        } else {
+            _db.EntityTechnical.Add(new EntityTechnicalRow {
+                EntityId = entityId,
+                ProbeFailedAt = now,
+                UpdatedAt = now
+            });
+        }
+
+        await _db.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task ClearProbeFailuresForPathsAsync(
+        IReadOnlyCollection<string> sourcePaths, CancellationToken cancellationToken) {
+        if (sourcePaths.Count == 0) return;
+
+        var paths = sourcePaths.ToList();
+        var rows = await _db.EntityTechnical
+            .Where(t => t.ProbeFailedAt != null && _db.EntityFiles.Any(f =>
+                f.EntityId == t.EntityId && f.Role == EntityFileRole.Source && paths.Contains(f.Path)))
+            .ToListAsync(cancellationToken);
+        if (rows.Count == 0) return;
+
+        var now = DateTimeOffset.UtcNow;
+        foreach (var row in rows) {
+            row.ProbeFailedAt = null;
+            row.UpdatedAt = now;
+        }
+
+        await _db.SaveChangesAsync(cancellationToken);
     }
 
 }

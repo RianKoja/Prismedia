@@ -24,7 +24,20 @@ public sealed class GeneratePreviewJobHandler(
         var timer = new JobPhaseTimer();
         var settings = await roots.GetSettingsAsync(cancellationToken);
 
-        var (duration, width, height) = await GetDimensionsAsync(entityId, cancellationToken);
+        var tech = await Persistence.GetEntityTechnicalAsync(entityId, cancellationToken);
+        var (duration, width, height) = (tech?.DurationSeconds, tech?.Width, tech?.Height);
+
+        if (duration is null or <= 0 && tech?.ProbeFailedAt is not null) {
+            // The probe already established the source is unreadable (corrupt media); ffmpeg
+            // cannot generate anything from it either. Complete quietly — the probe failure
+            // surfaced the bad file, and the marker keeps scans from re-queueing this work.
+            logger.LogWarning(
+                "GeneratePreview: skipping {EntityId} — source file could not be probed (marked unreadable)",
+                entityId);
+            await context.ReportProgressAsync(
+                100, "Skipped: source file could not be read (corrupt or truncated)", cancellationToken);
+            return;
+        }
 
         if (settings.GenerateTrickplay && duration is null or <= 0) {
             await context.EnqueueIfNeededAsync(
@@ -153,15 +166,6 @@ public sealed class GeneratePreviewJobHandler(
             assets.TrickplayPlaylistUrl(entityId, frameWidth), MediaContentTypes.HlsPlaylist, null, cancellationToken);
 
         return true;
-    }
-
-    private async Task<(double? Duration, int? Width, int? Height)> GetDimensionsAsync(
-        Guid entityId, CancellationToken cancellationToken) {
-        var tech = await Persistence.GetEntityTechnicalAsync(entityId, cancellationToken);
-        if (tech is null)
-            return (null, null, null);
-
-        return (tech.DurationSeconds, tech.Width, tech.Height);
     }
 
     private static double ComputeSeekTime(double? duration) {

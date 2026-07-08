@@ -32,6 +32,68 @@ public sealed class LibraryScanPersistenceServiceTests {
     }
 
     [Fact]
+    public async Task DownstreamNeedsSuppressProbeAndGenerationWhileSourceIsMarkedUnreadable() {
+        await using var db = CreateContext();
+        var videoId = Guid.Parse("77777777-7777-7777-7777-777777777771");
+        SeedVideo(db, videoId);
+        db.EntityTechnical.Add(new EntityTechnicalRow {
+            EntityId = videoId,
+            ProbeFailedAt = DateTimeOffset.UtcNow,
+            UpdatedAt = DateTimeOffset.UtcNow
+        });
+        await db.SaveChangesAsync();
+
+        var service = new LibraryScanPersistenceService(db);
+        var needs = await service.CheckDownstreamNeedsBatchAsync([videoId], CancellationToken.None);
+
+        Assert.False(needs[videoId].NeedsProbe);
+        Assert.False(needs[videoId].NeedsPreview);
+        Assert.False(needs[videoId].NeedsTrickplay);
+        Assert.False(needs[videoId].NeedsSubtitleExtraction);
+        // Fingerprints hash the raw file, which works regardless of media corruption.
+        Assert.True(needs[videoId].MissingOshash);
+        Assert.True(needs[videoId].MissingMd5);
+    }
+
+    [Fact]
+    public async Task ClearProbeFailuresForPathsGivesChangedFileAFreshProbingChance() {
+        await using var db = CreateContext();
+        var videoId = Guid.Parse("77777777-7777-7777-7777-777777777772");
+        const string sourcePath = "/media/shows/corrupt-episode.mp4";
+        SeedVideo(db, videoId, sourcePath);
+        await db.SaveChangesAsync();
+
+        var service = new LibraryScanPersistenceService(db);
+        await service.MarkEntityProbeFailedAsync(videoId, CancellationToken.None);
+
+        var suppressed = await service.CheckDownstreamNeedsBatchAsync([videoId], CancellationToken.None);
+        Assert.False(suppressed[videoId].NeedsProbe);
+
+        await service.ClearProbeFailuresForPathsAsync([sourcePath], CancellationToken.None);
+
+        var restored = await service.CheckDownstreamNeedsBatchAsync([videoId], CancellationToken.None);
+        Assert.True(restored[videoId].NeedsProbe);
+    }
+
+    [Fact]
+    public async Task SuccessfulTechnicalUpsertClearsProbeFailureMarker() {
+        await using var db = CreateContext();
+        var videoId = Guid.Parse("77777777-7777-7777-7777-777777777773");
+        SeedVideo(db, videoId);
+        await db.SaveChangesAsync();
+
+        var service = new LibraryScanPersistenceService(db);
+        await service.MarkEntityProbeFailedAsync(videoId, CancellationToken.None);
+        await service.UpsertEntityTechnicalAsync(
+            videoId, 120, 1920, 1080, null, null, null, null, "h264", "mp4", null, CancellationToken.None);
+
+        var technical = await service.GetEntityTechnicalAsync(videoId, CancellationToken.None);
+        Assert.NotNull(technical);
+        Assert.Null(technical.ProbeFailedAt);
+        Assert.Equal(120, technical.DurationSeconds);
+    }
+
+    [Fact]
     public async Task DownstreamNeedsTrickplayWhenThumbnailExistsWithoutTrickplayInfo() {
         await using var db = CreateContext();
         var videoId = Guid.Parse("22222222-2222-2222-2222-222222222222");

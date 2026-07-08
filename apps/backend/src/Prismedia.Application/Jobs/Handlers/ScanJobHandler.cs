@@ -28,7 +28,8 @@ public abstract class ScanJobHandler(
     ILogger logger,
     IFileDiscovery fileDiscovery,
     ILibraryScanRootPersistence roots,
-    IScanSnapshotStore? snapshots = null) : IJobHandler {
+    IScanSnapshotStore? snapshots = null,
+    IMediaProcessingStatePersistence? processingState = null) : IJobHandler {
     public abstract JobType Type { get; }
 
     public async Task HandleAsync(JobContext context, CancellationToken cancellationToken) {
@@ -115,6 +116,14 @@ public abstract class ScanJobHandler(
             logger.LogInformation(
                 "{JobType}: {Label} changed since last scan (+{Added} -{Removed} ~{Changed}), rescanning",
                 scanKind, root.Label, delta.Added.Count, delta.Removed.Count, delta.Changed.Count);
+        }
+
+        // A file whose on-disk signature changed may have been repaired or replaced, so any
+        // unreadable-source (probe-failure) marker it carries is stale: clear it before the scan's
+        // downstream checks so the file gets a fresh probing chance.
+        if (processingState is not null && (delta.Changed.Count > 0 || delta.Added.Count > 0)) {
+            var touchedPaths = delta.Changed.Concat(delta.Added).Select(signature => signature.Path).ToList();
+            await processingState.ClearProbeFailuresForPathsAsync(touchedPaths, cancellationToken);
         }
 
         await ScanRootCoreAsync(context, root, cancellationToken);

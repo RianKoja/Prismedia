@@ -26,8 +26,13 @@ public sealed class ProbeVideoJobHandler(
         }
 
         if (probe is null) {
-            logger.LogWarning("ProbeVideo: ffprobe failed for {Path}", filePath);
-            return;
+            // Persist the marker BEFORE failing: it stops scans from re-enqueueing probe and
+            // generation work for this entity until the file changes on disk, so one corrupt
+            // file surfaces here once instead of churning the queue forever.
+            await Persistence.MarkEntityProbeFailedAsync(entityId, cancellationToken);
+            throw new InvalidOperationException(
+                $"ffprobe could not read '{filePath}' — the file appears corrupt or truncated. " +
+                "Probing and preview generation are paused for it until the file is repaired or replaced.");
         }
 
         using (timer.Phase("persist")) {

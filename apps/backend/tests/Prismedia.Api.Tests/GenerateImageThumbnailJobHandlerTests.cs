@@ -205,6 +205,8 @@ public sealed class GenerateImageThumbnailJobHandlerTests : IDisposable {
         public Task UpsertSubtitleAsync(Guid entityId, string language, string? label, string format, EntitySubtitleSource source, string storagePath, string sourceFormat, int streamIndex, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task UpsertAudioTrackTagsAsync(Guid entityId, string? artist, string? album, int? trackNumber, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<EntityTechnicalData?> GetEntityTechnicalAsync(Guid entityId, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task MarkEntityProbeFailedAsync(Guid entityId, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task ClearProbeFailuresForPathsAsync(IReadOnlyCollection<string> sourcePaths, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<LibraryRootData?> GetLibraryRootAsync(Guid rootId, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<IReadOnlyList<LibraryRootData>> GetEnabledRootsAsync(CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task UpdateRootLastScannedAsync(Guid rootId, CancellationToken cancellationToken) => throw new NotSupportedException();
