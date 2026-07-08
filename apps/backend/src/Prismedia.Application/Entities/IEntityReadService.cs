@@ -133,4 +133,18 @@ public interface IEntityReadService {
     /// the entity does not exist or does not match the requested kind.
     /// </summary>
     Task<IEntityCard?> GetDetailAsync(Guid id, string kind, bool hideNsfw, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Gets the folder-list context (visible child count, description, dates, lifetime, external
+    /// ids) for a batch of container entities. Sized for external catalog list pages: one grouped
+    /// query per collection across the whole batch, never a full detail hydration per row.
+    /// The default returns no contexts (rows pass through unenriched), so read-model fakes and
+    /// partial implementations stay source-compatible.
+    /// </summary>
+    Task<IReadOnlyDictionary<Guid, EntityFolderListContext>> GetFolderListContextsAsync(
+        IReadOnlyList<Guid> ids,
+        bool hideNsfw,
+        CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyDictionary<Guid, EntityFolderListContext>>(
+            new Dictionary<Guid, EntityFolderListContext>());
 }

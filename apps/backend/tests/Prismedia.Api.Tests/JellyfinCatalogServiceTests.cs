@@ -319,21 +319,17 @@ public sealed class JellyfinCatalogServiceTests {
     }
 
     [Fact]
-    public async Task BrowsingSeriesListHydratesFolderChildCount() {
+    public async Task BrowsingSeriesListEnrichesFolderRowsFromBatchedContext() {
         var seriesId = Guid.NewGuid();
-        var seasonId = Guid.NewGuid();
         var entities = new FakeEntityReadService();
         entities.ListByKind["video-series"] = [Thumb(seriesId, EntityKind.VideoSeries, "A Show")];
-        entities.Cards[seriesId] = new EntityCard {
-            Id = seriesId,
-            Kind = EntityKind.VideoSeries,
-            Title = "A Show",
-            ParentEntityId = null,
-            SortOrder = null,
-            Capabilities = [],
-            ChildrenByKind = [new EntityGroup(EntityKind.VideoSeason, "Seasons", [Thumb(seasonId, EntityKind.VideoSeason, "Season 1")])],
-            Relationships = []
-        };
+        entities.FolderContexts[seriesId] = new EntityFolderListContext(
+            ChildCount: 3,
+            Description: "About a show",
+            Dates: [new EntityDate("premiere", "2020-01-05", new DateOnly(2020, 1, 5), "day")],
+            LifetimeStart: null,
+            LifetimeEnd: null,
+            ExternalIds: [new Prismedia.Contracts.Entities.EntityExternalId("tmdb", "42", null)]);
         var catalog = new JellyfinCatalogService(entities, new FakeCollections());
 
         var result = await catalog.GetItemsAsync(
@@ -344,8 +340,13 @@ public sealed class JellyfinCatalogServiceTests {
 
         var item = Assert.Single(result.Items);
         Assert.Equal(JellyfinProtocol.ItemTypes.Series, item.Type);
-        Assert.Equal(1, item.ChildCount); // folder containers are still hydrated for their child count
-        Assert.Contains(seriesId, entities.DetailCalls);
+        Assert.Equal(3, item.ChildCount);
+        Assert.Equal(3, item.RecursiveItemCount);
+        Assert.Equal("About a show", item.Overview);
+        Assert.Equal(2020, item.ProductionYear);
+        Assert.Equal("42", item.ProviderIds?["tmdb"]);
+        // The dominant cost of the old path: a full detail hydration per folder row. It must not happen.
+        Assert.Empty(entities.DetailCalls);
     }
 
     [Fact]
@@ -1031,9 +1032,17 @@ public sealed class JellyfinCatalogServiceTests {
         public Dictionary<Guid, EntityCard> Cards { get; } = new();
         public Dictionary<Guid, EntityThumbnail> Thumbnails { get; } = new();
         public Dictionary<Guid, bool> PlayedById { get; } = new();
+        public Dictionary<Guid, EntityFolderListContext> FolderContexts { get; } = new();
         public List<ListCall> ListCalls { get; } = [];
         public List<Guid> DetailCalls { get; } = [];
         public List<Guid> ReferencedByCalls { get; } = [];
+
+        public Task<IReadOnlyDictionary<Guid, EntityFolderListContext>> GetFolderListContextsAsync(
+            IReadOnlyList<Guid> ids,
+            bool hideNsfw,
+            CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyDictionary<Guid, EntityFolderListContext>>(
+                ids.Where(FolderContexts.ContainsKey).ToDictionary(id => id, id => FolderContexts[id]));
 
         public Task<EntityListResponse> ListAsync(
             string? kind,

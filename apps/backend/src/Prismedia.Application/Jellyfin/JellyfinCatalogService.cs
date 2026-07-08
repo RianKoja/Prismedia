@@ -289,7 +289,7 @@ public sealed partial class JellyfinCatalogService {
             .SelectMany(group => VisibleEntities(group.Entities, visibility))
             .FirstOrDefault(child => child.Kind == EntityKind.Video)?.Id;
         var playableChild = childVideoId is { } id
-            ? await GetDetailedCardAsync(id, visibility, cancellationToken)
+            ? await GetDetailedCardAsync(id, EntityKind.Video, visibility, cancellationToken)
             : null;
         return MapCard(detail, serverId, context, playableChild);
     }
@@ -835,33 +835,53 @@ public sealed partial class JellyfinCatalogService {
             .ToArray();
 
     /// <summary>
-    /// Hydrates only folder-container rows (series and seasons) so their structural child counts
-    /// populate, leaving playable leaf rows on the cheap thumbnail projection. Series/season lists
-    /// are small, so the targeted hydration here is not the cost the broad list hydration was.
+    /// Enriches folder-container rows (series and seasons) with the metadata list rows need beyond
+    /// the thumbnail projection — child counts, overview, premiere/production dates, and provider
+    /// ids — from ONE batched context load for the whole page. The previous per-row detail
+    /// hydration cost a full aggregate graph per series (files, streams, watch state, children) and
+    /// made a 50-series page take tens of seconds on a real library. Full detail (people, studios,
+    /// trailers, chapters) remains the single-item fetch's job (GetItemAsync).
     /// </summary>
     private async Task<IReadOnlyList<JellyfinBaseItemDto>> HydrateFolderContainersAsync(
         IReadOnlyList<JellyfinBaseItemDto> items,
         string serverId,
         JellyfinContentVisibility visibility,
         CancellationToken cancellationToken) {
-        if (!items.Any(ShouldHydrateCatalogItem)) {
+        _ = serverId; // kept for signature stability with the mapping call sites
+        var folderIds = items
+            .Where(ShouldHydrateCatalogItem)
+            .Select(item => item.Id)
+            .Distinct()
+            .ToArray();
+        if (folderIds.Length == 0) {
             return items;
         }
 
-        var hydrated = new List<JellyfinBaseItemDto>(items.Count);
-        foreach (var item in items) {
-            if (!ShouldHydrateCatalogItem(item)) {
-                hydrated.Add(item);
-                continue;
-            }
+        var contexts = await _entities.GetFolderListContextsAsync(folderIds, visibility.HideNsfw, cancellationToken);
+        return items
+            .Select(item => contexts.TryGetValue(item.Id, out var context)
+                ? EnrichFolderRow(item, context)
+                : item)
+            .ToArray();
+    }
 
-            var detail = await GetDetailedCardAsync(item.Id, visibility, cancellationToken);
-            hydrated.Add(detail is null
-                ? item
-                : await MapDetailAsync(detail, serverId, ItemContext.From(item), visibility, cancellationToken));
-        }
-
-        return hydrated;
+    /// <summary>Overlays the batched folder context onto a thumbnail-mapped row.</summary>
+    private static JellyfinBaseItemDto EnrichFolderRow(JellyfinBaseItemDto item, EntityFolderListContext context) {
+        var dates = context.Dates.Count == 0 ? null : new DatesCapability(context.Dates);
+        var lifetime = context.LifetimeStart is null && context.LifetimeEnd is null
+            ? null
+            : new LifetimeCapability(context.LifetimeStart, context.LifetimeEnd, null);
+        var premiereDate = PremiereDateFrom(dates);
+        return item with {
+            Overview = context.Description,
+            PremiereDate = premiereDate,
+            StartDate = ToDateTimeOffset(lifetime?.Start),
+            EndDate = ToDateTimeOffset(lifetime?.End),
+            ProductionYear = ProductionYearFrom(premiereDate, dates, lifetime),
+            ProviderIds = ProviderIds(new LinksCapability([], context.ExternalIds)),
+            ChildCount = context.ChildCount == 0 ? null : context.ChildCount,
+            RecursiveItemCount = context.ChildCount == 0 ? null : context.ChildCount
+        };
     }
 
     // Music artists/albums are served straight from the thumbnail projection (which carries
@@ -883,7 +903,7 @@ public sealed partial class JellyfinCatalogService {
                 continue;
             }
 
-            var detail = await GetDetailedCardAsync(thumbnail.Id, visibility, cancellationToken);
+            var detail = await GetDetailedCardAsync(thumbnail.Id, thumbnail.Kind, visibility, cancellationToken);
             if (detail is null) {
                 items.Add(MapThumbnail(thumbnail, serverId));
                 continue;
@@ -926,6 +946,22 @@ public sealed partial class JellyfinCatalogService {
 
         var detail = await _entities.GetDetailAsync(id, EntityKindRegistry.ToCode(card.Kind), visibility.HideNsfw, cancellationToken);
         return detail is not null && visibility.Allows(detail) ? detail : card;
+    }
+
+    /// <summary>
+    /// Known-kind variant: when the caller already holds the entity's kind (a thumbnail row, a
+    /// movie's video child) the detail loads directly — the kind-discovery card pre-load in the
+    /// two-step variant is a full aggregate hydration of its own, which doubled every shelf row's
+    /// cost. The detail projection enforces the same library/NSFW visibility; the wanted/visibility
+    /// wall is applied here exactly like the two-step variant.
+    /// </summary>
+    private async Task<IEntityCard?> GetDetailedCardAsync(
+        Guid id,
+        EntityKind kind,
+        JellyfinContentVisibility visibility,
+        CancellationToken cancellationToken) {
+        var detail = await _entities.GetDetailAsync(id, EntityKindRegistry.ToCode(kind), visibility.HideNsfw, cancellationToken);
+        return detail is not null && visibility.Allows(detail) ? detail : null;
     }
 
     private async Task<IReadOnlyList<JellyfinBaseItemDto>> ItemsByIdAsync(

@@ -595,6 +595,79 @@ public sealed partial class EfEntityReadService : IEntityReadService {
             : card;
     }
 
+    public async Task<IReadOnlyDictionary<Guid, EntityFolderListContext>> GetFolderListContextsAsync(
+        IReadOnlyList<Guid> ids,
+        bool hideNsfw,
+        CancellationToken cancellationToken) {
+        if (ids.Count == 0) {
+            return new Dictionary<Guid, EntityFolderListContext>();
+        }
+
+        var idSet = ids.Distinct().ToArray();
+
+        // Direct visible children: wanted phantoms are excluded (external catalogs never see them),
+        // and hidden-NSFW children don't count toward what the viewer can actually browse into.
+        var childQuery = _db.Entities.AsNoTracking()
+            .Where(row => row.ParentEntityId != null && idSet.Contains(row.ParentEntityId.Value) && !row.IsWanted);
+        if (hideNsfw) {
+            childQuery = childQuery.Where(row => !row.IsNsfw);
+        }
+
+        var childCounts = await childQuery
+            .GroupBy(row => row.ParentEntityId!.Value)
+            .Select(group => new { Id = group.Key, Count = group.Count() })
+            .ToDictionaryAsync(group => group.Id, group => group.Count, cancellationToken);
+
+        var descriptions = await _db.EntityDescriptions.AsNoTracking()
+            .Where(row => idSet.Contains(row.EntityId))
+            .ToDictionaryAsync(row => row.EntityId, row => row.Value, cancellationToken);
+
+        var dates = (await _db.EntityDates.AsNoTracking()
+                .Where(row => idSet.Contains(row.EntityId))
+                .ToArrayAsync(cancellationToken))
+            .GroupBy(row => row.EntityId)
+            .ToDictionary(
+                group => group.Key,
+                group => (IReadOnlyList<EntityDate>)group
+                    .Select(row => new EntityDate(row.Code, row.Value, row.SortableValue, row.Precision))
+                    .ToArray());
+
+        var lifetimes = (await _db.EntityLifetimes.AsNoTracking()
+                .Where(row => idSet.Contains(row.EntityId))
+                .ToArrayAsync(cancellationToken))
+            .ToDictionary(row => row.EntityId);
+
+        var externalIds = (await _db.EntityExternalIds.AsNoTracking()
+                .Where(row => idSet.Contains(row.EntityId))
+                .ToArrayAsync(cancellationToken))
+            .GroupBy(row => row.EntityId)
+            .ToDictionary(
+                group => group.Key,
+                group => (IReadOnlyList<Contracts.Entities.EntityExternalId>)group
+                    .Select(row => new Contracts.Entities.EntityExternalId(row.Provider, row.Value, row.Url))
+                    .ToArray());
+
+        var contexts = new Dictionary<Guid, EntityFolderListContext>(idSet.Length);
+        foreach (var id in idSet) {
+            var lifetime = lifetimes.GetValueOrDefault(id);
+            contexts[id] = new EntityFolderListContext(
+                childCounts.GetValueOrDefault(id),
+                descriptions.GetValueOrDefault(id),
+                dates.GetValueOrDefault(id, []),
+                LifetimeStart: ToLifetimeDate(lifetime?.StartCode, lifetime?.StartValue, lifetime?.StartSortableValue, lifetime?.StartPrecision),
+                LifetimeEnd: ToLifetimeDate(lifetime?.EndCode, lifetime?.EndValue, lifetime?.EndSortableValue, lifetime?.EndPrecision),
+                externalIds.GetValueOrDefault(id, []));
+        }
+
+        return contexts;
+    }
+
+    /// <summary>Reconstructs a lifetime edge date from its flattened columns; null when no value was stored.</summary>
+    private static EntityDate? ToLifetimeDate(string? code, string? value, DateOnly? sortableValue, string? precision) =>
+        string.IsNullOrWhiteSpace(value)
+            ? null
+            : new EntityDate(code ?? string.Empty, value, sortableValue, precision);
+
     private IQueryable<EntityRow> ApplyNsfwVisibility(IQueryable<EntityRow> query, bool hideNsfw) =>
         hideNsfw
             ? query.Where(entity => !entity.IsNsfw)

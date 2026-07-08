@@ -766,6 +766,17 @@ public sealed class SecurityEndpointTests : IDisposable {
                 id == EpisodeId ? VideoCard(id, "Pilot", SeasonId, 1, "/media/the-chair-company/s01e01.mkv") :
                 null);
 
+        // The series has one season and the season one episode — the batched folder context the
+        // catalog reads for list rows instead of hydrating each folder row's full detail.
+        public Task<IReadOnlyDictionary<Guid, EntityFolderListContext>> GetFolderListContextsAsync(
+            IReadOnlyList<Guid> ids,
+            bool hideNsfw,
+            CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyDictionary<Guid, EntityFolderListContext>>(
+                ids.Where(id => id == SeriesId || id == SeasonId).ToDictionary(
+                    id => id,
+                    id => new EntityFolderListContext(1, null, [], null, null, [])));
+
         public Task<EntityThumbnailBatchResponse> GetThumbnailsAsync(
             IReadOnlyList<Guid> ids,
             bool hideNsfw,
