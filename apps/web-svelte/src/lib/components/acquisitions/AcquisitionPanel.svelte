@@ -81,6 +81,21 @@
       status === ACQUISITION_STATUS.imported,
   );
 
+  /**
+   * The user's manual Files toggle. Once set it wins over the status-derived default, so a poll
+   * reassigning `files` can't snap the list shut again; it resets when the imported flag actually
+   * transitions, keeping the collapse-once-imported behavior.
+   */
+  let filesOpen = $state<boolean | null>(null);
+  let lastFilesImported: boolean | null = null;
+  $effect(() => {
+    const imported = files?.imported ?? null;
+    if (imported !== lastFilesImported) {
+      lastFilesImported = imported;
+      filesOpen = null;
+    }
+  });
+
   /** True while a load is in flight, so poll ticks never stack behind a slow transfer probe. */
   let loading = false;
   /** Consecutive background-refresh failures; transient blips stay silent, a persistent outage surfaces. */
@@ -397,7 +412,8 @@
       {#if files && files.files.length > 0}
         <details
           class="group min-w-0 overflow-hidden rounded-sm border border-border-subtle bg-surface-1"
-          open={!files.imported}
+          open={filesOpen ?? !files.imported}
+          ontoggle={(event) => (filesOpen = event.currentTarget.open)}
         >
           <summary class="flex min-w-0 cursor-pointer items-center gap-2 px-3 py-2 text-kicker text-text-primary select-none">
             <FileText class="h-3.5 w-3.5 text-text-muted" />
