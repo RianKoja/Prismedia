@@ -149,7 +149,7 @@ public sealed class EfSettingsPersistence : ISettingsPersistence {
         } catch (DbUpdateException ex) when (
             ex.InnerException is PostgresException postgres &&
             IsLibraryRootPathConstraintViolation(postgres.SqlState, postgres.ConstraintName)) {
-            throw new LibraryRootPathConflictException(path);
+            throw new LibraryRootPathConflictException(path, ex);
         }
     }
 

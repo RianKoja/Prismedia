@@ -29,8 +29,8 @@ public sealed class SettingValidationException : ArgumentException {
 /// <summary>
 /// Raised when a library root's path collides with one that already exists.
 /// </summary>
-public sealed class LibraryRootPathConflictException(string path)
-    : InvalidOperationException($"A library root already exists at '{path}'.") {
+public sealed class LibraryRootPathConflictException(string path, Exception? inner = null)
+    : InvalidOperationException($"A library root already exists at '{path}'.", inner) {
     /// <summary>The path that already has a library root.</summary>
     public string Path { get; } = path;
 }
