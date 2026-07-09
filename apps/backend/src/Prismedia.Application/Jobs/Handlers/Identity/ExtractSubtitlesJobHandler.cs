@@ -76,17 +76,8 @@ public sealed class ExtractSubtitlesJobHandler(
         }
 
         var outputDir = assets.SubtitleDir(entityId);
-        var languageOccurrences = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         var registered = 0;
         foreach (var candidate in candidates) {
-            // entity_subtitles enforces one row per (entity, language, source): two sidecars that
-            // resolve to the same language — very common, since every untagged file defaults to
-            // "und" — get a stable ".2"/".3" suffix instead of colliding. Candidates arrive in a
-            // deterministic (path-sorted) order, so the same file earns the same suffix every rescan.
-            var occurrence = languageOccurrences.GetValueOrDefault(candidate.Language);
-            languageOccurrences[candidate.Language] = occurrence + 1;
-            var language = occurrence == 0 ? candidate.Language : $"{candidate.Language}.{occurrence + 1}";
-
             var storagePath = candidate.Path;
             if (candidate.Extension != "vtt") {
                 // Named after the sidecar file itself (not a loop index), so the output path is
@@ -100,8 +91,10 @@ public sealed class ExtractSubtitlesJobHandler(
                 storagePath = outputPath;
             }
 
+            // UpsertSidecarSubtitleAsync deconflicts the language itself when two sidecars for this
+            // video resolve to the same one (very common — every untagged file defaults to "und").
             await Persistence.UpsertSidecarSubtitleAsync(
-                entityId, language, candidate.Label, storagePath, candidate.Extension, candidate.Path,
+                entityId, candidate.Language, candidate.Label, storagePath, candidate.Extension, candidate.Path,
                 cancellationToken);
             registered++;
         }

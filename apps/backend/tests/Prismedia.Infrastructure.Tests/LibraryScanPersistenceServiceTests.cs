@@ -494,6 +494,77 @@ public sealed class LibraryScanPersistenceServiceTests {
     }
 
     [Fact]
+    public async Task UpsertSidecarSubtitleDisambiguatesInsteadOfCollidingOnLanguage() {
+        // entity_subtitles has a unique index on (EntityId, Language, Source). Sidecars are
+        // free-form and commonly collide on language (every untagged file defaults to "und"), so
+        // this must self-disambiguate rather than crash on SaveChangesAsync.
+        await using var db = CreateContext();
+        var videoId = Guid.Parse("eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee");
+        SeedVideo(db, videoId);
+
+        var service = new LibraryScanPersistenceService(db);
+        await service.UpsertSidecarSubtitleAsync(
+            videoId, "und", null, "/cache/sidecar-a.vtt", "srt", "/media/Movie.srt", CancellationToken.None);
+        await service.UpsertSidecarSubtitleAsync(
+            videoId, "und", "Forced", "/cache/sidecar-b.vtt", "srt", "/media/Movie.forced.srt", CancellationToken.None);
+        await service.UpsertSidecarSubtitleAsync(
+            videoId, "und", "Commentary", "/cache/sidecar-c.vtt", "srt", "/media/Movie.commentary.srt", CancellationToken.None);
+
+        var subtitles = db.EntitySubtitles.Where(row => row.EntityId == videoId).ToArray();
+        Assert.Equal(3, subtitles.Length);
+        Assert.Equal(3, subtitles.Select(s => s.Language).Distinct(StringComparer.OrdinalIgnoreCase).Count());
+        Assert.Contains(subtitles, s => s.SourcePath == "/media/Movie.srt" && s.Language == "und");
+        Assert.Contains(subtitles, s => s.SourcePath == "/media/Movie.forced.srt" && s.Language == "und.2");
+        Assert.Contains(subtitles, s => s.SourcePath == "/media/Movie.commentary.srt" && s.Language == "und.3");
+    }
+
+    [Fact]
+    public async Task UpsertSidecarSubtitleKeepsExistingLanguageWhenRequestedLanguageAlreadyExists() {
+        // Rescan stability: re-registering an already-disambiguated sidecar with its "natural"
+        // language (because a sibling with the same natural language is present again too) must
+        // not overwrite it into a collision with that sibling.
+        await using var db = CreateContext();
+        var videoId = Guid.Parse("ffffffff-ffff-ffff-ffff-ffffffffffff");
+        var firstId = Guid.Parse("11111111-aaaa-aaaa-aaaa-111111111111");
+        var secondId = Guid.Parse("22222222-aaaa-aaaa-aaaa-222222222222");
+        SeedVideo(db, videoId);
+        db.EntitySubtitles.AddRange(
+            new EntitySubtitleRow {
+                Id = firstId,
+                EntityId = videoId,
+                Language = "und",
+                Format = "vtt",
+                Source = EntitySubtitleSource.Sidecar,
+                StoragePath = "/cache/sidecar-a.vtt",
+                SourceFormat = "srt",
+                SourcePath = "/media/Movie.srt",
+                CreatedAt = DateTimeOffset.UtcNow
+            },
+            new EntitySubtitleRow {
+                Id = secondId,
+                EntityId = videoId,
+                Language = "und.2",
+                Label = "Forced",
+                Format = "vtt",
+                Source = EntitySubtitleSource.Sidecar,
+                StoragePath = "/cache/sidecar-b.vtt",
+                SourceFormat = "srt",
+                SourcePath = "/media/Movie.forced.srt",
+                CreatedAt = DateTimeOffset.UtcNow
+            });
+        await db.SaveChangesAsync();
+
+        var service = new LibraryScanPersistenceService(db);
+        await service.UpsertSidecarSubtitleAsync(
+            videoId, "und", null, "/cache/sidecar-a.vtt", "srt", "/media/Movie.srt", CancellationToken.None);
+        await service.UpsertSidecarSubtitleAsync(
+            videoId, "und", "Forced", "/cache/sidecar-b.vtt", "srt", "/media/Movie.forced.srt", CancellationToken.None);
+
+        var second = await db.EntitySubtitles.SingleAsync(row => row.Id == secondId);
+        Assert.Equal("und.2", second.Language);
+    }
+
+    [Fact]
     public async Task RemoveEntitiesInExcludedPathsRemovesExistingSourcesUnderExcludedDirectories() {
         await using var db = CreateContext();
         var keepId = Guid.Parse("11111111-1111-1111-1111-111111111111");

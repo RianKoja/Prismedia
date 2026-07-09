@@ -295,8 +295,16 @@ public sealed partial class LibraryScanPersistenceService {
             .FirstOrDefaultAsync(s => s.EntityId == entityId && s.Source == EntitySubtitleSource.Sidecar
                 && s.SourcePath == sourcePath, cancellationToken);
 
+        // entity_subtitles enforces one row per (EntityId, Language, Source), but sidecar files are
+        // free-form and commonly collide on language — every untagged file defaults to "und". Pick a
+        // free "language", "language.2", "language.3", ... the same way UpsertSubtitleAsync does for
+        // embedded streams, so this method stays safe on its own regardless of caller behavior.
         if (existing is not null) {
-            existing.Language = language;
+            var conflict = await _db.EntitySubtitles
+                .AnyAsync(s => s.EntityId == entityId && s.Source == EntitySubtitleSource.Sidecar
+                    && s.Language == language && s.Id != existing.Id, cancellationToken);
+
+            existing.Language = conflict ? existing.Language : language;
             existing.Label = label;
             existing.StoragePath = storagePath;
             existing.SourceFormat = sourceFormat;
@@ -304,10 +312,16 @@ public sealed partial class LibraryScanPersistenceService {
             return;
         }
 
+        var langKey = language;
+        for (var suffix = 2; await _db.EntitySubtitles.AnyAsync(s => s.EntityId == entityId
+            && s.Source == EntitySubtitleSource.Sidecar && s.Language == langKey, cancellationToken); suffix++) {
+            langKey = $"{language}.{suffix}";
+        }
+
         _db.EntitySubtitles.Add(new EntitySubtitleRow {
             Id = Guid.NewGuid(),
             EntityId = entityId,
-            Language = language,
+            Language = langKey,
             Label = label,
             Format = "vtt",
             Source = EntitySubtitleSource.Sidecar,

@@ -84,9 +84,10 @@ public sealed class ExtractSubtitlesJobHandlerTests : IDisposable {
     }
 
     [Fact]
-    public async Task DuplicateLanguageSidecarsGetDisambiguatedInsteadOfCollidingOnLanguage() {
-        // entity_subtitles has a unique index on (EntityId, Language, Source); two sidecars that both
-        // resolve to "und" (very common for untagged files) must not be upserted with the same language.
+    public async Task SidecarsThatResolveToTheSameLanguageAreBothSubmittedForPersistence() {
+        // Language deconfliction (the entity_subtitles unique index is on (EntityId, Language,
+        // Source)) is UpsertSidecarSubtitleAsync's job — see LibraryScanPersistenceServiceTests —
+        // the handler just passes each candidate's resolved language through unchanged.
         var videoPath = CreateFile("Movie.mkv");
         CreateFile("Movie.srt");
         CreateFile("Movie.forced.srt");
@@ -99,33 +100,8 @@ public sealed class ExtractSubtitlesJobHandlerTests : IDisposable {
         await handler.HandleAsync(new JobContext(BuildJob(), new NoopJobQueue()), CancellationToken.None);
 
         Assert.Equal(2, persistence.SidecarUpserts.Count);
-        var languages = persistence.SidecarUpserts.Select(u => u.Language).ToArray();
-        Assert.Equal(languages.Length, languages.Distinct(StringComparer.OrdinalIgnoreCase).Count());
         Assert.Contains(persistence.SidecarUpserts, u => u.Language == "und" && u.Label == "Forced");
-        Assert.Contains(persistence.SidecarUpserts, u => u.Language == "und.2" && u.Label is null);
-    }
-
-    [Fact]
-    public async Task DuplicateLanguageDisambiguationIsStableAcrossRescans() {
-        var videoPath = CreateFile("Movie.mkv");
-        CreateFile("Movie.srt");
-        CreateFile("Movie.forced.srt");
-
-        var assets = new RecordingSubtitleAssetGenerator(_tempDir);
-        var persistence = new SubtitlePersistence(videoPath);
-        var handler = new ExtractSubtitlesJobHandler(
-            NullLogger<ExtractSubtitlesJobHandler>.Instance, new FakeMediaProbe([]), assets, persistence);
-
-        await handler.HandleAsync(new JobContext(BuildJob(), new NoopJobQueue()), CancellationToken.None);
-        var firstRun = persistence.SidecarUpserts
-            .Select(u => (u.SourcePath, u.Language)).OrderBy(u => u.SourcePath, StringComparer.Ordinal).ToArray();
-
-        persistence.SidecarUpserts.Clear();
-        await handler.HandleAsync(new JobContext(BuildJob(), new NoopJobQueue()), CancellationToken.None);
-        var secondRun = persistence.SidecarUpserts
-            .Select(u => (u.SourcePath, u.Language)).OrderBy(u => u.SourcePath, StringComparer.Ordinal).ToArray();
-
-        Assert.Equal(firstRun, secondRun);
+        Assert.Contains(persistence.SidecarUpserts, u => u.Language == "und" && u.Label is null);
     }
 
     [Fact]
