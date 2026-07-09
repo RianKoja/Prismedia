@@ -93,7 +93,14 @@ public static class LibraryEndpoints {
                 return LibraryManagementForbidden();
             }
 
-            var created = await settings.CreateLibraryRootAsync(request, cancellationToken, user.Id);
+            LibraryRoot created;
+            try {
+                created = await settings.CreateLibraryRootAsync(request, cancellationToken, user.Id);
+            } catch (LibraryRootPathConflictException ex) {
+                return Results.Json(
+                    new ApiProblem(ApiProblemCodes.LibraryRootPathConflict, ex.Message),
+                    statusCode: StatusCodes.Status409Conflict);
+            }
 
             // Admins see every library implicitly; explicit grants only exist for members.
             // A member-created root is always creator-only; admins may grant an initial set.
@@ -109,7 +116,8 @@ public static class LibraryEndpoints {
             .WithName("CreateLibraryRoot")
             .WithSummary("Adds a watched media root.")
             .Produces<LibraryRoot>()
-            .Produces<ApiProblem>(StatusCodes.Status403Forbidden);
+            .Produces<ApiProblem>(StatusCodes.Status403Forbidden)
+            .Produces<ApiProblem>(StatusCodes.Status409Conflict);
 
         group.MapPatch("/{id:guid}", async (
             Guid id,

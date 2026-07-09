@@ -25,3 +25,12 @@ public sealed class SettingValidationException : ArgumentException {
     /// <summary>Setting key whose value failed validation.</summary>
     public string Key { get; }
 }
+
+/// <summary>
+/// Raised when a library root's path collides with one that already exists.
+/// </summary>
+public sealed class LibraryRootPathConflictException(string path)
+    : InvalidOperationException($"A library root already exists at '{path}'.") {
+    /// <summary>The path that already has a library root.</summary>
+    public string Path { get; } = path;
+}

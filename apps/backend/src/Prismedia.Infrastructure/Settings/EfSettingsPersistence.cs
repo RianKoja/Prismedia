@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using Prismedia.Application.Settings;
 using Prismedia.Contracts.Settings;
 using Prismedia.Domain.Entities;
@@ -133,9 +134,25 @@ public sealed class EfSettingsPersistence : ISettingsPersistence {
         };
 
         _db.LibraryRoots.Add(row);
-        await _db.SaveChangesAsync(cancellationToken);
+        try {
+            await _db.SaveChangesAsync(cancellationToken);
+        } catch (DbUpdateException ex) when (
+            ex.InnerException is PostgresException postgres &&
+            IsLibraryRootPathConstraintViolation(postgres.SqlState, postgres.ConstraintName)) {
+            throw new LibraryRootPathConflictException(state.Path);
+        }
+
         return ToContract(row);
     }
+
+    /// <summary>
+    /// Whether a Postgres error identifies a violation of the unique index on
+    /// <c>library_roots.path</c>. A separate, string-parameter overload so the decision itself
+    /// is unit-testable without constructing a real <see cref="PostgresException"/> (its
+    /// constructor is internal to Npgsql).
+    /// </summary>
+    internal static bool IsLibraryRootPathConstraintViolation(string? sqlState, string? constraintName) =>
+        sqlState == PostgresErrorCodes.UniqueViolation && constraintName == "IX_library_roots_path";
 
     public async Task<LibraryRoot> SaveLibraryRootAsync(LibraryRoot state, CancellationToken cancellationToken) {
         var row = await _db.LibraryRoots.FindAsync([state.Id], cancellationToken)
