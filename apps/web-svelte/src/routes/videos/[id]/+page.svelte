@@ -141,7 +141,7 @@
   const acq = useEntityAcquisition({
     entityId: () => video?.id,
     capabilities: () => video?.capabilities,
-    onChanged: loadVideo,
+    onChanged: () => loadVideo({ showLoading: false }),
   });
 
   const playerProps = $derived.by(() => {
@@ -438,8 +438,9 @@
 
   // ── Data loading ───────────────────────────────────────────────────
 
-  async function loadVideo() {
-    loadState = "loading";
+  async function loadVideo(options = { showLoading: true }) {
+    // Silent for acquisition-driven refreshes: never flash the player page back to its skeleton.
+    if (options.showLoading || !video) loadState = "loading";
     errorMessage = null;
     try {
       const nextVideo = await fetchVideo(page.params.id ?? "");
@@ -847,10 +848,10 @@
         {#if section.id === "acquisition"}
           <EntityAcquisitionCard
             {acq}
-            onCancelled={() => void loadVideo()}
+            onCancelled={() => void loadVideo({ showLoading: false })}
             entity={video ? { id: video.id, kind: video.kind, title: video.title } : undefined}
             onDeleted={() => void goto(seriesRef ? `/series/${seriesRef.id}` : "/videos")}
-            onReverted={() => void loadVideo()}
+            onReverted={() => void loadVideo({ showLoading: false })}
           />
         {:else}
           <VideoDetailSectionContent
@@ -897,10 +898,10 @@
         {#if section.id === "acquisition"}
           <EntityAcquisitionCard
             {acq}
-            onCancelled={() => void loadVideo()}
+            onCancelled={() => void loadVideo({ showLoading: false })}
             entity={video ? { id: video.id, kind: video.kind, title: video.title } : undefined}
             onDeleted={() => void goto(seriesRef ? `/series/${seriesRef.id}` : "/videos")}
-            onReverted={() => void loadVideo()}
+            onReverted={() => void loadVideo({ showLoading: false })}
           />
         {/if}
       {/snippet}

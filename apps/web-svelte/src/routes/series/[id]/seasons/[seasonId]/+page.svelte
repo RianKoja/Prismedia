@@ -84,7 +84,7 @@
     entityId: () => season?.id,
     capabilities: () => season?.capabilities,
     childCards: () => episodeCards,
-    onChanged: loadSeason,
+    onChanged: () => loadSeason({ showLoading: false }),
   });
 
   // Seasons are not relationship owners: tags, studio, and cast belong to the series and
@@ -140,8 +140,10 @@
 
   const seasonWanted = $derived(!!season && isWanted(season.capabilities));
 
-  async function loadSeason() {
-    loadState = "loading";
+  async function loadSeason(options = { showLoading: true }) {
+    // Acquisition-driven refreshes (search started, download cancelled, revert) update in place —
+    // flashing the whole page back to its skeleton reads as a reload/crash.
+    if (options.showLoading || !season) loadState = "loading";
     errorMessage = null;
     try {
       const [seriesDetail, seasonDetail] = await Promise.all([
@@ -261,10 +263,10 @@
         {#if section.id === "acquisition"}
           <EntityAcquisitionCard
             {acq}
-            onCancelled={() => void loadSeason()}
+            onCancelled={() => void loadSeason({ showLoading: false })}
             entity={season ? { id: season.id, kind: season.kind, title: season.title } : undefined}
             onDeleted={() => void goto(`/series/${seriesId}`)}
-            onReverted={() => void loadSeason()}
+            onReverted={() => void loadSeason({ showLoading: false })}
           />
         {/if}
       {/snippet}

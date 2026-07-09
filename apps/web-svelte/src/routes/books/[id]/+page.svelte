@@ -145,7 +145,7 @@
   const acq = useEntityAcquisition({
     entityId: () => book?.id,
     capabilities: () => book?.capabilities,
-    onChanged: () => loadBook(),
+    onChanged: () => loadBook(bookId, { showLoading: false }),
   });
 
   const heroActions = $derived.by((): EntityDetailActionButton[] => {
@@ -242,9 +242,10 @@
     return appChrome.setBreadcrumbs(crumbs);
   });
 
-  async function loadBook(targetBookId = bookId) {
+  async function loadBook(targetBookId = bookId, options = { showLoading: true }) {
     const token = ++loadToken;
-    loadState = "loading";
+    // Silent for acquisition-driven refreshes: update in place instead of flashing the skeleton.
+    if (options.showLoading || !book) loadState = "loading";
     errorMessage = null;
     try {
       const nextBook = await fetchBook(targetBookId);
@@ -384,7 +385,7 @@
 
   /** Cancel stops the download only — the wanted placeholder stays, so refresh in place. */
   function handleAcquisitionCancelled() {
-    void loadBook();
+    void loadBook(bookId, { showLoading: false });
   }
 
   function openSelectedReader() {

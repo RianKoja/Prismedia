@@ -90,7 +90,7 @@
   const acq = useEntityAcquisition({
     entityId: () => library?.id,
     capabilities: () => library?.capabilities,
-    onChanged: () => void loadLibrary(),
+    onChanged: () => void loadLibrary({ showLoading: false }),
   });
 
   const heroActions = $derived.by((): EntityDetailActionButton[] => {
@@ -155,8 +155,9 @@
     return appChrome.setBreadcrumbs(crumbs);
   });
 
-  async function loadLibrary() {
-    loadState = "loading";
+  async function loadLibrary(options = { showLoading: true }) {
+    // Silent for acquisition-driven refreshes: update in place instead of flashing the skeleton.
+    if (options.showLoading || !library) loadState = "loading";
     errorMessage = null;
     try {
       const nextLibrary = await fetchAudioLibrary(page.params.id ?? "");
@@ -356,7 +357,7 @@
             castLabel="Performers"
           />
         {:else if section.id === "acquisition"}
-          <EntityAcquisitionCard {acq} onCancelled={() => void loadLibrary()} />
+          <EntityAcquisitionCard {acq} onCancelled={() => void loadLibrary({ showLoading: false })} />
         {/if}
       {/snippet}
     </EntityDetail>
