@@ -62,8 +62,16 @@ public static class SubtitleSidecarFileMatcher {
             }
 
             // Symlinks/junctions are skipped: a subtitle sidecar is trusted to be a real file the
-            // library owns, not a link that could point streaming outside the media library.
-            if (File.GetAttributes(path).HasFlag(FileAttributes.ReparsePoint)) {
+            // library owns, not a link that could point streaming outside the media library. A file
+            // that vanishes between enumeration and this check just isn't a candidate either way.
+            FileAttributes attributes;
+            try {
+                attributes = File.GetAttributes(path);
+            } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
+                continue;
+            }
+
+            if (attributes.HasFlag(FileAttributes.ReparsePoint)) {
                 continue;
             }
 
