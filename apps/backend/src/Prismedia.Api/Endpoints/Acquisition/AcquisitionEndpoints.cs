@@ -134,7 +134,9 @@ public static class AcquisitionEndpoints {
             AcquisitionQueueService queue,
             CancellationToken cancellationToken) => {
                 try {
-                    var detail = await queue.QueueAsync(id, request.CandidateId, cancellationToken);
+                    // A release queued through this endpoint is the user's explicit choice, which exempts
+                    // it from automatic payload validation (manual picks are the user's authority).
+                    var detail = await queue.QueueAsync(id, request.CandidateId, cancellationToken, manualPick: true);
                     return detail is null
                         ? Results.NotFound(new ApiProblem(ApiProblemCodes.AcquisitionNotFound, "Acquisition was not found."))
                         : Results.Ok(detail);

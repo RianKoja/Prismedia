@@ -34,14 +34,29 @@ public sealed class AcquisitionImportJobHandler(
             import = import with { AllowFormatChange = true };
         }
 
+        var payloadFiles = string.IsNullOrWhiteSpace(import.ContentPath)
+            ? []
+            : payloads.Read(import.ContentPath)?.Files.Select(file => file.RelativePath).ToArray() ?? [];
+
         // The dangerous-file hold runs before ANY engine: a release whose payload carries an executable
         // (the classic fake-release .scr) is never imported automatically and never silently skipped —
-        // it waits, visibly, for the user to review, blocklist, or import manually.
-        if (!string.IsNullOrWhiteSpace(import.ContentPath)
-            && payloads.Read(import.ContentPath) is { } downloadPayload
-            && DangerousFileDetection.FindDangerousFile(downloadPayload.Files.Select(file => file.RelativePath)) is { } dangerous) {
+        // it waits, visibly, for the user to review, blocklist, or import manually. Deliberately NOT
+        // bypassed by a manual retry.
+        if (DangerousFileDetection.FindDangerousFile(payloadFiles) is { } dangerous) {
             logger.LogWarning("AcquisitionImport: dangerous file {File} held for acquisition {Id}", dangerous, payload.AcquisitionId);
             var holdMessage = $"The download contains a potentially dangerous file (\"{Path.GetFileName(dangerous)}\") and was not imported. Review it, or block this release and search again.";
+            await acquisitions.SetStatusAsync(payload.AcquisitionId, AcquisitionStatus.ManualImportRequired, holdMessage, cancellationToken);
+            await RecordImportFailedAsync(import, holdMessage, cancellationToken);
+            return;
+        }
+
+        // The wrong-content hold: the downloaded files must not contradict the work this acquisition is
+        // for — otherwise a mislabeled release would be renamed into the expected work's folder, masking
+        // the mismatch forever. Skipped for the user's own picks (manual release queue, uploaded torrent)
+        // and for a manual retry-import — reviewing and clicking "import anyway" is the override.
+        if (!payload.ManualRetry && await FindPayloadConflictAsync(payload.AcquisitionId, import, payloadFiles, cancellationToken) is { } conflict) {
+            logger.LogWarning("AcquisitionImport: wrong content held for acquisition {Id}: {Conflict}", payload.AcquisitionId, conflict);
+            var holdMessage = $"The download does not look like the expected content: {conflict} Review the files, import anyway, or block this release and search again.";
             await acquisitions.SetStatusAsync(payload.AcquisitionId, AcquisitionStatus.ManualImportRequired, holdMessage, cancellationToken);
             await RecordImportFailedAsync(import, holdMessage, cancellationToken);
             return;
@@ -69,6 +84,34 @@ public sealed class AcquisitionImportJobHandler(
             await RecordImportFailedAsync(import, $"Import failed: {ex.Message}", CancellationToken.None);
             throw;
         }
+    }
+
+    /// <summary>
+    /// Finds a contradiction between the downloaded files and the expected work (wrong year, wrong
+    /// season/episode) per <see cref="AcquisitionPayloadValidation"/>. Null — no hold — for manual picks
+    /// (the user chose that exact release), non-video kinds, and payloads carrying no contrary evidence.
+    /// The expected year comes from the search input, which resolves it from the linked entity's graph.
+    /// </summary>
+    private async Task<string?> FindPayloadConflictAsync(
+        Guid acquisitionId, AcquisitionImportContext import, IReadOnlyList<string> payloadFiles, CancellationToken cancellationToken) {
+        if (payloadFiles.Count == 0) {
+            return null;
+        }
+
+        var selected = await acquisitions.GetSelectedReleaseAsync(acquisitionId, cancellationToken);
+        if (selected?.ManualPick == true) {
+            return null;
+        }
+
+        var input = await acquisitions.GetSearchInputAsync(acquisitionId, cancellationToken);
+        return AcquisitionPayloadValidation.FindConflict(
+            payloadFiles,
+            import.Kind,
+            input?.WorkTitle ?? import.Series ?? import.Title,
+            input?.Year ?? import.Year,
+            import.SeasonNumber,
+            import.EpisodeNumber,
+            selected is not null && TvReleaseTokens.NamesCompleteSeries(selected.Title));
     }
 
     /// <summary>Records a durable ImportFailed event (a manual-import hold or an import exception) against the acquisition. Best-effort.</summary>

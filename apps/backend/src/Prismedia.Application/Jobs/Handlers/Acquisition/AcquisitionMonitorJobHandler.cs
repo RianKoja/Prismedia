@@ -187,6 +187,14 @@ public sealed class AcquisitionMonitorJobHandler(
                         TargetLabel: isUpgrade ? "Replace with upgrade" : "Import completed download"),
                     cancellationToken);
             } else {
+                if (await FindPayloadConflictAsync(downloadClient, connection, transfer, cancellationToken) is { } conflict) {
+                    logger.LogWarning(
+                        "AcquisitionMonitor: transfer {TransferId} contains the wrong content ({Conflict}); abandoning it for recovery.",
+                        transfer.TransferId, conflict);
+                    await EnqueueFailedHandleAsync(context, transfer.AcquisitionId, BlocklistReason.WrongContent, conflict, cancellationToken);
+                    return;
+                }
+
                 await AdvanceStallAsync(context, transfer, status, cancellationToken);
             }
         } catch (OperationCanceledException) {
@@ -248,6 +256,52 @@ public sealed class AcquisitionMonitorJobHandler(
         // transfer can stall straight out of Queued) rather than silently sitting.
         if (transfer.AcquisitionStatus != AcquisitionStatus.Downloading) {
             await acquisitions.SetStatusAsync(transfer.AcquisitionId, AcquisitionStatus.Downloading, null, cancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// Checks an in-flight download's actual file list against the work its acquisition expects — the
+    /// torrent metadata names every contained file long before the bytes arrive, so a mislabeled or
+    /// wrong-year release is abandoned (blocklisted and replaced by failed-download recovery) while it is
+    /// still downloading instead of being discovered at import. Only automatic picks are validated: a
+    /// release the user queued explicitly (or uploaded) is the user's authority. Evidence-based per
+    /// <see cref="AcquisitionPayloadValidation"/> — a client hiccup or an empty (pre-metadata) file list
+    /// never fails a download. Errors resolve to null so a files-endpoint failure can't break polling.
+    /// </summary>
+    private async Task<string?> FindPayloadConflictAsync(
+        IDownloadClient downloadClient,
+        DownloadClientConnection connection,
+        ActiveTransfer transfer,
+        CancellationToken cancellationToken) {
+        try {
+            var selected = await acquisitions.GetSelectedReleaseAsync(transfer.AcquisitionId, cancellationToken);
+            if (selected is null || selected.ManualPick) {
+                return null;
+            }
+
+            var input = await acquisitions.GetSearchInputAsync(transfer.AcquisitionId, cancellationToken);
+            if (input is null) {
+                return null;
+            }
+
+            var files = await downloadClient.GetFilesAsync(connection, transfer.ClientItemId, cancellationToken);
+            if (files.Count == 0) {
+                return null;
+            }
+
+            return AcquisitionPayloadValidation.FindConflict(
+                files.Select(file => file.Name).ToArray(),
+                input.Kind,
+                input.WorkTitle,
+                input.Year,
+                input.SeasonNumber,
+                input.EpisodeNumber,
+                TvReleaseTokens.NamesCompleteSeries(selected.Title));
+        } catch (OperationCanceledException) {
+            throw;
+        } catch (Exception ex) {
+            logger.LogDebug(ex, "AcquisitionMonitor: payload validation skipped for transfer {TransferId}", transfer.TransferId);
+            return null;
         }
     }
 

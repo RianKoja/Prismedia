@@ -21,5 +21,9 @@ public enum BlocklistReason {
 
     /// <summary>The user manually blocklisted the release.</summary>
     [Code("manual")]
-    Manual
+    Manual,
+
+    /// <summary>The download's file list contradicted the sought work (wrong year, season, or episode) and it was abandoned.</summary>
+    [Code("wrong-content")]
+    WrongContent
 }

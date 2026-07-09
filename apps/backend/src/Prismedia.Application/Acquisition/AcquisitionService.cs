@@ -362,7 +362,7 @@ public sealed class AcquisitionService(
         await queue.EnqueueAsync(
             new EnqueueJobRequest(
                 JobType.AcquisitionImport,
-                PayloadJson: AcquisitionJobPayload.Serialize(id, allowFormatChange),
+                PayloadJson: AcquisitionJobPayload.Serialize(id, allowFormatChange, manualRetry: true),
                 TargetEntityId: id.ToString(),
                 TargetLabel: detail.Summary.Title),
             cancellationToken);

@@ -170,14 +170,17 @@ public sealed class TvUnitSpecification : IReleaseSpecification {
             return null;
         }
 
-        var declaredEpisode = TvReleaseTokens.ParseEpisode(release.Title);
+        var declaredEpisodes = TvReleaseTokens.ParseEpisodes(release.Title);
         if (rules.EpisodeNumber is { } episode) {
-            // Single episode sought: only the exact unit qualifies.
-            return declaredEpisode == (season, episode) ? null : Reason;
+            // Single episode sought: the release must declare the exact unit — including a multi-episode
+            // release that contains it (a double-episode S01E41E42 file fulfils an E42 search).
+            return declaredEpisodes is { } unit && unit.Season == season && unit.Episodes.Contains(episode)
+                ? null
+                : Reason;
         }
 
-        // Season pack sought: a single-episode release can never fulfil it.
-        if (declaredEpisode is not null) {
+        // Season pack sought: an episode-scoped release can never fulfil it.
+        if (declaredEpisodes is not null) {
             return Reason;
         }
 
@@ -327,9 +330,13 @@ public sealed class TvReleaseDecisionEngine(EntityKind kind) : IAcquisitionDecis
         }
 
         if (rules.EpisodeNumber is { } episode) {
-            // Single episode sought: only the exact SxxEyy earns the boost (other units are rejected by
-            // the unit specification; a marker-less single file ranks last).
-            return TvReleaseTokens.ParseEpisode(release.Title) == (season, episode) ? ExactUnitBoost : 0;
+            // Single episode sought: a release declaring the exact unit — alone or within a multi-episode
+            // span — earns the boost (other units are rejected by the unit specification; a marker-less
+            // single file ranks last).
+            return TvReleaseTokens.ParseEpisodes(release.Title) is { } unit
+                && unit.Season == season && unit.Episodes.Contains(episode)
+                    ? ExactUnitBoost
+                    : 0;
         }
 
         if (TvReleaseTokens.ParseSeason(release.Title) == season) {

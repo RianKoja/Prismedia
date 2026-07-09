@@ -200,7 +200,28 @@ public sealed record AcquisitionMetadata(
 /// <param name="EpisodeNumber">Episode number for a single-episode acquisition; builds the S01E05 rungs.</param>
 public sealed record AcquisitionSearchInput(
     Guid Id, string Title, string? Author, EntityKind Kind = EntityKind.Book, Guid? EntityId = null,
-    int? Year = null, Guid? ProfileId = null, string? Series = null, int? SeasonNumber = null, int? EpisodeNumber = null);
+    int? Year = null, Guid? ProfileId = null, string? Series = null, int? SeasonNumber = null, int? EpisodeNumber = null) {
+    /// <summary>
+    /// The title of the WORK this acquisition belongs to — the series for TV units (a season or episode
+    /// acquisition's own Title is "Season 1" or the episode name), the author-qualified title for music,
+    /// the plain title otherwise. This is what release titles actually name, so the search's relevance
+    /// scoring, identity gates, and payload validation all compare against it.
+    /// </summary>
+    public string WorkTitle {
+        get {
+            if (Kind is EntityKind.Video or EntityKind.VideoSeason or EntityKind.VideoSeries) {
+                return string.IsNullOrWhiteSpace(Series) ? Title : Series;
+            }
+
+            if (Kind is EntityKind.AudioLibrary or EntityKind.AudioTrack or EntityKind.MusicArtist
+                && !string.IsNullOrWhiteSpace(Author)) {
+                return $"{Author} {Title}".Trim();
+            }
+
+            return Title;
+        }
+    }
+}
 
 /// <summary>
 /// Request-time acquisition choices (import target, profile) threaded from a commit to the acquisitions
@@ -251,8 +272,12 @@ public sealed record SeedingTransfer(
 /// Snapshot of the release an acquisition was last sent to download, persisted so a later failure can
 /// blocklist exactly that release. The <see cref="Identity"/> is computed the same way future search
 /// candidates are, so the blocklist recognizes the release when it reappears.
+/// <see cref="ManualPick"/> marks a release the user queued explicitly (release picker, uploaded
+/// .torrent): payload validation never second-guesses a manual pick — the user is the authority, the
+/// same way manual picks bypass the search-time identity gates. Older persisted snapshots default to
+/// automatic, keeping validation active for them.
 /// </summary>
-public sealed record SelectedRelease(string Title, string? IndexerName, string? InfoHash) {
+public sealed record SelectedRelease(string Title, string? IndexerName, string? InfoHash, bool ManualPick = false) {
     /// <summary>The normalized blocklist identity for this release. Derived, so it is not persisted.</summary>
     [System.Text.Json.Serialization.JsonIgnore]
     public string Identity => ReleaseIdentity.For(InfoHash, IndexerName, Title);

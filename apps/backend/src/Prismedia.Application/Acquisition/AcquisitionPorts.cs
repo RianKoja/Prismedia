@@ -132,8 +132,12 @@ public interface IBookAcquisitionProfileStore {
 /// re-grab the next-best candidate without depending on the full queue service implementation.
 /// </summary>
 public interface IAcquisitionQueueService {
-    /// <summary>Queues the given candidate of an acquisition for download. Returns the refreshed acquisition, or null when it no longer exists.</summary>
-    Task<Contracts.Acquisition.AcquisitionDetail?> QueueAsync(Guid acquisitionId, Guid candidateId, CancellationToken cancellationToken);
+    /// <summary>
+    /// Queues the given candidate of an acquisition for download. Returns the refreshed acquisition, or
+    /// null when it no longer exists. <paramref name="manualPick"/> marks a user-chosen release (the
+    /// release picker's queue action), exempting the download from automatic payload validation.
+    /// </summary>
+    Task<Contracts.Acquisition.AcquisitionDetail?> QueueAsync(Guid acquisitionId, Guid candidateId, CancellationToken cancellationToken, bool manualPick = false);
 }
 
 /// <summary>Plans how a completed download's files map into the target library root.</summary>

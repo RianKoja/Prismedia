@@ -225,7 +225,7 @@ public sealed class AcquisitionFailedHandleJobHandlerTests {
     private sealed class RecordingQueueService : IAcquisitionQueueService {
         public List<(Guid AcquisitionId, Guid CandidateId)> Calls { get; } = [];
 
-        public Task<AcquisitionDetail?> QueueAsync(Guid acquisitionId, Guid candidateId, CancellationToken cancellationToken) {
+        public Task<AcquisitionDetail?> QueueAsync(Guid acquisitionId, Guid candidateId, CancellationToken cancellationToken, bool manualPick = false) {
             Calls.Add((acquisitionId, candidateId));
             return Task.FromResult<AcquisitionDetail?>(null);
         }

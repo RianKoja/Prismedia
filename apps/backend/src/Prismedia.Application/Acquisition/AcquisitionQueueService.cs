@@ -23,7 +23,7 @@ public sealed class AcquisitionQueueService(
     IAcquisitionHistoryStore history,
     ILogger<AcquisitionQueueService> logger) : IAcquisitionQueueService {
     /// <summary>Queues a chosen candidate: resolves a usable link (direct, magnet, or scraped from the info page) and hands it to a download client.</summary>
-    public async Task<AcquisitionDetail?> QueueAsync(Guid acquisitionId, Guid candidateId, CancellationToken cancellationToken) {
+    public async Task<AcquisitionDetail?> QueueAsync(Guid acquisitionId, Guid candidateId, CancellationToken cancellationToken, bool manualPick = false) {
         var candidate = await acquisitions.GetQueueCandidateAsync(acquisitionId, candidateId, cancellationToken);
         if (candidate is null) {
             throw new AcquisitionConfigurationException(ApiProblemCodes.AcquisitionReleaseNotFound, "The selected release was not found for this acquisition.");
@@ -64,7 +64,7 @@ public sealed class AcquisitionQueueService(
             // Snapshot the chosen release so a later failure can blocklist exactly it (and pick the next-best).
             await acquisitions.SetSelectedReleaseAsync(
                 acquisitionId,
-                new SelectedRelease(candidate.Title, candidate.IndexerName, candidate.InfoHash),
+                new SelectedRelease(candidate.Title, candidate.IndexerName, candidate.InfoHash, manualPick),
                 cancellationToken);
             await acquisitions.SetStatusAsync(acquisitionId, AcquisitionStatus.Queued, "Sent to download client.", cancellationToken);
             await RecordGrabbedAsync(acquisitionId, candidate.Title, candidate.IndexerName, client.DisplayName, cancellationToken);
@@ -95,6 +95,12 @@ public sealed class AcquisitionQueueService(
             // A manual .torrent has no grab indexer; the client's default seed goal still applies.
             var seedGoal = new TransferSeedGoal(client.SeedRatio, client.SeedTimeMinutes);
             await acquisitions.CreateTransferAsync(acquisitionId, client.Id, clientItemId, category ?? client.Category, cancellationToken, seedGoal.IsEmpty ? null : seedGoal);
+            // Supersede any prior auto-grab snapshot: the uploaded file is now what is downloading, and
+            // it is a manual pick (never payload-validated, never wrongly blocklisted for the old release).
+            await acquisitions.SetSelectedReleaseAsync(
+                acquisitionId,
+                new SelectedRelease(fileName, IndexerName: null, InfoHash: null, ManualPick: true),
+                cancellationToken);
             await acquisitions.SetStatusAsync(acquisitionId, AcquisitionStatus.Queued, "Uploaded torrent sent to download client.", cancellationToken);
             // A manual .torrent has no grab indexer; the uploaded file name stands in for the release title.
             await RecordGrabbedAsync(acquisitionId, fileName, indexerName: null, client.DisplayName, cancellationToken);

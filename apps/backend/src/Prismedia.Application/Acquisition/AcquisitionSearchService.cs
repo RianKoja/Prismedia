@@ -46,7 +46,7 @@ public sealed class AcquisitionSearchRunner(
         }
 
         var rules = (await profiles.GetRulesAsync(input.ProfileId, input.Kind, cancellationToken)) with {
-            TargetTitle = TargetTitleFor(input),
+            TargetTitle = input.WorkTitle,
             TargetYear = input.Year
         };
 
@@ -140,19 +140,6 @@ public sealed class AcquisitionSearchRunner(
         IReadOnlyList<IndexerRelease> Found,
         string? Error,
         bool RateLimited = false);
-
-    private static string TargetTitleFor(AcquisitionSearchInput input) {
-        if (input.Kind is Domain.Entities.EntityKind.Video or Domain.Entities.EntityKind.VideoSeason or Domain.Entities.EntityKind.VideoSeries) {
-            return string.IsNullOrWhiteSpace(input.Series) ? input.Title : input.Series;
-        }
-
-        if (input.Kind is Domain.Entities.EntityKind.AudioLibrary or Domain.Entities.EntityKind.AudioTrack or Domain.Entities.EntityKind.MusicArtist
-            && !string.IsNullOrWhiteSpace(input.Author)) {
-            return $"{input.Author} {input.Title}".Trim();
-        }
-
-        return input.Title;
-    }
 
     private async Task<IndexerSearchResult> SearchIndexerAsync(
         Contracts.Acquisition.IndexerConfigDetail config,
