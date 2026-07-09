@@ -47,6 +47,8 @@ public static class SubtitleSidecarFileMatcher {
         // "Movie.Directors.Cut.mkv" beside "Movie.mkv") own any sidecar matching their own longer
         // stem, so a shorter sibling stem doesn't also claim it.
         var siblingVideoStems = entries
+            // VideoExtensions is a HashSet built with StringComparer.OrdinalIgnoreCase, so this
+            // Contains is already case-insensitive without passing a comparer explicitly.
             .Where(path => MovieImportPlanBuilder.VideoExtensions.Contains(Path.GetExtension(path)))
             .Select(Path.GetFileNameWithoutExtension)
             .Where(candidateStem => !string.IsNullOrEmpty(candidateStem) &&
