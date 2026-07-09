@@ -216,6 +216,29 @@ public sealed partial class LibraryScanPersistenceService {
         return detail?.SubtitlesExtractedAt is not null;
     }
 
+    public async Task<IReadOnlyList<EntityRefreshTarget>> GetAudioContainerTargetsInRootAsync(
+        Guid rootId, CancellationToken cancellationToken) {
+        var albumIds = await _db.AudioLibraryDetails.AsNoTracking()
+            .Where(detail => detail.LibraryRootId == rootId)
+            .Select(detail => detail.EntityId)
+            .ToListAsync(cancellationToken);
+        var artistIds = await _db.MusicArtistDetails.AsNoTracking()
+            .Where(detail => detail.LibraryRootId == rootId)
+            .Select(detail => detail.EntityId)
+            .ToListAsync(cancellationToken);
+
+        var containerIds = albumIds.Concat(artistIds).Distinct().ToArray();
+        if (containerIds.Length == 0) {
+            return [];
+        }
+
+        return await _db.Entities.AsNoTracking()
+            .Where(entity => containerIds.Contains(entity.Id))
+            .OrderBy(entity => entity.Title)
+            .Select(entity => new EntityRefreshTarget(entity.Id, entity.KindCode, entity.Title))
+            .ToListAsync(cancellationToken);
+    }
+
     public async Task<IReadOnlyList<EntityRefreshTarget>> GetAudioTrackTargetsInRootAsync(
         Guid rootId, CancellationToken cancellationToken) {
         var albumIds = await _db.AudioLibraryDetails.AsNoTracking()

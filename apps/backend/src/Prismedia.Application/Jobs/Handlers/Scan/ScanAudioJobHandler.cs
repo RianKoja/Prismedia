@@ -40,6 +40,13 @@ public sealed class ScanAudioJobHandler(
         await AutoIdentifyScanEnqueue.EnqueueExistingRootsForRootAsync(
             context, settings, downstreamNeeds, root.Id, ScanCategories, cancellationToken);
         await EnqueueExistingTrackJobsAsync(context, settings, root.Id, cancellationToken);
+        // Container covers (identify artwork on albums/artists) can predate their grid variants; an
+        // unchanged scan self-heals them the same way the video scan does, instead of leaving grids
+        // serving full-size originals until the daily sweep.
+        await EnqueueContainerGridThumbnailsAsync(
+            context,
+            await audio.GetAudioContainerTargetsInRootAsync(root.Id, cancellationToken),
+            cancellationToken);
     }
 
     protected override async Task<ScanRootOutcome> ScanRootCoreAsync(JobContext context, LibraryRootData root, CancellationToken cancellationToken) {
@@ -214,6 +221,15 @@ public sealed class ScanAudioJobHandler(
 
         await AutoIdentifyScanEnqueue.EnqueueRootsAsync(context, settings, downstreamNeeds, autoIdentifyIds, cancellationToken);
 
+        // Backfill grid-thumbnail variants for album/artist covers (identify artwork arrives full
+        // size). The video scan enqueues this per entity; without the same here, audio grids serve
+        // the original album art until the low-priority daily sweep reaches them.
+        var containerTargets = artistItems
+            .Select((item, index) => new EntityRefreshTarget(artistIds[index], EntityKind.MusicArtist.ToCode(), item.Title))
+            .Concat(albumItems.Select((item, index) => new EntityRefreshTarget(albumIds[index], EntityKind.AudioLibrary.ToCode(), item.Title)))
+            .ToArray();
+        await EnqueueContainerGridThumbnailsAsync(context, containerTargets, cancellationToken);
+
         // Acquisition-imported albums: stamp the acquisition's provider ids onto the owning entities and
         // identify each affected root — bypassing the auto-identify gates, because an acquisition import
         // is explicit user intent and the stamped ids let identify resolve ID-first.
@@ -325,6 +341,35 @@ public sealed class ScanAudioJobHandler(
             var enqueued = await context.EnqueueBatchAsync(requests, cancellationToken);
             logger.LogDebug("ScanAudio: enqueued {Enqueued}/{Total} downstream jobs for unchanged tracks",
                 enqueued, requests.Count);
+        }
+    }
+
+    /// <summary>
+    /// Enqueues a grid-thumbnail job for each album/artist container whose cover lacks its 480/960
+    /// variants, so audio grids ride the same fast variant path as video kinds.
+    /// </summary>
+    private async Task EnqueueContainerGridThumbnailsAsync(
+        JobContext context,
+        IReadOnlyList<EntityRefreshTarget> containers,
+        CancellationToken cancellationToken) {
+        if (containers.Count == 0) {
+            return;
+        }
+
+        var needs = await downstreamNeeds.CheckDownstreamNeedsBatchAsync(
+            containers.Select(container => container.Id).ToArray(), cancellationToken);
+        var requests = containers
+            .Where(container => needs.TryGetValue(container.Id, out var entityNeeds) && entityNeeds.NeedsGridThumbnail)
+            .Select(container => EnqueueJobRequest.ForEntity(
+                JobType.GenerateGridThumbnail,
+                container.KindCode.DecodeAs<EntityKind>(),
+                container.Id.ToString(),
+                container.Title,
+                JobPriorities.Thumbnail))
+            .ToArray();
+        if (requests.Length > 0) {
+            var enqueued = await context.EnqueueBatchAsync(requests, cancellationToken);
+            logger.LogDebug("ScanAudio: enqueued {Enqueued}/{Total} container grid-thumbnail jobs", enqueued, requests.Length);
         }
     }
 

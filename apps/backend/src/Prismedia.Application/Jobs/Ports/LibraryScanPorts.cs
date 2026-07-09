@@ -118,6 +118,16 @@ public interface IAudioScanPersistence {
         Guid rootId, CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyList<EntityRefreshTarget>>([]);
 
+    /// <summary>
+    /// Lists the album and artist container entities under a library root. Used by scans to backfill
+    /// container-level downstream work — most importantly the grid-thumbnail variants for covers that
+    /// arrived via identify artwork, so album/artist grids serve small variants instead of full-size
+    /// originals while waiting for the daily sweep.
+    /// </summary>
+    Task<IReadOnlyList<EntityRefreshTarget>> GetAudioContainerTargetsInRootAsync(
+        Guid rootId, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<EntityRefreshTarget>>([]);
+
     Task<int> RemoveStaleLooseAudioTracksInRootAsync(Guid rootId, IReadOnlySet<string> validPaths, CancellationToken cancellationToken);
     Task<int> RemoveStaleAudioTracksInLibraryAsync(Guid libraryEntityId, IReadOnlySet<string> validPaths, CancellationToken cancellationToken);
     Task<int> RemoveStaleAudioLibrariesInRootAsync(Guid rootId, IReadOnlySet<string> validFolderPaths, CancellationToken cancellationToken);
