@@ -220,6 +220,14 @@ public sealed class JellyfinCatalogExtrasEndpointTests {
     }
 
     private sealed class PlaylistCollectionItemReadService(Guid playlistId, Guid trackId) : ICollectionItemReadService {
+        public Task<IReadOnlyDictionary<Guid, CollectionListContext>> GetListContextsAsync(
+            IReadOnlyList<Guid> collectionIds,
+            bool hideNsfw,
+            CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyDictionary<Guid, CollectionListContext>>(collectionIds.Contains(playlistId)
+                ? new Dictionary<Guid, CollectionListContext> { [playlistId] = new(1, true) }
+                : new Dictionary<Guid, CollectionListContext>());
+
         public Task<CollectionItemsResponse> ListItemsAsync(
             Guid collectionId,
             bool hideNsfw,
@@ -251,6 +259,12 @@ public sealed class JellyfinCatalogExtrasEndpointTests {
             bool hideNsfw,
             CancellationToken cancellationToken) =>
             Task.FromResult(new CollectionItemsResponse([]));
+
+        public Task<IReadOnlyDictionary<Guid, CollectionListContext>> GetListContextsAsync(
+            IReadOnlyList<Guid> collectionIds,
+            bool hideNsfw,
+            CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyDictionary<Guid, CollectionListContext>>(new Dictionary<Guid, CollectionListContext>());
 
         public Task<IReadOnlyDictionary<Guid, string>> ResolveCoverPathsAsync(
             IReadOnlyList<Guid> collectionIds,

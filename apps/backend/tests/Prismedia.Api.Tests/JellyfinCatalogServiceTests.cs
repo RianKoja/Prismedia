@@ -1130,6 +1130,21 @@ public sealed class JellyfinCatalogServiceTests {
                 .Where(item => !hideNsfw || !item.Entity.IsNsfw)
                 .ToArray()));
 
+        public Task<IReadOnlyDictionary<Guid, CollectionListContext>> GetListContextsAsync(
+            IReadOnlyList<Guid> collectionIds,
+            bool hideNsfw,
+            CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyDictionary<Guid, CollectionListContext>>(collectionIds
+                .Select(id => (Id: id, Members: (Items.GetValueOrDefault(id) ?? [])
+                    .Where(item => !hideNsfw || !item.Entity.IsNsfw)
+                    .ToArray()))
+                .Where(pair => pair.Members.Length > 0)
+                .ToDictionary(
+                    pair => pair.Id,
+                    pair => new CollectionListContext(
+                        pair.Members.Length,
+                        pair.Members.Any(item => item.Entity.Kind is EntityKind.AudioTrack or EntityKind.AudioLibrary or EntityKind.MusicArtist))));
+
         public Task<IReadOnlyDictionary<Guid, string>> ResolveCoverPathsAsync(
             IReadOnlyList<Guid> collectionIds,
             bool hideNsfw,

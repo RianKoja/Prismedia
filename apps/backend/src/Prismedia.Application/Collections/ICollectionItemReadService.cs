@@ -33,4 +33,19 @@ public interface ICollectionItemReadService {
         IReadOnlyList<Guid> collectionIds,
         bool hideNsfw,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Batched list-row context for many collections at once: the visible member count and whether any
+    /// member is an audio kind (which projects the box set as an audio playlist). ONE grouped query for
+    /// the whole batch — list surfaces must never hydrate per-collection membership per row (the
+    /// original Jellyfin views N+1 took a minute on large libraries). Collections with no visible
+    /// members are absent from the result.
+    /// </summary>
+    Task<IReadOnlyDictionary<Guid, CollectionListContext>> GetListContextsAsync(
+        IReadOnlyList<Guid> collectionIds,
+        bool hideNsfw,
+        CancellationToken cancellationToken);
 }
+
+/// <summary>One collection's cheap list-row context: visible member count and audio capability.</summary>
+public sealed record CollectionListContext(int ChildCount, bool HasAudio);

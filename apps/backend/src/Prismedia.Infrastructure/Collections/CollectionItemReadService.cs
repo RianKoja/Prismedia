@@ -72,6 +72,38 @@ public sealed class CollectionItemReadService(
         return new CollectionItemsResponse(items);
     }
 
+    public async Task<IReadOnlyDictionary<Guid, CollectionListContext>> GetListContextsAsync(
+        IReadOnlyList<Guid> collectionIds,
+        bool hideNsfw,
+        CancellationToken cancellationToken) {
+        if (collectionIds.Count == 0) {
+            return new Dictionary<Guid, CollectionListContext>();
+        }
+
+        // One grouped query for the whole batch: member counts and audio capability come straight
+        // from the membership join — no thumbnail hydration, no per-collection round-trips.
+        var audioKinds = new[] {
+            EntityKindRegistry.AudioTrack.Code,
+            EntityKindRegistry.AudioLibrary.Code,
+            EntityKindRegistry.MusicArtist.Code,
+        };
+        var rows = await (
+            from item in db.CollectionItemDetails.AsNoTracking()
+            join entity in db.Entities.AsNoTracking() on item.ItemEntityId equals entity.Id
+            where collectionIds.Contains(item.CollectionEntityId) &&
+                  (!hideNsfw || !entity.IsNsfw)
+            group entity.KindCode by item.CollectionEntityId into members
+            select new {
+                CollectionId = members.Key,
+                Count = members.Count(),
+                HasAudio = members.Any(kind => audioKinds.Contains(kind))
+            }).ToArrayAsync(cancellationToken);
+
+        return rows.ToDictionary(
+            row => row.CollectionId,
+            row => new CollectionListContext(row.Count, row.HasAudio));
+    }
+
     public async Task<IReadOnlyDictionary<Guid, string>> ResolveCoverPathsAsync(
         IReadOnlyList<Guid> collectionIds,
         bool hideNsfw,

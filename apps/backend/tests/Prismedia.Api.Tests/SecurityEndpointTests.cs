@@ -637,6 +637,12 @@ public sealed class SecurityEndpointTests : IDisposable {
             CancellationToken cancellationToken) =>
             Task.FromResult(new CollectionItemsResponse([]));
 
+        public Task<IReadOnlyDictionary<Guid, CollectionListContext>> GetListContextsAsync(
+            IReadOnlyList<Guid> collectionIds,
+            bool hideNsfw,
+            CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyDictionary<Guid, CollectionListContext>>(new Dictionary<Guid, CollectionListContext>());
+
         public Task<IReadOnlyDictionary<Guid, string>> ResolveCoverPathsAsync(
             IReadOnlyList<Guid> collectionIds,
             bool hideNsfw,

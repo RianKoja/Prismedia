@@ -110,6 +110,80 @@ public sealed partial class JellyfinCatalogService {
         return new JellyfinQueryResult<JellyfinBaseItemDto>(views, views.Count, 0);
     }
 
+    /// <summary>
+    /// Whether a view browse can fetch only the requested page window. Safe only when no post-fetch
+    /// filtering could change membership or totals: an explicit Limit is present, no played filter
+    /// (the view's own forced-played is pushed into the entity query), any requested item types are
+    /// exactly what the view's kind maps to, and the view has no post-fetch row filter (Videos drops
+    /// child rows after fetching; Collections needs cover/context mapping over the full, small set).
+    /// </summary>
+    private static bool CanPushDownViewPaging(LibraryViewDefinition view, JellyfinItemQuery query) {
+        if (query.Limit is null || query.IsPlayed is not null ||
+            view.Id == VideosViewId || view.Id == CollectionsViewId) {
+            return false;
+        }
+
+        if (query.IncludeItemTypes.Count == 0) {
+            return true;
+        }
+
+        var expected = view.Kind switch {
+            _ when view.Kind == EntityKindRegistry.Movie.Code => JellyfinProtocol.ItemTypes.Movie,
+            _ when view.Kind == EntityKindRegistry.VideoSeries.Code => JellyfinProtocol.ItemTypes.Series,
+            _ when view.Kind == EntityKindRegistry.MusicArtist.Code => JellyfinProtocol.ItemTypes.MusicArtist,
+            _ => null
+        };
+        return expected is not null &&
+            query.IncludeItemTypes.All(type => string.Equals(type, expected, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Fetches exactly the requested window of a library view (plus the rows before it, bounded by
+    /// <see cref="MaxBrowseItems"/>), maps the page to stub rows, and reports the library's true total
+    /// from the entity list's server-side count.
+    /// </summary>
+    private async Task<JellyfinQueryResult<JellyfinBaseItemDto>> PagedViewChildrenAsync(
+        LibraryViewDefinition view,
+        JellyfinItemQuery query,
+        string serverId,
+        JellyfinContentVisibility visibility,
+        CancellationToken cancellationToken) {
+        if (!visibility.AllowsAny) {
+            return new JellyfinQueryResult<JellyfinBaseItemDto>([], 0, 0);
+        }
+
+        var start = Math.Max(0, query.StartIndex);
+        var limit = Math.Max(0, query.Limit ?? 0);
+        var needed = (int)Math.Min(MaxBrowseItems, (long)start + limit);
+        var results = new List<EntityThumbnail>(Math.Min(needed, 1000));
+        var total = 0;
+        string? cursor = null;
+        do {
+            var response = await _entities.ListAsync(
+                view.Kind,
+                query.SearchTerm,
+                cursor,
+                visibility.HideNsfw,
+                Math.Clamp(needed - results.Count, 1, 1000),
+                cancellationToken,
+                sort: ToPrismediaSort(query.SortBy),
+                sortDir: ToPrismediaSortDir(query.SortOrder),
+                favorite: query.IsFavorite,
+                played: view.ForcedPlayed,
+                nsfw: visibility.NsfwFilter, wanted: false);
+            results.AddRange(response.Items);
+            total = response.TotalCount;
+            cursor = response.NextCursor;
+        } while (cursor is not null && results.Count < needed);
+
+        var page = await HydrateFolderContainersAsync(
+            results.Skip(start).Take(limit).Select(item => MapThumbnail(item, serverId)).ToArray(),
+            serverId,
+            visibility,
+            cancellationToken);
+        return new JellyfinQueryResult<JellyfinBaseItemDto>(page, total, Math.Min(start, total));
+    }
+
     /// <summary>Returns visible collection entities as root-level Jellyfin box sets.</summary>
     private async Task<IReadOnlyList<JellyfinBaseItemDto>> RootCollectionsAsync(
         string serverId,
@@ -206,6 +280,11 @@ public sealed partial class JellyfinCatalogService {
             items = musicItems;
         } else if (query.ParentId is null || query.ParentId == RootId) {
             items = (await GetUserViewsWithArtworkAsync(serverId, visibility, cancellationToken)).Items;
+        } else if (ViewById(query.ParentId.Value) is { } pagedView && CanPushDownViewPaging(pagedView, query)) {
+            // A paged library browse (Infuse's StartIndex/Limit walk) fetches only the requested
+            // window instead of materializing the whole library, and reports the true total from the
+            // entity list's own count — work scales with the page size, not the library size.
+            return await PagedViewChildrenAsync(pagedView, query, serverId, visibility, cancellationToken);
         } else {
             items = await ChildrenOfAsync(query.ParentId.Value, query, serverId, visibility, cancellationToken);
         }
@@ -1223,29 +1302,37 @@ public sealed partial class JellyfinCatalogService {
             .ToArray();
     }
 
-    private async Task<JellyfinBaseItemDto> MapCollectionThumbnailAsync(
-        EntityThumbnail item,
-        string serverId,
-        JellyfinContentVisibility visibility,
-        CancellationToken cancellationToken) {
-        var dto = MapThumbnail(item, serverId);
-        var collectionItems = await _collections.ListItemsAsync(item.Id, visibility.HideNsfw, cancellationToken);
-        return IsAudioCapableCollection(collectionItems.Items)
-            ? AsPlaylistCollection(dto)
-            : dto;
-    }
-
+    /// <summary>
+    /// Maps collection thumbnails to box-set list rows with ONE batched membership query for the whole
+    /// page (member count + audio capability). The previous shape — a full member-thumbnail hydration
+    /// per collection, per row, on every Views/root call — was the collections equivalent of the series
+    /// N+1 and took a minute on large libraries. Real member detail stays on the single-collection
+    /// detail path (<see cref="MapCollectionDetailAsync"/>).
+    /// </summary>
     private async Task<IReadOnlyList<JellyfinBaseItemDto>> MapCollectionThumbnailsAsync(
         IReadOnlyList<EntityThumbnail> items,
         string serverId,
         JellyfinContentVisibility visibility,
         CancellationToken cancellationToken) {
-        var mapped = new List<JellyfinBaseItemDto>(items.Count);
-        foreach (var item in items) {
-            mapped.Add(await MapCollectionThumbnailAsync(item, serverId, visibility, cancellationToken));
+        if (items.Count == 0) {
+            return [];
         }
 
-        return mapped;
+        var contexts = await _collections.GetListContextsAsync(
+            items.Select(item => item.Id).ToArray(),
+            visibility.HideNsfw,
+            cancellationToken);
+        return items
+            .Select(item => {
+                var dto = MapThumbnail(item, serverId);
+                if (!contexts.TryGetValue(item.Id, out var context)) {
+                    return dto;
+                }
+
+                dto = dto with { ChildCount = context.ChildCount, RecursiveItemCount = context.ChildCount };
+                return context.HasAudio ? AsPlaylistCollection(dto) : dto;
+            })
+            .ToArray();
     }
 
     private async Task<JellyfinBaseItemDto> MapCollectionDetailAsync(
