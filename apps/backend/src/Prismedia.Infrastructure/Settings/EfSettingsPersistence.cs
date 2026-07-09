@@ -134,15 +134,23 @@ public sealed class EfSettingsPersistence : ISettingsPersistence {
         };
 
         _db.LibraryRoots.Add(row);
+        await SaveLibraryRootChangesAsync(state.Path, cancellationToken);
+        return ToContract(row);
+    }
+
+    /// <summary>
+    /// Saves pending library-root changes, translating a violation of the unique index on
+    /// <c>library_roots.path</c> into <see cref="LibraryRootPathConflictException"/> instead of
+    /// letting the raw <see cref="DbUpdateException"/> reach callers.
+    /// </summary>
+    private async Task SaveLibraryRootChangesAsync(string path, CancellationToken cancellationToken) {
         try {
             await _db.SaveChangesAsync(cancellationToken);
         } catch (DbUpdateException ex) when (
             ex.InnerException is PostgresException postgres &&
             IsLibraryRootPathConstraintViolation(postgres.SqlState, postgres.ConstraintName)) {
-            throw new LibraryRootPathConflictException(state.Path);
+            throw new LibraryRootPathConflictException(path);
         }
-
-        return ToContract(row);
     }
 
     /// <summary>
@@ -171,7 +179,8 @@ public sealed class EfSettingsPersistence : ISettingsPersistence {
         row.LastScannedAt = state.LastScannedAt;
         row.UpdatedAt = state.UpdatedAt;
 
-        await _db.SaveChangesAsync(cancellationToken);
+        await SaveLibraryRootChangesAsync(state.Path, cancellationToken);
+
         return ToContract(row);
     }
 

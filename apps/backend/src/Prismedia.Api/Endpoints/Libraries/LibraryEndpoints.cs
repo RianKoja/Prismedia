@@ -97,9 +97,7 @@ public static class LibraryEndpoints {
             try {
                 created = await settings.CreateLibraryRootAsync(request, cancellationToken, user.Id);
             } catch (LibraryRootPathConflictException ex) {
-                return Results.Json(
-                    new ApiProblem(ApiProblemCodes.LibraryRootPathConflict, ex.Message),
-                    statusCode: StatusCodes.Status409Conflict);
+                return LibraryRootPathConflict(ex);
             }
 
             // Admins see every library implicitly; explicit grants only exist for members.
@@ -129,14 +127,21 @@ public static class LibraryEndpoints {
                     return LibraryManagementForbidden();
                 }
 
-                var root = await settings.UpdateLibraryRootAsync(id, request, cancellationToken);
+                LibraryRoot? root;
+                try {
+                    root = await settings.UpdateLibraryRootAsync(id, request, cancellationToken);
+                } catch (LibraryRootPathConflictException ex) {
+                    return LibraryRootPathConflict(ex);
+                }
+
                 return root is null ? Results.NotFound() : Results.Ok(root);
             })
             .WithName("UpdateLibraryRoot")
             .WithSummary("Updates a watched media root.")
             .Produces<LibraryRoot>()
             .Produces<ApiProblem>(StatusCodes.Status403Forbidden)
-            .Produces(StatusCodes.Status404NotFound);
+            .Produces(StatusCodes.Status404NotFound)
+            .Produces<ApiProblem>(StatusCodes.Status409Conflict);
 
         group.MapDelete("/{id:guid}", async (
             Guid id,
@@ -208,4 +213,9 @@ public static class LibraryEndpoints {
         Results.Json(
             new ApiProblem(ApiProblemCodes.AdminRequired, "You do not have permission to manage this library."),
             statusCode: StatusCodes.Status403Forbidden);
+
+    private static IResult LibraryRootPathConflict(LibraryRootPathConflictException ex) =>
+        Results.Json(
+            new ApiProblem(ApiProblemCodes.LibraryRootPathConflict, ex.Message),
+            statusCode: StatusCodes.Status409Conflict);
 }
