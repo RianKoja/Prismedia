@@ -76,12 +76,22 @@ public sealed class ExtractSubtitlesJobHandler(
         }
 
         var outputDir = assets.SubtitleDir(entityId);
+        var languageOccurrences = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         var registered = 0;
-        for (var i = 0; i < candidates.Count; i++) {
-            var candidate = candidates[i];
+        foreach (var candidate in candidates) {
+            // entity_subtitles enforces one row per (entity, language, source): two sidecars that
+            // resolve to the same language — very common, since every untagged file defaults to
+            // "und" — get a stable ".2"/".3" suffix instead of colliding. Candidates arrive in a
+            // deterministic (path-sorted) order, so the same file earns the same suffix every rescan.
+            var occurrence = languageOccurrences.GetValueOrDefault(candidate.Language);
+            languageOccurrences[candidate.Language] = occurrence + 1;
+            var language = occurrence == 0 ? candidate.Language : $"{candidate.Language}.{occurrence + 1}";
+
             var storagePath = candidate.Path;
             if (candidate.Extension != "vtt") {
-                var outputPath = Path.Combine(outputDir, $"sidecar-{candidate.Language}-{i}.vtt");
+                // Named after the sidecar file itself (not a loop index), so the output path is
+                // stable across rescans regardless of filesystem enumeration order.
+                var outputPath = Path.Combine(outputDir, $"sidecar-{Path.GetFileName(candidate.Path)}.vtt");
                 if (!await assets.ConvertSubtitleFileAsync(candidate.Path, outputPath, cancellationToken)) {
                     logger.LogWarning("ExtractSubtitles: failed to convert sidecar subtitle {Path}", candidate.Path);
                     continue;
@@ -91,7 +101,7 @@ public sealed class ExtractSubtitlesJobHandler(
             }
 
             await Persistence.UpsertSidecarSubtitleAsync(
-                entityId, candidate.Language, candidate.Label, storagePath, candidate.Extension, candidate.Path,
+                entityId, language, candidate.Label, storagePath, candidate.Extension, candidate.Path,
                 cancellationToken);
             registered++;
         }

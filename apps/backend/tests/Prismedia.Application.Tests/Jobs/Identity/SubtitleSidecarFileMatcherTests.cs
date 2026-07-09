@@ -84,6 +84,37 @@ public sealed class SubtitleSidecarFileMatcherTests : IDisposable {
     }
 
     [Fact]
+    public void LongerSiblingVideoStemOwnsTheSidecarInsteadOfTheShorterPrefix() {
+        var movie = CreateFile("Movie.mkv");
+        var directorsCut = CreateFile("Movie.Directors.Cut.mkv");
+        CreateFile("Movie.Directors.Cut.en.srt");
+
+        Assert.Empty(SubtitleSidecarFileMatcher.FindCandidates(movie));
+        var candidate = Assert.Single(SubtitleSidecarFileMatcher.FindCandidates(directorsCut));
+        Assert.Equal("en", candidate.Language);
+    }
+
+    [Fact]
+    public void ExactStemStillMatchesWhenALongerSiblingStemExists() {
+        var movie = CreateFile("Movie.mkv");
+        CreateFile("Movie.Directors.Cut.mkv");
+        CreateFile("Movie.srt");
+
+        var candidate = Assert.Single(SubtitleSidecarFileMatcher.FindCandidates(movie));
+        Assert.Equal("und", candidate.Language);
+    }
+
+    [Fact]
+    public void SymlinkedSidecarFilesAreSkipped() {
+        var video = CreateFile("Movie.mkv");
+        var real = CreateFile("real.srt");
+        var linkPath = Path.Combine(_dir, "Movie.en.srt");
+        File.CreateSymbolicLink(linkPath, real);
+
+        Assert.Empty(SubtitleSidecarFileMatcher.FindCandidates(video));
+    }
+
+    [Fact]
     public void AllSupportedExtensionsAreDiscoveredCaseInsensitively() {
         var video = CreateFile("Movie.mkv");
         CreateFile("Movie.en.SRT");
