@@ -65,8 +65,8 @@ public sealed class ExtractSubtitlesJobHandler(
 
     /// <summary>
     /// Registers subtitle files sitting beside the video ("Movie.srt", "Movie.en.srt",
-    /// "Movie.pt-BR.srt", "Movie.ai_translated.srt"). Already-vtt sidecars are referenced
-    /// directly; other formats are normalized to vtt the same way embedded streams are.
+    /// "Movie.pt-BR.srt", "Movie.ai_translated.srt"), copying every one — vtt included — through
+    /// ffmpeg into the app-owned subtitle cache the same way embedded streams are.
     /// </summary>
     private async Task<int> ExtractSidecarSubtitlesAsync(
         Guid entityId, string filePath, CancellationToken cancellationToken) {
@@ -78,23 +78,22 @@ public sealed class ExtractSubtitlesJobHandler(
         var outputDir = assets.SubtitleDir(entityId);
         var registered = 0;
         foreach (var candidate in candidates) {
-            var storagePath = candidate.Path;
-            if (candidate.Extension != "vtt") {
-                // Named after the sidecar file itself (not a loop index), so the output path is
-                // stable across rescans regardless of filesystem enumeration order.
-                var outputPath = Path.Combine(outputDir, $"sidecar-{Path.GetFileName(candidate.Path)}.vtt");
-                if (!await assets.ConvertSubtitleFileAsync(candidate.Path, outputPath, cancellationToken)) {
-                    logger.LogWarning("ExtractSubtitles: failed to convert sidecar subtitle {Path}", candidate.Path);
-                    continue;
-                }
-
-                storagePath = outputPath;
+            // Every sidecar — vtt included — is copied through ffmpeg into the app-owned cache dir
+            // rather than serving the library path directly: the discovery-time symlink check only
+            // proves the file was safe at scan time, and a served StoragePath must stay safe even if
+            // the library-folder entry is swapped for a symlink afterward. Named after the sidecar
+            // file itself (not a loop index), so the output path is stable across rescans regardless
+            // of filesystem enumeration order.
+            var outputPath = Path.Combine(outputDir, $"sidecar-{Path.GetFileName(candidate.Path)}.vtt");
+            if (!await assets.ConvertSubtitleFileAsync(candidate.Path, outputPath, cancellationToken)) {
+                logger.LogWarning("ExtractSubtitles: failed to convert sidecar subtitle {Path}", candidate.Path);
+                continue;
             }
 
             // UpsertSidecarSubtitleAsync deconflicts the language itself when two sidecars for this
             // video resolve to the same one (very common — every untagged file defaults to "und").
             await Persistence.UpsertSidecarSubtitleAsync(
-                entityId, candidate.Language, candidate.Label, storagePath, candidate.Extension, candidate.Path,
+                entityId, candidate.Language, candidate.Label, outputPath, candidate.Extension, candidate.Path,
                 cancellationToken);
             registered++;
         }

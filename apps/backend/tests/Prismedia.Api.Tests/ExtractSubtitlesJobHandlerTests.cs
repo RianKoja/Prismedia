@@ -50,7 +50,10 @@ public sealed class ExtractSubtitlesJobHandlerTests : IDisposable {
     }
 
     [Fact]
-    public async Task VttSidecarsAreReferencedDirectlyWithoutConversion() {
+    public async Task VttSidecarsAreCopiedThroughTheCacheLikeOtherFormats() {
+        // Even an already-vtt sidecar is routed through the app-owned cache: the file sitting in
+        // the library folder could be swapped for a symlink after the scan, so StoragePath must
+        // never be a live reference back into the library folder.
         var videoPath = CreateFile("Movie.mkv");
         var vttPath = CreateFile("Movie.en.vtt");
 
@@ -63,8 +66,11 @@ public sealed class ExtractSubtitlesJobHandlerTests : IDisposable {
 
         var upsert = Assert.Single(persistence.SidecarUpserts);
         Assert.Equal("en", upsert.Language);
-        Assert.Equal(vttPath, upsert.StoragePath);
-        Assert.Empty(assets.ConvertedInputs);
+        Assert.NotEqual(vttPath, upsert.StoragePath);
+        Assert.Equal(
+            Path.Combine(_tempDir, "subtitles", $"sidecar-{Path.GetFileName(vttPath)}.vtt"),
+            upsert.StoragePath);
+        Assert.Contains(vttPath, assets.ConvertedInputs);
     }
 
     [Fact]
