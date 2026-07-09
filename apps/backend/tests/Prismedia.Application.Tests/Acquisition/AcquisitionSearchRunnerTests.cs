@@ -73,7 +73,7 @@ public sealed class AcquisitionSearchRunnerTests {
     [Fact]
     public async Task QueryLadderFallsThroughToTheBroaderRungWhenNothingAcceptableIsFound() {
         // The context-rich rung ("Book Author") returns nothing; the bare-title rung finds the release.
-        var release = new IndexerRelease("Book (epub)", 5_000_000, 60, 3, DownloadProtocol.Torrent, "http://dl", "magnet:?c", "hash", "http://info", null, null);
+        var release = new IndexerRelease("Author - Book (epub)", 5_000_000, 60, 3, DownloadProtocol.Torrent, "http://dl", "magnet:?c", "hash", "http://info", null, null);
         var client = new QueryAwareIndexerSearchClient(new Dictionary<string, IReadOnlyList<IndexerRelease>>(StringComparer.OrdinalIgnoreCase) {
             ["Book"] = [release],
         });
@@ -97,7 +97,7 @@ public sealed class AcquisitionSearchRunnerTests {
 
     [Fact]
     public async Task QueryLadderStopsAtTheFirstRungWithAnAcceptableRelease() {
-        var release = new IndexerRelease("Book (epub)", 5_000_000, 60, 3, DownloadProtocol.Torrent, "http://dl", "magnet:?c", "hash", "http://info", null, null);
+        var release = new IndexerRelease("Author - Book (epub)", 5_000_000, 60, 3, DownloadProtocol.Torrent, "http://dl", "magnet:?c", "hash", "http://info", null, null);
         var client = new QueryAwareIndexerSearchClient(new Dictionary<string, IReadOnlyList<IndexerRelease>>(StringComparer.OrdinalIgnoreCase) {
             ["Book Author"] = [release],
         });

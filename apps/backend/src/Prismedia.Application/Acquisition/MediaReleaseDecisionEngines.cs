@@ -90,6 +90,11 @@ public sealed class MusicReleaseDecisionEngine : IAcquisitionDecisionEngine {
 
     private static readonly IReleaseSpecification[] Specifications = [
         new DangerousContentSpecification(),
+        // The same leading-title identity gate the video kinds use: music scene naming leads
+        // "Artist - Album (Year) [FLAC]" and the music target is "Artist Album", so the strict
+        // prefix walk fits. NO year gate on purpose — remaster/reissue years legitimately diverge
+        // from the album's release year and would reject wanted releases.
+        new TitleIdentitySpecification(),
         new ProtocolSpecification(),
         new DownloadLinkSpecification(),
         new MinSeedersSpecification(),

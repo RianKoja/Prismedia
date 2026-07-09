@@ -41,6 +41,26 @@ public sealed class ProtocolSpecification : IReleaseSpecification {
 }
 
 /// <summary>
+/// The book identity gate: a release must name the sought TITLE as a contiguous token run and — when
+/// the author is known — carry every author token somewhere in the title. Book release naming has no
+/// fixed leading convention ("Author - Title (Year) [EPUB]" and "Title - Author" both occur), so this
+/// is deliberately order-agnostic rather than the video kinds' strict leading-prefix walk. The author
+/// requirement is what stops a same-title book by a different author from winning on quality/seeders —
+/// the book analog of the movie wrong-year guard. Author-less releases of the right title are rejected
+/// too (conservative: they stay visible for manual picks, which bypass the gate by design). No year
+/// gate on purpose: book years are edition-dependent and would reject legitimate editions.
+/// </summary>
+public sealed class BookTitleIdentitySpecification : IReleaseSpecification {
+    public ReleaseRejectionReason Reason => ReleaseRejectionReason.TitleMismatch;
+
+    public ReleaseRejectionReason? Evaluate(IndexerRelease release, BookAcquisitionRules rules) =>
+        ReleaseTitleIdentity.ContainsRun(release.Title, rules.TargetTitle)
+            && ReleaseTitleIdentity.ContainsAllTokens(release.Title, rules.TargetAuthor)
+                ? null
+                : Reason;
+}
+
+/// <summary>
 /// Rejects releases the importer can't handle. A title naming only an unimportable format (CBR/RAR/MOBI/AZW)
 /// is rejected up front so it is never downloaded only to dead-end at import. When a profile restricts
 /// formats, a title naming an importable format outside that set is also rejected. Titles that name no
@@ -267,6 +287,7 @@ public sealed class BookReleaseDecisionEngine : IAcquisitionDecisionEngine {
 
     private static readonly IReleaseSpecification[] Specifications = [
         new DangerousContentSpecification(),
+        new BookTitleIdentitySpecification(),
         new ProtocolSpecification(),
         new DownloadLinkSpecification(),
         new FormatSpecification(),

@@ -110,6 +110,59 @@ public sealed class ReleaseTitleIdentityTests {
     }
 
     [Fact]
+    public void MusicSearchRejectsWrongAlbumsAndAcceptsEditionTails() {
+        var engine = new MusicReleaseDecisionEngine();
+        // The music target is "Artist Album" (WorkTitle), matching artist-led scene naming.
+        var rules = BookAcquisitionRules.Default with {
+            Kind = EntityKind.AudioLibrary,
+            TargetTitle = "Pink Floyd The Wall"
+        };
+
+        var scored = engine.Evaluate([
+            (Release("Pink Floyd - The Wall (1979) [FLAC]", seeders: 40), null, "Idx"),
+            (Release("Pink Floyd - The Wall (2011 Remaster) [FLAC]", seeders: 90), null, "Idx"),
+            (Release("Pink Floyd - The Wall Deluxe Edition [FLAC]", seeders: 25), null, "Idx"),
+            (Release("Pink Floyd - Animals (1977) [FLAC]", seeders: 900), null, "Idx"),
+            (Release("Another Band - The Wall (2005) [FLAC]", seeders: 500), null, "Idx"),
+        ], rules);
+
+        var verdicts = scored.ToDictionary(candidate => candidate.Release.Title, candidate => candidate);
+        // The right album passes in every edition — remaster years are NOT a rejection axis for music.
+        Assert.True(verdicts["Pink Floyd - The Wall (1979) [FLAC]"].Accepted);
+        Assert.True(verdicts["Pink Floyd - The Wall (2011 Remaster) [FLAC]"].Accepted);
+        Assert.True(verdicts["Pink Floyd - The Wall Deluxe Edition [FLAC]"].Accepted);
+        // A different album by the artist, and the same album by a different artist, are rejected.
+        Assert.Contains(ReleaseRejectionReason.TitleMismatch, verdicts["Pink Floyd - Animals (1977) [FLAC]"].Rejections);
+        Assert.Contains(ReleaseRejectionReason.TitleMismatch, verdicts["Another Band - The Wall (2005) [FLAC]"].Rejections);
+    }
+
+    [Fact]
+    public void BookSearchRequiresTheTitleRunAndTheAuthorAnywhere() {
+        var spec = new BookTitleIdentitySpecification();
+        var rules = BookAcquisitionRules.Default with {
+            TargetTitle = "The Way of Kings",
+            TargetAuthor = "Brandon Sanderson"
+        };
+
+        // Both leading conventions pass — book naming has no fixed order.
+        Assert.Null(spec.Evaluate(Release("Brandon Sanderson - The Way of Kings (2010) [EPUB]"), rules));
+        Assert.Null(spec.Evaluate(Release("The Way of Kings - Brandon Sanderson (retail) [EPUB]"), rules));
+        // Same title, different author → rejected: the book analog of the wrong-year movie grab.
+        Assert.Equal(ReleaseRejectionReason.TitleMismatch,
+            spec.Evaluate(Release("Someone Else - The Way of Kings [EPUB]"), rules));
+        // Right author, different book → rejected.
+        Assert.Equal(ReleaseRejectionReason.TitleMismatch,
+            spec.Evaluate(Release("Brandon Sanderson - Words of Radiance [EPUB]"), rules));
+        // Author-less releases are rejected for automatic picks (still available manually).
+        Assert.Equal(ReleaseRejectionReason.TitleMismatch,
+            spec.Evaluate(Release("The Way of Kings (2010) [EPUB]"), rules));
+        // Without a known author, the title run alone decides.
+        Assert.Null(spec.Evaluate(
+            Release("The Way of Kings (2010) [EPUB]"),
+            rules with { TargetAuthor = null }));
+    }
+
+    [Fact]
     public void GatesAreNoOpsWithoutATargetTitleOrYear() {
         // Ad-hoc evaluations (no wanted entity, no target) keep the historical permissive behavior.
         var engine = new MovieReleaseDecisionEngine();
@@ -119,7 +172,7 @@ public sealed class ReleaseTitleIdentityTests {
         Assert.True(scored[0].Accepted);
     }
 
-    private static IndexerRelease Release(string title, int seeders) =>
+    private static IndexerRelease Release(string title, int seeders = 5) =>
         new(title, SizeBytes: 1_000_000_000, Seeders: seeders, Peers: seeders, DownloadProtocol.Torrent,
             DownloadUrl: "http://dl", MagnetUrl: null, InfoHash: null, InfoUrl: null, Language: null, PublishedAt: null);
 }

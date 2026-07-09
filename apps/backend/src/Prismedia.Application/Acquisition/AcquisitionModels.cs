@@ -126,9 +126,20 @@ public sealed record BookAcquisitionRules(
     /// The sought work's year identity, set per search by the runner (a movie's release year; a series'
     /// premiere year — the year scene naming appends to disambiguate same-name works). Feeds
     /// <see cref="MediaYearSpecification"/> so a release naming a conflicting title-adjacent year is
-    /// rejected instead of winning on quality. Null disables the year gate.
+    /// rejected instead of winning on quality. Null disables the year gate. Deliberately NOT consumed
+    /// by the book and music engines: book years are edition-dependent and album years legitimately
+    /// diverge on remasters/reissues, so a year gate would reject wanted releases there.
     /// </summary>
     public int? TargetYear { get; init; }
+
+    /// <summary>
+    /// The sought work's creator (a book's author), set per search by the runner. Feeds the book
+    /// identity gate: a same-title book by a different author must be rejected, and release naming
+    /// carries the author in no fixed position ("Author - Title" and "Title - Author" both occur), so
+    /// the author rides separately from <see cref="TargetTitle"/> instead of being folded into it.
+    /// Null/empty disables the author check.
+    /// </summary>
+    public string? TargetAuthor { get; init; }
 
     /// <summary>
     /// Permissive defaults used when no profile is configured yet (e.g. ad-hoc verification searches).

@@ -29,12 +29,14 @@ public static partial class ReleaseTitleIdentity {
     };
 
     // Tokens that legitimately end a title at the tail position — editions, cuts, and streaming-service
-    // tags that scene naming places between the title and the quality block. Everything already known to
+    // tags that scene naming places between the title and the quality block, plus the album-edition
+    // vocabulary music releases append ("Album (Deluxe Edition) [FLAC]"). Everything already known to
     // the shared metadata vocabulary (quality/source/codec/language) also ends a title. prism-vocab: external.
     private static readonly IReadOnlySet<string> BoundaryTokens = new HashSet<string>(StringComparer.Ordinal) {
         "extended", "unrated", "uncut", "remastered", "restored", "theatrical", "directors", "redux",
         "imax", "limited", "internal", "criterion", "anniversary", "edition", "hybrid", "dubbed", "subbed",
         "episode", "episodes", "collection", "hd",
+        "deluxe", "expanded", "remaster", "reissue", "bonus", "mono", "stereo",
         "amzn", "nf", "dsnp", "pcok", "hulu", "atvp", "hmax", "hbo", "max", "pmtp", "roku", "stan", "itunes"
     };
 
@@ -92,6 +94,50 @@ public static partial class ReleaseTitleIdentity {
         }
 
         return tokens;
+    }
+
+    /// <summary>
+    /// True when the target's comparison tokens appear as a contiguous run ANYWHERE in the release
+    /// title — the order-agnostic variant for kinds with no fixed leading convention (book releases
+    /// lead with the author as often as the title). An empty target matches everything.
+    /// </summary>
+    public static bool ContainsRun(string releaseTitle, string? targetTitle) {
+        var target = ComparableTokens(targetTitle);
+        if (target.Count == 0) {
+            return true;
+        }
+
+        var tokens = ComparableTokens(releaseTitle);
+        for (var start = 0; start <= tokens.Count - target.Count; start++) {
+            var matched = true;
+            for (var offset = 0; offset < target.Count; offset++) {
+                if (!string.Equals(tokens[start + offset], target[offset], StringComparison.Ordinal)) {
+                    matched = false;
+                    break;
+                }
+            }
+
+            if (matched) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// True when every one of the target's comparison tokens appears somewhere in the release title,
+    /// in any order — the author check for book releases, whose "Author - Title" and "Title - Author"
+    /// orderings both occur. An empty target matches everything.
+    /// </summary>
+    public static bool ContainsAllTokens(string releaseTitle, string? targetText) {
+        var target = ComparableTokens(targetText);
+        if (target.Count == 0) {
+            return true;
+        }
+
+        var tokens = ComparableTokens(releaseTitle).ToHashSet(StringComparer.Ordinal);
+        return target.All(tokens.Contains);
     }
 
     /// <summary>True when a tail-position token legitimately ends a title rather than extending it.</summary>
