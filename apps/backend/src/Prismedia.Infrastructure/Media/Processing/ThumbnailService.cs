@@ -185,6 +185,24 @@ public sealed class ThumbnailService {
     }
 
     /// <summary>
+    /// Converts a standalone subtitle file (srt/ass/ssa/vtt) to WebVTT, the same way embedded
+    /// streams are normalized, so sidecar subtitles get cue-timed rendering alongside them.
+    /// </summary>
+    public async Task<bool> ConvertSubtitleFileAsync(
+        string inputPath, string outputPath,
+        CancellationToken cancellationToken,
+        MediaToolOptions? toolOptions = null) {
+        Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
+        var tools = toolOptions ?? _toolOptions;
+
+        var result = await _processExecutor.RunAsync(tools.FfmpegPath,
+            ["-y", "-v", "error", "-i", inputPath, "-c:s", "webvtt", outputPath],
+            null, cancellationToken, lowPriority: true);
+
+        return result.ExitCode == 0 && File.Exists(outputPath);
+    }
+
+    /// <summary>
     /// Extracts trickplay frames in a single ffmpeg decode pass. The file is opened and
     /// demuxed exactly once; the <c>fps=1/interval</c> filter samples one keyframe per
     /// interval (mirroring Jellyfin's trickplay extraction). This replaces the previous

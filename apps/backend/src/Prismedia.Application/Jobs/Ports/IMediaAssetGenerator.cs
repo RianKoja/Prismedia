@@ -62,6 +62,11 @@ public interface IMediaAssetGenerator {
         string inputPath, string outputDir,
         IReadOnlyList<SubtitleStreamData> streams, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Converts a standalone subtitle file (srt/ass/ssa/vtt) to WebVTT for cue-timed rendering.
+    /// </summary>
+    Task<bool> ConvertSubtitleFileAsync(string inputPath, string outputPath, CancellationToken cancellationToken);
+
     Task<int[]?> GenerateWaveformDataAsync(
         string inputPath, double durationSeconds, int pixelsPerSecond, CancellationToken cancellationToken);
 

@@ -234,6 +234,9 @@ public sealed class GeneratePreviewJobHandlerTests : IDisposable {
         public Task<IReadOnlyList<string>> ExtractSubtitlesAsync(string inputPath, string outputDir, IReadOnlyList<SubtitleStreamData> streams, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
 
+        public Task<bool> ConvertSubtitleFileAsync(string inputPath, string outputPath, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
         public Task<int[]?> GenerateWaveformDataAsync(string inputPath, double durationSeconds, int pixelsPerSecond, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
 
@@ -329,6 +332,7 @@ public sealed class GeneratePreviewJobHandlerTests : IDisposable {
         public Task<Guid?> GetSourceFileIdAsync(Guid entityId, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task MarkSubtitlesExtractedAsync(Guid entityId, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task UpsertSubtitleAsync(Guid entityId, string language, string? label, string format, EntitySubtitleSource source, string storagePath, string sourceFormat, int streamIndex, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task UpsertSidecarSubtitleAsync(Guid entityId, string language, string? label, string storagePath, string sourceFormat, string sourcePath, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task UpsertAudioTrackTagsAsync(Guid entityId, string? artist, string? album, int? trackNumber, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task MarkEntityProbeFailedAsync(Guid entityId, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task ClearProbeFailuresForPathsAsync(IReadOnlyCollection<string> sourcePaths, CancellationToken cancellationToken) => throw new NotSupportedException();

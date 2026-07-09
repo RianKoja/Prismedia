@@ -86,6 +86,12 @@ public sealed class MediaAssetGeneratorAdapter(
             await ResolveVideoToolsAsync(cancellationToken));
     }
 
+    public async Task<bool> ConvertSubtitleFileAsync(
+        string inputPath, string outputPath, CancellationToken cancellationToken) =>
+        await thumbnails.ConvertSubtitleFileAsync(
+            inputPath, outputPath, cancellationToken,
+            await ResolveVideoToolsAsync(cancellationToken));
+
     public async Task<int[]?> GenerateWaveformDataAsync(
         string inputPath, double durationSeconds, int pixelsPerSecond, CancellationToken cancellationToken) =>
         await thumbnails.GenerateWaveformDataAsync(

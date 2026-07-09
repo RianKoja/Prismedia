@@ -268,6 +268,14 @@ public interface IMediaProcessingStatePersistence {
     Task UpsertSubtitleAsync(Guid entityId, string language, string? label, string format,
         EntitySubtitleSource source, string storagePath, string sourceFormat, int streamIndex, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Upserts a subtitle sidecar file discovered beside the video's source file. Unlike
+    /// <see cref="UpsertSubtitleAsync"/> (keyed by embedded stream index), sidecar tracks are
+    /// keyed by their real file path, since that is the stable identity a rescan can match.
+    /// </summary>
+    Task UpsertSidecarSubtitleAsync(Guid entityId, string language, string? label,
+        string storagePath, string sourceFormat, string sourcePath, CancellationToken cancellationToken);
+
     Task UpsertAudioTrackTagsAsync(Guid entityId, string? artist, string? album, int? trackNumber, CancellationToken cancellationToken);
 
     Task<EntityTechnicalData?> GetEntityTechnicalAsync(Guid entityId, CancellationToken cancellationToken);

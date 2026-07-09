@@ -289,6 +289,37 @@ public sealed partial class LibraryScanPersistenceService {
         await _db.SaveChangesAsync(cancellationToken);
     }
 
+    public async Task UpsertSidecarSubtitleAsync(Guid entityId, string language, string? label,
+        string storagePath, string sourceFormat, string sourcePath, CancellationToken cancellationToken) {
+        var existing = await _db.EntitySubtitles
+            .FirstOrDefaultAsync(s => s.EntityId == entityId && s.Source == EntitySubtitleSource.Sidecar
+                && s.SourcePath == sourcePath, cancellationToken);
+
+        if (existing is not null) {
+            existing.Language = language;
+            existing.Label = label;
+            existing.StoragePath = storagePath;
+            existing.SourceFormat = sourceFormat;
+            await _db.SaveChangesAsync(cancellationToken);
+            return;
+        }
+
+        _db.EntitySubtitles.Add(new EntitySubtitleRow {
+            Id = Guid.NewGuid(),
+            EntityId = entityId,
+            Language = language,
+            Label = label,
+            Format = "vtt",
+            Source = EntitySubtitleSource.Sidecar,
+            StoragePath = storagePath,
+            SourceFormat = sourceFormat,
+            SourcePath = sourcePath,
+            CreatedAt = DateTimeOffset.UtcNow
+        });
+
+        await _db.SaveChangesAsync(cancellationToken);
+    }
+
     public async Task UpsertAudioTrackTagsAsync(Guid entityId, string? artist, string? album, int? trackNumber, CancellationToken cancellationToken) {
         var detail = await _db.AudioTrackDetails.FindAsync([entityId], cancellationToken);
         if (detail is null) return;

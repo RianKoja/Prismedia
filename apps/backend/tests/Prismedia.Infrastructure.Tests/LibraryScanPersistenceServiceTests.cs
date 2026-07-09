@@ -435,6 +435,65 @@ public sealed class LibraryScanPersistenceServiceTests {
     }
 
     [Fact]
+    public async Task UpsertSidecarSubtitleAddsARowKeyedByTheSidecarFilePath() {
+        await using var db = CreateContext();
+        var videoId = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
+        SeedVideo(db, videoId);
+
+        var service = new LibraryScanPersistenceService(db);
+        await service.UpsertSidecarSubtitleAsync(
+            videoId,
+            "pt-BR",
+            null,
+            "/data/cache/videos/bbb/subtitles/sidecar-pt-BR-0.vtt",
+            "srt",
+            "/media/Movie.pt-BR.srt",
+            CancellationToken.None);
+
+        var subtitle = Assert.Single(db.EntitySubtitles.Where(row => row.EntityId == videoId));
+        Assert.Equal(EntitySubtitleSource.Sidecar, subtitle.Source);
+        Assert.Equal("pt-BR", subtitle.Language);
+        Assert.Equal("vtt", subtitle.Format);
+        Assert.Equal("/data/cache/videos/bbb/subtitles/sidecar-pt-BR-0.vtt", subtitle.StoragePath);
+        Assert.Equal("srt", subtitle.SourceFormat);
+        Assert.Equal("/media/Movie.pt-BR.srt", subtitle.SourcePath);
+    }
+
+    [Fact]
+    public async Task UpsertSidecarSubtitleRefreshesExistingRowInsteadOfDuplicatingItOnRescan() {
+        await using var db = CreateContext();
+        var videoId = Guid.Parse("cccccccc-cccc-cccc-cccc-cccccccccccc");
+        var subtitleId = Guid.Parse("dddddddd-dddd-dddd-dddd-dddddddddddd");
+        SeedVideo(db, videoId);
+        db.EntitySubtitles.Add(new EntitySubtitleRow {
+            Id = subtitleId,
+            EntityId = videoId,
+            Language = "und",
+            Label = "Ai Translated",
+            Format = "vtt",
+            Source = EntitySubtitleSource.Sidecar,
+            StoragePath = "/data/cache/videos/ccc/subtitles/sidecar-und-0.vtt",
+            SourceFormat = "srt",
+            SourcePath = "/media/Movie.ai_translated.srt",
+            CreatedAt = DateTimeOffset.UtcNow
+        });
+        await db.SaveChangesAsync();
+
+        var service = new LibraryScanPersistenceService(db);
+        await service.UpsertSidecarSubtitleAsync(
+            videoId,
+            "und",
+            "Ai Translated",
+            "/data/cache/videos/ccc/subtitles/sidecar-und-0.vtt",
+            "srt",
+            "/media/Movie.ai_translated.srt",
+            CancellationToken.None);
+
+        var subtitle = Assert.Single(db.EntitySubtitles.Where(row => row.EntityId == videoId));
+        Assert.Equal(subtitleId, subtitle.Id);
+    }
+
+    [Fact]
     public async Task RemoveEntitiesInExcludedPathsRemovesExistingSourcesUnderExcludedDirectories() {
         await using var db = CreateContext();
         var keepId = Guid.Parse("11111111-1111-1111-1111-111111111111");
