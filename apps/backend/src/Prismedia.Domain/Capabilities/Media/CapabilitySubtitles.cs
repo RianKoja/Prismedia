@@ -8,12 +8,12 @@ namespace Prismedia.Domain.Capabilities;
 public sealed class CapabilitySubtitles(IEnumerable<CapabilitySubtitles.Item>? items = null)
     : CollectionCapability<CapabilitySubtitles.Item>(items) {
     /// <summary>
-    /// When embedded subtitles were last extracted for the owning media, or null when
-    /// extraction has not run. Tracks the extraction pass for the subtitle set as a whole.
+    /// When managed embedded and sidecar subtitles were last reconciled for the owning media,
+    /// or null when reconciliation has not completed. Tracks the pass for the set as a whole.
     /// </summary>
     public DateTimeOffset? ExtractedAt { get; private set; }
 
-    /// <summary>Records when the embedded-subtitle extraction pass last completed.</summary>
+    /// <summary>Records when the managed-subtitle reconciliation pass last completed.</summary>
     /// <param name="extractedAt">Extraction timestamp, or null to clear it.</param>
     public void MarkExtracted(DateTimeOffset? extractedAt) => ExtractedAt = extractedAt;
 
@@ -34,7 +34,7 @@ public sealed class CapabilitySubtitles(IEnumerable<CapabilitySubtitles.Item>? i
     /// <param name="Source">How the subtitle was discovered or generated.</param>
     /// <param name="StoragePath">Path to the normalized subtitle file served by Prismedia.</param>
     /// <param name="SourceFormat">Original subtitle format before normalization.</param>
-    /// <param name="SourcePath">Optional path to the original subtitle source file.</param>
+    /// <param name="SourcePath">Embedded stream locator or optional app-owned preserved styled source path.</param>
     /// <param name="IsDefault">Whether this subtitle should be selected by default.</param>
     public sealed record Item(
         Guid Id,

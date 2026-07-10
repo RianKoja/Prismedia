@@ -17,7 +17,14 @@ public sealed partial class LibraryScanPersistenceService {
         Guid entityId, CancellationToken cancellationToken) {
         var root = await _db.Entities.AsNoTracking()
             .Where(e => e.Id == entityId)
-            .Select(e => new EntityRefreshTarget(e.Id, e.KindCode, e.Title))
+            .Select(e => new EntityRefreshTarget(
+                e.Id,
+                e.KindCode,
+                e.Title,
+                _db.EntityFiles
+                    .Where(file => file.EntityId == e.Id && file.Role == EntityFileRole.Source)
+                    .Select(file => file.Path)
+                    .FirstOrDefault()))
             .FirstOrDefaultAsync(cancellationToken);
         if (root is null) return [];
 
@@ -28,7 +35,14 @@ public sealed partial class LibraryScanPersistenceService {
         for (var depth = 0; depth < 3 && parentIds.Count > 0; depth++) {
             var children = await _db.Entities.AsNoTracking()
                 .Where(e => e.ParentEntityId != null && parentIds.Contains(e.ParentEntityId.Value))
-                .Select(e => new EntityRefreshTarget(e.Id, e.KindCode, e.Title))
+                .Select(e => new EntityRefreshTarget(
+                    e.Id,
+                    e.KindCode,
+                    e.Title,
+                    _db.EntityFiles
+                        .Where(file => file.EntityId == e.Id && file.Role == EntityFileRole.Source)
+                        .Select(file => file.Path)
+                        .FirstOrDefault()))
                 .ToArrayAsync(cancellationToken);
             if (children.Length == 0) break;
             result.AddRange(children);

@@ -9,6 +9,6 @@ public sealed record VideoDetail : EntityDetail {
     /// <summary>Relationship edge metadata for credited people shown on detail pages.</summary>
     public required IReadOnlyList<EntityCreditMetadata> CreditMetadata { get; init; }
 
-    /// <summary>When embedded subtitles were last extracted, when known.</summary>
+    /// <summary>When managed embedded and adjacent subtitles were last reconciled, when known.</summary>
     public required DateTimeOffset? SubtitlesExtractedAt { get; init; }
 }

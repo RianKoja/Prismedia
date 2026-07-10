@@ -10,8 +10,9 @@ namespace Prismedia.Infrastructure.Media.Adapters;
 public sealed class MediaAssetGeneratorAdapter(
     ThumbnailService thumbnails,
     AssetPathService paths,
+    SubtitleAssetImportService subtitleAssets,
     SettingsService? settings = null,
-    MediaToolOptions? defaultToolOptions = null) : IMediaAssetGenerator {
+    MediaToolOptions? defaultToolOptions = null) : IMediaAssetGenerator, ISubtitleAssetService {
     public async Task<bool> GenerateVideoThumbnailAsync(
         string inputPath, string outputPath, double seekSeconds,
         int width, int height, int quality, CancellationToken cancellationToken) =>
@@ -77,7 +78,11 @@ public sealed class MediaAssetGeneratorAdapter(
             await ResolveVideoToolsAsync(cancellationToken));
 
     public async Task<IReadOnlyList<string>> ExtractSubtitlesAsync(
-        string inputPath, string outputDir, IReadOnlyList<SubtitleStreamData> streams, CancellationToken cancellationToken) {
+        Guid entityId,
+        string inputPath,
+        IReadOnlyList<SubtitleStreamData> streams,
+        CancellationToken cancellationToken) {
+        var outputDir = paths.EnsureSubtitleDirectorySafe(entityId);
         var infraStreams = streams
             .Select(s => new SubtitleStreamInfo(s.StreamIndex, s.CodecName, s.Language, s.Title))
             .ToList();
@@ -85,6 +90,25 @@ public sealed class MediaAssetGeneratorAdapter(
             inputPath, outputDir, infraStreams, cancellationToken,
             await ResolveVideoToolsAsync(cancellationToken));
     }
+
+    public async Task<ImportedSidecarSubtitleAssets> ImportSidecarSubtitleAsync(
+        Guid entityId,
+        string inputPath,
+        string sourceKey,
+        string sourceFormat,
+        CancellationToken cancellationToken) =>
+        await subtitleAssets.ImportAsync(
+            entityId,
+            inputPath,
+            sourceKey,
+            sourceFormat,
+            cancellationToken,
+            await ResolveVideoToolsAsync(cancellationToken));
+
+    public Task DeleteSubtitleAssetsAsync(
+        IReadOnlyCollection<string> assetPaths,
+        CancellationToken cancellationToken) =>
+        subtitleAssets.DeleteAsync(assetPaths, cancellationToken);
 
     public async Task<int[]?> GenerateWaveformDataAsync(
         string inputPath, double durationSeconds, int pixelsPerSecond, CancellationToken cancellationToken) =>
@@ -103,7 +127,6 @@ public sealed class MediaAssetGeneratorAdapter(
     public string BookPageThumbnailPath(Guid entityId) => paths.BookPageThumbnailPath(entityId);
     public string BookCoverThumbnailPath(Guid entityId) => paths.BookCoverThumbnailPath(entityId);
     public string AudioWaveformPath(Guid entityId) => paths.AudioWaveformPath(entityId);
-    public string SubtitleDir(Guid entityId) => paths.SubtitleDir(entityId);
 
     public string VideoThumbnailUrl(Guid entityId) => AssetPathService.VideoThumbnailUrl(entityId);
     public string VideoPreviewUrl(Guid entityId) => AssetPathService.VideoPreviewUrl(entityId);

@@ -154,7 +154,9 @@ public sealed class ThumbnailService {
 
         var outputPaths = new List<string>();
         foreach (var stream in streams) {
-            var fileName = $"embedded-{stream.Language}-{stream.StreamIndex}.vtt";
+            // Stream metadata is untrusted input. Keep generated paths independent of
+            // language/title values so path separators cannot escape the owned cache.
+            var fileName = $"embedded-{stream.StreamIndex}.vtt";
             outputPaths.Add(Path.Combine(outputDir, fileName));
         }
 

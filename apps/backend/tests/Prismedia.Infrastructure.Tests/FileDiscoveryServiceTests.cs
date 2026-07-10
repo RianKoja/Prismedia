@@ -1,4 +1,6 @@
 using Prismedia.Infrastructure.Media.Processing;
+using Prismedia.Application.Jobs.Ports;
+using Prismedia.Infrastructure.Media.Adapters;
 
 namespace Prismedia.Infrastructure.Tests;
 
@@ -25,6 +27,45 @@ public sealed class FileDiscoveryServiceTests : IDisposable {
             CancellationToken.None);
 
         Assert.Equal([Path.Combine(_root.FullName, "Included", "keep.mkv")], files);
+    }
+
+    [Fact]
+    public async Task VideoSubtitleSidecarCategoryUsesCanonicalExtensionsCaseInsensitively() {
+        await File.WriteAllTextAsync(Path.Combine(_root.FullName, "Movie.en.SRT"), "srt");
+        await File.WriteAllTextAsync(Path.Combine(_root.FullName, "Movie.fr.vtt"), "vtt");
+        await File.WriteAllTextAsync(Path.Combine(_root.FullName, "Movie.de.ASS"), "ass");
+        await File.WriteAllTextAsync(Path.Combine(_root.FullName, "Movie.es.ssa"), "ssa");
+        await File.WriteAllTextAsync(Path.Combine(_root.FullName, "Movie.nfo"), "ignored");
+        var discovery = new FileDiscoveryAdapter(new FileDiscoveryService());
+
+        var files = await discovery.DiscoverFilesAsync(
+            _root.FullName,
+            MediaCategory.VideoSubtitleSidecar,
+            recursive: false,
+            excludedPaths: new HashSet<string>(),
+            CancellationToken.None);
+
+        Assert.Equal(
+            ["Movie.de.ASS", "Movie.en.SRT", "Movie.es.ssa", "Movie.fr.vtt"],
+            files.Select(Path.GetFileName));
+    }
+
+    [Fact]
+    public async Task SubtitleSnapshotKeepsDescriptiveTagsThatAreGeneratedMediaSuffixes() {
+        await File.WriteAllTextAsync(Path.Combine(_root.FullName, "Movie.sample.srt"), "sample captions");
+        await File.WriteAllTextAsync(Path.Combine(_root.FullName, "Movie.preview.vtt"), "preview captions");
+        var discovery = new FileDiscoveryAdapter(new FileDiscoveryService());
+
+        var signatures = await discovery.DiscoverFileSignaturesAsync(
+            _root.FullName,
+            MediaCategory.VideoSubtitleSidecar,
+            recursive: false,
+            excludedPaths: new HashSet<string>(),
+            CancellationToken.None);
+
+        Assert.Equal(
+            ["Movie.preview.vtt", "Movie.sample.srt"],
+            signatures.Select(signature => Path.GetFileName(signature.Path)));
     }
 
     [Fact]

@@ -47,8 +47,11 @@ public sealed class LibraryMaintenanceJobHandler(
                 cancellationToken);
         }
 
+        var orphanedSubtitleAssets = await persistence.CleanupOrphanedSubtitleAssetsAsync(cancellationToken);
+        totalOrphansRemoved += orphanedSubtitleAssets;
+
         logger.LogInformation(
-            "LibraryMaintenance complete: {MissingAssets} missing assets found, {OrphansRemoved} orphaned cache dirs removed",
+            "LibraryMaintenance complete: {MissingAssets} missing assets found, {OrphansRemoved} orphaned cache entries removed",
             totalMissingAssets, totalOrphansRemoved);
 
         await context.ReportProgressAsync(100,

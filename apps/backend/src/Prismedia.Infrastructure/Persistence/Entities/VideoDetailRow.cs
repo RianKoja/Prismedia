@@ -6,4 +6,6 @@ public sealed class VideoDetailRow {
     public Guid? LibraryRootId { get; set; }
 
     public DateTimeOffset? SubtitlesExtractedAt { get; set; }
+
+    public string? SubtitleSidecarSignature { get; set; }
 }

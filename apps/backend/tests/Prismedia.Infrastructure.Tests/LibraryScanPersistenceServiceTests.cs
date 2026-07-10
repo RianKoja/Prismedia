@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Prismedia.Application.Entities;
 using Prismedia.Application.Jobs.Ports;
+using Prismedia.Contracts.Media;
 using Prismedia.Domain.Entities;
 using Prismedia.Infrastructure.Media.Processing;
 using Prismedia.Infrastructure.Media.Persistence;
@@ -33,7 +34,7 @@ public sealed class LibraryScanPersistenceServiceTests {
     }
 
     [Fact]
-    public async Task DownstreamNeedsSuppressProbeAndGenerationWhileSourceIsMarkedUnreadable() {
+    public async Task UnreadableVideoStillAllowsIndependentSidecarReconciliation() {
         await using var db = CreateContext();
         var videoId = Guid.Parse("77777777-7777-7777-7777-777777777771");
         SeedVideo(db, videoId);
@@ -50,7 +51,7 @@ public sealed class LibraryScanPersistenceServiceTests {
         Assert.False(needs[videoId].NeedsProbe);
         Assert.False(needs[videoId].NeedsPreview);
         Assert.False(needs[videoId].NeedsTrickplay);
-        Assert.False(needs[videoId].NeedsSubtitleExtraction);
+        Assert.True(needs[videoId].NeedsSubtitleExtraction);
         // Fingerprints hash the raw file, which works regardless of media corruption.
         Assert.True(needs[videoId].MissingOshash);
         Assert.True(needs[videoId].MissingMd5);
@@ -62,6 +63,11 @@ public sealed class LibraryScanPersistenceServiceTests {
         var videoId = Guid.Parse("77777777-7777-7777-7777-777777777772");
         const string sourcePath = "/media/shows/corrupt-episode.mp4";
         SeedVideo(db, videoId, sourcePath);
+        db.VideoDetails.Add(new VideoDetailRow {
+            EntityId = videoId,
+            SubtitlesExtractedAt = DateTimeOffset.UtcNow,
+            SubtitleSidecarSignature = new string('a', 64)
+        });
         await db.SaveChangesAsync();
 
         var service = new LibraryScanPersistenceService(db);
@@ -69,11 +75,17 @@ public sealed class LibraryScanPersistenceServiceTests {
 
         var suppressed = await service.CheckDownstreamNeedsBatchAsync([videoId], CancellationToken.None);
         Assert.False(suppressed[videoId].NeedsProbe);
+        Assert.False(suppressed[videoId].NeedsSubtitleExtraction);
 
         await service.ClearProbeFailuresForPathsAsync([sourcePath], CancellationToken.None);
+        await service.ClearManagedSubtitleCompletionForPathsAsync([sourcePath], CancellationToken.None);
 
         var restored = await service.CheckDownstreamNeedsBatchAsync([videoId], CancellationToken.None);
         Assert.True(restored[videoId].NeedsProbe);
+        Assert.True(restored[videoId].NeedsSubtitleExtraction);
+        var detail = await db.VideoDetails.FindAsync([videoId]);
+        Assert.Null(detail!.SubtitlesExtractedAt);
+        Assert.Equal(new string('a', 64), detail.SubtitleSidecarSignature);
     }
 
     [Fact]
@@ -361,6 +373,74 @@ public sealed class LibraryScanPersistenceServiceTests {
     }
 
     [Fact]
+    public async Task MissingManualSubtitleDoesNotRequeueManagedExtraction() {
+        await using var db = CreateContext();
+        var videoId = Guid.NewGuid();
+        SeedVideo(db, videoId);
+        db.VideoDetails.Add(new VideoDetailRow {
+            EntityId = videoId,
+            SubtitlesExtractedAt = DateTimeOffset.UtcNow
+        });
+        var manualId = Guid.NewGuid();
+        db.EntitySubtitles.Add(new EntitySubtitleRow {
+            Id = manualId,
+            EntityId = videoId,
+            Language = "eng",
+            Format = "vtt",
+            Source = EntitySubtitleSource.Manual,
+            SourceKey = SubtitleSourceKeys.Capability(manualId),
+            StoragePath = "/tmp/prismedia/missing-manual-subtitle.vtt",
+            SourceFormat = "vtt",
+            CreatedAt = DateTimeOffset.UtcNow
+        });
+        await db.SaveChangesAsync();
+
+        var needs = await new LibraryScanPersistenceService(db)
+            .CheckDownstreamNeedsBatchAsync([videoId], CancellationToken.None);
+
+        Assert.False(needs[videoId].NeedsSubtitleExtraction);
+    }
+
+    [Fact]
+    public async Task MissingStyledSidecarSourceRequeuesManagedExtraction() {
+        var cacheRoot = CreateCacheRoot();
+        try {
+            await using var db = CreateContext();
+            var videoId = Guid.NewGuid();
+            var assets = Assets(cacheRoot);
+            var subtitleDir = assets.SubtitleDir(videoId);
+            Directory.CreateDirectory(subtitleDir);
+            var storagePath = Path.Combine(subtitleDir, "sidecar-test.vtt");
+            await File.WriteAllTextAsync(storagePath, "WEBVTT\n\n");
+            SeedVideo(db, videoId);
+            db.VideoDetails.Add(new VideoDetailRow {
+                EntityId = videoId,
+                SubtitlesExtractedAt = DateTimeOffset.UtcNow
+            });
+            db.EntitySubtitles.Add(new EntitySubtitleRow {
+                Id = Guid.NewGuid(),
+                EntityId = videoId,
+                Language = "eng",
+                Format = SubtitleFormats.Vtt,
+                Source = EntitySubtitleSource.Sidecar,
+                SourceKey = new string('a', 64),
+                StoragePath = storagePath,
+                SourceFormat = SubtitleFormats.Ass,
+                SourcePath = Path.ChangeExtension(storagePath, SubtitleFileExtensions.Ass),
+                CreatedAt = DateTimeOffset.UtcNow
+            });
+            await db.SaveChangesAsync();
+
+            var needs = await new LibraryScanPersistenceService(db, assets)
+                .CheckDownstreamNeedsBatchAsync([videoId], CancellationToken.None);
+
+            Assert.True(needs[videoId].NeedsSubtitleExtraction);
+        } finally {
+            DeleteDirectory(cacheRoot);
+        }
+    }
+
+    [Fact]
     public async Task UpsertSubtitleRefreshesExistingStreamInsteadOfDuplicatingIt() {
         await using var db = CreateContext();
         var videoId = Guid.Parse("44444444-4444-4444-4444-444444444444");
@@ -431,7 +511,8 @@ public sealed class LibraryScanPersistenceServiceTests {
         var subtitles = db.EntitySubtitles.Where(row => row.EntityId == videoId).ToArray();
         Assert.Equal(2, subtitles.Length);
         Assert.Contains(subtitles, subtitle => subtitle.Id == subtitleId && subtitle.Language == "eng" && subtitle.SourcePath is null);
-        Assert.Contains(subtitles, subtitle => subtitle.Language == "eng.3"
+        Assert.Contains(subtitles, subtitle => subtitle.Language == "eng"
+            && subtitle.SourceKey == "stream:3"
             && subtitle.StoragePath == "/data/cache/videos/666/subtitles/embedded-eng-3.vtt"
             && subtitle.SourcePath == "3");
     }
@@ -484,9 +565,335 @@ public sealed class LibraryScanPersistenceServiceTests {
         Assert.Equal(2, subtitles.Length);
         Assert.Contains(subtitles, subtitle => subtitle.Id == conflictId && subtitle.Language == "eng");
         Assert.Contains(subtitles, subtitle => subtitle.Id == streamId
-            && subtitle.Language == "eng.3"
+            && subtitle.Language == "eng"
+            && subtitle.SourceKey == "stream:3"
             && subtitle.StoragePath == "/data/cache/videos/888/subtitles/embedded-eng-3.vtt"
             && subtitle.SourcePath == "3");
+    }
+
+    [Fact]
+    public async Task ReconcileManagedSubtitlesKeepsStableIdentityAndValidDuplicateLanguages() {
+        await using var db = CreateContext();
+        var videoId = Guid.NewGuid();
+        var sidecarId = Guid.NewGuid();
+        var manualId = Guid.NewGuid();
+        SeedVideo(db, videoId);
+        db.VideoDetails.Add(new VideoDetailRow {
+            EntityId = videoId,
+            SubtitleSidecarSignature = "previous",
+            SubtitlesExtractedAt = DateTimeOffset.UtcNow.AddDays(-1)
+        });
+        db.EntitySubtitles.AddRange(
+            new EntitySubtitleRow {
+                Id = sidecarId,
+                EntityId = videoId,
+                Language = "und",
+                Format = "vtt",
+                Source = EntitySubtitleSource.Sidecar,
+                SourceKey = "sidecar:one",
+                StoragePath = "/cache/old-one.vtt",
+                SourceFormat = "ass",
+                SourcePath = "/cache/old-one.ass",
+                CreatedAt = DateTimeOffset.UtcNow.AddDays(-1)
+            },
+            new EntitySubtitleRow {
+                Id = Guid.NewGuid(),
+                EntityId = videoId,
+                Language = "eng",
+                Format = "vtt",
+                Source = EntitySubtitleSource.Embedded,
+                SourceKey = "stream:9",
+                StoragePath = "/cache/stale-embedded.vtt",
+                SourceFormat = "subrip",
+                SourcePath = "9",
+                CreatedAt = DateTimeOffset.UtcNow.AddDays(-1)
+            },
+            new EntitySubtitleRow {
+                Id = manualId,
+                EntityId = videoId,
+                Language = "eng",
+                Format = "vtt",
+                Source = EntitySubtitleSource.Manual,
+                SourceKey = $"manual:{manualId:N}",
+                StoragePath = "/cache/manual.vtt",
+                SourceFormat = "vtt",
+                CreatedAt = DateTimeOffset.UtcNow
+            });
+        await db.SaveChangesAsync();
+
+        var service = new LibraryScanPersistenceService(db);
+        var result = await service.ReconcileManagedSubtitlesAsync(
+            videoId,
+            new string('a', 64),
+            [
+                new ManagedSubtitleTrackData(
+                    EntitySubtitleSource.Sidecar, "sidecar:one", "und", "Forced", "vtt",
+                    "/cache/new-one.vtt", "ass", "/cache/new-one.ass"),
+                new ManagedSubtitleTrackData(
+                    EntitySubtitleSource.Sidecar, "sidecar:two", "und", null, "vtt",
+                    "/cache/two.vtt", "srt", null),
+                new ManagedSubtitleTrackData(
+                    EntitySubtitleSource.Embedded, "stream:3", "eng", "SDH", "vtt",
+                    "/cache/embedded-3.vtt", "subrip", "3")
+            ],
+            isComplete: true,
+            CancellationToken.None);
+
+        var rows = db.EntitySubtitles.Where(row => row.EntityId == videoId).ToArray();
+        Assert.Equal(4, rows.Length);
+        Assert.Contains(rows, row => row.Id == sidecarId && row.SourceKey == "sidecar:one" && row.Language == "und");
+        Assert.Contains(rows, row => row.SourceKey == "sidecar:two" && row.Language == "und");
+        Assert.Contains(rows, row => row.SourceKey == "stream:3" && row.Language == "eng");
+        Assert.Contains(rows, row => row.Id == manualId && row.Source == EntitySubtitleSource.Manual);
+        Assert.DoesNotContain(rows, row => row.SourceKey == "stream:9");
+        Assert.Contains("/cache/old-one.vtt", result.ObsoleteAssetPaths);
+        Assert.Contains("/cache/old-one.ass", result.ObsoleteAssetPaths);
+        Assert.Contains("/cache/stale-embedded.vtt", result.ObsoleteAssetPaths);
+        var detail = await db.VideoDetails.FindAsync([videoId]);
+        Assert.Equal(new string('a', 64), detail!.SubtitleSidecarSignature);
+        Assert.NotNull(detail.SubtitlesExtractedAt);
+    }
+
+    [Fact]
+    public async Task IncompleteSubtitleReconciliationKeepsValidRowsButStillNeedsExtraction() {
+        await using var db = CreateContext();
+        var videoId = Guid.NewGuid();
+        SeedVideo(db, videoId);
+        db.VideoDetails.Add(new VideoDetailRow {
+            EntityId = videoId,
+            SubtitleSidecarSignature = new string('0', 64),
+            SubtitlesExtractedAt = DateTimeOffset.UtcNow.AddDays(-1)
+        });
+        db.EntitySubtitles.Add(new EntitySubtitleRow {
+            Id = Guid.NewGuid(),
+            EntityId = videoId,
+            Language = "fr",
+            Format = SubtitleFormats.Vtt,
+            Source = EntitySubtitleSource.Sidecar,
+            SourceKey = new string('f', 64),
+            StoragePath = "/cache/stale-failed-sidecar.vtt",
+            SourceFormat = SubtitleFormats.Srt,
+            CreatedAt = DateTimeOffset.UtcNow.AddDays(-1)
+        });
+        await db.SaveChangesAsync();
+
+        var service = new LibraryScanPersistenceService(db);
+        await service.ReconcileManagedSubtitlesAsync(
+            videoId,
+            new string('a', 64),
+            [new ManagedSubtitleTrackData(
+                EntitySubtitleSource.Embedded, "stream:3", "en", null, SubtitleFormats.Vtt,
+                "/cache/embedded-3.vtt", SubtitleFormats.Srt, "3")],
+            isComplete: false,
+            CancellationToken.None);
+
+        var rows = await db.EntitySubtitles.Where(row => row.EntityId == videoId).ToListAsync();
+        Assert.Single(rows);
+        Assert.Equal("stream:3", rows[0].SourceKey);
+        var detail = await db.VideoDetails.FindAsync([videoId]);
+        Assert.Null(detail!.SubtitleSidecarSignature);
+        Assert.Null(detail.SubtitlesExtractedAt);
+
+        var needs = await service.CheckDownstreamNeedsBatchAsync([videoId], CancellationToken.None);
+        Assert.True(needs[videoId].NeedsSubtitleExtraction);
+    }
+
+    [Fact]
+    public async Task ReconcileManagedSubtitlesRejectsDestructiveLifecycleOwner() {
+        await using var db = CreateContext();
+        var videoId = Guid.NewGuid();
+        SeedVideo(db, videoId);
+        var video = db.Entities.Local.Single(row => row.Id == videoId);
+        video.LifecycleClaimKind = EntityLifecycleClaimKind.DeletingFiles;
+        video.LifecycleClaimId = Guid.NewGuid();
+        video.LifecycleClaimedAt = DateTimeOffset.UtcNow;
+        db.VideoDetails.Add(new VideoDetailRow { EntityId = videoId });
+        await db.SaveChangesAsync();
+
+        var service = new LibraryScanPersistenceService(db);
+        await Assert.ThrowsAsync<EntityLifecycleMutationConflictException>(() =>
+            service.ReconcileManagedSubtitlesAsync(
+                videoId,
+                new string('b', 64),
+                [new ManagedSubtitleTrackData(
+                    EntitySubtitleSource.Sidecar, "sidecar:one", "eng", null, "vtt",
+                    "/cache/one.vtt", "srt", null)],
+                isComplete: true,
+                CancellationToken.None));
+
+        db.ChangeTracker.Clear();
+        Assert.Empty(await db.EntitySubtitles.Where(row => row.EntityId == videoId).ToListAsync());
+        Assert.Null((await db.VideoDetails.FindAsync([videoId]))!.SubtitleSidecarSignature);
+    }
+
+    [Fact]
+    public async Task SidecarSignatureChangeInvalidatesExtractionWithoutAdvancingSignature() {
+        await using var db = CreateContext();
+        var videoId = Guid.NewGuid();
+        SeedLibraryRoot(db, RootId, "/media/videos");
+        SeedVideo(db, videoId, "/media/videos/movie.mkv");
+        db.VideoDetails.Add(new VideoDetailRow {
+            EntityId = videoId,
+            LibraryRootId = RootId,
+            SubtitleSidecarSignature = "old",
+            SubtitlesExtractedAt = DateTimeOffset.UtcNow
+        });
+        await db.SaveChangesAsync();
+
+        var service = new LibraryScanPersistenceService(db);
+        await service.InvalidateSubtitleStateAsync(
+            [new VideoSubtitleSidecarState(videoId, "new")], CancellationToken.None);
+
+        var detail = await db.VideoDetails.FindAsync([videoId]);
+        Assert.Null(detail!.SubtitlesExtractedAt);
+        Assert.Equal("old", detail.SubtitleSidecarSignature);
+        var target = Assert.Single(await service.GetVideoTargetsInRootAsync(RootId, CancellationToken.None));
+        Assert.Equal(videoId, target.Id);
+        Assert.Equal("/media/videos/movie.mkv", target.SourcePath);
+    }
+
+    [Fact]
+    public async Task RebindingVideoSourceClearsManagedSubtitleStateForReplacement() {
+        await using var db = CreateContext();
+        var videoId = Guid.NewGuid();
+        const string previousPath = "/media/videos/movie.mkv";
+        const string replacementPath = "/media/videos/movie.mp4";
+        SeedVideo(db, videoId, previousPath);
+        db.VideoDetails.Add(new VideoDetailRow {
+            EntityId = videoId,
+            SubtitleSidecarSignature = new string('a', 64),
+            SubtitlesExtractedAt = DateTimeOffset.UtcNow
+        });
+        db.EntitySubtitles.Add(new EntitySubtitleRow {
+            Id = Guid.NewGuid(),
+            EntityId = videoId,
+            Language = "en",
+            Format = SubtitleFormats.Vtt,
+            Source = EntitySubtitleSource.Sidecar,
+            SourceKey = new string('b', 64),
+            StoragePath = "/cache/old-sidecar.vtt",
+            SourceFormat = SubtitleFormats.Srt,
+            CreatedAt = DateTimeOffset.UtcNow
+        });
+        await db.SaveChangesAsync();
+
+        var owners = await new LibraryScanPersistenceService(db).RebindVideoSourceAsync(
+            previousPath,
+            replacementPath,
+            CancellationToken.None);
+
+        Assert.Equal([videoId], owners);
+        Assert.Empty(await db.EntitySubtitles.Where(row => row.EntityId == videoId).ToArrayAsync());
+        var detail = await db.VideoDetails.FindAsync([videoId]);
+        Assert.Null(detail!.SubtitlesExtractedAt);
+        Assert.Null(detail.SubtitleSidecarSignature);
+    }
+
+    [Fact]
+    public async Task VideoSourceOwnersExcludeNonVideoEntitiesSharingTheSameFile() {
+        await using var db = CreateContext();
+        var videoId = Guid.NewGuid();
+        var imageId = Guid.NewGuid();
+        const string sharedPath = "/media/mixed/animated.webm";
+        SeedVideo(db, videoId, sharedPath);
+        SeedSourceEntity(db, imageId, EntityKindRegistry.Image.Code, sharedPath);
+        await db.SaveChangesAsync();
+
+        var owners = await new LibraryScanPersistenceService(db).ListVideoSourceOwnersAsync(
+            [sharedPath],
+            CancellationToken.None);
+
+        var owner = Assert.Single(owners);
+        Assert.Equal(videoId, owner.EntityId);
+        Assert.Equal(sharedPath, owner.FilePath);
+    }
+
+    [Fact]
+    public async Task VideoRecoveryIncludesNullRootOwnersCoveredByPathOrScanSnapshot() {
+        await using var db = CreateContext();
+        var otherRootId = Guid.NewGuid();
+        var assignedId = Guid.NewGuid();
+        var pathCoveredId = Guid.NewGuid();
+        var snapshotCoveredId = Guid.NewGuid();
+        var unrelatedId = Guid.NewGuid();
+        var assignedElsewhereId = Guid.NewGuid();
+        const string snapshotPath = "/mounted/video-alias/movie.mkv";
+        SeedLibraryRoot(db, RootId, "/media/videos");
+        SeedLibraryRoot(db, otherRootId, "/media/other");
+        SeedVideo(db, assignedId, "/media/videos/assigned.mkv");
+        SeedVideo(db, pathCoveredId, "/media/videos/legacy/path-covered.mkv");
+        SeedVideo(db, snapshotCoveredId, snapshotPath);
+        SeedVideo(db, unrelatedId, "/media/unrelated/movie.mkv");
+        SeedVideo(db, assignedElsewhereId, "/media/videos/owned-by-other-root.mkv");
+        db.VideoDetails.AddRange(
+            new VideoDetailRow { EntityId = assignedId, LibraryRootId = RootId },
+            new VideoDetailRow { EntityId = pathCoveredId },
+            new VideoDetailRow { EntityId = snapshotCoveredId },
+            new VideoDetailRow { EntityId = unrelatedId },
+            new VideoDetailRow { EntityId = assignedElsewhereId, LibraryRootId = otherRootId });
+        db.ScannedFiles.Add(new ScannedFileRow {
+            LibraryRootId = RootId,
+            ScanKind = JobType.ScanLibrary.ToCode(),
+            Path = snapshotPath,
+            SizeBytes = 1,
+            ModifiedTicks = 2,
+            UpdatedAt = DateTimeOffset.UtcNow
+        });
+        await db.SaveChangesAsync();
+
+        var service = new LibraryScanPersistenceService(db);
+        var targets = await service.GetVideoTargetsInRootAsync(RootId, CancellationToken.None);
+
+        Assert.Equal(
+            new[] { assignedId, pathCoveredId, snapshotCoveredId }.Order().ToArray(),
+            targets.Select(target => target.Id).Order().ToArray());
+    }
+
+    [Fact]
+    public async Task RootWideVideoRecoveryLoadsNeedsForEveryTargetInOnePersistenceCall() {
+        await using var db = CreateContext();
+        SeedLibraryRoot(db, RootId, "/media/videos");
+        var ids = Enumerable.Range(0, 75).Select(_ => Guid.NewGuid()).ToArray();
+        foreach (var id in ids) {
+            SeedVideo(db, id, $"/media/videos/{id:N}.mkv");
+            db.VideoDetails.Add(new VideoDetailRow { EntityId = id, LibraryRootId = RootId });
+        }
+        await db.SaveChangesAsync();
+
+        var service = new LibraryScanPersistenceService(db);
+        var targets = await service.GetVideoRecoveryTargetsInRootAsync(RootId, CancellationToken.None);
+
+        Assert.Equal(ids.Order().ToArray(), targets.Select(target => target.Id).Order().ToArray());
+        Assert.All(targets, target => Assert.True(target.Needs.NeedsSubtitleExtraction));
+    }
+
+    [Fact]
+    public async Task RefreshTreeProjectsSourcePathsForVideoDescendants() {
+        await using var db = CreateContext();
+        var seriesId = Guid.NewGuid();
+        var videoId = Guid.NewGuid();
+        const string sourcePath = "/media/videos/Show/episode.mkv";
+        db.Entities.Add(new EntityRow {
+            Id = seriesId,
+            KindCode = EntityKindRegistry.VideoSeries.Code,
+            Title = "Show",
+            CreatedAt = DateTimeOffset.UtcNow,
+            UpdatedAt = DateTimeOffset.UtcNow
+        });
+        SeedSourceEntity(
+            db,
+            videoId,
+            EntityKindRegistry.Video.Code,
+            sourcePath,
+            parentEntityId: seriesId);
+        db.VideoDetails.Add(new VideoDetailRow { EntityId = videoId });
+        await db.SaveChangesAsync();
+
+        var tree = await new LibraryScanPersistenceService(db)
+            .GetEntityTreeAsync(seriesId, CancellationToken.None);
+
+        Assert.Null(Assert.Single(tree, target => target.Id == seriesId).SourcePath);
+        Assert.Equal(sourcePath, Assert.Single(tree, target => target.Id == videoId).SourcePath);
     }
 
     [Fact]

@@ -77,7 +77,7 @@ public enum JobType {
     [Code("generate-audio-waveform")]
     GenerateAudioWaveform,
 
-    /// <summary>Extracts embedded subtitle tracks from video files as WebVTT.</summary>
+    /// <summary>Reconciles embedded and adjacent subtitle tracks into app-owned playback assets.</summary>
     [Code("extract-subtitles")]
     ExtractSubtitles,
 

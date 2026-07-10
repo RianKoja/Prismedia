@@ -1,7 +1,7 @@
 namespace Prismedia.Application.Jobs.Ports;
 
 /// <summary>
-/// Port for generating thumbnails, previews, sprites, waveforms, and extracting subtitles.
+/// Port for generating thumbnails, previews, sprites, and waveforms.
 /// </summary>
 public interface IMediaAssetGenerator {
     Task<bool> GenerateVideoThumbnailAsync(
@@ -58,10 +58,6 @@ public interface IMediaAssetGenerator {
         string inputPath, string outputPath,
         int targetWidth, int quality, CancellationToken cancellationToken);
 
-    Task<IReadOnlyList<string>> ExtractSubtitlesAsync(
-        string inputPath, string outputDir,
-        IReadOnlyList<SubtitleStreamData> streams, CancellationToken cancellationToken);
-
     Task<int[]?> GenerateWaveformDataAsync(
         string inputPath, double durationSeconds, int pixelsPerSecond, CancellationToken cancellationToken);
 
@@ -76,7 +72,6 @@ public interface IMediaAssetGenerator {
     string BookPageThumbnailPath(Guid entityId);
     string BookCoverThumbnailPath(Guid entityId);
     string AudioWaveformPath(Guid entityId);
-    string SubtitleDir(Guid entityId);
 
     string VideoThumbnailUrl(Guid entityId);
     string VideoPreviewUrl(Guid entityId);
@@ -87,5 +82,4 @@ public interface IMediaAssetGenerator {
     string BookPageThumbnailUrl(Guid entityId);
     string BookCoverThumbnailUrl(Guid entityId);
     string AudioWaveformUrl(Guid entityId);
-    string SubtitleUrl(Guid entityId, string fileName);
 }

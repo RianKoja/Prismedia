@@ -3,6 +3,7 @@ using Prismedia.Application.Jobs;
 using Prismedia.Application.Jobs.Ports;
 using Prismedia.Application.Settings;
 using Prismedia.Domain.Entities;
+using Prismedia.Infrastructure.Media.Processing;
 using Prismedia.Infrastructure.Persistence;
 using Prismedia.Infrastructure.Persistence.Entities;
 using Prismedia.Infrastructure.Settings;
@@ -95,15 +96,29 @@ public sealed partial class LibraryScanPersistenceService {
             .Select(v => v.EntityId)
             .ToListAsync(cancellationToken)).ToHashSet();
         var subtitleRows = await _db.EntitySubtitles.AsNoTracking()
-            .Where(subtitle => ids.Contains(subtitle.EntityId))
-            .Select(subtitle => new { subtitle.EntityId, subtitle.StoragePath })
+            .Where(subtitle => ids.Contains(subtitle.EntityId) &&
+                (subtitle.Source == EntitySubtitleSource.Embedded ||
+                    subtitle.Source == EntitySubtitleSource.Sidecar))
+            .Select(subtitle => new {
+                subtitle.EntityId,
+                subtitle.Source,
+                subtitle.StoragePath,
+                subtitle.SourceFormat,
+                subtitle.SourcePath
+            })
             .ToListAsync(cancellationToken);
         var subtitlesByEntity = subtitleRows
             .GroupBy(subtitle => subtitle.EntityId)
             .ToDictionary(group => group.Key, group => group.ToArray());
         var hasUsableSubtitleState = subtitlesExtracted
             .Where(id => !subtitlesByEntity.TryGetValue(id, out var rows) ||
-                rows.All(row => File.Exists(row.StoragePath)))
+                rows.All(row => SubtitleAssetAvailability.IsManagedTrackAvailable(
+                    _assets,
+                    row.EntityId,
+                    row.Source,
+                    row.StoragePath,
+                    row.SourceFormat,
+                    row.SourcePath)))
             .ToHashSet();
 
         var result = new Dictionary<Guid, DownstreamNeeds>(ids.Count);
@@ -121,7 +136,10 @@ public sealed partial class LibraryScanPersistenceService {
                 MissingMd5: !hasMd5.Contains(id),
                 NeedsPreview: !unreadable && needsPreview,
                 NeedsTrickplay: !unreadable && !hasTrickplay.Contains(id),
-                NeedsSubtitleExtraction: !unreadable && !hasUsableSubtitleState.Contains(id),
+                // Adjacent sidecars remain importable even when the source video is unreadable.
+                // Source-file changes clear both the probe marker and subtitle completion so a
+                // repaired video receives a fresh embedded-stream pass as well.
+                NeedsSubtitleExtraction: !hasUsableSubtitleState.Contains(id),
                 // Backfill: an existing cover missing either small variant. New entities
                 // (no cover at scan time) get theirs from GeneratePreview instead.
                 NeedsGridThumbnail: hasCover.Contains(id) &&

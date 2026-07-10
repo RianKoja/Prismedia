@@ -148,6 +148,27 @@ public sealed class PrismediaDbContextModelTests {
         Assert.True(entityNamespaceIndex.IsUnique);
     }
 
+    [Fact]
+    public void SubtitleTracksUseSourceIdentityInsteadOfDisplayLanguageForUniqueness() {
+        using var db = CreateContext();
+        var modelEntity = db.Model.FindEntityType(typeof(EntitySubtitleRow));
+
+        Assert.NotNull(modelEntity);
+        var identityIndex = modelEntity!.GetIndexes().Single(index =>
+            index.Properties.Select(property => property.Name).SequenceEqual([
+                nameof(EntitySubtitleRow.EntityId),
+                nameof(EntitySubtitleRow.Source),
+                nameof(EntitySubtitleRow.SourceKey)
+            ]));
+        Assert.True(identityIndex.IsUnique);
+        Assert.DoesNotContain(modelEntity.GetIndexes(), index =>
+            index.Properties.Select(property => property.Name).SequenceEqual([
+                nameof(EntitySubtitleRow.EntityId),
+                nameof(EntitySubtitleRow.Language),
+                nameof(EntitySubtitleRow.Source)
+            ]));
+    }
+
     [Theory]
     [InlineData(typeof(BookChapterDetailRow), "book_entity_id")]
     [InlineData(typeof(BookChapterDetailRow), "volume_entity_id")]
@@ -223,6 +244,8 @@ public sealed class PrismediaDbContextModelTests {
     [InlineData(typeof(EntityClassificationRow), nameof(EntityClassificationRow.Value), "value")]
     [InlineData(typeof(UserEntityStateRow), nameof(UserEntityStateRow.IsFavorite), "is_favorite")]
     [InlineData(typeof(VideoDetailRow), nameof(VideoDetailRow.SubtitlesExtractedAt), "subtitles_extracted_at")]
+    [InlineData(typeof(VideoDetailRow), nameof(VideoDetailRow.SubtitleSidecarSignature), "subtitle_sidecar_signature")]
+    [InlineData(typeof(EntitySubtitleRow), nameof(EntitySubtitleRow.SourceKey), "source_key")]
     [InlineData(typeof(LibraryRootRow), nameof(LibraryRootRow.ScanVideos), "scan_videos")]
     [InlineData(typeof(AppSettingRow), nameof(AppSettingRow.ValueJson), "value_json")]
     [InlineData(typeof(BrowserSessionRow), nameof(BrowserSessionRow.LastSeenAt), "last_seen_at")]

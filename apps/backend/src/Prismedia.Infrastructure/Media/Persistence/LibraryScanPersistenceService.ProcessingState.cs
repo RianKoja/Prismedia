@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Prismedia.Application.Files;
 using Prismedia.Application.Jobs.Ports;
 using Prismedia.Application.Settings;
+using Prismedia.Contracts.Media;
 using Prismedia.Domain.Entities;
 using Prismedia.Infrastructure.Persistence;
 using Prismedia.Infrastructure.Persistence.Entities;
@@ -235,60 +236,149 @@ public sealed partial class LibraryScanPersistenceService {
 
     public async Task UpsertSubtitleAsync(Guid entityId, string language, string? label, string format,
         EntitySubtitleSource source, string storagePath, string sourceFormat, int streamIndex, CancellationToken cancellationToken) {
-        var langKey = language;
-        var streamKey = streamIndex.ToString();
-
-        var streamMatch = await _db.EntitySubtitles
-            .FirstOrDefaultAsync(s => s.EntityId == entityId && s.Source == source
-                && s.SourcePath == streamKey, cancellationToken);
-        if (streamMatch is not null) {
-            if (!string.Equals(streamMatch.Language, langKey, StringComparison.Ordinal)) {
-                var languageConflict = await _db.EntitySubtitles
-                    .FirstOrDefaultAsync(s => s.EntityId == entityId && s.Source == source
-                        && s.Language == langKey && s.Id != streamMatch.Id, cancellationToken);
-
-                if (languageConflict is not null) {
-                    langKey = streamMatch.Language;
-                }
-            }
-
-            streamMatch.Language = langKey;
-            streamMatch.Label = label;
-            streamMatch.Format = format;
-            streamMatch.StoragePath = storagePath;
-            streamMatch.SourceFormat = sourceFormat;
-            await SaveChangesWithLifecycleAsync(cancellationToken);
-            return;
-        }
-
+        var streamKey = SubtitleSourceKeys.EmbeddedStream(streamIndex);
+        var streamIndexText = streamIndex.ToString(System.Globalization.CultureInfo.InvariantCulture);
         var existing = await _db.EntitySubtitles
-            .FirstOrDefaultAsync(s => s.EntityId == entityId && s.Language == langKey
-                && s.Source == source, cancellationToken);
+            .FirstOrDefaultAsync(subtitle => subtitle.EntityId == entityId &&
+                subtitle.Source == source &&
+                (subtitle.SourceKey == streamKey ||
+                    subtitle.SourceKey == string.Empty && subtitle.SourcePath == streamIndexText),
+                cancellationToken);
 
-        if (existing is not null) {
-            langKey = $"{language}.{streamIndex}";
-            var duplicate = await _db.EntitySubtitles
-                .AnyAsync(s => s.EntityId == entityId && s.Language == langKey
-                    && s.Source == source, cancellationToken);
-            if (duplicate)
-                return;
+        if (existing is null) {
+            existing = new EntitySubtitleRow {
+                Id = Guid.NewGuid(),
+                EntityId = entityId,
+                Source = source,
+                SourceKey = streamKey,
+                CreatedAt = DateTimeOffset.UtcNow
+            };
+            _db.EntitySubtitles.Add(existing);
         }
 
-        _db.EntitySubtitles.Add(new EntitySubtitleRow {
-            Id = Guid.NewGuid(),
-            EntityId = entityId,
-            Language = langKey,
-            Label = label,
-            Format = format,
-            Source = source,
-            StoragePath = storagePath,
-            SourceFormat = sourceFormat,
-            SourcePath = streamKey,
-            CreatedAt = DateTimeOffset.UtcNow
-        });
+        existing.SourceKey = streamKey;
+        existing.Language = language;
+        existing.Label = label;
+        existing.Format = format;
+        existing.StoragePath = storagePath;
+        existing.SourceFormat = sourceFormat;
+        existing.SourcePath = streamIndexText;
 
         await SaveChangesWithLifecycleAsync(cancellationToken);
     }
+
+    public async Task<SubtitleReconciliationResult> ReconcileManagedSubtitlesAsync(
+        Guid entityId,
+        string sidecarSignature,
+        IReadOnlyList<ManagedSubtitleTrackData> tracks,
+        bool isComplete,
+        CancellationToken cancellationToken) {
+        ArgumentException.ThrowIfNullOrWhiteSpace(sidecarSignature);
+        if (sidecarSignature.Length != 64 || !sidecarSignature.All(IsLowerHexCharacter)) {
+            throw new ArgumentException("Subtitle sidecar signatures must be lowercase SHA-256 values.", nameof(sidecarSignature));
+        }
+
+        var managedSources = new[] { EntitySubtitleSource.Embedded, EntitySubtitleSource.Sidecar };
+        var manifest = new Dictionary<(EntitySubtitleSource Source, string SourceKey), ManagedSubtitleTrackData>();
+        foreach (var track in tracks) {
+            if (!managedSources.Contains(track.Source)) {
+                throw new ArgumentException("Only embedded and sidecar tracks may be reconciled by the extraction pipeline.", nameof(tracks));
+            }
+            ArgumentException.ThrowIfNullOrWhiteSpace(track.SourceKey);
+            ArgumentException.ThrowIfNullOrWhiteSpace(track.Language);
+            ArgumentException.ThrowIfNullOrWhiteSpace(track.Format);
+            ArgumentException.ThrowIfNullOrWhiteSpace(track.StoragePath);
+            ArgumentException.ThrowIfNullOrWhiteSpace(track.SourceFormat);
+            if (track.SourceKey.Length > 128) {
+                throw new ArgumentOutOfRangeException(nameof(tracks), "Subtitle source keys are limited to 128 characters.");
+            }
+            if (track.Language.Length > 32) {
+                throw new ArgumentOutOfRangeException(nameof(tracks), "Subtitle language codes are limited to 32 characters.");
+            }
+            if (!Path.IsPathRooted(track.StoragePath)) {
+                throw new ArgumentException("Managed subtitle storage paths must be absolute.", nameof(tracks));
+            }
+            if (track.Source == EntitySubtitleSource.Sidecar &&
+                track.SourcePath is not null &&
+                !Path.IsPathRooted(track.SourcePath)) {
+                throw new ArgumentException("Styled sidecar source paths must be app-owned absolute paths.", nameof(tracks));
+            }
+            if (!manifest.TryAdd((track.Source, track.SourceKey), track)) {
+                throw new ArgumentException("The subtitle manifest contains a duplicate source identity.", nameof(tracks));
+            }
+        }
+
+        var existing = await _db.EntitySubtitles
+            .Where(subtitle => subtitle.EntityId == entityId && managedSources.Contains(subtitle.Source))
+            .ToListAsync(cancellationToken);
+        var existingByKey = existing
+            .Where(subtitle => !string.IsNullOrWhiteSpace(subtitle.SourceKey))
+            .ToDictionary(subtitle => (subtitle.Source, subtitle.SourceKey));
+        var obsoletePaths = new HashSet<string>(FileSystemPathComparison.Comparer);
+        var retainedPaths = new HashSet<string>(FileSystemPathComparison.Comparer);
+
+        foreach (var (identity, track) in manifest) {
+            if (!existingByKey.TryGetValue(identity, out var row)) {
+                row = new EntitySubtitleRow {
+                    Id = Guid.NewGuid(),
+                    EntityId = entityId,
+                    Source = track.Source,
+                    SourceKey = track.SourceKey,
+                    CreatedAt = DateTimeOffset.UtcNow
+                };
+                _db.EntitySubtitles.Add(row);
+            } else {
+                AddManagedAssetPaths(row, obsoletePaths);
+            }
+
+            row.Language = track.Language;
+            row.Label = track.Label;
+            row.Format = track.Format;
+            row.StoragePath = track.StoragePath;
+            row.SourceFormat = track.SourceFormat;
+            row.SourcePath = track.SourcePath;
+            row.IsDefault = track.IsDefault;
+            retainedPaths.Add(track.StoragePath);
+            if (!string.IsNullOrWhiteSpace(track.SourcePath) && Path.IsPathRooted(track.SourcePath)) {
+                retainedPaths.Add(track.SourcePath);
+            }
+        }
+
+        foreach (var stale in existing.Where(row => !manifest.ContainsKey((row.Source, row.SourceKey)))) {
+            AddManagedAssetPaths(stale, obsoletePaths);
+            _db.EntitySubtitles.Remove(stale);
+        }
+
+        var detail = await _db.VideoDetails.FindAsync([entityId], cancellationToken)
+            ?? throw new InvalidOperationException($"Video detail '{entityId}' was not found.");
+        detail.SubtitleSidecarSignature = isComplete ? sidecarSignature : null;
+        detail.SubtitlesExtractedAt = isComplete ? DateTimeOffset.UtcNow : null;
+
+        await SaveChangesWithLifecycleAsync(cancellationToken);
+        obsoletePaths.ExceptWith(retainedPaths);
+        return new SubtitleReconciliationResult(retainedPaths.ToArray(), obsoletePaths.ToArray());
+    }
+
+    private static void AddManagedAssetPaths(EntitySubtitleRow row, ISet<string> paths) {
+        AddPath(row.StoragePath, paths);
+        AddPath(row.SourcePath, paths);
+        if (row.Source == EntitySubtitleSource.Embedded &&
+            SubtitleFormats.IsStyled(row.SourceFormat) &&
+            Path.IsPathRooted(row.StoragePath)) {
+            AddPath(Path.ChangeExtension(
+                row.StoragePath,
+                SubtitleFileExtensions.ForFormat(row.SourceFormat)), paths);
+        }
+    }
+
+    private static void AddPath(string? path, ISet<string> paths) {
+        if (!string.IsNullOrWhiteSpace(path) && Path.IsPathRooted(path)) {
+            paths.Add(path);
+        }
+    }
+
+    private static bool IsLowerHexCharacter(char value) =>
+        value is >= '0' and <= '9' or >= 'a' and <= 'f';
 
     public async Task UpsertAudioTrackTagsAsync(Guid entityId, string? artist, string? album, int? trackNumber, CancellationToken cancellationToken) {
         var detail = await _db.AudioTrackDetails.FindAsync([entityId], cancellationToken);
@@ -346,22 +436,7 @@ public sealed partial class LibraryScanPersistenceService {
 
     public async Task ClearProbeFailuresForPathsAsync(
         IReadOnlyCollection<string> sourcePaths, CancellationToken cancellationToken) {
-        if (sourcePaths.Count == 0) return;
-
-        var paths = sourcePaths
-            .Distinct(FileSystemPathComparison.Comparer)
-            .ToHashSet(FileSystemPathComparison.Comparer);
-        var pathLengths = paths.Select(path => path.Length).Distinct().ToArray();
-        var sourceCandidates = await _db.EntityFiles.AsNoTracking()
-            .Where(file => file.Role == EntityFileRole.Source
-                && pathLengths.Contains(file.Path.Length))
-            .Select(file => new { file.EntityId, file.Path })
-            .ToArrayAsync(cancellationToken);
-        var sourceEntityIds = sourceCandidates
-            .Where(file => paths.Contains(file.Path))
-            .Select(file => file.EntityId)
-            .Distinct()
-            .ToArray();
+        var sourceEntityIds = await GetSourceEntityIdsForPathsAsync(sourcePaths, cancellationToken);
         if (sourceEntityIds.Length == 0) return;
 
         var rows = await _db.EntityTechnical
@@ -377,6 +452,47 @@ public sealed partial class LibraryScanPersistenceService {
         }
 
         await SaveChangesWithLifecycleAsync(cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task ClearManagedSubtitleCompletionForPathsAsync(
+        IReadOnlyCollection<string> sourcePaths,
+        CancellationToken cancellationToken) {
+        var sourceEntityIds = await GetSourceEntityIdsForPathsAsync(sourcePaths, cancellationToken);
+        if (sourceEntityIds.Length == 0) return;
+
+        var rows = await _db.VideoDetails
+            .Where(detail => sourceEntityIds.Contains(detail.EntityId) &&
+                detail.SubtitlesExtractedAt != null)
+            .ToListAsync(cancellationToken);
+        if (rows.Count == 0) return;
+
+        foreach (var row in rows) {
+            row.SubtitlesExtractedAt = null;
+        }
+
+        await SaveChangesWithLifecycleAsync(cancellationToken);
+    }
+
+    private async Task<Guid[]> GetSourceEntityIdsForPathsAsync(
+        IReadOnlyCollection<string> sourcePaths,
+        CancellationToken cancellationToken) {
+        if (sourcePaths.Count == 0) return [];
+
+        var paths = sourcePaths
+            .Distinct(FileSystemPathComparison.Comparer)
+            .ToHashSet(FileSystemPathComparison.Comparer);
+        var pathLengths = paths.Select(path => path.Length).Distinct().ToArray();
+        var sourceCandidates = await _db.EntityFiles.AsNoTracking()
+            .Where(file => file.Role == EntityFileRole.Source &&
+                pathLengths.Contains(file.Path.Length))
+            .Select(file => new { file.EntityId, file.Path })
+            .ToArrayAsync(cancellationToken);
+        return sourceCandidates
+            .Where(file => paths.Contains(file.Path))
+            .Select(file => file.EntityId)
+            .Distinct()
+            .ToArray();
     }
 
 }

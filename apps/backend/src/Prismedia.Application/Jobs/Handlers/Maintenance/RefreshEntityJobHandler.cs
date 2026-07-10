@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using Prismedia.Application.Files;
 using Prismedia.Application.Jobs.Ports;
 using Prismedia.Domain.Entities;
 
@@ -13,7 +14,9 @@ public sealed class RefreshEntityJobHandler(
     IEntityRefreshTreePersistence refreshTree,
     ILibraryScanRootPersistence scanRoots,
     IDownstreamNeedsPersistence downstreamNeeds,
-    IMaintenancePersistence maintenance) : IJobHandler {
+    IMaintenancePersistence maintenance,
+    ISubtitleSidecarDiscovery subtitleSidecars,
+    IVideoScanPersistence videos) : IJobHandler {
 
     public JobType Type => JobType.RefreshEntity;
 
@@ -31,6 +34,8 @@ public sealed class RefreshEntityJobHandler(
 
         await context.ReportProgressAsync(10, $"Found {tree.Count} entities to refresh", cancellationToken);
 
+        await InvalidateChangedSubtitleSidecarsAsync(tree, cancellationToken);
+
         var settings = await scanRoots.GetSettingsAsync(cancellationToken);
         var ids = tree.Select(e => e.Id).ToList();
         foreach (var entity in tree) {
@@ -43,27 +48,34 @@ public sealed class RefreshEntityJobHandler(
 
         var jobRequests = new List<EnqueueJobRequest>();
         foreach (var entity in tree) {
-            if (!needs.TryGetValue(entity.Id, out var entityNeeds)) continue;
+            if (!needs.TryGetValue(entity.Id, out var entityNeeds) ||
+                !EntityKindRegistry.TryGet(entity.KindCode, out var kind)) {
+                continue;
+            }
+
             var idStr = entity.Id.ToString();
 
-            switch (entity.KindCode) {
-                case "video":
+            switch (kind) {
+                case EntityKind.Video:
                     if (settings.AutoGenerateMetadata && entityNeeds.NeedsProbe)
                         jobRequests.Add(new EnqueueJobRequest(JobType.ProbeVideo, TargetEntityKind: entity.KindCode, TargetEntityId: idStr, TargetLabel: entity.Title, Priority: JobPriorities.Probe));
                     if (FingerprintGating.ShouldFingerprint(settings, entityNeeds))
                         jobRequests.Add(new EnqueueJobRequest(JobType.FingerprintVideo, TargetEntityKind: entity.KindCode, TargetEntityId: idStr, TargetLabel: entity.Title, Priority: JobPriorities.Fingerprint));
-                    if (entityNeeds.NeedsSubtitleExtraction)
+                    // An explicit refresh re-runs subtitle reconciliation even when the last
+                    // successful signature is unchanged. That also refreshes embedded streams and
+                    // repairs a missing app-owned asset without waiting for a library scan delta.
+                    if (entityNeeds.NeedsSubtitleExtraction || !string.IsNullOrWhiteSpace(entity.SourcePath))
                         jobRequests.Add(new EnqueueJobRequest(JobType.ExtractSubtitles, TargetEntityKind: entity.KindCode, TargetEntityId: idStr, TargetLabel: entity.Title, Priority: JobPriorities.Sidecar));
                     if ((settings.AutoGeneratePreview && entityNeeds.NeedsPreview) || (settings.GenerateTrickplay && entityNeeds.NeedsTrickplay))
                         jobRequests.Add(new EnqueueJobRequest(JobType.GeneratePreview, TargetEntityKind: entity.KindCode, TargetEntityId: idStr, TargetLabel: entity.Title, Priority: JobPriorities.Preview));
                     break;
-                case "image":
+                case EntityKind.Image:
                     if (FingerprintGating.ShouldFingerprint(settings, entityNeeds))
                         jobRequests.Add(new EnqueueJobRequest(JobType.FingerprintImage, TargetEntityKind: entity.KindCode, TargetEntityId: idStr, TargetLabel: entity.Title, Priority: JobPriorities.Fingerprint));
                     if (entityNeeds.NeedsPreview)
                         jobRequests.Add(new EnqueueJobRequest(JobType.GenerateImageThumbnail, TargetEntityKind: entity.KindCode, TargetEntityId: idStr, TargetLabel: entity.Title, Priority: JobPriorities.Thumbnail));
                     break;
-                case "audio-track":
+                case EntityKind.AudioTrack:
                     if (entityNeeds.NeedsProbe)
                         jobRequests.Add(new EnqueueJobRequest(JobType.ProbeAudio, TargetEntityKind: entity.KindCode, TargetEntityId: idStr, TargetLabel: entity.Title, Priority: JobPriorities.Probe));
                     if (FingerprintGating.ShouldFingerprint(settings, entityNeeds))
@@ -71,7 +83,7 @@ public sealed class RefreshEntityJobHandler(
                     if (entityNeeds.NeedsPreview)
                         jobRequests.Add(new EnqueueJobRequest(JobType.GenerateAudioWaveform, TargetEntityKind: entity.KindCode, TargetEntityId: idStr, TargetLabel: entity.Title, Priority: JobPriorities.Waveform));
                     break;
-                case "book-page":
+                case EntityKind.BookPage:
                     if (entityNeeds.NeedsPreview)
                         jobRequests.Add(new EnqueueJobRequest(JobType.GenerateBookPageThumbnail, TargetEntityKind: entity.KindCode, TargetEntityId: idStr, TargetLabel: entity.Title, Priority: JobPriorities.Thumbnail));
                     break;
@@ -87,5 +99,38 @@ public sealed class RefreshEntityJobHandler(
         }
 
         await context.ReportProgressAsync(100, $"Queued {jobRequests.Count} jobs", cancellationToken);
+    }
+
+    private async Task InvalidateChangedSubtitleSidecarsAsync(
+        IReadOnlyList<EntityRefreshTarget> tree,
+        CancellationToken cancellationToken) {
+        var targets = tree
+            .Where(entity =>
+                string.Equals(entity.KindCode, EntityKindRegistry.Video.Code, StringComparison.OrdinalIgnoreCase) &&
+                !string.IsNullOrWhiteSpace(entity.SourcePath))
+            .ToArray();
+        if (targets.Length == 0) {
+            return;
+        }
+
+        var sourcePaths = targets
+            .Select(target => target.SourcePath!)
+            .Distinct(FileSystemPathComparison.Comparer)
+            .ToArray();
+        var discoveries = await subtitleSidecars.DiscoverAsync(sourcePaths, cancellationToken);
+        var discoveryByPath = discoveries
+            .GroupBy(discovery => discovery.VideoPath, FileSystemPathComparison.Comparer)
+            .ToDictionary(group => group.Key, group => group.Last(), FileSystemPathComparison.Comparer);
+        var states = new List<VideoSubtitleSidecarState>(targets.Length);
+        foreach (var target in targets) {
+            if (!discoveryByPath.TryGetValue(target.SourcePath!, out var discovery) || !discovery.IsComplete) {
+                throw new IOException(
+                    "Adjacent subtitle discovery was incomplete; the entity refresh was not started.");
+            }
+
+            states.Add(new VideoSubtitleSidecarState(target.Id, discovery.Signature));
+        }
+
+        await videos.InvalidateSubtitleStateAsync(states, cancellationToken);
     }
 }

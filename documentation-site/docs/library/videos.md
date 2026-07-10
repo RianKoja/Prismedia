@@ -98,7 +98,25 @@ Sidecar values seed the entity at scan time; your in-app edits and provider iden
 
 ## Subtitles
 
-Subtitle tracks are extracted from the video's embedded streams (and managed/added in the player). See [Playback & Reading](../using/playback.md#subtitles).
+Prismedia extracts embedded subtitle streams and automatically discovers subtitle files beside a
+video. Name an SRT, VTT, ASS, or SSA file after the video, optionally followed by language or label
+tags:
+
+```text
+Movie.mkv
+Movie.en.srt
+Movie.pt-BR.forced.ass
+Movie.ai_translated.vtt
+```
+
+The normalized playback files and preserved ASS/SSA styling are copied into Prismedia's generated
+asset storage; the player never streams the live library sidecar. Incremental scans include these
+sidecars, so adding, editing, renaming, or removing one reconciles the video's tracks on the next
+scan. Multiple tracks may share a language.
+
+This discovery applies to sidecars already present beside media in a watched library. Acquisition
+imports do not yet move subtitle companion files from a download into the library. See
+[Playback & Reading](../using/playback.md#subtitles).
 
 ## Tips
 

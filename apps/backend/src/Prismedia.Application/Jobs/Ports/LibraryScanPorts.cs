@@ -79,10 +79,49 @@ public interface IVideoScanPersistence {
     Task<IReadOnlyList<VideoSourceOwner>> ListVideoSourceOwnersAsync(
         IReadOnlyCollection<string> filePaths,
         CancellationToken cancellationToken) => Task.FromResult<IReadOnlyList<VideoSourceOwner>>([]);
+
+    /// <summary>
+    /// Marks subtitle extraction incomplete for video owners whose successfully reconciled sidecar
+    /// signature differs from the files currently beside their source video. The successful signature
+    /// is advanced only by subtitle reconciliation, never by the scan that notices a change.
+    /// </summary>
+    Task InvalidateSubtitleStateAsync(
+        IReadOnlyCollection<VideoSubtitleSidecarState> states,
+        CancellationToken cancellationToken) => Task.CompletedTask;
+
+    /// <summary>
+    /// Lists every source-backed video under a library root so an unchanged scan can recover subtitle
+    /// extraction work that was cancelled or exhausted its retries after the detailed scan.
+    /// </summary>
+    Task<IReadOnlyList<VideoRefreshSourceTarget>> GetVideoTargetsInRootAsync(
+        Guid rootId,
+        CancellationToken cancellationToken) => Task.FromResult<IReadOnlyList<VideoRefreshSourceTarget>>([]);
+
+    /// <summary>
+    /// Loads every existing video under a root together with its downstream recovery state. The
+    /// persistence implementation evaluates the root as one set so unchanged scans do not repeat
+    /// the downstream-state query group for each materialization-sized batch.
+    /// </summary>
+    Task<IReadOnlyList<VideoRecoveryTarget>> GetVideoRecoveryTargetsInRootAsync(
+        Guid rootId,
+        CancellationToken cancellationToken);
 }
 
 /// <summary>One video Entity and the exact shared-or-exclusive Source path it owns.</summary>
 public sealed record VideoSourceOwner(Guid EntityId, string FilePath);
+
+/// <summary>Current sidecar-set signature for one video Entity owner.</summary>
+public sealed record VideoSubtitleSidecarState(Guid EntityId, string Signature);
+
+/// <summary>Existing source-backed video considered by an unchanged scan.</summary>
+public sealed record VideoRefreshSourceTarget(Guid Id, string Title, string SourcePath);
+
+/// <summary>Existing source-backed video and the downstream work an unchanged scan must recover.</summary>
+public sealed record VideoRecoveryTarget(
+    Guid Id,
+    string Title,
+    string SourcePath,
+    DownstreamNeeds Needs);
 
 /// <summary>Image and gallery scan persistence operations for discovered files and stale cleanup.</summary>
 public interface IImageGalleryScanPersistence {
@@ -314,6 +353,20 @@ public interface IMediaProcessingStatePersistence {
     Task UpsertSubtitleAsync(Guid entityId, string language, string? label, string format,
         EntitySubtitleSource source, string storagePath, string sourceFormat, int streamIndex, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Replaces Prismedia-managed embedded and sidecar subtitle tracks with the successfully
+    /// materialized extraction manifest. User uploads and provider/manual tracks are preserved.
+    /// The sidecar signature and extracted timestamp advance only when <paramref name="isComplete"/>
+    /// is true; a partial manifest remains explicitly eligible for retry.
+    /// </summary>
+    Task<SubtitleReconciliationResult> ReconcileManagedSubtitlesAsync(
+        Guid entityId,
+        string sidecarSignature,
+        IReadOnlyList<ManagedSubtitleTrackData> tracks,
+        bool isComplete,
+        CancellationToken cancellationToken) =>
+        throw new NotSupportedException("Managed subtitle reconciliation is not implemented.");
+
     Task UpsertAudioTrackTagsAsync(Guid entityId, string? artist, string? album, int? trackNumber, CancellationToken cancellationToken);
 
     Task<EntityTechnicalData?> GetEntityTechnicalAsync(Guid entityId, CancellationToken cancellationToken);
@@ -331,7 +384,33 @@ public interface IMediaProcessingStatePersistence {
     /// fresh probing chance.
     /// </summary>
     Task ClearProbeFailuresForPathsAsync(IReadOnlyCollection<string> sourcePaths, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Marks managed subtitle reconciliation incomplete for entities whose source media changed.
+    /// Sidecar-only paths do not match Source rows, while repaired/replaced videos receive a fresh
+    /// embedded-stream probe on the same scan that clears their probe-failure marker.
+    /// </summary>
+    Task ClearManagedSubtitleCompletionForPathsAsync(
+        IReadOnlyCollection<string> sourcePaths,
+        CancellationToken cancellationToken) => Task.CompletedTask;
 }
+
+/// <summary>One fully materialized subtitle track owned by Prismedia's extraction pipeline.</summary>
+public sealed record ManagedSubtitleTrackData(
+    EntitySubtitleSource Source,
+    string SourceKey,
+    string Language,
+    string? Label,
+    string Format,
+    string StoragePath,
+    string SourceFormat,
+    string? SourcePath,
+    bool IsDefault = false);
+
+/// <summary>Asset paths retained and retired by one subtitle reconciliation.</summary>
+public sealed record SubtitleReconciliationResult(
+    IReadOnlyList<string> RetainedAssetPaths,
+    IReadOnlyList<string> ObsoleteAssetPaths);
 
 /// <summary>Reads entity trees for refresh jobs that re-queue processing work.</summary>
 public interface IEntityRefreshTreePersistence {
@@ -633,7 +712,7 @@ public sealed record VideoSeasonScanInfo(string FolderPath, string Title, int Se
 /// <param name="MissingMd5">No stored MD5 fingerprint exists for the entity.</param>
 /// <param name="NeedsPreview">No preview asset (thumbnail, waveform, or animated image clip) exists yet.</param>
 /// <param name="NeedsTrickplay">No trickplay tiles exist yet.</param>
-/// <param name="NeedsSubtitleExtraction">Embedded subtitles have not been extracted yet.</param>
+/// <param name="NeedsSubtitleExtraction">Managed embedded/sidecar subtitles require reconciliation.</param>
 /// <param name="NeedsGridThumbnail">A cover exists but its small grid-card variant has not been generated yet.</param>
 public sealed record DownstreamNeeds(
     bool NeedsProbe,
@@ -650,4 +729,8 @@ public sealed record DownstreamNeeds(
 /// <param name="Id">Entity identifier.</param>
 /// <param name="KindCode">Entity kind code (e.g. "video", "image", "audio-track").</param>
 /// <param name="Title">Entity title for dashboard display.</param>
-public sealed record EntityRefreshTarget(Guid Id, string KindCode, string Title);
+/// <param name="SourcePath">
+/// Source-backed media path, when the entity owns one. Refresh handlers use this to inspect external
+/// companions before deciding which derived state must be rebuilt.
+/// </param>
+public sealed record EntityRefreshTarget(Guid Id, string KindCode, string Title, string? SourcePath = null);

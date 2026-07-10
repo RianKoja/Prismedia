@@ -21,8 +21,9 @@ namespace Prismedia.Application.Jobs.Handlers;
 /// </para>
 /// <para>
 /// Trade-off: because the signature only covers media files of the handler's categories, editing a
-/// metadata sidecar (for example a <c>.nfo</c>) without changing the media file is not detected by a
-/// no-change scan and is picked up on the next real change or via an explicit entity refresh.
+/// metadata sidecar is detected only when the concrete handler includes that sidecar category in
+/// <see cref="SnapshotCategories"/>. Entity-producing categories remain listed by
+/// <see cref="ScanCategories"/>.
 /// </para>
 /// </summary>
 public abstract class ScanJobHandler(
@@ -150,6 +151,7 @@ public abstract class ScanJobHandler(
         if (processingState is not null && (delta.Changed.Count > 0 || delta.Added.Count > 0)) {
             var touchedPaths = delta.Changed.Concat(delta.Added).Select(signature => signature.Path).ToList();
             await processingState.ClearProbeFailuresForPathsAsync(touchedPaths, cancellationToken);
+            await processingState.ClearManagedSubtitleCompletionForPathsAsync(touchedPaths, cancellationToken);
         }
 
         var outcome = await ScanRootCoreAsync(context, root, cancellationToken);
@@ -186,7 +188,7 @@ public abstract class ScanJobHandler(
     /// </summary>
     private async Task<IReadOnlyList<FileSignature>> EnumerateSignaturesAsync(
         LibraryRootData root, IReadOnlySet<string> excluded, CancellationToken cancellationToken) {
-        var categories = ScanCategories;
+        var categories = SnapshotCategories;
         if (categories.Count == 1) {
             return await fileDiscovery.DiscoverFileSignaturesAsync(
                 root.Path, categories[0], root.Recursive, excluded, cancellationToken);
@@ -213,6 +215,13 @@ public abstract class ScanJobHandler(
     /// and single-file books for the book scan).
     /// </summary>
     protected abstract IReadOnlyList<MediaCategory> ScanCategories { get; }
+
+    /// <summary>
+    /// File categories included in the incremental snapshot. Defaults to the categories that produce
+    /// entities, but a handler may add files it consumes as sidecars so changing only a sidecar still
+    /// enters the detailed reconciliation path.
+    /// </summary>
+    protected virtual IReadOnlyList<MediaCategory> SnapshotCategories => ScanCategories;
 
     /// <summary>
     /// Optionally enters a media-specific concurrency scope around one root's snapshot and detailed scan.

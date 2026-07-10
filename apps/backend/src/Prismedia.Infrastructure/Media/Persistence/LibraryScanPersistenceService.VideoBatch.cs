@@ -33,9 +33,14 @@ public sealed partial class LibraryScanPersistenceService {
         var paths = filePaths.Distinct(FileSystemPathComparison.Comparer).ToArray();
         var pathLengths = paths.Select(path => path.Length).Distinct().ToArray();
         var candidates = await _db.EntityFiles.AsNoTracking()
-            .Where(file => file.Role == EntityFileRole.Source
-                && pathLengths.Contains(file.Path.Length))
-            .Select(file => new VideoSourceOwner(file.EntityId, file.Path))
+            .Where(file => file.Role == EntityFileRole.Source &&
+                pathLengths.Contains(file.Path.Length))
+            .Join(
+                _db.Entities.AsNoTracking()
+                    .Where(entity => entity.KindCode == EntityKindRegistry.Video.Code),
+                file => file.EntityId,
+                entity => entity.Id,
+                (file, _) => new VideoSourceOwner(file.EntityId, file.Path))
             .ToArrayAsync(cancellationToken);
         return candidates.Where(owner => paths.Contains(owner.FilePath, FileSystemPathComparison.Comparer)).ToArray();
     }
@@ -104,6 +109,7 @@ public sealed partial class LibraryScanPersistenceService {
             .ToArrayAsync(cancellationToken);
         foreach (var detail in videoDetails) {
             detail.SubtitlesExtractedAt = null;
+            detail.SubtitleSidecarSignature = null;
         }
 
         var generatedRoles = new[] {

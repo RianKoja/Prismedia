@@ -29,4 +29,11 @@ public interface IMaintenancePersistence {
         EntityKind kind,
         Guid entityId,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Removes old app-owned subtitle cache files that no persisted subtitle row references.
+    /// A grace period protects generations that an active extraction has published but not committed.
+    /// </summary>
+    Task<int> CleanupOrphanedSubtitleAssetsAsync(CancellationToken cancellationToken) =>
+        Task.FromResult(0);
 }

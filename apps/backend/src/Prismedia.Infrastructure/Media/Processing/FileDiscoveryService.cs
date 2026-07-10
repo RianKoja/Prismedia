@@ -28,7 +28,14 @@ public sealed class FileDiscoveryService {
             return Task.FromResult<IReadOnlyList<string>>(results);
         }
 
-        WalkDirectory(rootPath, extensions, recursive, NormalizeExcludedPaths(excludedPaths), results.Add, cancellationToken);
+        WalkDirectory(
+            rootPath,
+            extensions,
+            recursive,
+            NormalizeExcludedPaths(excludedPaths),
+            skipGeneratedSuffixes: true,
+            onFile: results.Add,
+            cancellationToken: cancellationToken);
         results.Sort(StringComparer.OrdinalIgnoreCase);
         return Task.FromResult<IReadOnlyList<string>>(results);
     }
@@ -43,6 +50,26 @@ public sealed class FileDiscoveryService {
         IReadOnlySet<string> extensions,
         bool recursive,
         IReadOnlySet<string>? excludedPaths,
+        CancellationToken cancellationToken) =>
+        DiscoverFileSignaturesAsync(
+            rootPath,
+            extensions,
+            recursive,
+            excludedPaths,
+            skipGeneratedSuffixes: true,
+            cancellationToken: cancellationToken);
+
+    /// <summary>
+    /// Enumerates file signatures with explicit control over the generated-media filename filter.
+    /// Consumed sidecars opt out because words such as <c>sample</c> or <c>preview</c> are valid
+    /// descriptive subtitle tags, while entity-producing media keeps the generated-file guard.
+    /// </summary>
+    public Task<IReadOnlyList<FileSignature>> DiscoverFileSignaturesAsync(
+        string rootPath,
+        IReadOnlySet<string> extensions,
+        bool recursive,
+        IReadOnlySet<string>? excludedPaths,
+        bool skipGeneratedSuffixes,
         CancellationToken cancellationToken) {
         var results = new List<FileSignature>();
 
@@ -50,7 +77,7 @@ public sealed class FileDiscoveryService {
             return Task.FromResult<IReadOnlyList<FileSignature>>(results);
         }
 
-        WalkDirectory(rootPath, extensions, recursive, NormalizeExcludedPaths(excludedPaths), file => {
+        WalkDirectory(rootPath, extensions, recursive, NormalizeExcludedPaths(excludedPaths), skipGeneratedSuffixes, file => {
             try {
                 var info = new FileInfo(file);
                 results.Add(new FileSignature(file, info.Length, info.LastWriteTimeUtc.Ticks));
@@ -81,7 +108,14 @@ public sealed class FileDiscoveryService {
                 new Dictionary<string, IReadOnlyList<string>>(FileSystemPathComparison.Comparer));
         }
 
-        WalkDirectory(rootPath, extensions, recursive, NormalizeExcludedPaths(excludedPaths), allFiles.Add, cancellationToken);
+        WalkDirectory(
+            rootPath,
+            extensions,
+            recursive,
+            NormalizeExcludedPaths(excludedPaths),
+            skipGeneratedSuffixes: true,
+            onFile: allFiles.Add,
+            cancellationToken: cancellationToken);
 
         var grouped = new Dictionary<string, IReadOnlyList<string>>(FileSystemPathComparison.Comparer);
 
@@ -100,6 +134,7 @@ public sealed class FileDiscoveryService {
         IReadOnlySet<string> extensions,
         bool recursive,
         IReadOnlySet<string> excludedPaths,
+        bool skipGeneratedSuffixes,
         Action<string> onFile,
         CancellationToken cancellationToken) {
         cancellationToken.ThrowIfCancellationRequested();
@@ -118,7 +153,7 @@ public sealed class FileDiscoveryService {
                     continue;
 
                 var nameWithoutExt = Path.GetFileNameWithoutExtension(file);
-                if (SupportedExtensions.IsGeneratedSuffix(nameWithoutExt))
+                if (skipGeneratedSuffixes && SupportedExtensions.IsGeneratedSuffix(nameWithoutExt))
                     continue;
 
                 onFile(file);
@@ -136,7 +171,14 @@ public sealed class FileDiscoveryService {
                 if (dirName.StartsWith('.'))
                     continue;
 
-                WalkDirectory(subDir, extensions, recursive, excludedPaths, onFile, cancellationToken);
+                WalkDirectory(
+                    subDir,
+                    extensions,
+                    recursive,
+                    excludedPaths,
+                    skipGeneratedSuffixes,
+                    onFile,
+                    cancellationToken);
             }
         } catch (UnauthorizedAccessException) {
             // skip inaccessible directories silently

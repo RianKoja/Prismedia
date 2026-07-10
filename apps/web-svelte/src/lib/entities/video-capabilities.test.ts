@@ -105,6 +105,39 @@ describe("extractVideoPlayerProps", () => {
     });
   });
 
+  it("revises subtitle endpoint identity when sidecar content changes", () => {
+    const sourceToken = "a".repeat(32);
+    const firstContentToken = "b".repeat(32);
+    const secondContentToken = "c".repeat(32);
+    const subtitleCapability = (contentToken: string): EntityCapability => ({
+      kind: "subtitles",
+      items: [
+        {
+          id: "track-1",
+          language: "eng",
+          label: null,
+          format: "vtt",
+          source: "sidecar",
+          storagePath: `/tmp/cache/videos/video-1/subtitles/sidecar-${sourceToken}-${contentToken}.vtt`,
+          sourceFormat: "vtt",
+          sourcePath: null,
+          isDefault: false,
+        },
+      ],
+    });
+
+    const firstUrl = extractVideoPlayerProps("video-1", [
+      subtitleCapability(firstContentToken),
+    ]).subtitleTracks[0]?.url;
+    const secondUrl = extractVideoPlayerProps("video-1", [
+      subtitleCapability(secondContentToken),
+    ]).subtitleTracks[0]?.url;
+
+    expect(firstUrl).toBe(`/api/videos/video-1/subtitles/track-1?v=${firstContentToken}`);
+    expect(secondUrl).toBe(`/api/videos/video-1/subtitles/track-1?v=${secondContentToken}`);
+    expect(secondUrl).not.toBe(firstUrl);
+  });
+
   it("uses the advertised trickplay image playlist instead of guessing a fixed width", () => {
     const capabilities: EntityCapability[] = [
       {

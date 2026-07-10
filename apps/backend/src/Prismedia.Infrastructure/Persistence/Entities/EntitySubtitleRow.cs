@@ -15,6 +15,8 @@ public sealed class EntitySubtitleRow {
 
     public EntitySubtitleSource Source { get; set; } = EntitySubtitleSource.Manual;
 
+    public string SourceKey { get; set; } = string.Empty;
+
     public string StoragePath { get; set; } = string.Empty;
 
     public string SourceFormat { get; set; } = string.Empty;

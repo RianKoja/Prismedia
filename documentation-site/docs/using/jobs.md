@@ -22,7 +22,7 @@ The worker heartbeat badge tells you whether the .NET worker is online. If the A
 | **Media probe** | Read technical metadata: duration, dimensions, codecs, audio info, embedded tags. |
 | **Preview** | Generate thumbnails, sprites, trickplay tiles, and waveforms. |
 | **HLS** | Create adaptive playback assets on demand. |
-| **Subtitles** | Extract embedded subtitles and normalize tracks. |
+| **Subtitles** | Extract embedded subtitles, import adjacent SRT/VTT/ASS/SSA files, and reconcile normalized tracks. |
 | **Identify** | Provider searches, bulk identify, and cascade child resolution. |
 | **Collections** | Refresh dynamic and hybrid collection rules. |
 | **Maintenance** | Cleanup and diagnostic backfills. |

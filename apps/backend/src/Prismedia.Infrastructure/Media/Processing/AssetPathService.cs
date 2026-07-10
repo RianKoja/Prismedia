@@ -1,3 +1,6 @@
+using Prismedia.Application.Files;
+using Prismedia.Contracts.Media;
+
 namespace Prismedia.Infrastructure.Media.Processing;
 
 /// <summary>
@@ -82,6 +85,95 @@ public sealed class AssetPathService {
     public string SubtitleDir(Guid entityId) =>
         Path.Combine(_cacheRoot, "videos", entityId.ToString(), "subtitles");
 
+    /// <summary>
+    /// Creates the entity subtitle directory one component at a time while rejecting any existing
+    /// cache component that is a filesystem link. This avoids recursive creation traversing a
+    /// planted <c>videos</c>, entity, or <c>subtitles</c> symlink.
+    /// </summary>
+    public string EnsureSubtitleDirectorySafe(Guid entityId) {
+        EnsureOrdinaryDirectory(_cacheRoot, createIfMissing: true);
+        var current = _cacheRoot;
+        foreach (var segment in new[] { "videos", entityId.ToString(), "subtitles" }) {
+            current = Path.Combine(current, segment);
+            EnsureOrdinaryDirectory(current, createIfMissing: true);
+        }
+
+        return current;
+    }
+
+    /// <summary>Same-filesystem staging directory for one atomic subtitle import.</summary>
+    public string SubtitleStagingDir(Guid entityId, Guid operationId) =>
+        Path.Combine(SubtitleDir(entityId), $".staging-{operationId:N}");
+
+    /// <summary>
+    /// Computes paired content-versioned sidecar asset paths from already-safe hash tokens.
+    /// </summary>
+    public SubtitleAssetPaths SidecarSubtitlePaths(
+        Guid entityId,
+        string sourceToken,
+        string contentToken,
+        string sourceFormat) {
+        ArgumentException.ThrowIfNullOrWhiteSpace(sourceToken);
+        ArgumentException.ThrowIfNullOrWhiteSpace(contentToken);
+        if (!IsLowerHexToken(sourceToken) || !IsLowerHexToken(contentToken)) {
+            throw new ArgumentException("Subtitle asset tokens must contain lowercase hexadecimal characters only.");
+        }
+
+        var stem = $"sidecar-{sourceToken}-{contentToken}";
+        var normalizedPath = Path.Combine(SubtitleDir(entityId), stem + SubtitleFileExtensions.Vtt);
+        var sourcePath = SubtitleFormats.IsStyled(sourceFormat)
+            ? Path.Combine(SubtitleDir(entityId), stem + SubtitleFileExtensions.ForFormat(sourceFormat))
+            : null;
+        return new SubtitleAssetPaths(normalizedPath, sourcePath);
+    }
+
+    /// <summary>
+    /// Whether a path is an exact generated subtitle file directly inside one video's subtitle directory.
+    /// </summary>
+    public bool IsSubtitleAssetPath(Guid entityId, string path) {
+        if (string.IsNullOrWhiteSpace(path) || !Path.IsPathRooted(path)) {
+            return false;
+        }
+
+        try {
+            var fullPath = Path.GetFullPath(path);
+            var expectedDirectory = Path.GetFullPath(SubtitleDir(entityId));
+            return FileSystemPathComparison.Equals(
+                Path.GetDirectoryName(fullPath) ?? string.Empty,
+                expectedDirectory) &&
+                HasOrdinaryDirectoryChain(expectedDirectory);
+        } catch (Exception exception) when (exception is ArgumentException or NotSupportedException or PathTooLongException) {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Whether a path is an exact generated subtitle file for any video under the configured cache root.
+    /// </summary>
+    public bool IsSubtitleAssetPath(string path) {
+        if (string.IsNullOrWhiteSpace(path) || !Path.IsPathRooted(path)) {
+            return false;
+        }
+
+        try {
+            var fullPath = Path.GetFullPath(path);
+            if (!FileSystemPathComparison.IsSameOrDescendant(_cacheRoot, fullPath)) {
+                return false;
+            }
+
+            var segments = Path.GetRelativePath(_cacheRoot, fullPath)
+                .Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries);
+            return segments.Length == 4 &&
+                string.Equals(segments[0], "videos", StringComparison.Ordinal) &&
+                Guid.TryParse(segments[1], out var entityId) &&
+                string.Equals(segments[2], "subtitles", StringComparison.Ordinal) &&
+                !string.IsNullOrWhiteSpace(segments[3]) &&
+                IsSubtitleAssetPath(entityId, fullPath);
+        } catch (Exception exception) when (exception is ArgumentException or NotSupportedException or PathTooLongException) {
+            return false;
+        }
+    }
+
     public static string VideoThumbnailUrl(Guid entityId) =>
         $"/assets/videos/{entityId}/thumb.jpg";
 
@@ -117,4 +209,55 @@ public sealed class AssetPathService {
 
     public static string SubtitleUrl(Guid entityId, string fileName) =>
         $"/assets/videos/{entityId}/subtitles/{fileName}";
+
+    private static bool IsLowerHexToken(string value) =>
+        value.All(character => character is >= '0' and <= '9' or >= 'a' and <= 'f');
+
+    private bool HasOrdinaryDirectoryChain(string targetDirectory) {
+        var root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(_cacheRoot));
+        if (!IsOrdinaryDirectory(root)) {
+            return false;
+        }
+
+        var relative = Path.GetRelativePath(root, targetDirectory);
+        if (relative == "." || Path.IsPathRooted(relative) || relative.StartsWith("..", StringComparison.Ordinal)) {
+            return relative == ".";
+        }
+
+        var current = root;
+        foreach (var segment in relative.Split(
+                     Path.DirectorySeparatorChar,
+                     StringSplitOptions.RemoveEmptyEntries)) {
+            current = Path.Combine(current, segment);
+            if (!IsOrdinaryDirectory(current)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static void EnsureOrdinaryDirectory(string path, bool createIfMissing) {
+        if (!Directory.Exists(path) && createIfMissing) {
+            Directory.CreateDirectory(path);
+        }
+
+        if (!IsOrdinaryDirectory(path)) {
+            throw new IOException("Generated subtitle cache directories must be ordinary directories, not filesystem links.");
+        }
+    }
+
+    private static bool IsOrdinaryDirectory(string path) {
+        try {
+            var attributes = File.GetAttributes(path);
+            return attributes.HasFlag(FileAttributes.Directory) &&
+                !attributes.HasFlag(FileAttributes.ReparsePoint);
+        } catch (Exception exception) when (
+            exception is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException) {
+            return false;
+        }
+    }
 }
+
+/// <summary>Paired normalized and optional styled-source subtitle cache paths.</summary>
+public sealed record SubtitleAssetPaths(string StoragePath, string? SourcePath);

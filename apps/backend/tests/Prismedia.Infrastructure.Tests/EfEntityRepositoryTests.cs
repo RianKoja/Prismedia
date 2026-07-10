@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Prismedia.Application.Entities;
 using Prismedia.Application.Plugins;
+using Prismedia.Contracts.Media;
 using Prismedia.Domain.Capabilities;
 using Prismedia.Domain.Entities;
 using Prismedia.Domain.Media;
@@ -148,7 +149,7 @@ public sealed class EfEntityRepositoryTests {
         video.SetExternalId("tmdb", "42", "https://tmdb.test/42");
         var subtitlePath = Path.GetTempFileName();
         Set(video, new CapabilitySubtitles([new CapabilitySubtitles.Item(
-            Guid.NewGuid(), "en", "English", "srt", EntitySubtitleSource.Embedded, subtitlePath, "srt", null, true)]));
+            Guid.NewGuid(), "en", "English", "srt", EntitySubtitleSource.Manual, subtitlePath, "srt", null, true)]));
         Set(video, new CapabilityFingerprints([new CapabilityFingerprints.Item(FingerprintAlgorithm.Md5, "deadbeef")]));
         Set(video, new CapabilityClassification("R", "MPAA"));
         Set(video, new CapabilityProgress(currentEntityId: null, unit: ProgressUnit.Chapter, index: 4, total: 10, mode: ReaderMode.Paged, updatedAt: DateTimeOffset.UtcNow));
@@ -175,6 +176,137 @@ public sealed class EfEntityRepositoryTests {
         Assert.Equal(10, loaded.Progress!.Total);
 
         File.Delete(subtitlePath);
+    }
+
+    [Fact]
+    public async Task UnrelatedEntitySavePreservesMissingManagedSubtitleForRecovery() {
+        var subtitlePath = Path.GetTempFileName();
+        try {
+            await using var db = CreateContext();
+            var videoId = Guid.NewGuid();
+            var subtitleId = Guid.NewGuid();
+            SeedEntity(db, videoId, EntityKind.Video, "Stable subtitles");
+            db.VideoDetails.Add(new VideoDetailRow {
+                EntityId = videoId,
+                SubtitlesExtractedAt = DateTimeOffset.UtcNow
+            });
+            db.EntitySubtitles.Add(new EntitySubtitleRow {
+                Id = subtitleId,
+                EntityId = videoId,
+                Language = "eng",
+                Format = "vtt",
+                Source = EntitySubtitleSource.Embedded,
+                SourceKey = SubtitleSourceKeys.EmbeddedStream(7),
+                StoragePath = subtitlePath,
+                SourceFormat = "subrip",
+                SourcePath = "7",
+                CreatedAt = DateTimeOffset.UtcNow
+            });
+            await db.SaveChangesAsync();
+            var repository = new EfEntityRepository(
+                db,
+                TestUserContext.Admin(),
+                EntityMappers.Kinds(db),
+                EntityMappers.Capabilities(db, TestUserContext.Admin()));
+
+            var video = await repository.RequireAsync<Video>(videoId, CancellationToken.None);
+            File.Delete(subtitlePath);
+            video.Rate(4);
+            await repository.SaveAsync(video, CancellationToken.None);
+
+            var row = Assert.Single(await db.EntitySubtitles.AsNoTracking()
+                .Where(subtitle => subtitle.EntityId == videoId)
+                .ToArrayAsync());
+            Assert.Equal(subtitleId, row.Id);
+            Assert.Equal(SubtitleSourceKeys.EmbeddedStream(7), row.SourceKey);
+            var needs = await new Prismedia.Infrastructure.Media.Persistence.LibraryScanPersistenceService(db)
+                .CheckDownstreamNeedsBatchAsync([videoId], CancellationToken.None);
+            Assert.True(needs[videoId].NeedsSubtitleExtraction);
+        } finally {
+            File.Delete(subtitlePath);
+        }
+    }
+
+    [Fact]
+    public async Task StaleEntitySaveCannotOverwriteManagedSubtitlePipelineState() {
+        var databaseName = $"subtitle-race-{Guid.NewGuid():N}";
+        var oldPath = Path.GetTempFileName();
+        var newPath = Path.GetTempFileName();
+        var addedPath = Path.GetTempFileName();
+        try {
+            var videoId = Guid.NewGuid();
+            var embeddedId = Guid.NewGuid();
+            var sidecarId = Guid.NewGuid();
+            var originalTimestamp = DateTimeOffset.UtcNow.AddHours(-2);
+            await using (var setup = CreateContext(databaseName)) {
+                SeedEntity(setup, videoId, EntityKind.Video, "Concurrent subtitles");
+                setup.VideoDetails.Add(new VideoDetailRow {
+                    EntityId = videoId,
+                    SubtitlesExtractedAt = originalTimestamp,
+                    SubtitleSidecarSignature = new string('a', 64)
+                });
+                setup.EntitySubtitles.Add(new EntitySubtitleRow {
+                    Id = embeddedId,
+                    EntityId = videoId,
+                    Language = "en",
+                    Format = SubtitleFormats.Vtt,
+                    Source = EntitySubtitleSource.Embedded,
+                    SourceKey = SubtitleSourceKeys.EmbeddedStream(3),
+                    StoragePath = oldPath,
+                    SourceFormat = SubtitleFormats.Srt,
+                    SourcePath = "3",
+                    CreatedAt = originalTimestamp
+                });
+                await setup.SaveChangesAsync();
+            }
+
+            await using var staleContext = CreateContext(databaseName);
+            var staleRepository = new EfEntityRepository(
+                staleContext,
+                TestUserContext.Admin(),
+                EntityMappers.Kinds(staleContext),
+                EntityMappers.Capabilities(staleContext, TestUserContext.Admin()));
+            var staleVideo = await staleRepository.RequireAsync<Video>(videoId, CancellationToken.None);
+
+            await using (var pipeline = CreateContext(databaseName)) {
+                var detail = await pipeline.VideoDetails.FindAsync([videoId]);
+                detail!.SubtitlesExtractedAt = null;
+                var embedded = await pipeline.EntitySubtitles.FindAsync([embeddedId]);
+                embedded!.StoragePath = newPath;
+                pipeline.EntitySubtitles.Add(new EntitySubtitleRow {
+                    Id = sidecarId,
+                    EntityId = videoId,
+                    Language = "fr",
+                    Format = SubtitleFormats.Vtt,
+                    Source = EntitySubtitleSource.Sidecar,
+                    SourceKey = new string('b', 64),
+                    StoragePath = addedPath,
+                    SourceFormat = SubtitleFormats.Srt,
+                    CreatedAt = DateTimeOffset.UtcNow
+                });
+                await pipeline.SaveChangesAsync();
+            }
+
+            staleVideo.Rate(4);
+            await staleRepository.SaveAsync(staleVideo, CancellationToken.None);
+
+            await using var verification = CreateContext(databaseName);
+            var currentDetail = await verification.VideoDetails.AsNoTracking()
+                .SingleAsync(row => row.EntityId == videoId);
+            Assert.Null(currentDetail.SubtitlesExtractedAt);
+            Assert.Equal(new string('a', 64), currentDetail.SubtitleSidecarSignature);
+            var currentRows = await verification.EntitySubtitles.AsNoTracking()
+                .Where(row => row.EntityId == videoId)
+                .OrderBy(row => row.Id)
+                .ToArrayAsync();
+            Assert.Equal(2, currentRows.Length);
+            Assert.Equal(newPath, Assert.Single(currentRows, row => row.Id == embeddedId).StoragePath);
+            Assert.Equal(addedPath, Assert.Single(currentRows, row => row.Id == sidecarId).StoragePath);
+        } finally {
+            File.Delete(oldPath);
+            File.Delete(newPath);
+            File.Delete(addedPath);
+        }
     }
 
     [Fact]
@@ -541,9 +673,9 @@ public sealed class EfEntityRepositoryTests {
         await Assert.ThrowsAsync<InvalidOperationException>(() => repository.RequireAsync<Video>(id, CancellationToken.None));
     }
 
-    private static PrismediaDbContext CreateContext() =>
+    private static PrismediaDbContext CreateContext(string? databaseName = null) =>
         new(new DbContextOptionsBuilder<PrismediaDbContext>()
-            .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .UseInMemoryDatabase(databaseName ?? Guid.NewGuid().ToString())
             .Options);
 
     private static void SeedEntity(

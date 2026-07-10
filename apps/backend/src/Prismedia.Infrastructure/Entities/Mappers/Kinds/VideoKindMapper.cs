@@ -20,13 +20,16 @@ internal sealed class VideoKindMapper(PrismediaDbContext db) : IEntityKindMapper
     }
 
     public async Task PersistDetailAsync(Entity entity, CancellationToken cancellationToken) {
-        if (entity is not Video video) {
+        if (entity is not Video) {
             return;
         }
 
-        var row = await db.VideoDetails.FindAsync([entity.Id], cancellationToken)
-            ?? Track(new VideoDetailRow { EntityId = entity.Id });
-        row.SubtitlesExtractedAt = video.SubtitleCapability?.ExtractedAt;
+        // Managed subtitle lifecycle state is written only by the extraction pipeline. Generic
+        // Entity saves (ratings, progress, metadata edits) may carry a stale hydrated timestamp and
+        // must never overwrite an invalidation or a newer reconciliation from another DbContext.
+        if (await db.VideoDetails.FindAsync([entity.Id], cancellationToken) is null) {
+            Track(new VideoDetailRow { EntityId = entity.Id });
+        }
     }
 
     public IEntityCard ProjectDetail(

@@ -1,6 +1,9 @@
 using Microsoft.EntityFrameworkCore;
+using Prismedia.Application.Files;
 using Prismedia.Application.Jobs.Ports;
+using Prismedia.Contracts.Media;
 using Prismedia.Domain.Entities;
+using Prismedia.Infrastructure.Media.Processing;
 using Prismedia.Infrastructure.Persistence;
 using Prismedia.Infrastructure.Videos;
 
@@ -9,7 +12,10 @@ namespace Prismedia.Infrastructure.Media.Persistence;
 /// <summary>
 /// Infrastructure adapter for <see cref="IMaintenancePersistence"/>.
 /// </summary>
-public sealed class MaintenancePersistenceService(PrismediaDbContext db, string dataDir) : IMaintenancePersistence {
+public sealed class MaintenancePersistenceService(
+    PrismediaDbContext db,
+    AssetPathService assets) : IMaintenancePersistence {
+    private static readonly TimeSpan SubtitleOrphanGracePeriod = TimeSpan.FromHours(1);
     private static readonly EntityFileRole[] GeneratedVideoPreviewRoles =
     [
         EntityFileRole.Thumbnail,
@@ -30,7 +36,69 @@ public sealed class MaintenancePersistenceService(PrismediaDbContext db, string 
             .Select(e => e.Id)
             .ToListAsync(cancellationToken);
 
-    public string GetCacheBasePath() => Path.Combine(dataDir, "cache");
+    public string GetCacheBasePath() => assets.CacheRoot;
+
+    /// <inheritdoc />
+    public async Task<int> CleanupOrphanedSubtitleAssetsAsync(CancellationToken cancellationToken) {
+        var rows = await db.EntitySubtitles.AsNoTracking()
+            .Select(subtitle => new {
+                subtitle.Source,
+                subtitle.StoragePath,
+                subtitle.SourceFormat,
+                subtitle.SourcePath
+            })
+            .ToArrayAsync(cancellationToken);
+        var retained = new HashSet<string>(FileSystemPathComparison.Comparer);
+        foreach (var row in rows) {
+            AddRootedPath(row.StoragePath, retained);
+            AddRootedPath(row.SourcePath, retained);
+            if (row.Source == EntitySubtitleSource.Embedded &&
+                SubtitleFormats.IsStyled(row.SourceFormat) &&
+                Path.IsPathRooted(row.StoragePath)) {
+                AddRootedPath(
+                    Path.ChangeExtension(
+                        row.StoragePath,
+                        SubtitleFileExtensions.ForFormat(row.SourceFormat)),
+                    retained);
+            }
+        }
+
+        var videosDirectory = Path.Combine(assets.CacheRoot, "videos");
+        if (!IsOrdinaryDirectory(videosDirectory)) {
+            return 0;
+        }
+
+        var removed = 0;
+        var cutoff = DateTime.UtcNow - SubtitleOrphanGracePeriod;
+        foreach (var entityDirectory in TryEnumerateDirectories(videosDirectory)) {
+            cancellationToken.ThrowIfCancellationRequested();
+            var subtitleDirectory = Path.Combine(entityDirectory, "subtitles");
+            if (!IsOrdinaryDirectory(entityDirectory) || !IsOrdinaryDirectory(subtitleDirectory)) {
+                continue;
+            }
+
+            foreach (var path in TryEnumerateFiles(subtitleDirectory)) {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (retained.Contains(path) || !assets.IsSubtitleAssetPath(path)) {
+                    continue;
+                }
+
+                try {
+                    if (File.GetLastWriteTimeUtc(path) > cutoff) {
+                        continue;
+                    }
+
+                    File.Delete(path);
+                    removed++;
+                } catch (Exception exception) when (
+                    exception is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException) {
+                    // Maintenance is best effort; a later pass retries any inaccessible generation.
+                }
+            }
+        }
+
+        return removed;
+    }
 
     public async Task ClearGeneratedPreviewAssetsAsync(
         EntityKind kind,
@@ -62,6 +130,48 @@ public sealed class MaintenancePersistenceService(PrismediaDbContext db, string 
             EntityKind.AudioTrack => GeneratedAudioPreviewRoles,
             _ => []
         };
+
+    private static void AddRootedPath(string? path, ISet<string> paths) {
+        if (string.IsNullOrWhiteSpace(path) || !Path.IsPathRooted(path)) {
+            return;
+        }
+
+        try {
+            paths.Add(Path.GetFullPath(path));
+        } catch (Exception exception) when (
+            exception is ArgumentException or NotSupportedException or PathTooLongException) {
+            // Malformed historical rows do not authorize retaining an arbitrary cache file.
+        }
+    }
+
+    private static bool IsOrdinaryDirectory(string path) {
+        try {
+            var attributes = File.GetAttributes(path);
+            return attributes.HasFlag(FileAttributes.Directory) &&
+                !attributes.HasFlag(FileAttributes.ReparsePoint);
+        } catch (Exception exception) when (
+            exception is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException) {
+            return false;
+        }
+    }
+
+    private static IReadOnlyList<string> TryEnumerateDirectories(string path) {
+        try {
+            return Directory.GetDirectories(path);
+        } catch (Exception exception) when (
+            exception is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException) {
+            return [];
+        }
+    }
+
+    private static IReadOnlyList<string> TryEnumerateFiles(string path) {
+        try {
+            return Directory.GetFiles(path);
+        } catch (Exception exception) when (
+            exception is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException) {
+            return [];
+        }
+    }
 
     private void DeleteGeneratedPreviewFiles(EntityKind kind, Guid entityId) {
         var cacheBase = GetCacheBasePath();

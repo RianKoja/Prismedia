@@ -25,6 +25,7 @@ public sealed class ScanLibraryJobHandler(
     IScanMetadataPersistence? scanMetadata = null,
     IAcquisitionHintApplier? acquisitionHints = null,
     IMediaProcessingStatePersistence? processingState = null,
+    ISubtitleSidecarDiscovery? subtitleSidecars = null,
     VideoScanConcurrencyGate? scanGate = null)
     : ScanJobHandler(logger, fileDiscovery, roots, snapshots, processingState) {
     private const int BatchSize = 50;
@@ -44,14 +45,19 @@ public sealed class ScanLibraryJobHandler(
 
     protected override IReadOnlyList<MediaCategory> ScanCategories => [MediaCategory.Video];
 
+    protected override IReadOnlyList<MediaCategory> SnapshotCategories =>
+        [MediaCategory.Video, MediaCategory.VideoSubtitleSidecar];
+
     protected override async ValueTask<IAsyncDisposable?> EnterScanScopeAsync(
         LibraryRootData root, CancellationToken cancellationToken) =>
         scanGate is null ? null : await scanGate.EnterAsync(cancellationToken);
 
-    protected override Task OnNoFileChangesAsync(
-        JobContext context, LibraryRootData root, CancellationToken cancellationToken) =>
-        AutoIdentifyScanEnqueue.EnqueueExistingRootsForUnchangedScanAsync(
+    protected override async Task OnNoFileChangesAsync(
+        JobContext context, LibraryRootData root, CancellationToken cancellationToken) {
+        await AutoIdentifyScanEnqueue.EnqueueExistingRootsForUnchangedScanAsync(
             context, Roots, downstreamNeeds, root, ScanCategories, cancellationToken);
+        await EnqueueExistingVideoJobsAsync(context, root, cancellationToken);
+    }
 
     /// <summary>
     /// Materializes only one movie import's exact files through the video scanner's canonical
@@ -113,14 +119,21 @@ public sealed class ScanLibraryJobHandler(
             }
         }
 
-        var needs = await downstreamNeeds.CheckDownstreamNeedsBatchAsync(entityIds, cancellationToken);
+        var downstreamTargets = await ResolveVideoSourceOwnersAsync(
+            entityIds.ToList(),
+            persistedItems.Select(item => item.FilePath).ToList(),
+            files,
+            cancellationToken);
+        await InvalidateChangedSidecarsAsync(downstreamTargets, cancellationToken);
+        var downstreamIds = downstreamTargets.Select(target => target.EntityId).Distinct().ToArray();
+        var needs = await downstreamNeeds.CheckDownstreamNeedsBatchAsync(downstreamIds, cancellationToken);
         var downstreamJobs = new List<EnqueueJobRequest>();
-        for (var index = 0; index < entityIds.Count; index++) {
-            if (needs.TryGetValue(entityIds[index], out var entityNeeds)) {
+        foreach (var target in downstreamTargets) {
+            if (needs.TryGetValue(target.EntityId, out var entityNeeds)) {
                 downstreamJobs.AddRange(VideoDownstreamJobPlanner.Build(
                     settings,
-                    entityIds[index],
-                    persistedItems[index].FilePath,
+                    target.EntityId,
+                    target.FilePath,
                     entityNeeds));
             }
         }
@@ -232,9 +245,19 @@ public sealed class ScanLibraryJobHandler(
         }
 
         using (timer.Phase("enqueue")) {
-            for (var batchStart = 0; batchStart < allEntityIds.Count; batchStart += BatchSize) {
-                var batchEnd = Math.Min(batchStart + BatchSize, allEntityIds.Count);
-                var batchIds = allEntityIds.GetRange(batchStart, batchEnd - batchStart);
+            var downstreamTargets = await ResolveVideoSourceOwnersAsync(
+                allEntityIds,
+                scannedPaths,
+                files,
+                cancellationToken);
+            await InvalidateChangedSidecarsAsync(downstreamTargets, cancellationToken);
+            allEntityIds.Clear();
+            allEntityIds.AddRange(downstreamTargets.Select(target => target.EntityId).Distinct());
+
+            for (var batchStart = 0; batchStart < downstreamTargets.Count; batchStart += BatchSize) {
+                var batchEnd = Math.Min(batchStart + BatchSize, downstreamTargets.Count);
+                var batchTargets = downstreamTargets.GetRange(batchStart, batchEnd - batchStart);
+                var batchIds = batchTargets.Select(target => target.EntityId).ToList();
 
                 var needs = await downstreamNeeds.CheckDownstreamNeedsBatchAsync(batchIds, cancellationToken);
                 var jobRequests = new List<EnqueueJobRequest>();
@@ -245,7 +268,7 @@ public sealed class ScanLibraryJobHandler(
                         jobRequests.AddRange(VideoDownstreamJobPlanner.Build(
                             settings,
                             entityId,
-                            scannedPaths[batchStart + i],
+                            batchTargets[i].FilePath,
                             entityNeeds));
                     }
                 }
@@ -256,8 +279,8 @@ public sealed class ScanLibraryJobHandler(
                 }
 
                 await context.ReportProgressAsync(
-                    60 + (batchEnd * 30 / allEntityIds.Count),
-                    $"Enqueued downstream for {batchEnd}/{allEntityIds.Count}", cancellationToken);
+                    60 + (batchEnd * 30 / downstreamTargets.Count),
+                    $"Enqueued downstream for {batchEnd}/{downstreamTargets.Count}", cancellationToken);
             }
         }
 
@@ -307,6 +330,83 @@ public sealed class ScanLibraryJobHandler(
             root.Label, files.Count, removed, orphans, report.ToLogString());
 
         return failedPaths.Count == 0 ? ScanRootOutcome.Success : new ScanRootOutcome(failedPaths);
+    }
+
+    private async Task<List<VideoSourceOwner>> ResolveVideoSourceOwnersAsync(
+        IReadOnlyList<Guid> positionalEntityIds,
+        IReadOnlyList<string> positionalPaths,
+        IReadOnlyList<string> ownerLookupPaths,
+        CancellationToken cancellationToken) {
+        var persistedOwners = await videos.ListVideoSourceOwnersAsync(
+            ownerLookupPaths.Distinct(FileSystemPathComparison.Comparer).ToArray(),
+            cancellationToken);
+        var positionalOwners = positionalEntityIds
+            .Zip(positionalPaths, (id, path) => new VideoSourceOwner(id, path));
+
+        // Query every discovered source path, including files whose upsert failed. An existing owner
+        // still needs sidecar invalidation/queueing on a sidecar-only delta; otherwise the sidecar
+        // snapshot could advance while that owner's completed state remains stale. Positional owners
+        // cover minimal/fake persistence implementations that do not return freshly inserted rows.
+        return persistedOwners
+            .Concat(positionalOwners)
+            .GroupBy(owner => owner.EntityId)
+            .SelectMany(group => group
+                .DistinctBy(owner => owner.FilePath, FileSystemPathComparison.Comparer))
+            .OrderBy(owner => owner.FilePath, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(owner => owner.EntityId)
+            .ToList();
+    }
+
+    private async Task InvalidateChangedSidecarsAsync(
+        IReadOnlyList<VideoSourceOwner> targets,
+        CancellationToken cancellationToken) {
+        if (subtitleSidecars is null || targets.Count == 0) {
+            return;
+        }
+
+        var discoveries = await subtitleSidecars.DiscoverAsync(
+            targets.Select(target => target.FilePath)
+                .Distinct(FileSystemPathComparison.Comparer)
+                .ToArray(),
+            cancellationToken);
+        var states = new List<VideoSubtitleSidecarState>(targets.Count);
+        foreach (var target in targets) {
+            var discovery = discoveries.FirstOrDefault(result =>
+                FileSystemPathComparison.Equals(result.VideoPath, target.FilePath));
+            if (discovery is null || !discovery.IsComplete) {
+                throw new IOException(
+                    "Adjacent subtitle discovery was incomplete; the scan snapshot was not advanced.");
+            }
+
+            states.Add(new VideoSubtitleSidecarState(target.EntityId, discovery.Signature));
+        }
+
+        await videos.InvalidateSubtitleStateAsync(states, cancellationToken);
+    }
+
+    private async Task EnqueueExistingVideoJobsAsync(
+        JobContext context,
+        LibraryRootData root,
+        CancellationToken cancellationToken) {
+        var targets = await videos.GetVideoRecoveryTargetsInRootAsync(root.Id, cancellationToken);
+        if (targets.Count == 0) {
+            return;
+        }
+
+        var settings = await Roots.GetSettingsAsync(cancellationToken);
+        var requests = new List<EnqueueJobRequest>();
+        foreach (var target in targets) {
+            requests.AddRange(VideoDownstreamJobPlanner.Build(
+                settings, target.Id, target.SourcePath, target.Needs));
+        }
+
+        if (requests.Count > 0) {
+            var enqueued = await context.EnqueueBatchAsync(requests, cancellationToken);
+            logger.LogDebug(
+                "ScanLibrary: enqueued {Enqueued}/{Total} recovery jobs for unchanged videos",
+                enqueued,
+                requests.Count);
+        }
     }
 
     /// <summary>

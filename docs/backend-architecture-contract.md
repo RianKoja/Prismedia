@@ -154,10 +154,13 @@ deliberate patterns exist and must not be "corrected" into uniformity:
   surface. The contract capability set is therefore a superset of the domain set. Do not
   add domain classes for these.
 
-Subtitle extraction state (`CapabilitySubtitles.ExtractedAt`) lives on the subtitles
+Subtitle reconciliation state (`CapabilitySubtitles.ExtractedAt`) lives on the subtitles
 capability. Its value is persisted on the `video_details.subtitles_extracted_at` column
 (owned by the Video kind mapper) rather than a dedicated capability table; the scan
-pipeline still queries that column directly for extraction gating.
+pipeline still queries that column directly for extraction gating. The same detail row stores
+the signature of the last successfully reconciled adjacent-sidecar set. Video scan snapshots
+include subtitle sidecars even though those files do not become Entities, so sidecar-only changes
+invalidate and retry the managed embedded/sidecar manifest.
 
 `CapabilityCredits` is a domain capability but is **not** emitted as a contract
 capability. It persists as `EntityRelationshipLinkRow` rows with relationship code

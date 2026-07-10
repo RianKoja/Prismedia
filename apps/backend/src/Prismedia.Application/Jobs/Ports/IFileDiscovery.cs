@@ -35,6 +35,10 @@ public interface IFileDiscovery {
 
 public enum MediaCategory {
     Video,
+
+    /// <summary>Adjacent subtitle files included in video-scan change snapshots.</summary>
+    VideoSubtitleSidecar,
+
     Image,
     Audio,
     ComicArchive,

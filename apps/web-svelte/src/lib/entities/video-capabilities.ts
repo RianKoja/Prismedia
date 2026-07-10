@@ -278,6 +278,7 @@ function mapEntitySubtitle(
   const sourceFormat = parseSubtitleSourceFormat(sub.sourceFormat);
   const hasStyledSource =
     (sourceFormat === "ass" || sourceFormat === "ssa") && Boolean(sub.sourcePath);
+  const contentRevision = subtitleContentRevision(sub.storagePath);
 
   return {
     id: sub.id,
@@ -288,12 +289,23 @@ function mapEntitySubtitle(
     source: parseSubtitleSource(sub.source),
     sourceFormat,
     isDefault: sub.isDefault,
-    url: apiPath(`/videos/${videoId}/subtitles/${sub.id}`),
+    url: subtitleAssetUrl(`/videos/${videoId}/subtitles/${sub.id}`, contentRevision),
     sourceUrl: hasStyledSource
-      ? apiPath(`/videos/${videoId}/subtitles/${sub.id}/source`)
+      ? subtitleAssetUrl(`/videos/${videoId}/subtitles/${sub.id}/source`, contentRevision)
       : null,
     createdAt: "",
   };
+}
+
+function subtitleContentRevision(storagePath: string): string | null {
+  const fileName = storagePath.split(/[\\/]/).at(-1) ?? "";
+  const match = fileName.match(/^sidecar-[a-f0-9]{32}-([a-f0-9]{32})\.vtt$/i);
+  return match?.[1]?.toLowerCase() ?? null;
+}
+
+function subtitleAssetUrl(path: string, contentRevision: string | null): string {
+  const url = apiPath(path);
+  return contentRevision ? `${url}?v=${encodeURIComponent(contentRevision)}` : url;
 }
 
 function parseSubtitleSource(value: string): SubtitleSource {

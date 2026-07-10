@@ -20,11 +20,18 @@ public sealed class FileDiscoveryAdapter(FileDiscoveryService inner) : IFileDisc
 
     public Task<IReadOnlyList<FileSignature>> DiscoverFileSignaturesAsync(
         string rootPath, MediaCategory category, bool recursive, IReadOnlySet<string> excludedPaths, CancellationToken cancellationToken) {
-        return inner.DiscoverFileSignaturesAsync(rootPath, ExtensionsFor(category), recursive, excludedPaths, cancellationToken);
+        return inner.DiscoverFileSignaturesAsync(
+            rootPath,
+            ExtensionsFor(category),
+            recursive,
+            excludedPaths,
+            skipGeneratedSuffixes: category != MediaCategory.VideoSubtitleSidecar,
+            cancellationToken: cancellationToken);
     }
 
     private static IReadOnlySet<string> ExtensionsFor(MediaCategory category) => category switch {
         MediaCategory.Video => SupportedExtensions.Video,
+        MediaCategory.VideoSubtitleSidecar => SupportedExtensions.VideoSubtitleSidecar,
         MediaCategory.Image => SupportedExtensions.Image,
         MediaCategory.Audio => SupportedExtensions.Audio,
         MediaCategory.ComicArchive => SupportedExtensions.ComicArchive,

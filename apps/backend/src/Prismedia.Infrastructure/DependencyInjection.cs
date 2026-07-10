@@ -115,6 +115,10 @@ public static class DependencyInjection {
             provider.GetRequiredService<ProcessExecutor>(),
             provider.GetRequiredService<MediaProbeService>(),
             provider.GetRequiredService<MediaToolOptions>()));
+        services.AddSingleton(provider => new SubtitleAssetImportService(
+            provider.GetRequiredService<ProcessExecutor>(),
+            provider.GetRequiredService<AssetPathService>(),
+            provider.GetRequiredService<MediaToolOptions>()));
         services.AddSingleton<HashingService>();
         services.AddSingleton<SkiaImageDownscaler>();
         services.AddSingleton<IImageThumbnailGenerator>(provider =>
@@ -123,6 +127,7 @@ public static class DependencyInjection {
                 provider.GetRequiredService<ThumbnailService>()));
         services.AddSingleton<IFileDiscovery>(provider =>
             new FileDiscoveryAdapter(provider.GetRequiredService<FileDiscoveryService>()));
+        services.AddSingleton<ISubtitleSidecarDiscovery, SubtitleSidecarDiscovery>();
         services.AddSingleton<IMediaProbe>(provider =>
             new MediaProbeAdapter(provider.GetRequiredService<MediaProbeService>()));
         services.AddSingleton<IMediaHashing>(provider =>
@@ -182,12 +187,17 @@ public static class DependencyInjection {
     }
 
     private static void RegisterLibraryScanning(IServiceCollection services, string dataDir) {
-        services.AddScoped<IMediaAssetGenerator>(provider =>
+        services.AddScoped(provider =>
             new MediaAssetGeneratorAdapter(
                 provider.GetRequiredService<ThumbnailService>(),
                 provider.GetRequiredService<AssetPathService>(),
+                provider.GetRequiredService<SubtitleAssetImportService>(),
                 provider.GetRequiredService<SettingsService>(),
                 provider.GetRequiredService<MediaToolOptions>()));
+        services.AddScoped<IMediaAssetGenerator>(provider =>
+            provider.GetRequiredService<MediaAssetGeneratorAdapter>());
+        services.AddScoped<ISubtitleAssetService>(provider =>
+            provider.GetRequiredService<MediaAssetGeneratorAdapter>());
         services.AddScoped(provider =>
             new LibraryScanPersistenceService(
                 provider.GetRequiredService<PrismediaDbContext>(),
@@ -218,7 +228,9 @@ public static class DependencyInjection {
         services.AddSingleton<IBookFileMetadataReader, Media.Books.BookFileMetadataReader>();
         services.AddSingleton<IBookCoverImageExtractor, Media.Books.BookCoverImageExtractor>();
         services.AddScoped<IMaintenancePersistence>(provider =>
-            new MaintenancePersistenceService(provider.GetRequiredService<PrismediaDbContext>(), dataDir));
+            new MaintenancePersistenceService(
+                provider.GetRequiredService<PrismediaDbContext>(),
+                provider.GetRequiredService<AssetPathService>()));
         services.AddScoped<ICollectionRuleEngine, CollectionRuleEngine>();
         services.AddScoped<ICollectionRefreshPersistence, CollectionRefreshPersistenceService>();
         services.AddScoped<ICollectionItemReadService, CollectionItemReadService>();
@@ -294,7 +306,8 @@ public static class DependencyInjection {
             new VideoSubtitleAssetService(
                 provider.GetRequiredService<PrismediaDbContext>(),
                 provider.GetRequiredService<ProcessExecutor>(),
-                provider.GetRequiredService<MediaToolOptions>()));
+                provider.GetRequiredService<MediaToolOptions>(),
+                provider.GetRequiredService<AssetPathService>()));
     }
 
     private static void RegisterJobsSettingsAndState(

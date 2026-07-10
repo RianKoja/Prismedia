@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Prismedia.Domain.Entities;
 using Prismedia.Infrastructure.Media.Persistence;
+using Prismedia.Infrastructure.Media.Processing;
 using Prismedia.Infrastructure.Persistence;
 using Prismedia.Infrastructure.Persistence.Entities;
 
@@ -63,7 +64,7 @@ public sealed class MaintenancePersistenceServiceTests : IDisposable {
         await File.WriteAllTextAsync(Path.Combine(hls2Cache, "master.m3u8"), "old");
         await File.WriteAllTextAsync(Path.Combine(hlsCache, "master.m3u8"), "old");
 
-        var service = new MaintenancePersistenceService(db, _dataDir);
+        var service = new MaintenancePersistenceService(db, new AssetPathService(_dataDir));
         await service.ClearGeneratedPreviewAssetsAsync(EntityKind.Video, videoId, CancellationToken.None);
 
         Assert.Single(db.EntityFiles, file => file.EntityId == videoId);
@@ -78,6 +79,48 @@ public sealed class MaintenancePersistenceServiceTests : IDisposable {
         Assert.False(Directory.Exists(Path.Combine(cacheRoot, "hlsv", videoId.ToString())));
         Assert.False(Directory.Exists(Path.Combine(cacheRoot, "hls2", videoId.ToString())));
         Assert.False(Directory.Exists(Path.Combine(cacheRoot, "hls", videoId.ToString())));
+    }
+
+    [Fact]
+    public async Task CleanupOrphanedSubtitleAssetsKeepsReferencedAndRecentGenerations() {
+        await using var db = CreateContext();
+        var videoId = Guid.NewGuid();
+        var paths = new AssetPathService(_dataDir);
+        var subtitleDirectory = paths.EnsureSubtitleDirectorySafe(videoId);
+        var retained = Path.Combine(subtitleDirectory, "sidecar-retained.vtt");
+        var orphaned = Path.Combine(subtitleDirectory, "sidecar-orphaned.vtt");
+        var recent = Path.Combine(subtitleDirectory, "sidecar-recent.vtt");
+        await File.WriteAllTextAsync(retained, "WEBVTT");
+        await File.WriteAllTextAsync(orphaned, "WEBVTT");
+        await File.WriteAllTextAsync(recent, "WEBVTT");
+        File.SetLastWriteTimeUtc(orphaned, DateTime.UtcNow.AddHours(-2));
+        db.Entities.Add(new EntityRow {
+            Id = videoId,
+            KindCode = EntityKindRegistry.Video.Code,
+            Title = "Subtitled video",
+            CreatedAt = DateTimeOffset.UtcNow,
+            UpdatedAt = DateTimeOffset.UtcNow
+        });
+        db.EntitySubtitles.Add(new EntitySubtitleRow {
+            Id = Guid.NewGuid(),
+            EntityId = videoId,
+            Source = EntitySubtitleSource.Sidecar,
+            SourceKey = "retained",
+            Language = "en",
+            Format = "vtt",
+            StoragePath = retained,
+            SourceFormat = "srt",
+            CreatedAt = DateTimeOffset.UtcNow
+        });
+        await db.SaveChangesAsync();
+        var service = new MaintenancePersistenceService(db, paths);
+
+        var removed = await service.CleanupOrphanedSubtitleAssetsAsync(CancellationToken.None);
+
+        Assert.Equal(1, removed);
+        Assert.True(File.Exists(retained));
+        Assert.False(File.Exists(orphaned));
+        Assert.True(File.Exists(recent));
     }
 
     public void Dispose() {

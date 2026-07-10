@@ -1,3 +1,5 @@
+using Prismedia.Contracts.Media;
+
 namespace Prismedia.Infrastructure.Media.Processing;
 
 /// <summary>
@@ -8,6 +10,9 @@ public static class SupportedExtensions {
     {
         ".mp4", ".m4v", ".mkv", ".mov", ".webm", ".avi", ".wmv", ".flv", ".ts", ".m2ts", ".mpg", ".mpeg"
     };
+
+    /// <summary>Adjacent subtitle extensions included in video scan snapshots.</summary>
+    public static IReadOnlySet<string> VideoSubtitleSidecar => SubtitleFileExtensions.Supported;
 
     public static readonly IReadOnlySet<string> Image = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
     {

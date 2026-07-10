@@ -27,7 +27,11 @@ Video detail pages include:
 
 ## Subtitles
 
-Subtitle tracks can come from the video's embedded streams or be added in the app. Supported text tracks are converted to WebVTT for browser playback; embedded ASS/SSA tracks are served as styled subtitle sources so the ASS renderer can display them.
+Subtitle tracks can come from the video's embedded streams, same-name SRT/VTT/ASS/SSA files beside
+the video, or tracks added in the app. Supported text tracks are copied into Prismedia's generated
+storage and converted to WebVTT for browser playback; embedded and adjacent ASS/SSA tracks retain an
+app-owned styled source so the ASS renderer can display them. A library scan reconciles sidecar
+additions, edits, renames, and removals.
 
 ![Subtitle view options](/img/screenshots/settings-subtitles.png)
 

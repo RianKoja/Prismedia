@@ -11,7 +11,7 @@ export async function fetchVideoSubtitleCues(
   const cached = cueCache.get(cacheKey);
   if (cached) return cached;
 
-  const pending = fetch(track.url, { cache: "no-store" })
+  const request = fetch(track.url, { cache: "no-store" })
     .then(async (response) => {
       if (!response.ok) {
         throw new Error(`Subtitle cues failed (${response.status})`);
@@ -20,6 +20,13 @@ export async function fetchVideoSubtitleCues(
     })
     .then((vtt) => ({ cues: parseWebVttCues(vtt) }));
 
+  let pending: Promise<{ cues: SubtitleCue[] }>;
+  pending = request.catch((error: unknown) => {
+    if (cueCache.get(cacheKey) === pending) {
+      cueCache.delete(cacheKey);
+    }
+    throw error;
+  });
   cueCache.set(cacheKey, pending);
   return pending;
 }

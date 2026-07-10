@@ -76,6 +76,121 @@ public sealed class ScanJobHandlerTests {
     }
 
     [Fact]
+    public async Task VideoScanInvalidatesAndQueuesSubtitlesForEverySharedFileOwner() {
+        var root = new LibraryRootData(
+            Guid.NewGuid(), "/media/videos", "Videos",
+            Enabled: true, Recursive: true,
+            ScanVideos: true, ScanImages: false, ScanAudio: false, ScanBooks: false, IsNsfw: false);
+        const string sourcePath = "/media/videos/show-s01e01-e02.mkv";
+        var firstOwner = Guid.NewGuid();
+        var secondOwner = Guid.NewGuid();
+        var needsSubtitles = new DownstreamNeeds(
+            NeedsProbe: false,
+            MissingOshash: false,
+            MissingMd5: false,
+            NeedsPreview: false,
+            NeedsTrickplay: false,
+            NeedsSubtitleExtraction: true,
+            NeedsGridThumbnail: false);
+        var persistence = new FakeScanPersistence([root]) {
+            Settings = new LibrarySettingsData(
+                AutoGenerateMetadata: false,
+                AutoGenerateOshash: false,
+                AutoGenerateMd5: false,
+                AutoGeneratePreview: false,
+                GenerateTrickplay: false,
+                TrickplayIntervalSeconds: 10,
+                PreviewClipDurationSeconds: 8,
+                ThumbnailQuality: 2,
+                TrickplayQuality: 2),
+            UpsertedVideoIds = [firstOwner],
+            VideoSourceOwners = [
+                new VideoSourceOwner(firstOwner, sourcePath),
+                new VideoSourceOwner(secondOwner, sourcePath)
+            ],
+            DownstreamNeedsById = new Dictionary<Guid, DownstreamNeeds> {
+                [firstOwner] = needsSubtitles,
+                [secondOwner] = needsSubtitles
+            }
+        };
+        var sidecarSignature = new string('a', 64);
+        var queue = new RecordingJobQueue();
+        var handler = new ScanLibraryJobHandler(
+            NullLogger<ScanLibraryJobHandler>.Instance,
+            new RecordingFileDiscovery([sourcePath]),
+            persistence,
+            persistence,
+            persistence,
+            subtitleSidecars: new FixedSubtitleSidecarDiscovery(
+                new VideoSubtitleSidecarDiscovery(sourcePath, [], sidecarSignature, IsComplete: true)));
+
+        await handler.HandleAsync(
+            new JobContext(SingleRootScanJob(root), queue), CancellationToken.None);
+
+        var subtitleJobs = queue.Enqueued.Where(request => request.Type == JobType.ExtractSubtitles).ToArray();
+        Assert.Equal(2, subtitleJobs.Length);
+        Assert.Equal(
+            new[] { firstOwner, secondOwner }.Order().ToArray(),
+            subtitleJobs.Select(request => Guid.Parse(request.TargetEntityId!)).Order().ToArray());
+        Assert.Equal(
+            new[] { firstOwner, secondOwner }.Order().ToArray(),
+            persistence.InvalidatedSubtitleStates.Select(state => state.EntityId).Order().ToArray());
+        Assert.All(persistence.InvalidatedSubtitleStates, state => Assert.Equal(sidecarSignature, state.Signature));
+    }
+
+    [Fact]
+    public async Task UnchangedVideoScanRecoversCancelledSubtitleExtraction() {
+        var root = new LibraryRootData(
+            Guid.NewGuid(), "/media/videos", "Videos",
+            Enabled: true, Recursive: true,
+            ScanVideos: true, ScanImages: false, ScanAudio: false, ScanBooks: false, IsNsfw: false);
+        const string sourcePath = "/media/videos/movie.mkv";
+        var videoId = Guid.NewGuid();
+        var persistence = new FakeScanPersistence([root]) {
+            Settings = new LibrarySettingsData(
+                AutoGenerateMetadata: false,
+                AutoGenerateOshash: false,
+                AutoGenerateMd5: false,
+                AutoGeneratePreview: false,
+                GenerateTrickplay: false,
+                TrickplayIntervalSeconds: 10,
+                PreviewClipDurationSeconds: 8,
+                ThumbnailQuality: 2,
+                TrickplayQuality: 2),
+            ExistingVideoTargets = [new VideoRefreshSourceTarget(videoId, "Movie", sourcePath)],
+            DownstreamNeedsById = new Dictionary<Guid, DownstreamNeeds> {
+                [videoId] = new(
+                    NeedsProbe: false,
+                    MissingOshash: false,
+                    MissingMd5: false,
+                    NeedsPreview: false,
+                    NeedsTrickplay: false,
+                    NeedsSubtitleExtraction: true,
+                    NeedsGridThumbnail: false)
+            }
+        };
+        var snapshots = new FakeScanSnapshotStore();
+        snapshots.Seed(root.Id, JobType.ScanLibrary.ToCode(), [sourcePath]);
+        var queue = new RecordingJobQueue();
+        var handler = new ScanLibraryJobHandler(
+            NullLogger<ScanLibraryJobHandler>.Instance,
+            new CategoryFileDiscovery([sourcePath], []),
+            persistence,
+            persistence,
+            persistence,
+            snapshots);
+
+        await handler.HandleAsync(
+            new JobContext(SingleRootScanJob(root), queue), CancellationToken.None);
+
+        var request = Assert.Single(queue.Enqueued);
+        Assert.Equal(JobType.ExtractSubtitles, request.Type);
+        Assert.Equal(videoId.ToString(), request.TargetEntityId);
+        Assert.Equal(1, persistence.VideoRecoveryTargetCalls);
+        Assert.Equal(0, persistence.DownstreamNeedsChecks);
+    }
+
+    [Fact]
     public async Task VideoScanRemovesOrphanTagsWhenSettingEnabled() {
         var persistence = new FakeScanPersistence([OrphanCleanupRoot]) {
             Settings = OrphanCleanupSettings(removeOrphanTags: true),
@@ -2315,6 +2430,139 @@ public sealed class ScanJobHandlerTests {
     }
 
     [Fact]
+    public async Task VideoSnapshotRescansWhenOnlyAnAdjacentSubtitleIsAdded() {
+        var root = new LibraryRootData(
+            Guid.Parse("11111111-1111-1111-1111-111111111111"),
+            "/media/videos", "Videos",
+            Enabled: true, Recursive: true,
+            ScanVideos: true, ScanImages: false, ScanAudio: false, ScanBooks: false, IsNsfw: false);
+        var videoId = Guid.Parse("22222222-2222-2222-2222-222222222222");
+        var videoPath = "/media/videos/movie.mkv";
+        var persistence = new FakeScanPersistence([root]) { UpsertedVideoIds = [videoId] };
+        var snapshots = new FakeScanSnapshotStore();
+        var job = SingleRootScanJob(root);
+
+        var first = new ScanLibraryJobHandler(
+            NullLogger<ScanLibraryJobHandler>.Instance,
+            new CategoryFileDiscovery([videoPath], []),
+            persistence,
+            persistence,
+            persistence,
+            snapshots);
+        await first.HandleAsync(new JobContext(job, new NoopJobQueue()), CancellationToken.None);
+        Assert.Single(persistence.UpsertedVideoItems);
+
+        var second = new ScanLibraryJobHandler(
+            NullLogger<ScanLibraryJobHandler>.Instance,
+            new CategoryFileDiscovery([videoPath], ["/media/videos/movie.en.srt"]),
+            persistence,
+            persistence,
+            persistence,
+            snapshots);
+        await second.HandleAsync(new JobContext(job, new NoopJobQueue()), CancellationToken.None);
+
+        Assert.Equal(2, persistence.UpsertedVideoItems.Count);
+        Assert.Equal(2, snapshots.ApplyCount);
+    }
+
+    [Fact]
+    public async Task IncompleteSidecarDiscoveryDoesNotAdvanceTheVideoSnapshot() {
+        var root = new LibraryRootData(
+            Guid.NewGuid(), "/media/videos", "Videos",
+            Enabled: true, Recursive: true,
+            ScanVideos: true, ScanImages: false, ScanAudio: false, ScanBooks: false, IsNsfw: false);
+        const string videoPath = "/media/videos/movie.mkv";
+        const string sidecarPath = "/media/videos/movie.en.srt";
+        var videoId = Guid.NewGuid();
+        var persistence = new FakeScanPersistence([root]) {
+            UpsertedVideoIds = [videoId],
+            VideoSourceOwners = [new VideoSourceOwner(videoId, videoPath)]
+        };
+        var snapshots = new FakeScanSnapshotStore();
+        snapshots.Seed(root.Id, JobType.ScanLibrary.ToCode(), [videoPath]);
+        var files = new CategoryFileDiscovery([videoPath], [sidecarPath]);
+        var incomplete = new ScanLibraryJobHandler(
+            NullLogger<ScanLibraryJobHandler>.Instance,
+            files,
+            persistence,
+            persistence,
+            persistence,
+            snapshots,
+            subtitleSidecars: new FixedSubtitleSidecarDiscovery(
+                new VideoSubtitleSidecarDiscovery(videoPath, [], new string('a', 64), IsComplete: false)));
+
+        await Assert.ThrowsAsync<IOException>(() => incomplete.HandleAsync(
+            new JobContext(SingleRootScanJob(root), new NoopJobQueue()), CancellationToken.None));
+        Assert.Equal(0, snapshots.ApplyCount);
+
+        var complete = new ScanLibraryJobHandler(
+            NullLogger<ScanLibraryJobHandler>.Instance,
+            files,
+            persistence,
+            persistence,
+            persistence,
+            snapshots,
+            subtitleSidecars: new FixedSubtitleSidecarDiscovery(
+                new VideoSubtitleSidecarDiscovery(videoPath, [], new string('b', 64), IsComplete: true)));
+        await complete.HandleAsync(
+            new JobContext(SingleRootScanJob(root), new NoopJobQueue()), CancellationToken.None);
+
+        Assert.Equal(1, snapshots.ApplyCount);
+    }
+
+    [Fact]
+    public async Task ExistingOwnerStillQueuesSidecarWorkWhenItsUpsertFails() {
+        var root = new LibraryRootData(
+            Guid.NewGuid(), "/media/videos", "Videos",
+            Enabled: true, Recursive: true,
+            ScanVideos: true, ScanImages: false, ScanAudio: false, ScanBooks: false, IsNsfw: false);
+        const string videoPath = "/media/videos/movie.mkv";
+        const string sidecarPath = "/media/videos/movie.en.srt";
+        var videoId = Guid.NewGuid();
+        var persistence = new FakeScanPersistence([root]) {
+            Settings = DisabledGeneratedWorkSettings,
+            VideoUpsertException = new IOException("existing row could not be updated"),
+            VideoSourceOwners = [new VideoSourceOwner(videoId, videoPath)],
+            DownstreamNeedsById = new Dictionary<Guid, DownstreamNeeds> {
+                [videoId] = new(
+                    NeedsProbe: false,
+                    MissingOshash: false,
+                    MissingMd5: false,
+                    NeedsPreview: false,
+                    NeedsTrickplay: false,
+                    NeedsSubtitleExtraction: true,
+                    NeedsGridThumbnail: false)
+            }
+        };
+        var snapshots = new FakeScanSnapshotStore();
+        snapshots.Seed(root.Id, JobType.ScanLibrary.ToCode(), [videoPath]);
+        var queue = new RecordingJobQueue();
+        var handler = new ScanLibraryJobHandler(
+            NullLogger<ScanLibraryJobHandler>.Instance,
+            new CategoryFileDiscovery([videoPath], [sidecarPath]),
+            persistence,
+            persistence,
+            persistence,
+            snapshots,
+            subtitleSidecars: new FixedSubtitleSidecarDiscovery(
+                new VideoSubtitleSidecarDiscovery(
+                    videoPath,
+                    [],
+                    new string('d', 64),
+                    IsComplete: true)));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            handler.HandleAsync(
+                new JobContext(SingleRootScanJob(root), queue),
+                CancellationToken.None));
+
+        Assert.Equal(videoId, Assert.Single(persistence.InvalidatedSubtitleStates).EntityId);
+        var request = Assert.Single(queue.Enqueued, item => item.Type == JobType.ExtractSubtitles);
+        Assert.Equal(videoId.ToString(), request.TargetEntityId);
+        Assert.Equal(1, snapshots.ApplyCount);
+    }
+
+    [Fact]
     public async Task FailedFilesAreWithheldFromSnapshotAndRetriedNextScan() {
         var root = new LibraryRootData(
             Guid.Parse("11111111-1111-1111-1111-111111111111"),
@@ -2556,6 +2804,12 @@ public sealed class ScanJobHandlerTests {
             ThumbnailQuality: 2,
             TrickplayQuality: 2);
         public IReadOnlyList<Guid> UpsertedVideoIds { get; init; } = [];
+        public Exception? VideoUpsertException { get; init; }
+        public IReadOnlyList<VideoSourceOwner> VideoSourceOwners { get; init; } = [];
+        public IReadOnlyList<VideoRefreshSourceTarget> ExistingVideoTargets { get; init; } = [];
+        public List<VideoSubtitleSidecarState> InvalidatedSubtitleStates { get; } = [];
+        public int VideoRecoveryTargetCalls { get; private set; }
+        public int DownstreamNeedsChecks { get; private set; }
         public bool HasTechnical { get; init; }
         public IReadOnlyList<EntityRefreshTarget> ExistingAudioTrackTargets { get; init; } = [];
         public IReadOnlyDictionary<Guid, DownstreamNeeds> DownstreamNeedsById { get; init; } =
@@ -2902,13 +3156,49 @@ public sealed class ScanJobHandlerTests {
 
         public Task<IReadOnlyList<Guid>> UpsertVideosBatchAsync(IReadOnlyList<VideoUpsertItem> items, CancellationToken cancellationToken) {
             UpsertedVideoItems.AddRange(items);
-            return Task.FromResult(UpsertedVideoIds);
+            return VideoUpsertException is null
+                ? Task.FromResult(UpsertedVideoIds)
+                : Task.FromException<IReadOnlyList<Guid>>(VideoUpsertException);
+        }
+
+        public Task<IReadOnlyList<VideoSourceOwner>> ListVideoSourceOwnersAsync(
+            IReadOnlyCollection<string> filePaths,
+            CancellationToken cancellationToken) => Task.FromResult<IReadOnlyList<VideoSourceOwner>>(
+                VideoSourceOwners
+                    .Where(owner => filePaths.Contains(owner.FilePath, StringComparer.OrdinalIgnoreCase))
+                    .ToArray());
+
+        public Task InvalidateSubtitleStateAsync(
+            IReadOnlyCollection<VideoSubtitleSidecarState> states,
+            CancellationToken cancellationToken) {
+            InvalidatedSubtitleStates.AddRange(states);
+            return Task.CompletedTask;
+        }
+
+        public Task<IReadOnlyList<VideoRefreshSourceTarget>> GetVideoTargetsInRootAsync(
+            Guid rootId,
+            CancellationToken cancellationToken) => Task.FromResult(ExistingVideoTargets);
+
+        public Task<IReadOnlyList<VideoRecoveryTarget>> GetVideoRecoveryTargetsInRootAsync(
+            Guid rootId,
+            CancellationToken cancellationToken) {
+            VideoRecoveryTargetCalls++;
+            return Task.FromResult<IReadOnlyList<VideoRecoveryTarget>>(ExistingVideoTargets
+                .Where(target => DownstreamNeedsById.ContainsKey(target.Id))
+                .Select(target => new VideoRecoveryTarget(
+                    target.Id,
+                    target.Title,
+                    target.SourcePath,
+                    DownstreamNeedsById[target.Id]))
+                .ToArray());
         }
 
         public Task DiscardPendingScanChangesAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 
-        public Task<IReadOnlyDictionary<Guid, DownstreamNeeds>> CheckDownstreamNeedsBatchAsync(IReadOnlyList<Guid> entityIds, CancellationToken cancellationToken) =>
-            Task.FromResult(DownstreamNeedsById);
+        public Task<IReadOnlyDictionary<Guid, DownstreamNeeds>> CheckDownstreamNeedsBatchAsync(IReadOnlyList<Guid> entityIds, CancellationToken cancellationToken) {
+            DownstreamNeedsChecks++;
+            return Task.FromResult(DownstreamNeedsById);
+        }
 
         // The fake models a flat video library unless a test supplies explicit root metadata.
         public Task<IReadOnlyList<AutoIdentifyRootTarget>> ResolveAutoIdentifyRootsAsync(IReadOnlyList<Guid> entityIds, CancellationToken cancellationToken) =>
@@ -3054,6 +3344,49 @@ public sealed class ScanJobHandlerTests {
 
         public Task<IReadOnlyList<FileSignature>> DiscoverFileSignaturesAsync(string rootPath, MediaCategory category, bool recursive, IReadOnlySet<string> excludedPaths, CancellationToken cancellationToken) =>
             Task.FromResult<IReadOnlyList<FileSignature>>([]);
+    }
+
+    private sealed class CategoryFileDiscovery(
+        IReadOnlyList<string> videos,
+        IReadOnlyList<string> subtitles) : IFileDiscovery {
+        public Task<IReadOnlyList<string>> DiscoverFilesAsync(
+            string rootPath,
+            MediaCategory category,
+            bool recursive,
+            IReadOnlySet<string> excludedPaths,
+            CancellationToken cancellationToken) =>
+            Task.FromResult(category == MediaCategory.Video ? videos : (IReadOnlyList<string>)[]);
+
+        public Task<IReadOnlyDictionary<string, IReadOnlyList<string>>> DiscoverFilesByDirectoryAsync(
+            string rootPath,
+            MediaCategory category,
+            bool recursive,
+            IReadOnlySet<string> excludedPaths,
+            CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
+        public Task<IReadOnlyList<FileSignature>> DiscoverFileSignaturesAsync(
+            string rootPath,
+            MediaCategory category,
+            bool recursive,
+            IReadOnlySet<string> excludedPaths,
+            CancellationToken cancellationToken) {
+            var paths = category switch {
+                MediaCategory.Video => videos,
+                MediaCategory.VideoSubtitleSidecar => subtitles,
+                _ => []
+            };
+            return Task.FromResult<IReadOnlyList<FileSignature>>(
+                paths.Select(path => new FileSignature(path, path.Length, 0)).ToArray());
+        }
+    }
+
+    private sealed class FixedSubtitleSidecarDiscovery(VideoSubtitleSidecarDiscovery result)
+        : ISubtitleSidecarDiscovery {
+        public Task<IReadOnlyList<VideoSubtitleSidecarDiscovery>> DiscoverAsync(
+            IReadOnlyCollection<string> videoPaths,
+            CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<VideoSubtitleSidecarDiscovery>>([result]);
     }
 
     private sealed class RecordingFileDiscovery(

@@ -66,7 +66,8 @@ Most files now **direct-play** or **stream-copy**; a full transcode only happens
 
 - **Auto-enable** must be on in **Settings → Subtitles**.
 - **Preferred languages** must include the track's language code.
-- The track must exist — embedded subtitles are extracted by the subtitles job; confirm it succeeded in Jobs.
+- The track must exist — embedded and adjacent subtitles are processed by the subtitles job; confirm it succeeded in Jobs.
+- For a file beside the video, keep the same video stem (`Movie.en.srt` beside `Movie.mkv`) and rescan the library. Supported extensions are SRT, VTT, ASS, and SSA.
 
 For a per-video override, use the player's subtitle button.
 

@@ -36,12 +36,13 @@ internal static class EntityAttachmentModelConfiguration {
                 .HasMaxLength(64)
                 .HasConversion(value => value.ToCode(), value => value.DecodeAs<EntitySubtitleSource>())
                 .IsRequired();
+            entity.Property(row => row.SourceKey).HasColumnName("source_key").HasMaxLength(128).IsRequired();
             entity.Property(row => row.StoragePath).HasColumnName("storage_path").IsRequired();
             entity.Property(row => row.SourceFormat).HasColumnName("source_format").HasMaxLength(32).IsRequired();
             entity.Property(row => row.SourcePath).HasColumnName("source_path");
             entity.Property(row => row.IsDefault).HasColumnName("is_default");
             entity.Property(row => row.CreatedAt).HasColumnName("created_at");
-            entity.HasIndex(row => new { row.EntityId, row.Language, row.Source }).IsUnique();
+            entity.HasIndex(row => new { row.EntityId, row.Source, row.SourceKey }).IsUnique();
             entity.HasOne<EntityRow>()
                 .WithMany()
                 .HasForeignKey(row => row.EntityId)
@@ -77,6 +78,9 @@ internal static class EntityAttachmentModelConfiguration {
             entity.Property(row => row.EntityId).HasColumnName("entity_id");
             entity.Property(row => row.LibraryRootId).HasColumnName("library_root_id");
             entity.Property(row => row.SubtitlesExtractedAt).HasColumnName("subtitles_extracted_at");
+            entity.Property(row => row.SubtitleSidecarSignature)
+                .HasColumnName("subtitle_sidecar_signature")
+                .HasMaxLength(64);
             entity.HasOne<EntityRow>()
                 .WithOne()
                 .HasForeignKey<VideoDetailRow>(row => row.EntityId)

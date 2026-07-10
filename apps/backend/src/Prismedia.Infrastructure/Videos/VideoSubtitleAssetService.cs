@@ -15,6 +15,7 @@ public sealed class VideoSubtitleAssetService : IVideoSubtitleAssetService {
     private readonly PrismediaDbContext _db;
     private readonly ProcessExecutor _processExecutor;
     private readonly MediaToolOptions _mediaTools;
+    private readonly AssetPathService _assetPaths;
 
     /// <summary>
     /// Creates a subtitle asset resolver over the database context.
@@ -22,13 +23,16 @@ public sealed class VideoSubtitleAssetService : IVideoSubtitleAssetService {
     /// <param name="db">Database context used to find subtitle rows.</param>
     /// <param name="processExecutor">Process runner used to extract embedded styled subtitles on demand.</param>
     /// <param name="mediaTools">Configured ffmpeg and ffprobe executable paths.</param>
+    /// <param name="assetPaths">Generated-asset paths used to contain sidecar reads to app-owned cache.</param>
     public VideoSubtitleAssetService(
         PrismediaDbContext db,
         ProcessExecutor processExecutor,
-        MediaToolOptions mediaTools) {
+        MediaToolOptions mediaTools,
+        AssetPathService assetPaths) {
         _db = db;
         _processExecutor = processExecutor;
         _mediaTools = mediaTools;
+        _assetPaths = assetPaths;
     }
 
     /// <summary>
@@ -42,13 +46,19 @@ public sealed class VideoSubtitleAssetService : IVideoSubtitleAssetService {
         Guid videoId,
         Guid trackId,
         CancellationToken cancellationToken) {
-        var path = await _db.EntitySubtitles
+        var row = await _db.EntitySubtitles
             .AsNoTracking()
             .Where(row => row.EntityId == videoId && row.Id == trackId)
-            .Select(row => row.StoragePath)
+            .Select(row => new { row.StoragePath, row.Source })
             .SingleOrDefaultAsync(cancellationToken);
 
-        return ExistingAsset(path, MediaContentTypes.VttUtf8);
+        if (row is null) {
+            return null;
+        }
+
+        return row.Source == EntitySubtitleSource.Sidecar
+            ? ExistingOwnedSidecarAsset(videoId, row.StoragePath, MediaContentTypes.VttUtf8)
+            : ExistingAsset(row.StoragePath, MediaContentTypes.VttUtf8);
     }
 
     /// <summary>
@@ -75,8 +85,16 @@ public sealed class VideoSubtitleAssetService : IVideoSubtitleAssetService {
 
         if (row is null ||
             string.IsNullOrWhiteSpace(row.SourcePath) ||
-            !IsStyledSubtitleFormat(row.SourceFormat)) {
+            !SubtitleFormats.IsStyled(row.SourceFormat)) {
             return null;
+        }
+
+        if (row.Source == EntitySubtitleSource.Sidecar) {
+            return ExistingPairedSidecarSource(
+                videoId,
+                row.StoragePath,
+                row.SourcePath,
+                row.SourceFormat);
         }
 
         var preservedAsset = ExistingAsset(row.SourcePath, MediaContentTypes.SsaUtf8);
@@ -100,7 +118,17 @@ public sealed class VideoSubtitleAssetService : IVideoSubtitleAssetService {
         }
 
         var outputPath = EmbeddedSubtitleSourcePath(row.StoragePath, row.SourceFormat);
-        if (File.Exists(outputPath)) {
+        try {
+            _assetPaths.EnsureSubtitleDirectorySafe(videoId);
+        } catch (IOException) {
+            return null;
+        } catch (UnauthorizedAccessException) {
+            return null;
+        }
+        if (!_assetPaths.IsSubtitleAssetPath(videoId, outputPath)) {
+            return null;
+        }
+        if (SubtitleAssetAvailability.IsOrdinaryNonEmptyFile(outputPath)) {
             return new VideoSubtitleAsset(outputPath, MediaContentTypes.SsaUtf8);
         }
 
@@ -114,11 +142,11 @@ public sealed class VideoSubtitleAssetService : IVideoSubtitleAssetService {
     }
 
     private static VideoSubtitleAsset? ExistingAsset(string? path, string contentType) {
-        if (string.IsNullOrWhiteSpace(path) || !Path.IsPathRooted(path) || !File.Exists(path)) {
+        if (!SubtitleAssetAvailability.IsOrdinaryNonEmptyFile(path)) {
             return null;
         }
 
-        return new VideoSubtitleAsset(path, contentType);
+        return new VideoSubtitleAsset(path!, contentType);
     }
 
     private async Task<bool> ExtractEmbeddedStyledSubtitleAsync(
@@ -126,29 +154,38 @@ public sealed class VideoSubtitleAssetService : IVideoSubtitleAssetService {
         int streamIndex,
         string outputPath,
         CancellationToken cancellationToken) {
-        Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
-        var result = await _processExecutor.RunAsync(
-            _mediaTools.FfmpegPath,
-            [
-                "-y",
-                "-v", "error",
-                "-i", sourcePath,
-                "-map", $"0:{streamIndex}",
-                "-c:s", "copy",
-                outputPath
-            ],
-            null,
-            cancellationToken,
-            lowPriority: true);
+        var extension = Path.GetExtension(outputPath);
+        var stagingPath = Path.Combine(
+            Path.GetDirectoryName(outputPath)!,
+            $".embedded-source-{Guid.NewGuid():N}{extension}");
+        try {
+            var result = await _processExecutor.RunAsync(
+                _mediaTools.FfmpegPath,
+                [
+                    "-y",
+                    "-v", "error",
+                    "-i", sourcePath,
+                    "-map", $"0:{streamIndex}",
+                    "-c:s", "copy",
+                    stagingPath
+                ],
+                null,
+                cancellationToken,
+                lowPriority: true);
 
-        return result.ExitCode == 0 && File.Exists(outputPath);
+            if (result.ExitCode != 0 || !SubtitleAssetAvailability.IsOrdinaryNonEmptyFile(stagingPath)) {
+                return false;
+            }
+
+            File.Move(stagingPath, outputPath, overwrite: true);
+            return SubtitleAssetAvailability.IsOrdinaryNonEmptyFile(outputPath);
+        } finally {
+            TryDeleteFile(stagingPath);
+        }
     }
 
     private static string EmbeddedSubtitleSourcePath(string storagePath, string sourceFormat) {
-        var extension = string.Equals(sourceFormat, "ssa", StringComparison.OrdinalIgnoreCase)
-            ? ".ssa"
-            : ".ass";
-        return Path.ChangeExtension(storagePath, extension);
+        return Path.ChangeExtension(storagePath, SubtitleFileExtensions.ForFormat(sourceFormat));
     }
 
     private static bool ExistingSource(string? path) =>
@@ -156,7 +193,32 @@ public sealed class VideoSubtitleAssetService : IVideoSubtitleAssetService {
         Path.IsPathRooted(path) &&
         File.Exists(path);
 
-    private static bool IsStyledSubtitleFormat(string? format) =>
-        string.Equals(format, "ass", StringComparison.OrdinalIgnoreCase) ||
-        string.Equals(format, "ssa", StringComparison.OrdinalIgnoreCase);
+    private VideoSubtitleAsset? ExistingPairedSidecarSource(
+        Guid videoId,
+        string storagePath,
+        string sourcePath,
+        string sourceFormat) {
+        return SubtitleAssetAvailability.IsStyledSidecarPairAvailable(
+            _assetPaths, videoId, storagePath, sourcePath, sourceFormat)
+            ? new VideoSubtitleAsset(sourcePath, MediaContentTypes.SsaUtf8)
+            : null;
+    }
+
+    private VideoSubtitleAsset? ExistingOwnedSidecarAsset(
+        Guid videoId,
+        string path,
+        string contentType) =>
+        SubtitleAssetAvailability.IsOwnedOrdinaryFile(_assetPaths, videoId, path)
+            ? new VideoSubtitleAsset(path, contentType)
+            : null;
+
+    private static void TryDeleteFile(string path) {
+        try {
+            if (File.Exists(path)) {
+                File.Delete(path);
+            }
+        } catch (Exception exception) when (exception is IOException or UnauthorizedAccessException) {
+            // Failed on-demand extraction never publishes or references its staging file.
+        }
+    }
 }
