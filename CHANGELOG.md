@@ -133,6 +133,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - Updated documentation, README screenshots, branding assets, install metadata, and app copy to match the current Prismedia v1 surface.
 
 ### Fixed
+- Adding or updating a library with a folder that is already watched now returns a clear conflict instead of failing with an internal server error.
 - Video seek bars now span the same full player width as the playback controls, regardless of the media artwork or source aspect ratio.
 - File deletion now lives in the shared Acquisition tab for every file-backed Entity instead of crowding the detail hero, whose remaining actions wrap cleanly on smaller screens.
 - The video film strip now responds only to horizontal wheel or trackpad movement, so ordinary vertical page scrolling passes through instead of scrubbing playback.

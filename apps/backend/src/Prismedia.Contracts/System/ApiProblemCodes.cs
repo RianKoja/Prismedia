@@ -169,6 +169,9 @@ public static class ApiProblemCodes {
     /// <summary>Problem code <c>last_admin_required</c>.</summary>
     public const string LastAdminRequired = "last_admin_required";
 
+    /// <summary>Problem code <c>library_root_path_conflict</c>.</summary>
+    public const string LibraryRootPathConflict = "library_root_path_conflict";
+
     /// <summary>Problem code <c>not_found</c>.</summary>
     public const string NotFound = "not_found";
 

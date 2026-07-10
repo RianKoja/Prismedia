@@ -11,6 +11,19 @@ using Prismedia.Infrastructure.Settings;
 namespace Prismedia.Infrastructure.Tests;
 
 public sealed class SettingsServiceTests {
+    [Theory]
+    [InlineData("23505", "IX_library_roots_path", true)]
+    [InlineData("23505", "IX_something_else", false)]
+    [InlineData("23503", "IX_library_roots_path", false)]
+    [InlineData(null, null, false)]
+    public void LibraryRootPathConflictMatchesOnlyItsPostgresUniqueIndex(
+        string? sqlState,
+        string? constraintName,
+        bool expected) =>
+        Assert.Equal(
+            expected,
+            EfSettingsPersistence.IsLibraryRootPathConstraintViolation(sqlState, constraintName));
+
     [Fact]
     public async Task CreateLibraryRootQueuesScanForEachEnabledKind() {
         await using var db = CreateContext();

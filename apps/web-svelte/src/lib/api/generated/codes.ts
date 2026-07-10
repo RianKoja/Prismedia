@@ -663,6 +663,7 @@ export const PROBLEM_CODE = {
   jellyfinQuickConnectNotFound: "jellyfin_quick_connect_not_found",
   jellyfinUserNotFound: "jellyfin_user_not_found",
   lastAdminRequired: "last_admin_required",
+  libraryRootPathConflict: "library_root_path_conflict",
   notFound: "not_found",
   passwordInvalid: "password_invalid",
   playbackItemNotFound: "playback_item_not_found",

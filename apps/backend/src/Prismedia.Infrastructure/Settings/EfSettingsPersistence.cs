@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using Prismedia.Application.Settings;
 using Prismedia.Contracts.Settings;
 using Prismedia.Domain.Entities;
@@ -14,6 +15,8 @@ namespace Prismedia.Infrastructure.Settings;
 /// library roots.
 /// </summary>
 public sealed class EfSettingsPersistence : ISettingsPersistence {
+    private const string LibraryRootPathUniqueIndex = "IX_library_roots_path";
+
     private readonly PrismediaDbContext _db;
 
     public EfSettingsPersistence(PrismediaDbContext db) {
@@ -133,8 +136,25 @@ public sealed class EfSettingsPersistence : ISettingsPersistence {
         };
 
         _db.LibraryRoots.Add(row);
-        await _db.SaveChangesAsync(cancellationToken);
+        await SaveLibraryRootChangesAsync(state.Path, cancellationToken);
         return ToContract(row);
+    }
+
+    /// <summary>
+    /// Identifies the PostgreSQL unique violation owned by the watched-root path invariant.
+    /// </summary>
+    internal static bool IsLibraryRootPathConstraintViolation(string? sqlState, string? constraintName) =>
+        sqlState == PostgresErrorCodes.UniqueViolation &&
+        constraintName == LibraryRootPathUniqueIndex;
+
+    private async Task SaveLibraryRootChangesAsync(string path, CancellationToken cancellationToken) {
+        try {
+            await _db.SaveChangesAsync(cancellationToken);
+        } catch (DbUpdateException exception) when (
+            exception.InnerException is PostgresException postgresException &&
+            IsLibraryRootPathConstraintViolation(postgresException.SqlState, postgresException.ConstraintName)) {
+            throw new LibraryRootPathConflictException(path, exception);
+        }
     }
 
     public async Task<LibraryRoot> SaveLibraryRootAsync(LibraryRoot state, CancellationToken cancellationToken) {
@@ -154,7 +174,7 @@ public sealed class EfSettingsPersistence : ISettingsPersistence {
         row.LastScannedAt = state.LastScannedAt;
         row.UpdatedAt = state.UpdatedAt;
 
-        await _db.SaveChangesAsync(cancellationToken);
+        await SaveLibraryRootChangesAsync(state.Path, cancellationToken);
         return ToContract(row);
     }
 

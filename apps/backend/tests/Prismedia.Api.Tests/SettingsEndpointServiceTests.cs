@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Prismedia.Application.Settings;
 using Prismedia.Contracts.Settings;
+using Prismedia.Contracts.System;
 
 namespace Prismedia.Api.Tests;
 
@@ -93,6 +94,53 @@ public sealed class SettingsEndpointServiceTests {
         Assert.NotNull(roots);
         Assert.Single(roots);
         Assert.True(root.IsSuccessStatusCode);
+    }
+
+    [Fact]
+    public async Task CreatingAnExistingLibraryRootPathReturnsTypedConflict() {
+        using var factory = CreateFactory();
+        using var client = factory.CreateAuthenticatedClient();
+
+        using var response = await client.PostAsJsonAsync(
+            "/api/libraries",
+            new LibraryRootCreateRequest("/media/videos", "Duplicate", false, null, null, null, null, null, null));
+        var problem = await response.Content.ReadFromJsonAsync<ApiProblem>();
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.NotNull(problem);
+        Assert.Equal(ApiProblemCodes.LibraryRootPathConflict, problem.Code);
+        Assert.Contains("/media/videos", problem.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task UpdatingToAnExistingLibraryRootPathReturnsTypedConflict() {
+        using var factory = CreateFactory();
+        using var client = factory.CreateAuthenticatedClient();
+
+        using var createResponse = await client.PostAsJsonAsync(
+            "/api/libraries",
+            new LibraryRootCreateRequest("/media/series", "Series", false, null, null, null, null, null, null));
+        var created = await createResponse.Content.ReadFromJsonAsync<LibraryRoot>();
+        Assert.NotNull(created);
+
+        using var response = await client.PatchAsJsonAsync(
+            $"/api/libraries/{created.Id}",
+            new LibraryRootUpdateRequest(
+                Path: "/media/videos",
+                Label: null,
+                Enabled: null,
+                Recursive: null,
+                ScanVideos: null,
+                ScanImages: null,
+                ScanAudio: null,
+                ScanBooks: null,
+                IsNsfw: null));
+        var problem = await response.Content.ReadFromJsonAsync<ApiProblem>();
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.NotNull(problem);
+        Assert.Equal(ApiProblemCodes.LibraryRootPathConflict, problem.Code);
+        Assert.Contains("/media/videos", problem.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -212,17 +260,25 @@ public sealed class SettingsEndpointServiceTests {
             Task.FromResult<LibraryRoot?>(_roots.GetValueOrDefault(id));
 
         public Task<LibraryRoot> AddLibraryRootAsync(LibraryRoot state, CancellationToken cancellationToken) {
+            ThrowIfPathBelongsToAnotherRoot(state);
             _roots[state.Id] = state;
             return Task.FromResult(state);
         }
 
         public Task<LibraryRoot> SaveLibraryRootAsync(LibraryRoot state, CancellationToken cancellationToken) {
+            ThrowIfPathBelongsToAnotherRoot(state);
             _roots[state.Id] = state;
             return Task.FromResult(state);
         }
 
         public Task<bool> DeleteLibraryRootAsync(Guid id, CancellationToken cancellationToken) =>
             Task.FromResult(_roots.Remove(id));
+
+        private void ThrowIfPathBelongsToAnotherRoot(LibraryRoot state) {
+            if (_roots.Values.Any(root => root.Id != state.Id && root.Path == state.Path)) {
+                throw new LibraryRootPathConflictException(state.Path);
+            }
+        }
 
         private static LibraryRoot SampleRoot() =>
             new(

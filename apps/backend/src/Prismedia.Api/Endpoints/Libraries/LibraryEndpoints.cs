@@ -93,7 +93,12 @@ public static class LibraryEndpoints {
                 return LibraryManagementForbidden();
             }
 
-            var created = await settings.CreateLibraryRootAsync(request, cancellationToken, user.Id);
+            LibraryRoot created;
+            try {
+                created = await settings.CreateLibraryRootAsync(request, cancellationToken, user.Id);
+            } catch (LibraryRootPathConflictException exception) {
+                return LibraryRootPathConflict(exception);
+            }
 
             // Admins see every library implicitly; explicit grants only exist for members.
             // A member-created root is always creator-only; admins may grant an initial set.
@@ -109,7 +114,8 @@ public static class LibraryEndpoints {
             .WithName("CreateLibraryRoot")
             .WithSummary("Adds a watched media root.")
             .Produces<LibraryRoot>()
-            .Produces<ApiProblem>(StatusCodes.Status403Forbidden);
+            .Produces<ApiProblem>(StatusCodes.Status403Forbidden)
+            .Produces<ApiProblem>(StatusCodes.Status409Conflict);
 
         group.MapPatch("/{id:guid}", async (
             Guid id,
@@ -121,14 +127,21 @@ public static class LibraryEndpoints {
                     return LibraryManagementForbidden();
                 }
 
-                var root = await settings.UpdateLibraryRootAsync(id, request, cancellationToken);
+                LibraryRoot? root;
+                try {
+                    root = await settings.UpdateLibraryRootAsync(id, request, cancellationToken);
+                } catch (LibraryRootPathConflictException exception) {
+                    return LibraryRootPathConflict(exception);
+                }
+
                 return root is null ? Results.NotFound() : Results.Ok(root);
             })
             .WithName("UpdateLibraryRoot")
             .WithSummary("Updates a watched media root.")
             .Produces<LibraryRoot>()
             .Produces<ApiProblem>(StatusCodes.Status403Forbidden)
-            .Produces(StatusCodes.Status404NotFound);
+            .Produces(StatusCodes.Status404NotFound)
+            .Produces<ApiProblem>(StatusCodes.Status409Conflict);
 
         group.MapDelete("/{id:guid}", async (
             Guid id,
@@ -200,4 +213,7 @@ public static class LibraryEndpoints {
         Results.Json(
             new ApiProblem(ApiProblemCodes.AdminRequired, "You do not have permission to manage this library."),
             statusCode: StatusCodes.Status403Forbidden);
+
+    private static IResult LibraryRootPathConflict(LibraryRootPathConflictException exception) =>
+        Results.Conflict(new ApiProblem(ApiProblemCodes.LibraryRootPathConflict, exception.Message));
 }
