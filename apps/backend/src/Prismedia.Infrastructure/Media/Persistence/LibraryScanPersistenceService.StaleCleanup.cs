@@ -231,6 +231,9 @@ public sealed partial class LibraryScanPersistenceService {
 
         var orphanMovies = await _db.Entities
             .Where(e => e.KindCode == movieCode
+                && !e.IsWanted
+                && !_db.Monitors.Any(monitor =>
+                    monitor.EntityId == e.Id && monitor.Status == MonitorStatus.Active)
                 && !_db.Entities.Any(child => child.ParentEntityId == e.Id))
             .ToListAsync(cancellationToken);
         _db.Entities.RemoveRange(orphanMovies);
@@ -240,6 +243,9 @@ public sealed partial class LibraryScanPersistenceService {
 
         var orphanSeasons = await _db.Entities
             .Where(e => e.KindCode == seasonCode
+                && !e.IsWanted
+                && !_db.Monitors.Any(monitor =>
+                    monitor.EntityId == e.Id && monitor.Status == MonitorStatus.Active)
                 && !_db.Entities.Any(child => child.ParentEntityId == e.Id))
             .ToListAsync(cancellationToken);
         _db.Entities.RemoveRange(orphanSeasons);
@@ -249,6 +255,9 @@ public sealed partial class LibraryScanPersistenceService {
 
         var orphanSeries = await _db.Entities
             .Where(e => e.KindCode == seriesCode
+                && !e.IsWanted
+                && !_db.Monitors.Any(monitor =>
+                    monitor.EntityId == e.Id && monitor.Status == MonitorStatus.Active)
                 && !_db.Entities.Any(child => child.ParentEntityId == e.Id))
             .ToListAsync(cancellationToken);
         _db.Entities.RemoveRange(orphanSeries);

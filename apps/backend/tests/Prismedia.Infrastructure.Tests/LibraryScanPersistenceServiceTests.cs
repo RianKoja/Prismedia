@@ -1246,6 +1246,65 @@ public sealed class LibraryScanPersistenceServiceTests {
     }
 
     [Fact]
+    public async Task RemoveOrphanSeriesAndSeasonsPreservesWantedPlaceholders() {
+        await using var db = CreateContext();
+        var now = DateTimeOffset.UtcNow;
+        var wantedMovieId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+        var wantedSeasonId = Guid.Parse("22222222-2222-2222-2222-222222222222");
+        var wantedSeriesId = Guid.Parse("33333333-3333-3333-3333-333333333333");
+        var orphanMovieId = Guid.Parse("44444444-4444-4444-4444-444444444444");
+        var orphanSeasonId = Guid.Parse("55555555-5555-5555-5555-555555555555");
+        var orphanSeriesId = Guid.Parse("66666666-6666-6666-6666-666666666666");
+        db.Entities.AddRange(
+            new EntityRow { Id = wantedMovieId, KindCode = EntityKindRegistry.Movie.Code, Title = "Wanted movie", IsWanted = true, CreatedAt = now, UpdatedAt = now },
+            new EntityRow { Id = wantedSeasonId, KindCode = EntityKindRegistry.VideoSeason.Code, Title = "Wanted season", IsWanted = true, CreatedAt = now, UpdatedAt = now },
+            new EntityRow { Id = wantedSeriesId, KindCode = EntityKindRegistry.VideoSeries.Code, Title = "Wanted series", IsWanted = true, CreatedAt = now, UpdatedAt = now },
+            new EntityRow { Id = orphanMovieId, KindCode = EntityKindRegistry.Movie.Code, Title = "Orphan movie", CreatedAt = now, UpdatedAt = now },
+            new EntityRow { Id = orphanSeasonId, KindCode = EntityKindRegistry.VideoSeason.Code, Title = "Orphan season", CreatedAt = now, UpdatedAt = now },
+            new EntityRow { Id = orphanSeriesId, KindCode = EntityKindRegistry.VideoSeries.Code, Title = "Orphan series", CreatedAt = now, UpdatedAt = now });
+        await db.SaveChangesAsync();
+
+        var removed = await new LibraryScanPersistenceService(db)
+            .RemoveOrphanSeriesAndSeasonsAsync(CancellationToken.None);
+
+        Assert.Equal(3, removed);
+        Assert.True(await db.Entities.AnyAsync(entity => entity.Id == wantedMovieId));
+        Assert.True(await db.Entities.AnyAsync(entity => entity.Id == wantedSeasonId));
+        Assert.True(await db.Entities.AnyAsync(entity => entity.Id == wantedSeriesId));
+        Assert.False(await db.Entities.AnyAsync(entity => entity.Id == orphanMovieId));
+        Assert.False(await db.Entities.AnyAsync(entity => entity.Id == orphanSeasonId));
+        Assert.False(await db.Entities.AnyAsync(entity => entity.Id == orphanSeriesId));
+    }
+
+    [Fact]
+    public async Task RemoveOrphanSeriesAndSeasonsPreservesActivelyMonitoredMovie() {
+        await using var db = CreateContext();
+        var now = DateTimeOffset.UtcNow;
+        var monitoredMovieId = Guid.Parse("77777777-7777-7777-7777-777777777777");
+        var orphanMovieId = Guid.Parse("88888888-8888-8888-8888-888888888888");
+        db.Entities.AddRange(
+            new EntityRow { Id = monitoredMovieId, KindCode = EntityKindRegistry.Movie.Code, Title = "Monitored movie", CreatedAt = now, UpdatedAt = now },
+            new EntityRow { Id = orphanMovieId, KindCode = EntityKindRegistry.Movie.Code, Title = "Orphan movie", CreatedAt = now, UpdatedAt = now });
+        db.Monitors.Add(new MonitorRow {
+            Id = Guid.Parse("99999999-9999-9999-9999-999999999999"),
+            EntityId = monitoredMovieId,
+            Kind = EntityKind.Movie,
+            Status = MonitorStatus.Active,
+            Title = "Monitored movie",
+            CreatedAt = now,
+            UpdatedAt = now
+        });
+        await db.SaveChangesAsync();
+
+        var removed = await new LibraryScanPersistenceService(db)
+            .RemoveOrphanSeriesAndSeasonsAsync(CancellationToken.None);
+
+        Assert.Equal(1, removed);
+        Assert.True(await db.Entities.AnyAsync(entity => entity.Id == monitoredMovieId));
+        Assert.False(await db.Entities.AnyAsync(entity => entity.Id == orphanMovieId));
+    }
+
+    [Fact]
     public async Task RemoveOrphanTagsRemovesOnlyUnreferencedTags() {
         await using var db = CreateContext();
         var now = DateTimeOffset.UtcNow;
