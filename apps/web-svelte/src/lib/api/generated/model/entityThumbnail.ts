@@ -7,6 +7,7 @@
 import type { AcquisitionStatus } from './acquisitionStatus';
 import type { EntityKind } from './entityKind';
 import type { EntityKindCount } from './entityKindCount';
+import type { EntityThumbnailAcquisitionStatusesItem } from './entityThumbnailAcquisitionStatusesItem';
 import type { EntityThumbnailHoverImage } from './entityThumbnailHoverImage';
 import type { EntityThumbnailMeta } from './entityThumbnailMeta';
 import type { ThumbnailHoverKind } from './thumbnailHoverKind';
@@ -43,6 +44,9 @@ export interface EntityThumbnail {
   coverThumb2xUrl?: string | null;
   parentKind?: null | EntityKind;
   isWanted?: boolean;
+  hasSourceMedia?: boolean;
+  latestAcquisitionStatus?: null | AcquisitionStatus;
+  acquisitionStatuses?: EntityThumbnailAcquisitionStatusesItem[];
   wantedStatus?: null | AcquisitionStatus;
   /** @nullable */
   createdAt?: string | null;

@@ -3,8 +3,7 @@ namespace Prismedia.Domain.Entities;
 /// <summary>
 /// Closed set of lifecycle states for a first-party acquisition. An acquisition captures the
 /// intent to obtain a book, searches indexers for releases, downloads the chosen release through
-/// a download client, then imports the completed payload into a library root for the normal scan
-/// and auto-identify pipeline to finish.
+/// a download client, then runs the media kind's import workflow against a library root.
 /// </summary>
 public enum AcquisitionStatus {
     /// <summary>Created from a request but no release search has run yet.</summary>
@@ -35,9 +34,16 @@ public enum AcquisitionStatus {
     [Code("importing")]
     Importing,
 
-    /// <summary>The payload was imported and a book scan was enqueued.</summary>
+    /// <summary>The payload was placed in the library and its media-specific import workflow completed.</summary>
     [Code("imported")]
     Imported,
+
+    /// <summary>
+    /// A destructive workflow has durably claimed this acquisition and cancelled its background work.
+    /// The persisted teardown intent determines whether completion removes it or replaces it with a retry.
+    /// </summary>
+    [Code("stopping")]
+    Stopping,
 
     /// <summary>The acquisition failed; the status message carries the reason and it can be retried.</summary>
     [Code("failed")]
@@ -50,6 +56,27 @@ public enum AcquisitionStatus {
     /// <summary>The completed payload could not be imported automatically and needs manual resolution.</summary>
     [Code("manual-import-required")]
     ManualImportRequired
+}
+
+/// <summary>Durable completion intent captured when destructive acquisition cleanup begins.</summary>
+public enum AcquisitionTeardownIntent {
+    /// <summary>Remove the acquisition after its remote transfer and owned library files are gone.</summary>
+    [Code("remove")]
+    Remove,
+
+    /// <summary>Replace the acquisition with a clean pending search after owned library files are gone.</summary>
+    [Code("reacquire")]
+    Reacquire
+}
+
+/// <summary>Prismedia-owned sentinel states stored on a transfer before client-native telemetry exists.</summary>
+public enum TransferOwnershipState {
+    /// <summary>
+    /// A durable ownership placeholder exists and the remote Add is either in flight or awaiting crash
+    /// recovery. Teardown must resolve it by correlation before deleting the acquisition owner.
+    /// </summary>
+    [Code("adding")]
+    Adding
 }
 
 /// <summary>

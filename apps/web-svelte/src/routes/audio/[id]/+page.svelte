@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { goto } from "$app/navigation";
   import { page } from "$app/state";
   import { CloudDownload, Info, MicVocal, Music, Play, Shuffle, SlidersHorizontal, Users } from "@lucide/svelte";
   import EntityDetailSkeleton from "$lib/components/entities/EntityDetailSkeleton.svelte";
@@ -14,12 +15,14 @@
   import { getCapability } from "$lib/api/capabilities";
   import EntityAcquisitionCard from "$lib/components/acquisitions/EntityAcquisitionCard.svelte";
   import { useEntityAcquisition } from "$lib/components/acquisitions/use-entity-acquisition.svelte";
+  import { requestableDirectChildCards } from "$lib/requests/requestable-entity-children";
   import {
     toggleOptimisticEntityFlag,
     updateOptimisticEntityRating,
   } from "$lib/entities/entity-detail-state";
+  import { refreshAfterManagedFileRevert } from "$lib/entities/entity-file-management";
   import { entityCardToDetailCard, type EntityDetailCardFull, type EntityDetailCredit, type EntityDetailTag } from "$lib/entities/entity-detail";
-  import { CREDIT_ROLE } from "$lib/entities/entity-codes";
+  import { CAPABILITY_KIND, CREDIT_ROLE } from "$lib/entities/entity-codes";
   import { resolveEntityHref } from "$lib/entities/entity-routes";
   import type { AudioTrackListItemDto } from "$lib/entities/media-view-models";
   import {
@@ -77,21 +80,32 @@
 
   const dates = $derived(card?.dates ?? []);
 
-  const subLibraryCards = $derived(childCards.filter((c) => c.entity.kind === "audio-library"));
+  const subLibraryCards = $derived(requestableDirectChildCards(library?.id, childCards));
   const coverUrl = $derived.by(() => {
     if (!library) return undefined;
-    const images = getCapability(library.capabilities, "images");
+    const images = getCapability(library.capabilities, CAPABILITY_KIND.images);
     return assetUrl(images?.coverUrl ?? images?.thumbnailUrl) || undefined;
   });
-  const identifyAction = useIdentifyDetailAction(() => library?.id, () => library?.kind);
+  const identifyAction = useIdentifyDetailAction(() => library);
 
-  // A phantom album's "Search for release" and its acquisition management live in the
-  // Acquisition detail tab, exactly like a wanted book or movie.
+  // A phantom album's request state and its direct requestable sub-libraries share the same
+  // Acquisition surface as every other Entity hierarchy. Tracks intentionally stay out until
+  // AudioTrack becomes a RequestKindRegistry acquisition unit; exposing them now would offer an
+  // action the server correctly rejects.
   const acq = useEntityAcquisition({
     entityId: () => library?.id,
     capabilities: () => library?.capabilities,
-    onChanged: () => void loadLibrary({ showLoading: false }),
+    childCards: () => subLibraryCards,
+    onChanged: () => loadLibrary({ showLoading: false }),
+    onPruned: () => goto("/audio"),
   });
+  const fileManagement = {
+    onDeleted: () => goto("/audio"),
+    onReverted: () => refreshAfterManagedFileRevert(
+      acq,
+      () => loadLibrary({ showLoading: false }),
+    ),
+  };
 
   const heroActions = $derived.by((): EntityDetailActionButton[] => {
     const actions: EntityDetailActionButton[] = [];
@@ -357,7 +371,13 @@
             castLabel="Performers"
           />
         {:else if section.id === "acquisition"}
-          <EntityAcquisitionCard {acq} onCancelled={() => void loadLibrary({ showLoading: false })} />
+          <EntityAcquisitionCard
+            {acq}
+            entity={library}
+            {fileManagement}
+            onCancelled={() => void loadLibrary({ showLoading: false })}
+            onImported={() => loadLibrary({ showLoading: false })}
+          />
         {/if}
       {/snippet}
     </EntityDetail>

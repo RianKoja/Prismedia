@@ -39,7 +39,7 @@ public sealed record EntityThumbnail(
     int? Rating,
     bool IsFavorite,
     bool IsNsfw,
-    bool IsOrganized) {
+    bool IsOrganized) : IEntitySummary {
     /// <summary>
     /// Double-density companion of <see cref="CoverThumbUrl"/> for high-DPI displays.
     /// Falls back to <see cref="CoverThumbUrl"/> when the 2x grid variant has not been generated yet.
@@ -57,6 +57,29 @@ public sealed record EntityThumbnail(
     /// but no file yet. Grids badge it; external projections (Jellyfin, OPDS) exclude it.
     /// </summary>
     public bool IsWanted { get; init; }
+
+    /// <summary>
+    /// True when the entity or any structural descendant owns a source-media row. Artwork,
+    /// thumbnails, and generated cache assets do not count. This compact fact lets local EntityGrids
+    /// apply the same availability filter as the server-backed library index without hydrating the
+    /// full files capability.
+    /// </summary>
+    public bool HasSourceMedia { get; init; }
+
+    /// <summary>
+    /// Latest linked acquisition lifecycle state, whether or not the entity is still wanted. Keeping
+    /// this distinct from <see cref="WantedStatus"/> makes imported/cancelled history and stale-state
+    /// invariant violations visible to availability filters.
+    /// </summary>
+    public AcquisitionStatus? LatestAcquisitionStatus { get; init; }
+
+    /// <summary>
+    /// Distinct availability states across this Entity's structural subtree: the latest direct
+    /// acquisition per Entity plus active/latest upgrade-descendant work. Clients should use membership
+    /// in this set for availability filters while retaining <see cref="LatestAcquisitionStatus"/> for the
+    /// existing single-status badge.
+    /// </summary>
+    public IReadOnlyList<AcquisitionStatus> AcquisitionStatuses { get; init; } = [];
 
     /// <summary>
     /// For a wanted placeholder, the status of its latest acquisition — so a grid can show what the

@@ -197,6 +197,16 @@ namespace Prismedia.Infrastructure.Persistence.Migrations
                         .HasColumnType("jsonb")
                         .HasColumnName("external_ids_json");
 
+                    b.Property<string>("IdentityNamespace")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("identity_namespace");
+
+                    b.Property<string>("IdentityValue")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("identity_value");
+
                     b.Property<string>("OwnedFormatTier")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
@@ -212,16 +222,6 @@ namespace Prismedia.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(32)")
                         .HasDefaultValue("unknown")
                         .HasColumnName("owned_source_tier");
-
-                    b.Property<string>("PluginId")
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)")
-                        .HasColumnName("plugin_id");
-
-                    b.Property<string>("PluginItemId")
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)")
-                        .HasColumnName("plugin_item_id");
 
                     b.Property<string>("PosterUrl")
                         .HasMaxLength(2048)
@@ -303,6 +303,24 @@ namespace Prismedia.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(2048)")
                         .HasColumnName("final_source_path");
 
+                    b.Property<string>("IdentityNamespace")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("identity_namespace");
+
+                    b.Property<string>("IdentityValue")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("identity_value");
+
+                    b.Property<string>("ImportCheckpointJson")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("tv_import_checkpoint_json");
+
+                    b.Property<Guid?>("ImportClaimJobId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("import_claim_job_id");
+
                     b.Property<string>("Kind")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
@@ -344,16 +362,6 @@ namespace Prismedia.Infrastructure.Persistence.Migrations
                         .HasDefaultValue("unknown")
                         .HasColumnName("owned_source_tier");
 
-                    b.Property<string>("PluginId")
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)")
-                        .HasColumnName("plugin_id");
-
-                    b.Property<string>("PluginItemId")
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)")
-                        .HasColumnName("plugin_item_id");
-
                     b.Property<string>("PosterUrl")
                         .HasMaxLength(2048)
                         .HasColumnType("character varying(2048)")
@@ -382,6 +390,7 @@ namespace Prismedia.Infrastructure.Persistence.Migrations
                         .HasColumnName("source_urls_json");
 
                     b.Property<string>("Status")
+                        .IsConcurrencyToken()
                         .IsRequired()
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(32)
@@ -397,6 +406,21 @@ namespace Prismedia.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("TargetLibraryRootId")
                         .HasColumnType("uuid")
                         .HasColumnName("target_library_root_id");
+
+                    b.Property<string>("TeardownIntent")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("teardown_intent");
+
+                    b.Property<string>("TeardownOriginalStatus")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("teardown_original_status");
+
+                    b.Property<Guid?>("TeardownReplacementAcquisitionId")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid")
+                        .HasColumnName("teardown_replacement_acquisition_id");
 
                     b.Property<string>("Title")
                         .IsRequired()
@@ -1271,12 +1295,17 @@ namespace Prismedia.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("Provider");
-
                     b.HasIndex("EntityId", "Provider")
                         .IsUnique();
 
-                    b.ToTable("entity_external_ids", (string)null);
+                    b.HasIndex("Provider", "Value", "EntityId");
+
+                    b.ToTable("entity_external_ids", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_entity_external_ids_provider_canonical", "provider = lower(btrim(provider)) AND provider <> ''");
+
+                            t.HasCheckConstraint("ck_entity_external_ids_value_canonical", "value = btrim(value) AND value <> ''");
+                        });
                 });
 
             modelBuilder.Entity("Prismedia.Infrastructure.Persistence.Entities.EntityFileFingerprintRow", b =>
@@ -1711,6 +1740,49 @@ namespace Prismedia.Infrastructure.Persistence.Migrations
                     b.ToTable("entity_positions", (string)null);
                 });
 
+            modelBuilder.Entity("Prismedia.Infrastructure.Persistence.Entities.EntityProviderIdentityRow", b =>
+                {
+                    b.Property<Guid>("EntityId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("entity_id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("IdentityNamespace")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("identity_namespace");
+
+                    b.Property<string>("IdentityValue")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("identity_value");
+
+                    b.Property<string>("PluginId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("plugin_id");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("EntityId");
+
+                    b.ToTable("entity_provider_identities", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_entity_provider_identities_namespace_canonical", "identity_namespace = lower(btrim(identity_namespace)) AND identity_namespace <> ''");
+
+                            t.HasCheckConstraint("ck_entity_provider_identities_plugin_canonical", "plugin_id = lower(btrim(plugin_id)) AND plugin_id <> ''");
+
+                            t.HasCheckConstraint("ck_entity_provider_identities_value_canonical", "identity_value = btrim(identity_value) AND identity_value <> ''");
+                        });
+                });
+
             modelBuilder.Entity("Prismedia.Infrastructure.Persistence.Entities.EntityRelationshipLinkRow", b =>
                 {
                     b.Property<Guid>("EntityId")
@@ -1801,6 +1873,19 @@ namespace Prismedia.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(64)")
                         .HasColumnName("kind_code");
 
+                    b.Property<Guid?>("LifecycleClaimId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("lifecycle_claim_id");
+
+                    b.Property<string>("LifecycleClaimKind")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("lifecycle_claim_kind");
+
+                    b.Property<DateTimeOffset?>("LifecycleClaimedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("lifecycle_claimed_at");
+
                     b.Property<Guid?>("ParentEntityId")
                         .HasColumnType("uuid")
                         .HasColumnName("parent_entity_id");
@@ -1836,6 +1921,8 @@ namespace Prismedia.Infrastructure.Persistence.Migrations
 
                     b.ToTable("entities", null, t =>
                         {
+                            t.HasCheckConstraint("ck_entities_lifecycle_claim", "(lifecycle_claim_kind IS NULL AND lifecycle_claim_id IS NULL AND lifecycle_claimed_at IS NULL) OR (lifecycle_claim_kind IS NOT NULL AND lifecycle_claim_id IS NOT NULL AND lifecycle_claimed_at IS NOT NULL)");
+
                             t.HasCheckConstraint("ck_entities_rating", "rating_value IS NULL OR (rating_value >= 0 AND rating_value <= 5)");
                         });
                 });
@@ -2878,10 +2965,6 @@ namespace Prismedia.Infrastructure.Persistence.Migrations
                         .HasDefaultValue(0)
                         .HasColumnName("barren_searches");
 
-                    b.Property<Guid?>("BookEntityId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("book_entity_id");
-
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
@@ -2915,6 +2998,7 @@ namespace Prismedia.Infrastructure.Persistence.Migrations
                         .HasColumnName("profile_id");
 
                     b.Property<string>("Status")
+                        .IsConcurrencyToken()
                         .IsRequired()
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(32)
@@ -2950,8 +3034,6 @@ namespace Prismedia.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("AcquisitionId")
                         .IsUnique();
-
-                    b.HasIndex("BookEntityId");
 
                     b.HasIndex("EntityId")
                         .IsUnique();
@@ -3955,6 +4037,15 @@ namespace Prismedia.Infrastructure.Persistence.Migrations
                     b.HasOne("Prismedia.Infrastructure.Persistence.Entities.EntityRow", null)
                         .WithMany()
                         .HasForeignKey("EntityId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Prismedia.Infrastructure.Persistence.Entities.EntityProviderIdentityRow", b =>
+                {
+                    b.HasOne("Prismedia.Infrastructure.Persistence.Entities.EntityRow", null)
+                        .WithOne()
+                        .HasForeignKey("Prismedia.Infrastructure.Persistence.Entities.EntityProviderIdentityRow", "EntityId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

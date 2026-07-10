@@ -3,6 +3,7 @@ using System.Formats.Tar;
 using System.IO.Compression;
 using System.Security.Cryptography;
 using Microsoft.EntityFrameworkCore;
+using Prismedia.Application.Files;
 using Prismedia.Application.Plugins;
 using Prismedia.Contracts.Plugins;
 using Prismedia.Domain.Entities;
@@ -54,6 +55,7 @@ public sealed partial class PluginCatalogService {
         var entries = await FetchRemoteIndexAsync(cancellationToken);
         return entries
             .Where(entry => PluginCompatibilityResolver.IsCompatible(entry, current))
+            .Select(PluginManifestContract.Normalize)
             .GroupBy(entry => entry.Id, StringComparer.OrdinalIgnoreCase)
             .Select(group => group.OrderByDescending(entry => ParseVersion(entry.Version)).First())
             .ToArray();
@@ -263,10 +265,8 @@ public sealed partial class PluginCatalogService {
         return new string(chars).Trim('-', '.');
     }
 
-    private static bool IsSafeExtractionPath(string destination, string target) {
-        var root = Path.GetFullPath(destination).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-        return target.Equals(root, StringComparison.OrdinalIgnoreCase) ||
-            target.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
+    internal static bool IsSafeExtractionPath(string destination, string target) {
+        return FileSystemPathComparison.IsSameOrDescendant(destination, target);
     }
 
     private static string ArtifactExtension(string urlPath) {
@@ -298,24 +298,16 @@ public sealed partial class PluginCatalogService {
             return await JsonSerializer.DeserializeAsync<PluginManifest>(stream, JsonOptions, cancellationToken);
         } catch (JsonException) {
             return null;
+        } catch (ArgumentOutOfRangeException) {
+            // A code-bearing enum in an untrusted manifest used an unknown wire value.
+            return null;
         } catch (IOException) {
             return null;
         }
     }
 
-    private static bool IsCompatible(PluginManifest manifest, Version current) {
-        if (manifest.ManifestVersion != 1 ||
-            !manifest.Runtime.Equals("dotnet-process", StringComparison.OrdinalIgnoreCase) ||
-            !manifest.ApiTags.Contains("prismedia", StringComparer.OrdinalIgnoreCase)) {
-            return false;
-        }
-
-        var min = ParseVersion(manifest.Compat.PrismediaMin);
-        var max = string.IsNullOrWhiteSpace(manifest.Compat.PrismediaMax)
-            ? null
-            : ParseVersion(manifest.Compat.PrismediaMax);
-        return current >= min && (max is null || current <= max);
-    }
+    private static bool IsCompatible(PluginManifest manifest, Version current) =>
+        PluginCompatibilityResolver.IsCompatible(manifest, current);
 
     private static Version ParseVersion(string version) {
         var normalized = version.Split('-', 2)[0];

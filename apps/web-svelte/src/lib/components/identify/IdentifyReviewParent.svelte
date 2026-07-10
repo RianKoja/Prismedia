@@ -5,7 +5,6 @@
     ChevronUp,
     FolderPlus,
     Images,
-    Info,
     Layers,
     Loader2,
     Tag,
@@ -15,6 +14,8 @@
   import { cn } from "@prismedia/ui-svelte";
   import EntityThumbnail from "$lib/components/thumbnails/EntityThumbnail.svelte";
   import ReviewSection from "$lib/components/review/ReviewSection.svelte";
+  import ProposalContextBar from "$lib/components/review/ProposalContextBar.svelte";
+  import ProposalFieldReviewSection from "$lib/components/review/ProposalFieldReviewSection.svelte";
   import IdentifyTargetPreview from "./IdentifyTargetPreview.svelte";
   import IdentifyChildrenGrid from "./IdentifyChildrenGrid.svelte";
   import IdentifyNewContainersGrid from "./IdentifyNewContainersGrid.svelte";
@@ -26,7 +27,6 @@
     defaultFieldSelectionForReview,
     groupReviewImages,
     isNewRelationshipTitle,
-    proposalFieldValue,
     proposalHasField,
     reviewImagePreviewUrl,
     structuralChildEntities,
@@ -38,7 +38,6 @@
     relationshipProposals,
     relationshipTitlesForDetail,
     reviewDiffFieldKeys,
-    reviewFieldLabels,
   } from "$lib/components/identify-review";
   import {
     proposalImageUrl,
@@ -64,7 +63,6 @@
   const store = useIdentifyStore();
 
   const DIFF_FIELD_KEYS = reviewDiffFieldKeys;
-  const FIELD_LABELS = reviewFieldLabels;
 
   let selectedFields = $state<Record<string, boolean>>({});
   let selectedImages = $state<Record<string, string | null>>({});
@@ -231,108 +229,23 @@
   <!-- Preview of what we are identifying (collapsed by default) -->
   <IdentifyTargetPreview {entity} />
 
-  <!-- Context bar -->
-  <div class="grid grid-cols-[auto_1fr_auto_auto_auto] items-center gap-4 rounded-sm border border-border-subtle bg-surface-1 p-3.5 shadow-well">
-    {#if contextPosterUrl}
-      <img
-        src={contextPosterUrl}
-        alt=""
-        class={cn("rounded-xs object-cover", coverIsSquare ? "h-14 w-14" : contextImageWide ? "h-12 w-[5.5rem]" : "h-16 w-11")}
-        decoding="async"
-        referrerpolicy="no-referrer"
-      />
-    {:else}
-      <div class={cn("grid place-items-center rounded-xs bg-surface-3", coverIsSquare ? "h-14 w-14" : contextImageWide ? "h-12 w-[5.5rem]" : "h-16 w-11")}>
-        <Layers class="h-5 w-5 text-text-disabled" />
-      </div>
-    {/if}
-    <div class="min-w-0">
-      <h2 class="truncate">{contextTitle}</h2>
-      <div class="mt-1 flex min-w-0 flex-wrap items-center gap-1.5">
-        <span class="rounded-xs border border-phosphor-600/20 bg-surface-3 px-1.5 py-0.5 font-mono text-[0.6rem] leading-none text-phosphor-600">
-          {entity.kind}
-        </span>
-        {#if showEntitySubtitle}
-          <span class="min-w-0 truncate font-mono text-[0.7rem] text-text-muted">{entity.title}</span>
-        {/if}
-      </div>
-    </div>
-    <div class="hidden flex-col items-end gap-0.5 md:flex">
-      <span class="text-kicker">Match</span>
-      <span class="font-mono font-semibold text-text-accent">
-        {proposal.confidence ? `${Math.round(proposal.confidence * 100)}%` : "—"}
-      </span>
-    </div>
-    <div class="hidden flex-col items-end gap-0.5 md:flex">
-      <span class="text-kicker">Provider</span>
-      <span class="text-[0.82rem] text-text-primary">{proposal.provider}</span>
-    </div>
-    <div class="hidden flex-col items-end gap-0.5 md:flex">
-      <span class="text-kicker">Reason</span>
-      <span class="text-[0.74rem] text-text-secondary">{proposal.matchReason ?? "—"}</span>
-    </div>
-  </div>
+  <ProposalContextBar
+    {proposal}
+    title={contextTitle}
+    subtitle={showEntitySubtitle ? entity.title : null}
+    kindLabel={entity.kind}
+    posterUrl={contextPosterUrl}
+    imageShape={coverIsSquare ? "square" : contextImageWide ? "wide" : "portrait"}
+    showReason
+  />
 
-  <!-- Base fields -->
-  <ReviewSection
-    panelId={`base-fields-${proposal.proposalId}`}
-    title="Base fields"
-    meta={`${DIFF_FIELD_KEYS.filter((k) => selectedFields[k]).length} of ${DIFF_FIELD_KEYS.filter((k) => proposalHasField(proposal, k)).length} accepted`}
-  >
-    {#snippet icon()}
-      <Info class="h-3.5 w-3.5 text-text-accent" />
-    {/snippet}
-    {#snippet actions()}
-      <button
-        type="button"
-        class="text-[0.72rem] text-text-muted transition-colors hover:text-text-primary"
-        onclick={() => setAllFields(true)}
-      >
-        All
-      </button>
-      <button
-        type="button"
-        class="text-[0.72rem] text-text-muted transition-colors hover:text-text-primary"
-        onclick={() => setAllFields(false)}
-      >
-        None
-      </button>
-    {/snippet}
-
-    <!-- Diff header -->
-    <div class="hidden grid-cols-[auto_110px_1fr_1fr] items-center gap-3 border-b border-border-default bg-surface-2 px-3.5 py-1.5 md:grid">
-      <span class="w-5"></span>
-      <span class="text-kicker">Field</span>
-      <span class="text-kicker">Current</span>
-      <span class="text-kicker text-text-accent">Proposed</span>
-    </div>
-
-    {#each DIFF_FIELD_KEYS as field (field)}
-      {#if proposalHasField(proposal, field)}
-        {@const current = currentFieldValueForReview(entity, detail, field)}
-        <div class="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-3 border-b border-border-subtle px-3.5 py-3 last:border-b-0 md:grid-cols-[auto_110px_1fr_1fr]">
-          <label class="flex items-center">
-            <input
-              type="checkbox"
-              class="h-4 w-4 accent-accent-500"
-              checked={selectedFields[field]}
-              onchange={(event) => setFieldSelected(field, event.currentTarget.checked)}
-            />
-          </label>
-          <div class="md:contents">
-            <div>
-              <span class="font-heading text-[0.76rem] font-semibold text-text-secondary">{FIELD_LABELS[field]}</span>
-              <span class="ml-2 font-mono text-[0.62rem] text-text-disabled md:ml-0 md:block">{field}</span>
-            </div>
-            <div class="hidden text-[0.76rem] leading-snug text-text-muted md:block">{current || "—"}</div>
-            <div class="mt-1 text-[0.82rem] leading-snug text-text-primary md:mt-0">
-              {proposalFieldValue(proposal, field)}
-            </div>
-          </div>
-        </div>
-      {/if}
-    {/each}
-  </ReviewSection>
+  <ProposalFieldReviewSection
+    {proposal}
+    {selectedFields}
+    currentValue={(field) => currentFieldValueForReview(entity, detail, field)}
+    onFieldChange={setFieldSelected}
+    onAllFields={setAllFields}
+  />
 
   <!-- Credits -->
   {#if credits.length > 0}

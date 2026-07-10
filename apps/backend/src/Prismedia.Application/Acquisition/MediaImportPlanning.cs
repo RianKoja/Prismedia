@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using Prismedia.Application.Files;
 
 namespace Prismedia.Application.Acquisition;
 
@@ -132,6 +133,9 @@ public static class MusicImportPlanBuilder {
         ".jpg", ".jpeg", ".png", ".webp"
     };
 
+    /// <summary>Whether a planned payload path is source media rather than carried cover art.</summary>
+    public static bool IsAudioFile(string path) => AudioExtensions.Contains(Path.GetExtension(path));
+
     /// <summary>
     /// Plans the import of a downloaded album release into the album folder the naming template renders
     /// (<paramref name="template"/> defaults to <see cref="MediaNamingTemplates.MusicDefault"/>; a blank or
@@ -187,7 +191,7 @@ public static class MusicImportPlanBuilder {
             var segments = SplitDirectories(path);
             var shared = 0;
             while (shared < length && shared < segments.Length
-                && string.Equals(first[shared], segments[shared], StringComparison.OrdinalIgnoreCase)) {
+                && string.Equals(first[shared], segments[shared], FileSystemPathComparison.Comparison)) {
                 shared++;
             }
 
@@ -297,7 +301,25 @@ public static partial class TvImportPlanBuilder {
         }
 
         if (episodeTitles is { Count: > 0 }) {
-            units = RealignByEpisodeTitles(units, episodeTitles, series, template, quality);
+            units = RealignByEpisodeTitles(
+                units,
+                episodeTitles,
+                series,
+                template,
+                quality,
+                evidenceSeason: seasonNumber);
+        }
+
+        // One structural episode slot has one playable owner. Numeric duplicates and title-aligned
+        // covered episodes are both claims: importing either overlap under a collision suffix would let
+        // the housekeeping scan mint duplicate episode Entities for the same season/position.
+        var claimedSlots = units
+            .SelectMany(unit => unit.ExtraEpisodes
+                .Prepend(unit.Episode)
+                .Select(episode => (unit.Season, Episode: episode)))
+            .ToArray();
+        if (claimedSlots.Distinct().Count() != claimedSlots.Length) {
+            return TvUnitsPlan.Block(ImportBlockReason.AmbiguousMultiplePrimaries);
         }
 
         return TvUnitsPlan.For(units);
@@ -318,10 +340,16 @@ public static partial class TvImportPlanBuilder {
         IReadOnlyList<TvEpisodeTitle> episodeTitles,
         string series,
         string? template,
-        string? quality) {
+        string? quality,
+        int? evidenceSeason) {
         var realigned = new List<TvPlanUnit>(units.Count);
         var changed = false;
         foreach (var unit in units) {
+            if (evidenceSeason is { } requestedSeason && unit.Season != requestedSeason) {
+                realigned.Add(unit);
+                continue;
+            }
+
             var tail = TvReleaseTokens.EpisodeTitleTail(Path.GetFileNameWithoutExtension(unit.SourceRelativePath));
             var matched = tail is null
                 ? []
@@ -409,6 +437,6 @@ public static class ImportTargetResolver {
 
     private static bool IsUnderRoot(string candidate, string root) {
         var normalizedRoot = root.EndsWith(Path.DirectorySeparatorChar) ? root : root + Path.DirectorySeparatorChar;
-        return candidate.StartsWith(normalizedRoot, StringComparison.Ordinal);
+        return candidate.StartsWith(normalizedRoot, FileSystemPathComparison.Comparison);
     }
 }

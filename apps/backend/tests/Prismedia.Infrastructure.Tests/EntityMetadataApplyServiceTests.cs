@@ -1,11 +1,14 @@
 using Microsoft.EntityFrameworkCore;
 using Prismedia.Application.Entities;
+using Prismedia.Application.Plugins;
 using Prismedia.Contracts.Entities;
 using Prismedia.Contracts.Plugins;
 using Prismedia.Domain.Entities;
+using Prismedia.Infrastructure.Entities;
 using Prismedia.Infrastructure.Persistence;
 using Prismedia.Infrastructure.Persistence.Entities;
 using Prismedia.Infrastructure.Plugins;
+using DomainEntityExternalId = Prismedia.Domain.Entities.EntityExternalId;
 
 namespace Prismedia.Infrastructure.Tests;
 
@@ -420,7 +423,10 @@ public sealed class EntityMetadataApplyServiceTests {
         Assert.Equal("1", (await db.EntityExternalIds.SingleAsync(row => row.EntityId == volumeRow.Id && row.Provider == "volume")).Value);
         Assert.Equal(volumeRow.Id, (await db.Entities.SingleAsync(row => row.Id == chapterOneId)).ParentEntityId);
         Assert.Equal(volumeRow.Id, (await db.Entities.SingleAsync(row => row.Id == chapterTwoId)).ParentEntityId);
-        Assert.Equal("ch-1", (await db.EntityExternalIds.SingleAsync(row => row.EntityId == chapterOneId && row.Provider == "mangadexChapter")).Value);
+        var chapterIdentity = await db.EntityExternalIds.SingleAsync(row => row.EntityId == chapterOneId);
+        Assert.Equal(
+            new ExternalIdentity("mangadexChapter", "ch-1"),
+            new ExternalIdentity(chapterIdentity.Provider, chapterIdentity.Value));
     }
 
     [Fact]
@@ -820,6 +826,52 @@ public sealed class EntityMetadataApplyServiceTests {
         var file = await db.EntityFiles.SingleAsync(row => row.EntityId == entityId && row.Role == EntityFileRole.Cover);
         Assert.StartsWith($"/assets/plugins/artwork/{entityId}/cover-", file.Path);
         Assert.EndsWith(".jpg", file.Path);
+    }
+
+    [Fact]
+    public async Task ApplyStagesRemoteArtworkBeforeEnteringEntityLifecycleLease() {
+        await using var db = CreateContext();
+        var entityId = Guid.NewGuid();
+        SeedEntity(db, entityId, "book", "Staged artwork");
+        await db.SaveChangesAsync();
+        var lease = new ObservingLifecycleLease();
+        var imageHandler = new LeaseObservingImageHandler(() => lease.InsideLease);
+        var cacheRoot = Path.Combine(Path.GetTempPath(), $"prismedia-staged-artwork-{Guid.NewGuid():N}");
+        var imageUrl = "https://example.test/staged-cover.jpg";
+        var proposal = new EntityMetadataProposal(
+            "provider:book:staged",
+            "provider",
+            ProposalKind.Book,
+            1,
+            "external-id",
+            EmptyPatch(),
+            [new ImageCandidate("cover", imageUrl, "provider", null, null, null, null)],
+            [],
+            [],
+            TargetEntityId: entityId);
+
+        try {
+            var service = new EntityMetadataApplyService(
+                db,
+                new PluginArtworkServiceOptions(cacheRoot),
+                new HttpClient(imageHandler),
+                lifecycle: lease);
+
+            Assert.True(await service.ApplyAsync(
+                entityId,
+                proposal,
+                ["images"],
+                new Dictionary<string, string?> { ["cover"] = imageUrl },
+                CancellationToken.None));
+
+            Assert.True(imageHandler.WasCalled);
+            Assert.False(imageHandler.ObservedInsideLease);
+            Assert.False(lease.InsideLease);
+        } finally {
+            if (Directory.Exists(cacheRoot)) {
+                Directory.Delete(cacheRoot, recursive: true);
+            }
+        }
     }
 
     [Fact]
@@ -1596,6 +1648,330 @@ public sealed class EntityMetadataApplyServiceTests {
     }
 
     [Fact]
+    public async Task ApplyStructuralChildResolvesTheCompleteValidIdentitySetOnce() {
+        await using var db = CreateContext();
+        var bookId = Guid.NewGuid();
+        var identityMatchId = Guid.NewGuid();
+        var titleMatchId = Guid.NewGuid();
+        SeedEntity(db, bookId, EntityKind.Book.ToCode(), "Book");
+        SeedEntity(db, identityMatchId, EntityKind.BookVolume.ToCode(), "Identity Match", bookId);
+        SeedEntity(db, titleMatchId, EntityKind.BookVolume.ToCode(), "Provider Volume", bookId);
+        await db.SaveChangesAsync();
+
+        var tmdb = new ExternalIdentity("tmdb", "603");
+        var isbn = new ExternalIdentity("isbn-13", "9780000000001");
+        var identities = new RecordingExternalIdentityStore {
+            Resolution = new ExternalIdentityResolution([
+                new ExternalIdentityMatch(identityMatchId, [tmdb, isbn])
+            ])
+        };
+        var service = new EntityMetadataApplyService(
+            db,
+            new PluginArtworkServiceOptions(Path.GetTempPath()),
+            externalIdentities: identities);
+        var proposal = ProposalWithStructuralChild(
+            bookId,
+            "Provider Volume",
+            new Dictionary<string, string> {
+                [" TMDB "] = " 603 ",
+                ["isbn-13"] = "9780000000001",
+                ["candidate"] = "https://metadata.example/items/603",
+                ["blank"] = " "
+            });
+
+        await service.ApplyAsync(bookId, proposal, selectedFields: [], selectedImages: null, CancellationToken.None);
+
+        var call = Assert.Single(identities.ResolveCalls);
+        Assert.Equal(EntityKind.BookVolume, call.Kind);
+        Assert.Equal(bookId, call.ParentEntityId);
+        Assert.Equal([isbn, tmdb], call.Identities.OrderBy(identity => identity.Namespace).ToArray());
+        Assert.Equal("Provider Volume", (await db.Entities.FindAsync([identityMatchId]))?.Title);
+        Assert.Equal("Provider Volume", (await db.Entities.FindAsync([titleMatchId]))?.Title);
+    }
+
+    [Fact]
+    public async Task ApplyStructuralChildThrowsWhenExternalIdentitiesMatchDifferentEntities() {
+        await using var db = CreateContext();
+        var bookId = Guid.NewGuid();
+        var firstMatchId = Guid.NewGuid();
+        var titleMatchId = Guid.NewGuid();
+        SeedEntity(db, bookId, EntityKind.Book.ToCode(), "Book");
+        SeedEntity(db, firstMatchId, EntityKind.BookVolume.ToCode(), "First Match", bookId);
+        SeedEntity(db, titleMatchId, EntityKind.BookVolume.ToCode(), "Provider Volume", bookId);
+        await db.SaveChangesAsync();
+
+        var tmdb = new ExternalIdentity("tmdb", "603");
+        var isbn = new ExternalIdentity("isbn-13", "9780000000001");
+        var identities = new RecordingExternalIdentityStore {
+            Resolution = new ExternalIdentityResolution([
+                new ExternalIdentityMatch(firstMatchId, [tmdb]),
+                new ExternalIdentityMatch(titleMatchId, [isbn])
+            ])
+        };
+        var service = new EntityMetadataApplyService(
+            db,
+            new PluginArtworkServiceOptions(Path.GetTempPath()),
+            externalIdentities: identities);
+        var proposal = ProposalWithStructuralChild(
+            bookId,
+            "Provider Volume",
+            new Dictionary<string, string> {
+                ["tmdb"] = "603",
+                ["isbn-13"] = "9780000000001"
+            });
+
+        var exception = await Assert.ThrowsAsync<ExternalIdentityAmbiguityException>(() => service.ApplyAsync(
+            bookId,
+            proposal,
+            selectedFields: [],
+            selectedImages: null,
+            CancellationToken.None));
+
+        Assert.Equal(EntityKind.BookVolume, exception.Kind);
+        Assert.Equal(2, exception.Matches.Count);
+        Assert.Empty(identities.WriteCalls);
+        Assert.Equal("First Match", (await db.Entities.FindAsync([firstMatchId]))?.Title);
+        Assert.Equal("Provider Volume", (await db.Entities.FindAsync([titleMatchId]))?.Title);
+    }
+
+    [Fact]
+    public async Task ApplyPatchDelegatesExternalIdentityReplacementToStore() {
+        await using var db = CreateContext();
+        var entityId = Guid.NewGuid();
+        SeedEntity(db, entityId, EntityKind.Movie.ToCode(), "Movie");
+        await db.SaveChangesAsync();
+        var identities = new RecordingExternalIdentityStore();
+        var service = new EntityMetadataApplyService(
+            db,
+            new PluginArtworkServiceOptions(Path.GetTempPath()),
+            externalIdentities: identities);
+
+        await service.ApplyPatchAsync(
+            entityId,
+            new EntityMetadataUpdateRequest(
+                Fields: ["externalIds"],
+                Patch: EmptyPatch() with {
+                    ExternalIds = new Dictionary<string, string> { [" TMDB "] = " 603 " },
+                    Urls = ["https://www.themoviedb.org/movie/603"]
+                }),
+            CancellationToken.None);
+
+        var call = Assert.Single(identities.WriteCalls);
+        Assert.Equal(ExternalIdentityWriteMode.ReplaceAll, call.Mode);
+        var association = Assert.Single(call.Identities);
+        Assert.Equal(new ExternalIdentity("tmdb", "603"), association.Identity);
+        Assert.Equal("https://www.themoviedb.org/movie/603", association.Url);
+    }
+
+    [Fact]
+    public async Task ApplyProposalDelegatesValidExternalIdentityUpsertsAndSkipsUrlLocators() {
+        await using var db = CreateContext();
+        var entityId = Guid.NewGuid();
+        SeedEntity(db, entityId, EntityKind.Movie.ToCode(), "Movie");
+        await db.SaveChangesAsync();
+        var identities = new RecordingExternalIdentityStore();
+        var service = new EntityMetadataApplyService(
+            db,
+            new PluginArtworkServiceOptions(Path.GetTempPath()),
+            externalIdentities: identities);
+        var proposal = new EntityMetadataProposal(
+            ProposalId: "tmdb:movie:603",
+            Provider: "tmdb",
+            TargetKind: ProposalKind.Movie,
+            Confidence: 1,
+            MatchReason: "external-id",
+            Patch: EmptyPatch() with {
+                ExternalIds = new Dictionary<string, string> {
+                    ["tmdb"] = "603",
+                    ["candidate"] = "https://metadata.example/items/603"
+                }
+            },
+            Images: [],
+            Children: [],
+            Candidates: []);
+
+        await service.ApplyAsync(
+            entityId,
+            proposal,
+            selectedFields: ["externalIds"],
+            selectedImages: null,
+            CancellationToken.None);
+
+        var call = Assert.Single(identities.WriteCalls);
+        Assert.Equal(ExternalIdentityWriteMode.Upsert, call.Mode);
+        Assert.Equal(new ExternalIdentity("tmdb", "603"), Assert.Single(call.Identities).Identity);
+    }
+
+    [Fact]
+    public async Task ApplyProposalBindsOnlyAcceptedProvidersDeclaredIdentityRoute() {
+        await using var db = CreateContext();
+        var entityId = Guid.NewGuid();
+        SeedEntity(db, entityId, EntityKind.Movie.ToCode(), "Movie");
+        await db.SaveChangesAsync();
+        var identities = new EfEntityExternalIdentityStore(db, TimeProvider.System);
+        var providerIdentities = new EfEntityProviderIdentityStore(db, TimeProvider.System);
+        var router = new ConfiguredIdentityRouter(
+            new PluginIdentityRoute("tmdb", new ExternalIdentity("tmdb", "603")),
+            new PluginIdentityRoute("imdb", new ExternalIdentity("imdb", "tt0133093")));
+        var service = new EntityMetadataApplyService(
+            db,
+            new PluginArtworkServiceOptions(Path.GetTempPath()),
+            externalIdentities: identities,
+            providerIdentities: providerIdentities,
+            identityRouter: router);
+        var proposal = new EntityMetadataProposal(
+            ProposalId: "tmdb:movie:603",
+            Provider: "TMDB",
+            TargetKind: ProposalKind.Movie,
+            Confidence: 1,
+            MatchReason: "external-id",
+            Patch: EmptyPatch() with {
+                ExternalIds = new Dictionary<string, string> {
+                    ["tmdb"] = "603",
+                    ["imdb"] = "tt0133093"
+                }
+            },
+            Images: [],
+            Children: [],
+            Candidates: []);
+
+        await service.ApplyAsync(
+            entityId,
+            proposal,
+            selectedFields: ["externalIds"],
+            selectedImages: null,
+            CancellationToken.None);
+
+        var binding = await providerIdentities.GetAsync(entityId, CancellationToken.None);
+        Assert.NotNull(binding);
+        Assert.Equal("tmdb", binding.PluginId);
+        Assert.Equal(new ExternalIdentity("tmdb", "603"), binding.Identity);
+        Assert.Single(await db.EntityProviderIdentities.ToArrayAsync());
+        Assert.Contains(db.EntityExternalIds, value =>
+            value.EntityId == entityId
+            && value.Provider == "imdb"
+            && value.Value == "tt0133093");
+    }
+
+    [Fact]
+    public async Task ApplyProposalDoesNotInferProviderIdentityWhenAcceptedPluginHasMultipleEligibleRoutes() {
+        await using var db = CreateContext();
+        var entityId = Guid.NewGuid();
+        SeedEntity(db, entityId, EntityKind.Movie.ToCode(), "Ambiguous movie");
+        await db.SaveChangesAsync();
+        var identities = new EfEntityExternalIdentityStore(db, TimeProvider.System);
+        var providerIdentities = new EfEntityProviderIdentityStore(db, TimeProvider.System);
+        var router = new ConfiguredIdentityRouter(
+            new PluginIdentityRoute("tmdb", new ExternalIdentity("tmdb", "603")),
+            new PluginIdentityRoute("tmdb", new ExternalIdentity("tmdblegacy", "movie:603")));
+        var service = new EntityMetadataApplyService(
+            db,
+            new PluginArtworkServiceOptions(Path.GetTempPath()),
+            externalIdentities: identities,
+            providerIdentities: providerIdentities,
+            identityRouter: router);
+        var proposal = new EntityMetadataProposal(
+            ProposalId: "tmdb:movie:603",
+            Provider: "tmdb",
+            TargetKind: ProposalKind.Movie,
+            Confidence: 1,
+            MatchReason: "external-id",
+            Patch: EmptyPatch() with {
+                ExternalIds = new Dictionary<string, string> {
+                    ["tmdb"] = "603",
+                    ["tmdblegacy"] = "movie:603"
+                }
+            },
+            Images: [],
+            Children: [],
+            Candidates: []);
+
+        await service.ApplyAsync(
+            entityId,
+            proposal,
+            selectedFields: ["externalIds"],
+            selectedImages: null,
+            CancellationToken.None);
+
+        Assert.Null(await providerIdentities.GetAsync(entityId, CancellationToken.None));
+        Assert.Empty(await db.EntityProviderIdentities.ToArrayAsync());
+    }
+
+    [Fact]
+    public async Task ApplyProposalBindsRecursiveStructuralChildrenToTheirOwnProviderIdentity() {
+        await using var db = CreateContext();
+        var seriesId = Guid.NewGuid();
+        var seasonId = Guid.NewGuid();
+        SeedEntity(db, seriesId, EntityKind.VideoSeries.ToCode(), "Series");
+        SeedEntity(db, seasonId, EntityKind.VideoSeason.ToCode(), "Season 2", seriesId, sortOrder: 2);
+        await db.SaveChangesAsync();
+        var identities = new EfEntityExternalIdentityStore(db, TimeProvider.System);
+        var providerIdentities = new EfEntityProviderIdentityStore(db, TimeProvider.System);
+        var router = new ConfiguredIdentityRouter(
+            new PluginIdentityRoute("tmdb", new ExternalIdentity("tmdb", "82728")),
+            new PluginIdentityRoute("imdb", new ExternalIdentity("imdb", "tt7678620")),
+            new PluginIdentityRoute("tmdb", new ExternalIdentity("tmdbseason", "82728:2")),
+            new PluginIdentityRoute("tvdb", new ExternalIdentity("tvdbseason", "1921360")));
+        var service = new EntityMetadataApplyService(
+            db,
+            new PluginArtworkServiceOptions(Path.GetTempPath()),
+            externalIdentities: identities,
+            providerIdentities: providerIdentities,
+            identityRouter: router);
+        var child = new EntityMetadataProposal(
+            ProposalId: "tmdb:tv:82728:season:2",
+            Provider: "tmdb",
+            TargetKind: ProposalKind.VideoSeason,
+            Confidence: 1,
+            MatchReason: "structural-child",
+            Patch: EmptyPatch() with {
+                Title = "Season 2",
+                ExternalIds = new Dictionary<string, string> {
+                    ["tmdbseason"] = "82728:2",
+                    ["tvdbseason"] = "1921360"
+                }
+            },
+            Images: [],
+            Children: [],
+            Candidates: [],
+            TargetEntityId: seasonId);
+        var proposal = new EntityMetadataProposal(
+            ProposalId: "tmdb:tv:82728",
+            Provider: "tmdb",
+            TargetKind: ProposalKind.VideoSeries,
+            Confidence: 1,
+            MatchReason: "external-id",
+            Patch: EmptyPatch() with {
+                ExternalIds = new Dictionary<string, string> {
+                    ["tmdb"] = "82728",
+                    ["imdb"] = "tt7678620"
+                }
+            },
+            Images: [],
+            Children: [child],
+            Candidates: []);
+
+        await service.ApplyAsync(
+            seriesId,
+            proposal,
+            selectedFields: ["externalIds"],
+            selectedImages: null,
+            CancellationToken.None);
+
+        var rootBinding = await providerIdentities.GetAsync(seriesId, CancellationToken.None);
+        var childBinding = await providerIdentities.GetAsync(seasonId, CancellationToken.None);
+        Assert.Equal(new ExternalIdentity("tmdb", "82728"), rootBinding?.Identity);
+        Assert.Equal("tmdb", rootBinding?.PluginId);
+        Assert.Equal(new ExternalIdentity("tmdbseason", "82728:2"), childBinding?.Identity);
+        Assert.Equal("tmdb", childBinding?.PluginId);
+        Assert.Equal(2, await db.EntityProviderIdentities.CountAsync());
+        Assert.Contains(db.EntityExternalIds, value =>
+            value.EntityId == seasonId
+            && value.Provider == "tvdbseason"
+            && value.Value == "1921360");
+    }
+
+    [Fact]
     public async Task ApplyMergesMultipleCreditRolesForSamePersonIntoOneRelationship() {
         await using var db = CreateContext();
         var episodeId = Guid.Parse("17171717-1717-1717-1717-171717171717");
@@ -1674,6 +2050,84 @@ public sealed class EntityMetadataApplyServiceTests {
         Positions: new Dictionary<string, int>(),
         Classification: null);
 
+    private static EntityMetadataProposal ProposalWithStructuralChild(
+        Guid bookId,
+        string childTitle,
+        IReadOnlyDictionary<string, string> externalIds) =>
+        new(
+            ProposalId: "provider:book",
+            Provider: "provider",
+            TargetKind: ProposalKind.Book,
+            TargetEntityId: bookId,
+            Confidence: 1,
+            MatchReason: "external-id",
+            Patch: EmptyPatch(),
+            Images: [],
+            Children: [new EntityMetadataProposal(
+                ProposalId: "provider:volume",
+                Provider: "provider",
+                TargetKind: ProposalKind.BookVolume,
+                Confidence: 1,
+                MatchReason: "external-id",
+                Patch: EmptyPatch() with { Title = childTitle, ExternalIds = externalIds },
+                Images: [],
+                Children: [],
+                Candidates: [])],
+            Candidates: []);
+
+    private sealed class RecordingExternalIdentityStore : IEntityExternalIdentityStore {
+        public ExternalIdentityResolution Resolution { get; init; } = new([]);
+
+        public List<ExternalIdentityResolveCall> ResolveCalls { get; } = [];
+
+        public List<ExternalIdentityWriteCall> WriteCalls { get; } = [];
+
+        public Task<IReadOnlyList<DomainEntityExternalId>> ListAsync(
+            Guid entityId,
+            CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<DomainEntityExternalId>>([]);
+
+        public Task<ExternalIdentityResolution> ResolveAsync(
+            EntityKind kind,
+            IReadOnlyCollection<ExternalIdentity> identities,
+            Guid? parentEntityId,
+            CancellationToken cancellationToken) {
+            ResolveCalls.Add(new ExternalIdentityResolveCall(kind, identities.ToArray(), parentEntityId));
+            return Task.FromResult(Resolution);
+        }
+
+        public Task WriteAsync(
+            Guid entityId,
+            IReadOnlyCollection<DomainEntityExternalId> identities,
+            ExternalIdentityWriteMode mode,
+            CancellationToken cancellationToken) {
+            WriteCalls.Add(new ExternalIdentityWriteCall(entityId, identities.ToArray(), mode));
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed record ExternalIdentityResolveCall(
+        EntityKind Kind,
+        IReadOnlyList<ExternalIdentity> Identities,
+        Guid? ParentEntityId);
+
+    private sealed record ExternalIdentityWriteCall(
+        Guid EntityId,
+        IReadOnlyList<DomainEntityExternalId> Identities,
+        ExternalIdentityWriteMode Mode);
+
+    private sealed class ConfiguredIdentityRouter(params PluginIdentityRoute[] routes) : IPluginIdentityRouter {
+        public Task<IReadOnlyList<PluginIdentityRoute>> ResolveAsync(
+            string entityKindCode,
+            IdentifyAction action,
+            IReadOnlyList<ExternalIdentity> identities,
+            CancellationToken cancellationToken) {
+            var requested = identities.ToHashSet();
+            return Task.FromResult<IReadOnlyList<PluginIdentityRoute>>(
+                routes.Where(route => requested.Contains(route.Identity)).ToArray());
+        }
+    }
+
     private sealed class FixedImageHandler : HttpMessageHandler {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
             Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.OK) {
@@ -1692,6 +2146,38 @@ public sealed class EntityMetadataApplyServiceTests {
             return Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.OK) {
                 Content = new ByteArrayContent([1, 2, 3])
             });
+        }
+    }
+
+    private sealed class LeaseObservingImageHandler(Func<bool> insideLease) : HttpMessageHandler {
+        public bool WasCalled { get; private set; }
+        public bool ObservedInsideLease { get; private set; }
+
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken) {
+            WasCalled = true;
+            ObservedInsideLease |= insideLease();
+            return Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.OK) {
+                Content = new ByteArrayContent([1, 2, 3])
+            });
+        }
+    }
+
+    private sealed class ObservingLifecycleLease : IEntityLifecycleMutationLease {
+        public bool InsideLease { get; private set; }
+
+        public async Task<bool> ExecuteAsync(
+            Guid entityId,
+            Func<CancellationToken, Task> mutation,
+            CancellationToken cancellationToken) {
+            InsideLease = true;
+            try {
+                await mutation(cancellationToken);
+                return true;
+            } finally {
+                InsideLease = false;
+            }
         }
     }
 }

@@ -16,18 +16,21 @@ public sealed partial class IdentifyPluginService : IIdentifyProviderService {
     private readonly IdentifyMatchHintResolver _hints;
     private readonly IdentifyRunnerSelector _runners;
     private readonly EntityMetadataApplyService _apply;
+    private readonly IIdentifyTargetEligibilityService _eligibility;
 
     public IdentifyPluginService(
         PrismediaDbContext db,
         PluginCatalogService catalog,
         IdentifyMatchHintResolver hints,
         IdentifyRunnerSelector runners,
-        EntityMetadataApplyService apply) {
+        EntityMetadataApplyService apply,
+        IIdentifyTargetEligibilityService eligibility) {
         _db = db;
         _catalog = catalog;
         _hints = hints;
         _runners = runners;
         _apply = apply;
+        _eligibility = eligibility;
     }
 
     /// <summary>
@@ -54,17 +57,16 @@ public sealed partial class IdentifyPluginService : IIdentifyProviderService {
         bool cascadeChildren = true,
         IIdentifyCascadeSink? sink = null,
         bool hydrateRelationships = true) {
-        if (hideNsfw && await _db.Entities.AsNoTracking()
-                .AnyAsync(entity => entity.Id == entityId && entity.IsNsfw, cancellationToken)) {
-            return new IdentifyPluginResponse(false, null, $"Entity '{entityId}' was not found.");
-        }
-
         var entity = await _db.Entities
             .AsNoTracking()
-            .FirstOrDefaultAsync(row => row.Id == entityId, cancellationToken);
+            .FirstOrDefaultAsync(
+                row => row.Id == entityId && (!hideNsfw || !row.IsNsfw),
+                cancellationToken);
         if (entity is null) {
-            return new IdentifyPluginResponse(false, null, $"Entity '{entityId}' was not found.");
+            throw new KeyNotFoundException($"Entity '{entityId}' was not found.");
         }
+
+        (await _eligibility.EvaluateAsync(entityId, cancellationToken)).EnsureEligible();
 
         var descriptor = await _catalog.FindProviderAsync(providerId, entity.KindCode, cancellationToken);
         if (descriptor is null) {
@@ -220,6 +222,11 @@ public sealed partial class IdentifyPluginService : IIdentifyProviderService {
         IReadOnlyDictionary<string, string> auth,
         bool includeNsfw,
         CancellationToken cancellationToken) {
+        var eligibility = await _eligibility.EvaluateAsync(parent.Id, cancellationToken);
+        if (!eligibility.IsEligible) {
+            return new IdentifyPluginResponse(false, null, $"Entity '{parent.Id}' has no source media on disk to identify.");
+        }
+
         var resolvedHints = await _hints.ResolveAsync(parent.Id, descriptor.Manifest.Id, cancellationToken);
         var ancestors = await LoadAncestorSnapshotsAsync(parent, descriptor.Manifest.Id, cancellationToken);
         var positions = await ResolveStructuralPositionsAsync(parent.Id, parent.SortOrder, cancellationToken);
@@ -230,7 +237,7 @@ public sealed partial class IdentifyPluginService : IIdentifyProviderService {
         var query = new IdentifyQuery(null, null, null);
         var resolvedAction = ResolveAction(descriptor.Manifest, parent.KindCode, query, resolvedHints);
         var request = new IdentifyPluginRequest(
-            ProtocolVersion: 2,
+            ProtocolVersion: PluginProtocol.CurrentVersion,
             Action: resolvedAction,
             Auth: auth,
             Entity: await SnapshotAsync(parent, descriptor.Manifest.Id, cancellationToken, pluginRequestKind),
@@ -265,7 +272,7 @@ public sealed partial class IdentifyPluginService : IIdentifyProviderService {
         IReadOnlyDictionary<string, string?>? selectedImages,
         CancellationToken cancellationToken,
         IIdentifyApplyProgressReporter? progress = null) =>
-        _apply.ApplyAsync(entityId, proposal, selectedFields, selectedImages, progress, cancellationToken);
+        ApplyEligibleAsync(entityId, proposal, selectedFields, selectedImages, progress, cancellationToken);
 
     /// <summary>
     /// Applies selected metadata proposal fields to an entity while publishing live progress.
@@ -277,7 +284,168 @@ public sealed partial class IdentifyPluginService : IIdentifyProviderService {
         IReadOnlyDictionary<string, string?>? selectedImages,
         IIdentifyApplyProgressReporter? progress,
         CancellationToken cancellationToken) =>
-        _apply.ApplyAsync(entityId, proposal, selectedFields, selectedImages, progress, cancellationToken);
+        ApplyEligibleAsync(entityId, proposal, selectedFields, selectedImages, progress, cancellationToken);
+
+    private async Task<bool> ApplyEligibleAsync(
+        Guid entityId,
+        EntityMetadataProposal proposal,
+        IReadOnlyCollection<string> selectedFields,
+        IReadOnlyDictionary<string, string?>? selectedImages,
+        IIdentifyApplyProgressReporter? progress,
+        CancellationToken cancellationToken) {
+        var preparedProposal = await PrepareApplyProposalAsync(
+            entityId,
+            proposal,
+            cancellationToken);
+        return await ApplyPreparedProposalAsync(
+            entityId,
+            preparedProposal,
+            selectedFields,
+            selectedImages,
+            progress,
+            cancellationToken);
+    }
+
+    /// <summary>
+    /// Rebinds the accepted proposal against the current local hierarchy and removes persisted
+    /// descendants that are no longer eligible. Queue apply uses the returned tree for progress and
+    /// history; direct apply uses the same preparation before writing.
+    /// </summary>
+    internal async Task<EntityMetadataProposal> PrepareApplyProposalAsync(
+        Guid entityId,
+        EntityMetadataProposal proposal,
+        CancellationToken cancellationToken) {
+        (await _eligibility.EvaluateAsync(entityId, cancellationToken)).EnsureEligible();
+        var reboundProposal = await RebindCurrentStructuralTargetsAsync(
+            proposal,
+            entityId,
+            cancellationToken);
+        return await RemoveIneligibleBoundStructuralDescendantsAsync(
+            reboundProposal,
+            cancellationToken);
+    }
+
+    /// <summary>
+    /// Applies an already prepared tree while retaining the root and descendant eligibility checks
+    /// at the final write boundary.
+    /// </summary>
+    internal async Task<bool> ApplyPreparedProposalAsync(
+        Guid entityId,
+        EntityMetadataProposal preparedProposal,
+        IReadOnlyCollection<string> selectedFields,
+        IReadOnlyDictionary<string, string?>? selectedImages,
+        IIdentifyApplyProgressReporter? progress,
+        CancellationToken cancellationToken) {
+        (await _eligibility.EvaluateAsync(entityId, cancellationToken)).EnsureEligible();
+        return await _apply.ApplyIdentifyAsync(
+            entityId,
+            preparedProposal,
+            selectedFields,
+            selectedImages,
+            progress,
+            _eligibility,
+            cancellationToken);
+    }
+
+    private async Task<EntityMetadataProposal> RebindCurrentStructuralTargetsAsync(
+        EntityMetadataProposal node,
+        Guid? parentEntityId,
+        CancellationToken cancellationToken) {
+        var children = new List<EntityMetadataProposal>();
+        foreach (var child in node.Children ?? []) {
+            var isRelationship = EntityMetadataProposalTraversal.IsRelationshipKind(child.TargetKind);
+            var targetEntityId = child.TargetEntityId;
+            if (!isRelationship && targetEntityId is null && parentEntityId is { } parentId) {
+                targetEntityId = await _apply.ResolveExistingStructuralChildIdAsync(
+                    parentId,
+                    child,
+                    cancellationToken);
+            }
+
+            var reboundChild = targetEntityId == child.TargetEntityId
+                ? child
+                : child with { TargetEntityId = targetEntityId };
+            children.Add(await RebindCurrentStructuralTargetsAsync(
+                reboundChild,
+                targetEntityId,
+                cancellationToken));
+        }
+
+        var relationships = new List<EntityMetadataProposal>();
+        foreach (var relationship in node.Relationships ?? []) {
+            relationships.Add(await RebindCurrentStructuralTargetsAsync(
+                relationship,
+                relationship.TargetEntityId,
+                cancellationToken));
+        }
+
+        return node with {
+            Children = children,
+            Relationships = relationships
+        };
+    }
+
+    /// <summary>
+    /// Revalidates every persisted structural target immediately before metadata application. A
+    /// descendant may have become Wanted, lost its Source binding, or been deleted while the review
+    /// was open; its stale patch must not overwrite request metadata. Unbound provider containers
+    /// remain in the tree, but removing their last eligible bound descendant naturally prevents the
+    /// apply service from materializing an empty container.
+    /// </summary>
+    private async Task<EntityMetadataProposal> RemoveIneligibleBoundStructuralDescendantsAsync(
+        EntityMetadataProposal proposal,
+        CancellationToken cancellationToken) {
+        var boundIds = new HashSet<Guid>();
+        CollectBoundStructuralDescendantIds(proposal, boundIds);
+        if (boundIds.Count == 0) {
+            return proposal;
+        }
+
+        var eligibility = await _eligibility.EvaluateManyAsync(boundIds, cancellationToken);
+        return FilterIneligibleBoundStructuralDescendants(proposal, eligibility);
+    }
+
+    private static void CollectBoundStructuralDescendantIds(
+        EntityMetadataProposal node,
+        HashSet<Guid> boundIds) {
+        foreach (var child in node.Children ?? []) {
+            if (!EntityMetadataProposalTraversal.IsRelationshipKind(child.TargetKind) &&
+                child.TargetEntityId is { } targetId) {
+                boundIds.Add(targetId);
+            }
+
+            CollectBoundStructuralDescendantIds(child, boundIds);
+        }
+
+        foreach (var relationship in node.Relationships ?? []) {
+            CollectBoundStructuralDescendantIds(relationship, boundIds);
+        }
+    }
+
+    private static EntityMetadataProposal FilterIneligibleBoundStructuralDescendants(
+        EntityMetadataProposal node,
+        IReadOnlyDictionary<Guid, IdentifyTargetEligibility> eligibility) {
+        var children = new List<EntityMetadataProposal>();
+        foreach (var child in node.Children ?? []) {
+            var isStructural = !EntityMetadataProposalTraversal.IsRelationshipKind(child.TargetKind);
+            if (isStructural &&
+                child.TargetEntityId is { } targetId &&
+                eligibility.TryGetValue(targetId, out var targetEligibility) &&
+                !targetEligibility.IsEligible) {
+                continue;
+            }
+
+            children.Add(FilterIneligibleBoundStructuralDescendants(child, eligibility));
+        }
+
+        var relationships = (node.Relationships ?? [])
+            .Select(relationship => FilterIneligibleBoundStructuralDescendants(relationship, eligibility))
+            .ToArray();
+        return node with {
+            Children = children,
+            Relationships = relationships
+        };
+    }
 
     private static IdentifyAction ResolveAction(
         PluginManifest manifest,
@@ -347,6 +515,12 @@ public sealed partial class IdentifyPluginService : IIdentifyProviderService {
             return new IdentifyPluginResponse(false, null, $"Cycle detected while identifying entity '{entity.Id}'.");
         }
 
+        var eligibility = await _eligibility.EvaluateAsync(entity.Id, cancellationToken);
+        if (!eligibility.IsEligible) {
+            visited.Remove(entity.Id);
+            return new IdentifyPluginResponse(false, null, $"Entity '{entity.Id}' has no source media on disk to identify.");
+        }
+
         var resolvedHints = await _hints.ResolveAsync(entity.Id, descriptor.Manifest.Id, cancellationToken);
         var ignoreStoredIdentity = ShouldIgnoreExistingIdentityHints(query);
         var hints = ignoreStoredIdentity
@@ -369,7 +543,7 @@ public sealed partial class IdentifyPluginService : IIdentifyProviderService {
         }
 
         var request = new IdentifyPluginRequest(
-            ProtocolVersion: 2,
+            ProtocolVersion: PluginProtocol.CurrentVersion,
             Action: resolvedAction,
             Auth: auth,
             Entity: entitySnapshot,

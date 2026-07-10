@@ -263,6 +263,23 @@ public sealed class AcquisitionRow {
     public AcquisitionStatus Status { get; set; } = AcquisitionStatus.Pending;
     public string? StatusMessage { get; set; }
 
+    /// <summary>
+    /// Durable destructive-operation intent. Set atomically with <see cref="AcquisitionStatus.Stopping"/>
+    /// before any remote or filesystem effect and retained across partial failure so retry cannot switch
+    /// an acquisition between removal and reacquisition.
+    /// </summary>
+    public AcquisitionTeardownIntent? TeardownIntent { get; set; }
+
+    /// <summary>The lifecycle status captured when <see cref="TeardownIntent"/> first claimed the row.</summary>
+    public AcquisitionStatus? TeardownOriginalStatus { get; set; }
+
+    /// <summary>
+    /// Idempotency pointer to the clean replacement created for a Reacquire teardown. It is persisted in
+    /// the same commit as the Pending replacement so a crash can resume that exact row instead of cloning
+    /// another acquisition or adopting unrelated newer work.
+    /// </summary>
+    public Guid? TeardownReplacementAcquisitionId { get; set; }
+
     public string Title { get; set; } = string.Empty;
     public string? Author { get; set; }
     public string? Series { get; set; }
@@ -282,11 +299,11 @@ public sealed class AcquisitionRow {
     /// <summary>Description/overview captured at request time, held so the acquisition surface is populated before import and used to seed the imported book.</summary>
     public string? Description { get; set; }
 
-    /// <summary>Plugin manifest id that supplied the request metadata, used to stamp the imported entity for ID-first identify.</summary>
-    public string? PluginId { get; set; }
+    /// <summary>External identity namespace captured with the request and carried through import.</summary>
+    public string? IdentityNamespace { get; set; }
 
-    /// <summary>The plugin's item id for this book (the external-id value paired with <see cref="PluginId"/>).</summary>
-    public string? PluginItemId { get; set; }
+    /// <summary>Opaque external identity value paired with <see cref="IdentityNamespace"/>.</summary>
+    public string? IdentityValue { get; set; }
 
     /// <summary>Provider → external id map captured at request time (jsonb).</summary>
     public string ExternalIdsJson { get; set; } = "{}";
@@ -299,6 +316,15 @@ public sealed class AcquisitionRow {
 
     /// <summary>Final on-disk path of the imported payload, used as the identify-hint key.</summary>
     public string? FinalSourcePath { get; set; }
+
+    /// <summary>Durable kind-specific file-placement plan/checkpoint (jsonb), cleared after Imported.</summary>
+    public string? ImportCheckpointJson { get; set; }
+
+    /// <summary>
+    /// Queue job that exclusively owns the active import, including the short pre-checkpoint planning
+    /// window. Retained across retry scheduling for the same job and replaced by an explicit checkpoint retry.
+    /// </summary>
+    public Guid? ImportClaimJobId { get; set; }
 
     /// <summary>Detected source tier of the release this acquisition imported (the owned quality, source axis).</summary>
     public BookSourceTier OwnedSourceTier { get; set; } = BookSourceTier.Unknown;
@@ -414,7 +440,7 @@ public sealed class DownloadTransferRow {
 
 /// <summary>
 /// Path-keyed identity hint written just before a completed acquisition enqueues a book scan. The
-/// scan stamps these external/plugin ids onto the newly created book entity so the existing
+/// scan stamps these external identities onto the newly created book entity so the existing
 /// auto-identify pipeline resolves it ID-first instead of re-discovering what the request already knew.
 /// </summary>
 public sealed class AcquisitionImportHintRow {
@@ -431,8 +457,11 @@ public sealed class AcquisitionImportHintRow {
     /// <summary>Normalized absolute path of the imported payload; the lookup key the scan matches against.</summary>
     public string SourcePath { get; set; } = string.Empty;
 
-    public string? PluginId { get; set; }
-    public string? PluginItemId { get; set; }
+    /// <summary>External identity namespace retained for the post-scan entity write.</summary>
+    public string? IdentityNamespace { get; set; }
+
+    /// <summary>Opaque external identity value paired with <see cref="IdentityNamespace"/>.</summary>
+    public string? IdentityValue { get; set; }
     public string ExternalIdsJson { get; set; } = "{}";
     public string SourceUrlsJson { get; set; } = "[]";
     public string? Title { get; set; }
@@ -566,25 +595,26 @@ public sealed class AcquisitionHistoryRow {
 
 /// <summary>
 /// A standing intent that Prismedia keeps acting on — the persistent counterpart to a one-and-done
-/// acquisition. In this version a monitor keeps a wanted book's acquisition alive: while
-/// <see cref="MonitorStatus.Active"/> the scheduler periodically re-runs its release search until the
-/// book is acquired. The <see cref="Kind"/> discriminator is present from day one so later monitor kinds
-/// (authors, series) share this table; only <see cref="EntityKind.Book"/> monitors are honored for now.
+/// acquisition. Every new monitor is anchored to a stable Entity id: grouping descriptors discover
+/// children, while leaf descriptors attach and detach transient acquisition work.
 /// </summary>
 public sealed class MonitorRow {
     public Guid Id { get; set; }
 
-    /// <summary>The kind of target this monitor watches. Books only in this version.</summary>
+    /// <summary>The canonical Entity kind of the item or container this monitor watches.</summary>
     public EntityKind Kind { get; set; } = EntityKind.Book;
 
-    /// <summary>The acquisition this monitor keeps re-searching. Nulled (and the monitor auto-paused) if that acquisition is hard-deleted.</summary>
+    /// <summary>
+    /// Transient acquisition work currently serving this monitor. Entity-linked monitors detach it after
+    /// import/cutoff and remain Active; legacy monitors without EntityId may terminate as Fulfilled.
+    /// </summary>
     public Guid? AcquisitionId { get; set; }
 
     /// <summary>
-    /// The library container entity (an author, an artist) this monitor watches for NEW works, for
-    /// monitors not tied to a single acquisition. The sweep re-resolves the container from its provider
-    /// ids and requests missing works as wanted placeholders. Loose link (no FK) into the entity graph;
-    /// a dangling id auto-pauses the monitor at the next sweep.
+    /// Stable Entity target for every new monitor, both per-item and container. AcquisitionId may attach
+    /// and detach many times while this identity remains the durable on/off intent. Entity-only grouping
+    /// targets sync provider children; Entity-only leaves either stay active on disk or request themselves
+    /// when fileless. Loose link (no FK) into the Entity graph.
     /// </summary>
     public Guid? EntityId { get; set; }
 
@@ -595,8 +625,8 @@ public sealed class MonitorRow {
     public Guid? ProfileId { get; set; }
 
     /// <summary>
-    /// The monitoring preset chosen when the container was requested. Only consulted for container
-    /// monitors (an author/artist/series watch, <see cref="EntityId"/> set): it governs whether the
+    /// The monitoring preset chosen when a grouping Entity was requested. Only consulted for grouping
+    /// monitors with provider-discovered children: it governs whether the
     /// discovery sync auto-monitors newly-discovered works — <see cref="MonitorPreset.All"/> and
     /// <see cref="MonitorPreset.Future"/> do; every other preset keeps monitoring the works committed up
     /// front but ignores new arrivals. Per-item monitors ignore this. Defaults to
@@ -614,12 +644,6 @@ public sealed class MonitorRow {
 
     /// <summary>When the monitor was last re-searched; null means never. Used to decide whether it is due.</summary>
     public DateTimeOffset? LastSearchedAt { get; set; }
-
-    /// <summary>
-    /// The imported book entity this monitor watches for upgrades, set once the acquisition imports. Lets the
-    /// monitor outlive the (transient) acquisition and re-search for a better release of the owned book.
-    /// </summary>
-    public Guid? BookEntityId { get; set; }
 
     /// <summary>Number of successful upgrade replacements so far, for the replacement cap (reset when the cutoff is met).</summary>
     public int UpgradeAttempts { get; set; }

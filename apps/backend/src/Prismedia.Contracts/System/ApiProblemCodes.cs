@@ -67,6 +67,9 @@ public static class ApiProblemCodes {
     /// <summary>Problem code <c>entity_file_not_found</c>.</summary>
     public const string EntityFileNotFound = "entity_file_not_found";
 
+    /// <summary>Problem code <c>entity_deletion_conflict</c>.</summary>
+    public const string EntityDeletionConflict = "entity_deletion_conflict";
+
     /// <summary>Problem code <c>entity_not_creatable</c>.</summary>
     public const string EntityNotCreatable = "entity_not_creatable";
 
@@ -76,6 +79,9 @@ public static class ApiProblemCodes {
     /// <summary>Problem code <c>entity_not_found</c>.</summary>
     public const string EntityNotFound = "entity_not_found";
 
+    /// <summary>Problem code <c>external_identity_ambiguous</c>.</summary>
+    public const string ExternalIdentityAmbiguous = "external_identity_ambiguous";
+
     /// <summary>Problem code <c>file_conflict</c>.</summary>
     public const string FileConflict = "file_conflict";
 
@@ -84,6 +90,9 @@ public static class ApiProblemCodes {
 
     /// <summary>Problem code <c>identify_failed</c>.</summary>
     public const string IdentifyFailed = "identify_failed";
+
+    /// <summary>Problem code <c>identify_target_not_eligible</c>.</summary>
+    public const string IdentifyTargetNotEligible = "identify_target_not_eligible";
 
     /// <summary>Problem code <c>identify_queue_apply_invalid</c>.</summary>
     public const string IdentifyQueueApplyInvalid = "identify_queue_apply_invalid";
@@ -180,6 +189,9 @@ public static class ApiProblemCodes {
 
     /// <summary>Problem code <c>request_invalid</c>.</summary>
     public const string RequestInvalid = "request_invalid";
+
+    /// <summary>Problem code <c>request_proposal_changed</c>.</summary>
+    public const string RequestProposalChanged = "request_proposal_changed";
 
     /// <summary>Problem code <c>request_service_invalid</c>.</summary>
     public const string RequestServiceInvalid = "request_service_invalid";

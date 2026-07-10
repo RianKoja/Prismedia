@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Prismedia.Application.Files;
 using Prismedia.Application.Jobs.Ports;
 using Prismedia.Application.Settings;
 using Prismedia.Domain.Entities;
@@ -22,13 +23,119 @@ public sealed partial class LibraryScanPersistenceService {
         return Task.CompletedTask;
     }
 
+    public async Task<IReadOnlyList<VideoSourceOwner>> ListVideoSourceOwnersAsync(
+        IReadOnlyCollection<string> filePaths,
+        CancellationToken cancellationToken) {
+        if (filePaths.Count == 0) {
+            return [];
+        }
+
+        var paths = filePaths.Distinct(FileSystemPathComparison.Comparer).ToArray();
+        var pathLengths = paths.Select(path => path.Length).Distinct().ToArray();
+        var candidates = await _db.EntityFiles.AsNoTracking()
+            .Where(file => file.Role == EntityFileRole.Source
+                && pathLengths.Contains(file.Path.Length))
+            .Select(file => new VideoSourceOwner(file.EntityId, file.Path))
+            .ToArrayAsync(cancellationToken);
+        return candidates.Where(owner => paths.Contains(owner.FilePath, FileSystemPathComparison.Comparer)).ToArray();
+    }
+
+    public async Task<IReadOnlyList<Guid>> RebindVideoSourceAsync(
+        string previousPath,
+        string replacementPath,
+        CancellationToken cancellationToken) {
+        var previousOwnerCandidates = await _db.EntityFiles
+            .Where(file => file.Role == EntityFileRole.Source
+                && file.Path.Length == previousPath.Length)
+            .ToArrayAsync(cancellationToken);
+        var previousOwners = previousOwnerCandidates
+            .Where(file => FileSystemPathComparison.Equals(file.Path, previousPath))
+            .ToArray();
+        if (previousOwners.Length == 0) {
+            return [];
+        }
+
+        var ownerIds = previousOwners.Select(file => file.EntityId).Distinct().ToArray();
+        if (!FileSystemPathComparison.Equals(previousPath, replacementPath)) {
+            var replacementCandidates = await _db.EntityFiles.AsNoTracking()
+                .Where(file => file.Role == EntityFileRole.Source
+                    && file.Path.Length == replacementPath.Length
+                    && !ownerIds.Contains(file.EntityId))
+                .Select(file => file.Path)
+                .ToArrayAsync(cancellationToken);
+            var conflictingOwner = replacementCandidates.Any(path =>
+                FileSystemPathComparison.Equals(path, replacementPath));
+            if (conflictingOwner) {
+                throw new InvalidOperationException(
+                    $"The replacement video path is already owned by another Entity: {replacementPath}");
+            }
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        var replacementSize = LibraryScanFileSystem.TryGetFileSize(replacementPath);
+        foreach (var source in previousOwners) {
+            source.Path = replacementPath;
+            source.SizeBytes = replacementSize;
+            source.UpdatedAt = now;
+        }
+
+        var entities = await _db.Entities.Where(entity => ownerIds.Contains(entity.Id)).ToArrayAsync(cancellationToken);
+        foreach (var entity in entities) {
+            entity.UpdatedAt = now;
+        }
+
+        // Technical, fingerprint, and subtitle data describes the retired file. Clearing it makes the
+        // shared downstream planner probe/extract the replacement immediately while user state stays on
+        // the same Entity id.
+        _db.MediaSources.RemoveRange(await _db.MediaSources
+            .Where(source => ownerIds.Contains(source.EntityId))
+            .ToArrayAsync(cancellationToken));
+        _db.EntityTechnical.RemoveRange(await _db.EntityTechnical
+            .Where(technical => ownerIds.Contains(technical.EntityId))
+            .ToArrayAsync(cancellationToken));
+        _db.EntityFileFingerprints.RemoveRange(await _db.EntityFileFingerprints
+            .Where(fingerprint => ownerIds.Contains(fingerprint.EntityId))
+            .ToArrayAsync(cancellationToken));
+        _db.EntitySubtitles.RemoveRange(await _db.EntitySubtitles
+            .Where(subtitle => ownerIds.Contains(subtitle.EntityId))
+            .ToArrayAsync(cancellationToken));
+        var videoDetails = await _db.VideoDetails
+            .Where(detail => ownerIds.Contains(detail.EntityId))
+            .ToArrayAsync(cancellationToken);
+        foreach (var detail in videoDetails) {
+            detail.SubtitlesExtractedAt = null;
+        }
+
+        var generatedRoles = new[] {
+            EntityFileRole.Thumbnail,
+            EntityFileRole.GridThumbnail,
+            EntityFileRole.GridThumbnail2x,
+            EntityFileRole.Preview,
+            EntityFileRole.Sprite,
+            EntityFileRole.Trickplay,
+            EntityFileRole.Hls,
+        };
+        _db.EntityFiles.RemoveRange(await _db.EntityFiles
+            .Where(file => ownerIds.Contains(file.EntityId) && generatedRoles.Contains(file.Role))
+            .ToArrayAsync(cancellationToken));
+        _db.TrickplayInfos.RemoveRange(await _db.TrickplayInfos
+            .Where(info => ownerIds.Contains(info.EntityId))
+            .ToArrayAsync(cancellationToken));
+
+        await SaveChangesWithLifecycleAsync(cancellationToken);
+        return ownerIds;
+    }
+
     public async Task<IReadOnlyList<Guid>> UpsertVideosBatchAsync(
         IReadOnlyList<VideoUpsertItem> items, CancellationToken cancellationToken) {
         if (items.Count == 0) return [];
 
-        var filePaths = items.Select(i => i.FilePath).ToList();
-        var movieCache = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
-        var seriesCache = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
+        var filePaths = items.Select(i => i.FilePath)
+            .Distinct(FileSystemPathComparison.Comparer)
+            .ToArray();
+        var filePathLengths = filePaths.Select(path => path.Length).Distinct().ToArray();
+        var movieCache = new Dictionary<string, Guid>(FileSystemPathComparison.Comparer);
+        var seriesCache = new Dictionary<string, Guid>(FileSystemPathComparison.Comparer);
         var seasonCache = new Dictionary<(Guid SeriesId, int SeasonNumber), Guid>();
 
         // One source path can legitimately belong to SEVERAL video entities: a multi-episode file
@@ -36,12 +143,17 @@ public sealed partial class LibraryScanPersistenceService {
         // key a dictionary on the path — a unique-key dictionary here crashed every scan of a
         // library containing such a file.
         var existingEntities = (await _db.EntityFiles.AsNoTracking()
-            .Where(f => f.Role == EntityFileRole.Source && filePaths.Contains(f.Path))
+            .Where(f => f.Role == EntityFileRole.Source
+                && filePathLengths.Contains(f.Path.Length))
             .Join(_db.Entities, f => f.EntityId, e => e.Id,
                 (f, e) => new { f.Path, e.Id, Entity = e })
             .ToListAsync(cancellationToken))
-            .GroupBy(x => x.Path)
-            .ToDictionary(g => g.Key, g => g.OrderBy(x => x.Entity.CreatedAt).ThenBy(x => x.Id).ToList());
+            .Where(row => filePaths.Contains(row.Path, FileSystemPathComparison.Comparer))
+            .GroupBy(x => x.Path, FileSystemPathComparison.Comparer)
+            .ToDictionary(
+                g => g.Key,
+                g => g.OrderBy(x => x.Entity.CreatedAt).ThenBy(x => x.Id).ToList(),
+                FileSystemPathComparison.Comparer);
 
         var now = DateTimeOffset.UtcNow;
         var results = new List<Guid>(items.Count);
@@ -98,7 +210,7 @@ public sealed partial class LibraryScanPersistenceService {
             results.Add(id);
         }
 
-        await _db.SaveChangesAsync(cancellationToken);
+        await SaveChangesWithLifecycleAsync(cancellationToken);
         return results;
     }
 

@@ -3,6 +3,7 @@ using System.Net;
 using System.Security.Cryptography;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Prismedia.Application.Plugins;
 using Prismedia.Contracts.Plugins;
 using Prismedia.Domain.Entities;
 using Prismedia.Infrastructure.Persistence;
@@ -15,6 +16,18 @@ namespace Prismedia.Infrastructure.Tests;
 
 public sealed class PluginRuntimeServiceTests : IDisposable {
     private readonly string _tempRoot = Path.Combine(Path.GetTempPath(), $"prismedia-plugin-tests-{Guid.NewGuid():N}");
+
+    [Fact]
+    public void CatalogExtractionRejectsCaseVariantSiblingOnUnix() {
+        if (OperatingSystem.IsWindows()) {
+            return;
+        }
+
+        var destination = Path.Combine(_tempRoot, "plugins", "community", "tmdb", "1.2.0");
+        var caseVariantSibling = Path.Combine(_tempRoot, "plugins", "community", "TMDB", "1.2.0", "payload.dll");
+
+        Assert.False(PluginCatalogService.IsSafeExtractionPath(destination, caseVariantSibling));
+    }
 
     [Fact]
     public async Task CatalogDiscoversOnlyCompatibleDotnetManifests() {
@@ -489,7 +502,14 @@ public sealed class PluginRuntimeServiceTests : IDisposable {
             IdentifyAction.LookupId,
             new Dictionary<string, string> { ["apiKey"] = "secret" },
             new IdentifyEntitySnapshot(entityId, EntityKind.Video, "Example"),
-            new IdentifyQuery(null, null, null),
+            new IdentifyQuery(
+                null,
+                null,
+                null,
+                Fields: new Dictionary<string, string> {
+                    ["seriesTitle"] = "Example",
+                    ["year"] = "2026"
+                }),
             new IdentifyMatchHints(
                 new Dictionary<string, string> { ["tmdb"] = "123" },
                 [],
@@ -504,6 +524,8 @@ public sealed class PluginRuntimeServiceTests : IDisposable {
         Assert.Equal(descriptor.EntryPath, executor.Arguments[0]);
         Assert.Equal(entityId, executor.CapturedRequest?.Entity.Id);
         Assert.Equal(IdentifyAction.LookupId, executor.CapturedRequest?.Action);
+        Assert.Equal("Example", executor.CapturedRequest?.Query.Fields?["seriesTitle"]);
+        Assert.Equal("2026", executor.CapturedRequest?.Query.Fields?["year"]);
     }
 
     [Fact]
@@ -603,11 +625,17 @@ public sealed class PluginRuntimeServiceTests : IDisposable {
         var executor = new CapturingProcessExecutor();
         var service = CreateIdentifyService(db, executor, _tempRoot);
 
-        var response = await service.IdentifyAsync(entityId, "tmdb", null, parentExternalIds: null, hideNsfw: true, CancellationToken.None);
+        var error = await Assert.ThrowsAsync<KeyNotFoundException>(() =>
+            service.IdentifyAsync(
+                entityId,
+                "tmdb",
+                null,
+                parentExternalIds: null,
+                hideNsfw: true,
+                CancellationToken.None));
 
-        Assert.False(response.Ok);
-        Assert.Null(response.Result);
-        Assert.Contains("was not found", response.Error);
+        Assert.Equal($"Entity '{entityId}' was not found.", error.Message);
+        Assert.DoesNotContain("Hidden Video", error.Message);
         Assert.Null(executor.CapturedRequest);
     }
 
@@ -680,6 +708,7 @@ public sealed class PluginRuntimeServiceTests : IDisposable {
         Assert.True(response.Ok);
         Assert.Equal(EntityKind.Video, executor.CapturedRequest?.Entity.Kind);
         Assert.Equal(IdentifyAction.Search, executor.CapturedRequest?.Action);
+        Assert.Equal(PluginProtocol.CurrentVersion, executor.CapturedRequest?.ProtocolVersion);
         Assert.Equal(ProposalKind.Movie, response.Result?.TargetKind);
         Assert.Equal(movieId, response.Result?.TargetEntityId);
     }
@@ -1364,7 +1393,21 @@ public sealed class PluginRuntimeServiceTests : IDisposable {
             new PluginCatalogService(db, new PluginCatalogOptions([pluginDir], _tempRoot, "1.0.0")),
             new IdentifyMatchHintResolver(db),
             new IdentifyRunnerSelector([new DotnetPluginProcessRunner(executor, new PluginCatalogOptions([], _tempRoot, "1.0.0"))]),
-            new EntityMetadataApplyService(db, new PluginArtworkServiceOptions(_tempRoot)));
+            new EntityMetadataApplyService(db, new PluginArtworkServiceOptions(_tempRoot)),
+            new AlwaysEligibleIdentifyTargetEligibilityService());
+
+    private sealed class AlwaysEligibleIdentifyTargetEligibilityService : IIdentifyTargetEligibilityService {
+        public Task<IdentifyTargetEligibility> EvaluateAsync(Guid entityId, CancellationToken cancellationToken) =>
+            Task.FromResult(new IdentifyTargetEligibility(entityId, IdentifyTargetEligibilityStatus.Eligible));
+
+        public Task<IReadOnlyDictionary<Guid, IdentifyTargetEligibility>> EvaluateManyAsync(
+            IReadOnlyCollection<Guid> entityIds,
+            CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyDictionary<Guid, IdentifyTargetEligibility>>(
+                entityIds.Distinct().ToDictionary(
+                    entityId => entityId,
+                    entityId => new IdentifyTargetEligibility(entityId, IdentifyTargetEligibilityStatus.Eligible)));
+    }
 
     private sealed class CapturingProcessExecutor : ProcessExecutor {
         public string? FileName { get; private set; }

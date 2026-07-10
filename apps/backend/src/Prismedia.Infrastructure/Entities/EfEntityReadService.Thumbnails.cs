@@ -122,18 +122,11 @@ public sealed partial class EfEntityReadService {
             ? new Dictionary<Guid, UserEntityStateRow>()
             : await LoadMovieChildStateAsync(movieIds, cancellationToken);
 
-        // For wanted placeholders only, the latest acquisition's status, so a grid thumbnail can show
-        // what the item is doing (searching / downloading / failed). Scoped to the wanted subset of this
-        // page — usually a handful of rows — so the acquisition slice never touches the common case.
-        var wantedIds = rows.Where(row => row.IsWanted).Select(row => row.Id).ToArray();
-        var wantedStatusByEntity = wantedIds.Length == 0
-            ? new Dictionary<Guid, AcquisitionStatus>()
-            : (await _db.Acquisitions.AsNoTracking()
-                    .Where(acquisition => acquisition.EntityId != null && wantedIds.Contains(acquisition.EntityId.Value))
-                    .Select(acquisition => new { acquisition.EntityId, acquisition.Status, acquisition.CreatedAt })
-                    .ToArrayAsync(cancellationToken))
-                .GroupBy(acquisition => acquisition.EntityId!.Value)
-                .ToDictionary(group => group.Key, group => group.OrderByDescending(acquisition => acquisition.CreatedAt).First().Status);
+        // Compact availability facts for this page: physical source-media truth plus acquisition state
+        // projected through every structural subtree. The singular direct status remains for the existing
+        // badge while filters use plural membership, including child and upgrade work.
+        var sourceMediaIds = await _sourceOwnership.ResolveAsync(ids, cancellationToken);
+        var acquisitionStatusesByEntity = await _acquisitionStatuses.ResolveAsync(ids, cancellationToken);
 
         // Tag names per entity, resolved through the tag relationship links and their target titles,
         // so list rows can surface tags (used as genres on the Jellyfin surface) without a detail load.
@@ -223,7 +216,11 @@ public sealed partial class EfEntityReadService {
                         ? parentKind
                         : null,
                 IsWanted = row.IsWanted,
-                WantedStatus = row.IsWanted && wantedStatusByEntity.TryGetValue(row.Id, out var wantedStatus)
+                HasSourceMedia = sourceMediaIds.Contains(row.Id),
+                LatestAcquisitionStatus = acquisitionStatusesByEntity.GetValueOrDefault(row.Id)?.LatestDirectStatus,
+                AcquisitionStatuses = acquisitionStatusesByEntity.GetValueOrDefault(row.Id)?.Statuses ?? [],
+                WantedStatus = row.IsWanted
+                    && acquisitionStatusesByEntity.GetValueOrDefault(row.Id)?.LatestDirectStatus is { } wantedStatus
                     ? wantedStatus
                     : null,
                 CreatedAt = row.CreatedAt,

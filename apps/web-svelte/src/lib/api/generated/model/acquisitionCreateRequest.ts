@@ -20,9 +20,9 @@ export interface AcquisitionCreateRequest {
   /** @nullable */
   posterUrl: string | null;
   /** @nullable */
-  pluginId: string | null;
+  identityNamespace: string | null;
   /** @nullable */
-  pluginItemId: string | null;
+  identityValue: string | null;
   /** @nullable */
   description?: string | null;
   kind?: AcquisitionCreateRequestKind;
@@ -42,4 +42,9 @@ export interface AcquisitionCreateRequest {
      * @pattern ^-?(?:0|[1-9]\d*)$
      */
   episodeNumber?: number | string | null;
+  /**
+     * @nullable
+     * @pattern ^-?(?:0|[1-9]\d*)$
+     */
+  volumeNumber?: number | string | null;
 }

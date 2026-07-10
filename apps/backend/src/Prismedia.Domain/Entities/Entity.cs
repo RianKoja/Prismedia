@@ -125,13 +125,27 @@ public abstract class Entity {
     /// <summary>Provider identities in insertion order.</summary>
     public IReadOnlyList<EntityExternalId> ExternalIds => _externalIds;
 
+    /// <summary>Exact plugin + persistent identity selected for metadata refresh and monitoring.</summary>
+    public EntityProviderIdentity? ProviderIdentity { get; private set; }
+
     /// <summary>Adds a user-visible URL.</summary>
     public void AddUrl(string value, string? label = null) => _urls.Add(new EntityUrl(value, label));
 
-    /// <summary>Sets a provider identity, replacing any existing identity for the same provider.</summary>
-    public void SetExternalId(string provider, string value, string? url = null) {
-        _externalIds.RemoveAll(id => string.Equals(id.Provider, provider, StringComparison.Ordinal));
-        _externalIds.Add(new EntityExternalId(provider, value, url));
+    /// <summary>
+    /// Sets an external identity from provider and value primitives, replacing any existing identity
+    /// in the same normalized namespace.
+    /// </summary>
+    public void SetExternalId(string provider, string value, string? url = null) =>
+        SetExternalId(new ExternalIdentity(provider, value), url);
+
+    /// <summary>Sets a validated identity, replacing any existing identity in the same namespace.</summary>
+    /// <param name="identity">Canonical external identity.</param>
+    /// <param name="url">Optional canonical URL for opening the item externally.</param>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="identity"/> is null.</exception>
+    public void SetExternalId(ExternalIdentity identity, string? url = null) {
+        ArgumentNullException.ThrowIfNull(identity);
+        _externalIds.RemoveAll(id => id.Identity.Namespace == identity.Namespace);
+        _externalIds.Add(new EntityExternalId(identity, url));
     }
 
     // ── Files ──────────────────────────────────────────────────────────
@@ -158,7 +172,8 @@ public abstract class Entity {
         IEnumerable<EntityUrl>? urls,
         IEnumerable<EntityExternalId>? externalIds,
         IEnumerable<EntityFile>? files,
-        bool? isWanted = null) {
+        bool? isWanted = null,
+        EntityProviderIdentity? providerIdentity = null) {
         RatingValue = ratingValue;
         IsFavorite = isFavorite;
         IsNsfw = isNsfw;
@@ -170,6 +185,7 @@ public abstract class Entity {
         if (externalIds is not null) _externalIds.AddRange(externalIds);
         _entityFiles.Clear();
         if (files is not null) _entityFiles.AddRange(files);
+        ProviderIdentity = providerIdentity;
     }
 
     /// <summary>

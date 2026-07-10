@@ -107,6 +107,7 @@ public static class DependencyInjection {
         services.AddSingleton<MediaToolService>();
         services.AddSingleton<FileDiscoveryService>();
         services.AddSingleton(new AssetPathService(dataDir, cacheDir));
+        services.AddSingleton<EntityAssetCleanupService>();
         services.AddSingleton(provider => new MediaProbeService(
             provider.GetRequiredService<ProcessExecutor>(),
             provider.GetRequiredService<MediaToolOptions>()));
@@ -152,16 +153,23 @@ public static class DependencyInjection {
             provider.GetRequiredService<PluginCatalogOptions>(),
             indexCache: provider.GetRequiredService<PluginIndexCache>()));
         services.AddScoped<IPluginCatalogService>(provider =>
-            provider.GetRequiredService<PluginCatalogService>());
+            new ScopedPluginCatalogCache(provider.GetRequiredService<PluginCatalogService>()));
+        services.AddScoped<IPluginIdentityRouter, PluginIdentityRouter>();
+        services.AddScoped<IPluginIdentityUrlResolver, PluginIdentityUrlResolver>();
         services.AddScoped<IdentifyMatchHintResolver>();
         services.AddScoped(provider => new EntityMetadataApplyService(
             provider.GetRequiredService<PrismediaDbContext>(),
             new PluginArtworkServiceOptions(cacheDir),
-            gridThumbnails: provider.GetRequiredService<IGridThumbnailService>()));
+            gridThumbnails: provider.GetRequiredService<IGridThumbnailService>(),
+            externalIdentities: provider.GetRequiredService<IEntityExternalIdentityStore>(),
+            providerIdentities: provider.GetRequiredService<IEntityProviderIdentityStore>(),
+            identityRouter: provider.GetRequiredService<IPluginIdentityRouter>(),
+            lifecycle: provider.GetRequiredService<IEntityLifecycleMutationLease>()));
         services.AddScoped<IEntityMetadataPatchService>(provider =>
             provider.GetRequiredService<EntityMetadataApplyService>());
         services.AddScoped<IEntityManagementService, EntityManagementService>();
         services.AddScoped<IMediaEntityDeletionService, MediaEntityDeletionService>();
+        services.AddScoped<IIdentifyTargetEligibilityService, EfIdentifyTargetEligibilityService>();
         services.AddScoped<IdentifyPluginService>();
         services.AddScoped<IIdentifyProviderService>(provider =>
             provider.GetRequiredService<IdentifyPluginService>());
@@ -183,7 +191,8 @@ public static class DependencyInjection {
         services.AddScoped(provider =>
             new LibraryScanPersistenceService(
                 provider.GetRequiredService<PrismediaDbContext>(),
-                provider.GetRequiredService<AssetPathService>()));
+                provider.GetRequiredService<AssetPathService>(),
+                provider.GetRequiredService<IEntityLifecycleMutationLease>()));
         services.AddScoped<ILibraryScanRootPersistence>(provider =>
             provider.GetRequiredService<LibraryScanPersistenceService>());
         services.AddScoped<IVideoScanPersistence>(provider =>
@@ -196,6 +205,7 @@ public static class DependencyInjection {
             provider.GetRequiredService<LibraryScanPersistenceService>());
         services.AddScoped<IDownstreamNeedsPersistence>(provider =>
             provider.GetRequiredService<LibraryScanPersistenceService>());
+        services.AddScoped<IImportedEntityReadinessPersistence, EfImportedEntityReadinessPersistence>();
         services.AddScoped<IMediaProcessingStatePersistence>(provider =>
             provider.GetRequiredService<LibraryScanPersistenceService>());
         services.AddScoped<IEntityRefreshTreePersistence>(provider =>
@@ -219,6 +229,14 @@ public static class DependencyInjection {
     private static void RegisterEntities(IServiceCollection services, string cacheDir) {
         RegisterEntityMappers(services);
         RegisterThumbnailContributors(services);
+        services.AddScoped<IEntityExternalIdentityStore, EfEntityExternalIdentityStore>();
+        services.AddScoped<IEntityProviderIdentityStore, EfEntityProviderIdentityStore>();
+        services.AddScoped<IEntityHierarchyReader, EfEntityHierarchyReader>();
+        services.AddScoped<IEntityLifecycleMutationLease, EfEntityLifecycleMutationLease>();
+        services.AddScoped<EfEntitySourceOwnershipProjection>();
+        services.AddScoped<IEntitySourceOwnershipReader>(provider =>
+            provider.GetRequiredService<EfEntitySourceOwnershipProjection>());
+        services.AddScoped<IEntityFileDeletionRecoveryReader, EfEntityFileDeletionRecoveryProjection>();
         services.AddScoped<EfEntityRepository>();
         services.AddScoped<IEntityWriteRepository>(provider => provider.GetRequiredService<EfEntityRepository>());
         // Concrete registration shared by the interface alias and the visibility checker so all
@@ -246,6 +264,7 @@ public static class DependencyInjection {
     private static void RegisterFilesAndOrganization(IServiceCollection services) {
         services.AddScoped<IOrganizePersistence, EfOrganizePersistence>();
         services.AddScoped<IFilesPersistence, EfFilesPersistence>();
+        services.AddScoped<IEntitySourcePathOwnerReader, EfEntitySourcePathOwnerReader>();
         services.AddSingleton<IManagedFileStorage, LocalManagedFileStorage>();
     }
 
@@ -330,11 +349,11 @@ public static class DependencyInjection {
 
     private static void RegisterRequests(IServiceCollection services) {
         // Prismedia fulfils all requests itself through its plugin-backed acquisition pipeline; the
-        // request layer is the kind-registry-driven metadata search + detail surface that feeds
+        // request layer is the kind-registry-driven selected-plugin search + proposal review that feeds
         // acquisitions. One source class serves every requestable kind.
-        services.AddScoped<IRequestMetadataSearchSource, PluginRequestMetadataSource>();
+        services.AddScoped<IPluginRequestSearchSource, PluginRequestMetadataSource>();
         services.AddScoped<IRequestMetadataEnricher, PluginRequestMetadataSource>();
-        services.AddScoped<IPluginRequestDetailSource, PluginRequestMetadataSource>();
+        services.AddScoped<IPluginRequestReviewSource, PluginRequestMetadataSource>();
         services.AddScoped<IPluginRequestProposalSource, PluginRequestMetadataSource>();
         services.AddScoped<IWantedEntityWriter, WantedEntityWriter>();
         services.AddScoped<IWantedSuppressionStore, EfWantedSuppressionStore>();
@@ -352,9 +371,14 @@ public static class DependencyInjection {
         services.AddScoped<IBookAcquisitionProfileStore, EfBookAcquisitionProfileStore>();
         services.AddScoped<ICustomFormatStore, EfCustomFormatStore>();
         services.AddScoped<IAcquisitionStore, EfAcquisitionStore>();
+        services.AddScoped<IAcquisitionLifecycleStore>(provider =>
+            provider.GetRequiredService<IAcquisitionStore>());
+        services.AddScoped<IAcquisitionTransferAddCoordinator, EfAcquisitionTransferAddCoordinator>();
         services.AddScoped<IAcquisitionBlocklistStore, EfAcquisitionBlocklistStore>();
         services.AddScoped<IAcquisitionHistoryStore, EfAcquisitionHistoryStore>();
         services.AddScoped<IMonitorStore, EfMonitorStore>();
+        services.AddScoped<IAcquisitionJobCleanup, AcquisitionJobCleanup>();
+        services.AddScoped<IEntityUnmonitorPersistence, EfEntityUnmonitorPersistence>();
         // Explicit indexer timeouts: a hung indexer must fail the search (which surfaces per-indexer in
         // the outcome) rather than pin the whole search job. Prowlarr gets longer because one call fans
         // out across every indexer it aggregates; direct Torznab/Newznab calls hit a single tracker.
@@ -377,7 +401,10 @@ public static class DependencyInjection {
         services.AddScoped<IAcquisitionImportPlanner, AcquisitionImportPlanner>();
         services.AddScoped<IImportFileMover, ImportFileMover>();
         services.AddScoped<IOwnedFileReplacer, OwnedFileReplacer>();
-        services.AddScoped<IAcquisitionHintApplier, AcquisitionHintApplier>();
+        services.AddScoped<IAcquisitionHintApplier>(provider => new AcquisitionHintApplier(
+            provider.GetRequiredService<PrismediaDbContext>(),
+            provider.GetRequiredService<IEntityExternalIdentityStore>(),
+            provider.GetRequiredService<IEntityLifecycleMutationLease>()));
         services.AddScoped<IImportTargetIndex, EfImportTargetIndex>();
         services.AddScoped<IImportedFilesReader, ImportedFilesReader>();
         services.AddScoped<IDownloadPayloadReader, DownloadPayloadReader>();

@@ -1,6 +1,7 @@
 using Prismedia.Application.Jobs.Handlers;
 using Microsoft.Extensions.Logging;
 using Prismedia.Application.Acquisition;
+using Prismedia.Application.Files;
 using Prismedia.Application.Jobs.Ports;
 using Prismedia.Application.Jobs.Scanning;
 using Prismedia.Domain.Entities;
@@ -23,7 +24,8 @@ public sealed class ScanLibraryJobHandler(
     IVideoSidecarMetadataReader? sidecars = null,
     IScanMetadataPersistence? scanMetadata = null,
     IAcquisitionHintApplier? acquisitionHints = null,
-    IMediaProcessingStatePersistence? processingState = null)
+    IMediaProcessingStatePersistence? processingState = null,
+    VideoScanConcurrencyGate? scanGate = null)
     : ScanJobHandler(logger, fileDiscovery, roots, snapshots, processingState) {
     private const int BatchSize = 50;
     private static readonly Regex SeasonFolderPattern = new(
@@ -42,10 +44,121 @@ public sealed class ScanLibraryJobHandler(
 
     protected override IReadOnlyList<MediaCategory> ScanCategories => [MediaCategory.Video];
 
+    protected override async ValueTask<IAsyncDisposable?> EnterScanScopeAsync(
+        LibraryRootData root, CancellationToken cancellationToken) =>
+        scanGate is null ? null : await scanGate.EnterAsync(cancellationToken);
+
     protected override Task OnNoFileChangesAsync(
         JobContext context, LibraryRootData root, CancellationToken cancellationToken) =>
         AutoIdentifyScanEnqueue.EnqueueExistingRootsForUnchangedScanAsync(
             context, Roots, downstreamNeeds, root, ScanCategories, cancellationToken);
+
+    /// <summary>
+    /// Materializes only one movie import's exact files through the video scanner's canonical
+    /// classification, wanted binding, batch upsert, and downstream planning. No root-wide stale
+    /// cleanup runs, so the import cannot remove unrelated videos while proving its own readiness.
+    /// </summary>
+    public async Task MaterializeImportedPathsAsync(
+        JobContext context,
+        Guid acquisitionId,
+        LibraryRootData root,
+        IReadOnlyList<string> placedPaths,
+        CancellationToken cancellationToken) {
+        if (!root.Enabled || !root.ScanVideos) {
+            throw new InvalidOperationException("The imported movie no longer belongs to an enabled video library root.");
+        }
+
+        await using var scanLease = scanGate is null ? null : await scanGate.EnterAsync(cancellationToken);
+        var files = placedPaths.Select(Path.GetFullPath).ToArray();
+        var settings = await Roots.GetSettingsAsync(cancellationToken);
+        if (!root.AutoIdentify) {
+            settings = settings with { AutoIdentifyEnabled = false };
+        }
+
+        var items = new List<VideoUpsertItem>(files.Length);
+        foreach (var filePath in files) {
+            var sidecar = sidecars is null
+                ? null
+                : await sidecars.ReadAsync(filePath, cancellationToken);
+            var item = BuildVideoUpsertItem(filePath, root, files, sidecar);
+            await VideoWantedBinding.BindAsync(
+                acquisitionHints,
+                item,
+                cancellationToken,
+                acquisitionId);
+            items.Add(item);
+        }
+
+        var failedPaths = new List<string>();
+        var (entityIds, persistedItems) = await UpsertBatchWithIsolationAsync(
+            items,
+            failedPaths,
+            cancellationToken);
+        if (failedPaths.Count > 0 || entityIds.Count != items.Count) {
+            throw new InvalidOperationException("One or more imported movie files could not be persisted.");
+        }
+
+        if (scanMetadata is not null) {
+            for (var index = 0; index < persistedItems.Count; index++) {
+                if (persistedItems[index].Metadata is not { } metadata) {
+                    continue;
+                }
+
+                await scanMetadata.ApplyVideoSidecarMetadataAsync(
+                    entityIds[index],
+                    metadata,
+                    Path.GetFileNameWithoutExtension(persistedItems[index].FilePath),
+                    persistedItems[index].IsNsfw,
+                    cancellationToken);
+            }
+        }
+
+        var needs = await downstreamNeeds.CheckDownstreamNeedsBatchAsync(entityIds, cancellationToken);
+        var downstreamJobs = new List<EnqueueJobRequest>();
+        for (var index = 0; index < entityIds.Count; index++) {
+            if (needs.TryGetValue(entityIds[index], out var entityNeeds)) {
+                downstreamJobs.AddRange(VideoDownstreamJobPlanner.Build(
+                    settings,
+                    entityIds[index],
+                    persistedItems[index].FilePath,
+                    entityNeeds));
+            }
+        }
+
+        if (downstreamJobs.Count > 0) {
+            await ImportedMaterializationHousekeeping.TryAsync(
+                logger,
+                "Imported movie is ready but its downstream jobs could not be queued.",
+                () => context.EnqueueBatchAsync(downstreamJobs, cancellationToken));
+        }
+
+        if (acquisitionHints is not null) {
+            var owners = await acquisitionHints.ApplyToFolderOwnersAsync(
+                cancellationToken,
+                acquisitionId);
+            foreach (var owner in owners) {
+                await ImportedMaterializationHousekeeping.TryAsync(
+                    logger,
+                    "Imported movie is ready but its identify job could not be queued.",
+                    () => context.EnqueueIfNeededAsync(new EnqueueJobRequest(
+                        JobType.AutoIdentify,
+                        TargetEntityKind: owner.TopLevelKindCode,
+                        TargetEntityId: owner.TopLevelEntityId.ToString(),
+                        TargetLabel: owner.TopLevelTitle,
+                        Priority: JobPriorities.AutoIdentify), cancellationToken));
+            }
+        }
+
+        await ImportedMaterializationHousekeeping.TryAsync(
+            logger,
+            "Imported movie is ready but automatic identification housekeeping could not be queued.",
+            () => AutoIdentifyScanEnqueue.EnqueueRootsAsync(
+                context,
+                settings,
+                downstreamNeeds,
+                entityIds,
+                cancellationToken));
+    }
 
     protected override async Task<ScanRootOutcome> ScanRootCoreAsync(
         JobContext context, LibraryRootData root, CancellationToken cancellationToken) {
@@ -70,8 +183,8 @@ public sealed class ScanLibraryJobHandler(
         // persistence failed are skipped, so downstream label lookups cannot index `files` directly.
         var scannedPaths = new List<string>(files.Count);
         var failedPaths = new List<string>();
-        var validPaths = new HashSet<string>(files.Count, StringComparer.OrdinalIgnoreCase);
-        var validMovieFolders = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var validPaths = new HashSet<string>(files.Count, FileSystemPathComparison.Comparer);
+        var validMovieFolders = new HashSet<string>(FileSystemPathComparison.Comparer);
 
         using (timer.Phase("upsert")) {
             for (var batchStart = 0; batchStart < files.Count; batchStart += BatchSize) {
@@ -87,34 +200,9 @@ public sealed class ScanLibraryJobHandler(
                     var item = BuildVideoUpsertItem(filePath, root, files, sidecar);
                     if (item.Movie is { } movie) {
                         validMovieFolders.Add(movie.FolderPath);
-                        if (acquisitionHints is not null) {
-                            // Bind a request-created wanted Movie to this folder BEFORE the upsert, so the
-                            // path-keyed movie upsert finds the wanted entity instead of creating a duplicate.
-                            await acquisitionHints.BindWantedEntityAsync(EntityKind.Movie, movie.FolderPath, cancellationToken);
-                        }
                     }
 
-                    // Bind the wanted TV tree BEFORE the upserts, top-down: the series grouping by
-                    // folder (the ancestor of an imported season/episode hint), then its phantom season
-                    // and episode by their sibling positions — so the path/position-keyed upserts find
-                    // the request-created entities instead of creating duplicates.
-                    if (acquisitionHints is not null && item.Series is { } seriesInfo) {
-                        await acquisitionHints.BindWantedParentAsync(EntityKind.VideoSeries, seriesInfo.FolderPath, cancellationToken);
-                        if (item.Season is { } seasonInfo) {
-                            // A season-pack hint names the wanted season directly; phantom seasons of a
-                            // bound series also match by their sibling position.
-                            await acquisitionHints.BindWantedEntityAsync(EntityKind.VideoSeason, seasonInfo.FolderPath, cancellationToken);
-                            await acquisitionHints.BindWantedChildBySortOrderAsync(
-                                EntityKind.VideoSeason, seriesInfo.FolderPath, seasonInfo.SeasonNumber, seasonInfo.FolderPath, cancellationToken);
-                            if (item.EpisodeNumber is { } episodeNumber) {
-                                await acquisitionHints.BindWantedChildBySortOrderAsync(
-                                    EntityKind.Video, seasonInfo.FolderPath, episodeNumber, filePath, cancellationToken);
-                            }
-                        }
-
-                        // A hint that names this exact file (a single-episode import) binds directly too.
-                        await acquisitionHints.BindWantedEntityAsync(EntityKind.Video, filePath, cancellationToken);
-                    }
+                    await VideoWantedBinding.BindAsync(acquisitionHints, item, cancellationToken);
 
                     batchItems.Add(item);
                 }
@@ -153,31 +241,13 @@ public sealed class ScanLibraryJobHandler(
 
                 for (var i = 0; i < batchIds.Count; i++) {
                     var entityId = batchIds[i];
-                    var label = Path.GetFileNameWithoutExtension(scannedPaths[batchStart + i]);
-                    var entityIdStr = entityId.ToString();
-
-                    if (!needs.TryGetValue(entityId, out var entityNeeds)) continue;
-
-                    // Queries first (probe feeds preview's technical metadata, then fingerprint),
-                    // then the quick grid thumbnail, then subtitle sidecars, leaving the heavy
-                    // preview/trickplay generation last so it never delays newer media.
-                    if (settings.AutoGenerateMetadata && entityNeeds.NeedsProbe)
-                        jobRequests.Add(EnqueueJobRequest.ForEntity(JobType.ProbeVideo, EntityKind.Video, entityIdStr, label, JobPriorities.Probe));
-
-                    if (FingerprintGating.ShouldFingerprint(settings, entityNeeds))
-                        jobRequests.Add(EnqueueJobRequest.ForEntity(JobType.FingerprintVideo, EntityKind.Video, entityIdStr, label, JobPriorities.Fingerprint));
-
-                    if (entityNeeds.NeedsSubtitleExtraction)
-                        jobRequests.Add(EnqueueJobRequest.ForEntity(JobType.ExtractSubtitles, EntityKind.Video, entityIdStr, label, JobPriorities.Sidecar));
-
-                    var shouldGeneratePreview = settings.AutoGeneratePreview && entityNeeds.NeedsPreview;
-                    var shouldGenerateTrickplay = settings.GenerateTrickplay && entityNeeds.NeedsTrickplay;
-                    if (shouldGeneratePreview || shouldGenerateTrickplay)
-                        jobRequests.Add(EnqueueJobRequest.ForEntity(JobType.GeneratePreview, EntityKind.Video, entityIdStr, label, JobPriorities.Preview));
-                    else if (entityNeeds.NeedsGridThumbnail)
-                        // Backfill the small grid variant for an existing cover (GeneratePreview, which
-                        // also generates it, isn't running because a thumbnail already exists).
-                        jobRequests.Add(EnqueueJobRequest.ForEntity(JobType.GenerateGridThumbnail, EntityKind.Video, entityIdStr, label, JobPriorities.Thumbnail));
+                    if (needs.TryGetValue(entityId, out var entityNeeds)) {
+                        jobRequests.AddRange(VideoDownstreamJobPlanner.Build(
+                            settings,
+                            entityId,
+                            scannedPaths[batchStart + i],
+                            entityNeeds));
+                    }
                 }
 
                 if (jobRequests.Count > 0) {
@@ -191,14 +261,11 @@ public sealed class ScanLibraryJobHandler(
             }
         }
 
-        // Auto identify the top-level ancestors only (a series rather than each episode), so one job
-        // identifies the whole tree and episodes are filled by cascading from it.
-        await AutoIdentifyScanEnqueue.EnqueueRootsAsync(context, settings, downstreamNeeds, allEntityIds, cancellationToken);
-
         // Acquisition-imported content: stamp the acquisition's provider ids onto the entities owning the
         // imported paths and identify each affected root — deliberately bypassing the global/per-root
         // auto-identify gates, because an acquisition import is explicit user intent and the stamped ids
-        // let identify resolve ID-first instead of leaving the imported tree metadata-less.
+        // let identify resolve ID-first instead of leaving the imported tree metadata-less. This MUST run
+        // before generic auto-identify is queued so a fast worker cannot claim the same root ID-less.
         if (acquisitionHints is not null) {
             foreach (var owner in await acquisitionHints.ApplyToFolderOwnersAsync(cancellationToken)) {
                 await context.EnqueueIfNeededAsync(new EnqueueJobRequest(
@@ -209,6 +276,10 @@ public sealed class ScanLibraryJobHandler(
                     Priority: JobPriorities.AutoIdentify), cancellationToken);
             }
         }
+
+        // Auto identify the top-level ancestors only (a series rather than each episode), so one job
+        // identifies the whole tree and episodes are filled by cascading from it.
+        await AutoIdentifyScanEnqueue.EnqueueRootsAsync(context, settings, downstreamNeeds, allEntityIds, cancellationToken);
 
         int removed;
         int orphans;
@@ -495,10 +566,9 @@ public sealed class ScanLibraryJobHandler(
     }
 
     private static bool SamePath(string left, string right) =>
-        string.Equals(
+        FileSystemPathComparison.Equals(
             Path.TrimEndingDirectorySeparator(left),
-            Path.TrimEndingDirectorySeparator(right),
-            StringComparison.OrdinalIgnoreCase);
+            Path.TrimEndingDirectorySeparator(right));
 
     private static bool IsPathUnderRoot(string path, string rootPath) {
         var relative = Path.GetRelativePath(

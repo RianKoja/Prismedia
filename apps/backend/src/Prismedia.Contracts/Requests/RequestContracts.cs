@@ -1,14 +1,16 @@
+using Prismedia.Contracts.Plugins;
 using Prismedia.Domain.Entities;
 
 namespace Prismedia.Contracts.Requests;
 
-/// <summary>Search query for requestable external media.</summary>
-/// <param name="HideNsfw">When true, adults-only results (NC-17/X style certifications) are filtered out.</param>
-public sealed record RequestSearchRequest(
-    string Query,
-    IReadOnlyList<RequestMediaKind> Kinds,
-    IReadOnlyList<RequestProviderKind> Sources,
-    bool HideNsfw);
+/// <summary>Schema-driven search against one explicitly selected metadata plugin and media kind.</summary>
+/// <param name="Kind">The single discoverable request kind being searched.</param>
+/// <param name="PluginId">Stable manifest id of the plugin selected by the user.</param>
+/// <param name="Fields">Plugin-owned search values keyed by its declared search schema.</param>
+public sealed record RequestPluginSearchRequest(
+    RequestMediaKind Kind,
+    string PluginId,
+    IReadOnlyDictionary<string, string> Fields);
 
 /// <summary>Aggregated request search response.</summary>
 public sealed record RequestSearchResponse(
@@ -22,6 +24,8 @@ public sealed record RequestProviderHealth(Guid ServiceId, RequestProviderKind K
 /// <param name="Subtitle">Short secondary line for review context (e.g. the author for a book, work count for an author).</param>
 /// <param name="Requestable">True when the item can be requested.</param>
 /// <param name="ProviderName">Display name of the plugin/provider that sourced this result (e.g. "OpenLibrary"), for attribution in the results grid.</param>
+/// <param name="PluginId">Stable manifest id of the plugin that produced this result.</param>
+/// <param name="ExternalIdentity">Persistent identity selected from the plugin's declared namespaces.</param>
 public sealed record RequestSearchResult(
     Guid ServiceId,
     RequestProviderKind Source,
@@ -42,69 +46,69 @@ public sealed record RequestSearchResult(
     string? UpstreamId,
     bool? Monitored,
     bool Requestable,
-    string? ProviderName = null);
+    string? ProviderName = null,
+    string? PluginId = null,
+    ExternalIdentity? ExternalIdentity = null);
 
-/// <summary>Normalized external detail record for a requestable item.</summary>
-/// <param name="Subtitle">Short secondary line for review context (e.g. the author for a book, the book count for an author).</param>
-/// <param name="Dates">Provider date entries (code → ISO-ish value: release, firstAir, …) — the same dates identify would apply.</param>
-/// <param name="Children">Selectable child works — an author's books, or a series' volumes — fanned out into one acquisition each.</param>
-public sealed record RequestDetailResponse(
-    RequestProviderKind Source,
+/// <summary>
+/// Requests the canonical plugin proposal used to review one discovery result before committing it.
+/// </summary>
+/// <param name="Kind">Request-flow kind selected by the user.</param>
+/// <param name="PluginId">Stable manifest id of the plugin that produced the search result.</param>
+/// <param name="ExternalIdentity">Persistent upstream identity selected from the search result.</param>
+public sealed record RequestReviewRequest(
     RequestMediaKind Kind,
-    string ExternalId,
-    string Title,
-    string? Subtitle,
-    int? Year,
-    IReadOnlyDictionary<string, string> Dates,
-    string? Overview,
-    string? PosterUrl,
-    string? BackdropUrl,
-    decimal? Rating,
-    int? RuntimeMinutes,
-    string? Certification,
-    int? TrackCount,
-    IReadOnlyList<string> Tags,
-    IReadOnlyList<string> Studios,
-    IReadOnlyList<string> Credits,
-    IReadOnlyList<RequestCastMember> Cast,
-    IReadOnlyList<RequestRatingValue> Ratings,
-    IReadOnlyList<RequestChildOption> Children,
-    IReadOnlyList<RequestTrack> Tracks,
-    bool Tracked,
-    string? UpstreamId,
-    bool? Monitored,
-    RequestServiceOptionsResponse ServiceOptions);
+    string PluginId,
+    ExternalIdentity ExternalIdentity);
 
-/// <summary>One cast credit on a request detail, hydrated from the metadata provider.</summary>
-/// <param name="Role">Character or role name when known.</param>
-/// <param name="ImageUrl">Absolute profile/headshot URL when available.</param>
-public sealed record RequestCastMember(string Name, string? Role, string? ImageUrl);
+/// <summary>
+/// Requests the canonical plugin proposal for an existing library entity. The server resolves the
+/// entity's persistent identities through the central plugin router; callers never select or encode a
+/// plugin-qualified identifier.
+/// </summary>
+/// <param name="EntityId">Existing local entity whose persistent identities should be reviewed.</param>
+/// <param name="Kind">Request-flow kind that determines the plugin entity kind and proposal shape.</param>
+public sealed record RequestEntityReviewRequest(
+    Guid EntityId,
+    RequestMediaKind Kind);
 
-/// <summary>A rating from one source on a request detail.</summary>
-/// <param name="Value">Score in the source's native scale.</param>
-/// <param name="Scale">Maximum of the source's scale (10 for TMDB/IMDb, 100 for percent scores).</param>
-/// <param name="Votes">Vote count when the source reports one.</param>
-public sealed record RequestRatingValue(RequestRatingSource Source, decimal Value, decimal Scale, int? Votes);
-
-/// <summary>Selectable or informational child option, such as a book in an author's bibliography or a series volume.</summary>
-/// <param name="Number">Ordering number where the provider has one (volume number).</param>
-/// <param name="Year">Release year when known.</param>
-/// <param name="ItemCount">Child count for a container; null elsewhere.</param>
-/// <param name="Monitored">Upstream monitored flag when the parent is tracked; null otherwise.</param>
-public sealed record RequestChildOption(
-    string Id,
-    string Title,
+/// <summary>
+/// Canonical, unflattened plugin proposal used by every request review surface.
+/// </summary>
+/// <param name="PluginId">Stable manifest id of the plugin that resolved the proposal.</param>
+/// <param name="ExternalIdentity">Primary persistent identity used for the lookup.</param>
+/// <param name="EntityKind">Actual entity kind targeted by the root proposal.</param>
+/// <param name="Kind">Request-flow kind selected by the user.</param>
+/// <param name="Proposal">Complete proposal, including nested structural children and relationships.</param>
+/// <param name="Revision">Deterministic SHA-256 digest of the canonical proposal content.</param>
+/// <param name="Targets">Requestable root and structural child targets represented by the proposal.</param>
+public sealed record RequestReviewResponse(
+    string PluginId,
+    ExternalIdentity ExternalIdentity,
+    EntityKind EntityKind,
     RequestMediaKind Kind,
+    EntityMetadataProposal Proposal,
+    string Revision,
+    IReadOnlyList<RequestReviewTarget> Targets);
+
+/// <summary>One independently identifiable root or structural child in a request review proposal.</summary>
+/// <param name="ProposalId">Plugin-owned proposal id used by the review UI.</param>
+/// <param name="Kind">Request-flow kind for this target.</param>
+/// <param name="EntityKind">Actual Prismedia entity kind targeted by the proposal node.</param>
+/// <param name="ExternalIdentity">Persistent identity declared by the selected plugin for this target kind.</param>
+/// <param name="Requestable">Whether the request flow currently supports committing this target kind.</param>
+/// <param name="Position">Provider-reported structural position, when available.</param>
+/// <param name="Year">Provider-reported year, when available.</param>
+/// <param name="Monitored">Monitoring state, when supplied by a future provider contract.</param>
+public sealed record RequestReviewTarget(
+    string ProposalId,
+    RequestMediaKind Kind,
+    EntityKind EntityKind,
+    ExternalIdentity ExternalIdentity,
     bool Requestable,
-    int? Number,
-    int? Year,
-    int? ItemCount,
-    string? Overview,
-    string? PosterUrl,
-    bool? Monitored);
-
-/// <summary>One track on an album detail, for review before requesting.</summary>
-public sealed record RequestTrack(int Number, string Title, int? DurationSeconds);
+    int? Position = null,
+    int? Year = null,
+    bool? Monitored = null);
 
 /// <summary>
 /// Commits a request: creates the wanted library entity/entities for the reviewed item up front —
@@ -136,6 +140,29 @@ public sealed record RequestCommitRequest(
     RequestMediaKind Kind,
     string ExternalId,
     IReadOnlyList<string> SelectedChildIds,
+    Guid? TargetLibraryRootId = null,
+    Guid? ProfileId = null,
+    MonitorPreset? Preset = null);
+
+/// <summary>
+/// Commits an item from the canonical proposal review surface. Structural selections are proposal ids,
+/// never client-supplied external identities; the server re-resolves the exact plugin and derives every
+/// selected node's persistent identity from the fresh proposal before it writes anything.
+/// </summary>
+/// <param name="Kind">Request-flow kind reviewed by the user.</param>
+/// <param name="PluginId">Stable manifest id of the plugin that produced the review.</param>
+/// <param name="RootExternalIdentity">Persistent identity used to resolve the reviewed root proposal.</param>
+/// <param name="ProposalRevision">Revision returned by the review endpoint.</param>
+/// <param name="SelectedProposalIds">Case-sensitive proposal ids selected from the reviewed proposal.</param>
+/// <param name="TargetLibraryRootId">Optional import-target override.</param>
+/// <param name="ProfileId">Optional acquisition-profile override.</param>
+/// <param name="Preset">Optional container monitoring preset.</param>
+public sealed record ReviewedRequestCommitRequest(
+    RequestMediaKind Kind,
+    string PluginId,
+    ExternalIdentity RootExternalIdentity,
+    string ProposalRevision,
+    IReadOnlyList<string> SelectedProposalIds,
     Guid? TargetLibraryRootId = null,
     Guid? ProfileId = null,
     MonitorPreset? Preset = null);
@@ -182,16 +209,12 @@ public sealed record MissingChildrenCommitResponse(int Covered, int Missing);
 /// </summary>
 public sealed record WantedRemovalRequest(IReadOnlyList<Guid> EntityIds);
 
+/// <summary>One wanted placeholder that could not be removed, with retryable user-facing detail.</summary>
+/// <param name="EntityId">The Entity that remains wanted.</param>
+/// <param name="Message">Why the durable give-up operation did not complete.</param>
+public sealed record WantedRemovalFailure(Guid EntityId, string Message);
+
 /// <summary>Result of a wanted removal.</summary>
-/// <param name="Removed">How many placeholders were removed (on-disk items are skipped).</param>
-public sealed record WantedRemovalResponse(int Removed);
-
-/// <summary>Root folder/profile option exposed by a request service instance.</summary>
-public sealed record RequestServiceOption(string Id, string Name, string? Path);
-
-/// <summary>Grouped selectable options exposed by a request service instance.</summary>
-public sealed record RequestServiceOptionsResponse(
-    IReadOnlyList<RequestServiceOption> QualityProfiles,
-    IReadOnlyList<RequestServiceOption> RootFolders,
-    IReadOnlyList<RequestServiceOption> MetadataProfiles,
-    IReadOnlyList<RequestServiceOption> Tags);
+/// <param name="Removed">How many placeholders are now absent.</param>
+/// <param name="Failures">Entities that remain visible and selected because removal did not complete.</param>
+public sealed record WantedRemovalResponse(int Removed, IReadOnlyList<WantedRemovalFailure> Failures);

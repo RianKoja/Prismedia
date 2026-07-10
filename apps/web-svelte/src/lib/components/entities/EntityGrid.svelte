@@ -19,6 +19,7 @@
     buildEntityKindTabs,
     entityGridRequestFromState,
     entityGridFilterFromId,
+    normalizeEntityGridFilterIds,
     type EntityGridRequest,
     type EntityGridSort,
     type EntityGridSortDir,
@@ -37,7 +38,7 @@
 
   const DEFAULT_PAGE_SIZE = 250;
   const DEFAULT_PAGE_SIZE_OPTIONS = [100, 250, 500, 1000];
-  const DEFAULT_DESKTOP_SCALE = 11;
+  const DEFAULT_DESKTOP_SCALE = 6;
   const MOBILE_THUMBNAIL_QUERY = "(max-width: 639.98px)";
 
   interface Props {
@@ -157,9 +158,8 @@
 
   function defaultScale(): number {
     // On phones the very largest thumbnails (minScale) can feel oversized, so
-    // start one step in while still leaning large for touch. Desktop starts near
-    // the smallest end of the slider so dense libraries do not open as oversized
-    // posters on wide screens.
+    // start one step in while still leaning large for touch. Desktop starts at
+    // the preferred mid-range density shared by the main library grids.
     return isMobileThumbnailViewport() ? clampScale(minScale + 1) : clampScale(DEFAULT_DESKTOP_SCALE);
   }
 
@@ -189,8 +189,10 @@
   const persistedPrefs: EntityGridPrefs | null = prefsStore ? prefsStore.load() : null;
 
   let capabilityOverrides = $state(new Map<string, EntityCapability[]>());
-  /** Wanted placeholders removed via the bulk action this session; dropped from the grid optimistically. */
+  /** Wanted placeholders the server confirmed removed during this session. */
   let removedIds = $state(new Set<string>());
+  /** Actionable durable-teardown failures for wanted cards that remain selected. */
+  let removeWantedErrors = $state<string[]>([]);
   let activeKind = $state(persistedPrefs?.activeKind ?? ENTITY_GRID_ALL_KINDS);
   let activePresetId = $state<string | null>(persistedPrefs?.activePresetId ?? null);
   let drawerOpen = $state(false);
@@ -268,6 +270,7 @@
   const visibleCards = $derived(
     applyEntityGridState(effectiveCards, gridState, filterOptions, {
       preserveServerResolvedSorts: Boolean(onRequestChange),
+      serverResolvedFilters: Boolean(onRequestChange),
     }),
   );
   const selectedCount = $derived(selectedIds.length);
@@ -645,8 +648,7 @@
   }
 
   function applyPreset(preset: FilterPreset) {
-    filterIds = preset.filters
-      .map((filter) => filter.value)
+    filterIds = normalizeEntityGridFilterIds(preset.filters.map((filter) => filter.value))
       .filter((id) => Boolean(entityGridFilterFromId(id, filterOptions)));
     const presetSorts: EntityGridSort[] = ["title", "kind", "rating", "position", "added", "random"];
     sortBy = (presetSorts as string[]).includes(preset.sortBy) ? (preset.sortBy as EntityGridSort) : initialSortBy;
@@ -718,19 +720,42 @@
   /**
    * Removes the selected wanted placeholders: the server deletes each (tearing down in-flight
    * downloads) and blacklists it from container discovery so a followed author/artist sweep never
-   * brings it back — requesting the exact item again later clears its blacklist entry. The grid drops
-   * the cards optimistically.
+   * brings it back — requesting the exact item again later clears its blacklist entry. Each Entity is sent
+   * separately so a retained/failed durable teardown remains visible and selected for an explicit retry.
    */
   async function removeWantedSelection() {
     if (selectedCards.length === 0) return;
+    removeWantedErrors = [];
     const targets = selectedCards.map((card) => card.entity.id);
-    try {
-      await removeWantedEntities(targets);
-      removedIds = new Set([...removedIds, ...targets]);
-      selectedIds = [];
+    const confirmed: string[] = [];
+    const failures: string[] = [];
+    for (const target of targets) {
+      try {
+        const result = await removeWantedEntities([target]);
+        if (Number(result.removed) === 1) {
+          confirmed.push(target);
+          continue;
+        }
+
+        const messages = result.failures
+          .filter((failure) => failure.entityId === target)
+          .map((failure) => failure.message);
+        failures.push(...(messages.length > 0
+          ? messages
+          : ["The wanted item could not be removed. Refresh and try again."]));
+      } catch (error) {
+        // This target stays selected and visible; continue so one outage does not strand other removals.
+        failures.push(error instanceof Error ? error.message : "The wanted item could not be removed.");
+      }
+    }
+
+    removeWantedErrors = Array.from(new Set(failures));
+
+    if (confirmed.length > 0) {
+      const confirmedIds = new Set(confirmed);
+      removedIds = new Set([...removedIds, ...confirmed]);
+      selectedIds = selectedIds.filter((id) => !confirmedIds.has(id));
       onSelectionChange?.(selectedIds);
-    } catch {
-      // best-effort; the cards stay and the user can retry
     }
   }
 
@@ -918,6 +943,14 @@
     {viewMode}
   />
 
+  {#if removeWantedErrors.length > 0}
+    <div class="remove-wanted-error" role="alert">
+      {#each removeWantedErrors as message (message)}
+        <p>{message}</p>
+      {/each}
+    </div>
+  {/if}
+
   {#if drawerOpen}
     <EntityGridFilterDrawer
       activeFilterIds={filterIds}
@@ -1040,6 +1073,21 @@
   .entity-grid > :global(.pagination-shell),
   .entity-grid.is-static > :global(.pagination-shell) {
     margin-top: 0.85rem;
+  }
+
+  .remove-wanted-error {
+    display: grid;
+    gap: 0.25rem;
+    border: 1px solid color-mix(in srgb, var(--color-error) 40%, transparent);
+    border-radius: var(--radius-xs);
+    background: color-mix(in srgb, var(--color-error) 10%, transparent);
+    padding: 0.65rem 0.8rem;
+    color: var(--color-error-text);
+    font-size: 0.78rem;
+  }
+
+  .remove-wanted-error p {
+    margin: 0;
   }
 
   .grid-viewport {

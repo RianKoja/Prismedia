@@ -111,6 +111,8 @@ export interface EntityThumbnailCard {
   custom?: EntityThumbnailCustomOverlay;
   fit?: "contain" | "cover";
   hover: EntityThumbnailHoverPreview;
+  /** True when this Entity or its structural descendants own source media. */
+  hasSourceMedia?: boolean;
   href?: string;
   meta?: EntityThumbnailMetaItem[];
   /** Fraction watched/read in 0..1 for the thumbnail progress meter, when meaningful. */
@@ -120,6 +122,13 @@ export interface EntityThumbnailCard {
    * thumbnail's wanted badge shows what the item is doing. Null/undefined when not wanted or unknown.
    */
   wantedStatus?: string | null;
+  /** Latest linked acquisition state, retained after an entity leaves Wanted. */
+  latestAcquisitionStatus?: string | null;
+  /**
+   * Distinct acquisition states across the Entity's structural subtree. Availability filters use
+   * membership here; older servers may omit it, in which case callers fall back to the singular status.
+   */
+  acquisitionStatuses?: string[] | null;
   routeContext?: EntityRouteContext;
   subtitle?: string;
 }
@@ -217,6 +226,7 @@ export function entityReferenceToThumbnailCard(
     },
     fit: options.fit ?? "cover",
     hover: options.hover ?? { kind: THUMBNAIL_HOVER_KIND.none },
+    hasSourceMedia: false,
     href: options.href,
     meta: options.meta,
     routeContext: options.routeContext,

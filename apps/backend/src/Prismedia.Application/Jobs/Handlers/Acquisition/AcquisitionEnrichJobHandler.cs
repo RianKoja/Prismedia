@@ -7,7 +7,7 @@ namespace Prismedia.Application.Jobs.Handlers;
 
 /// <summary>
 /// Enriches a request's held metadata from its originating metadata plugin: resolves the cover, fuller
-/// description, and dates by the provider work-id (which the lightweight request-time search result often
+/// description, and dates by the persistent work identity (which lightweight request search often
 /// lacks) and fills only the gaps. Best-effort — a provider miss or error leaves the held metadata as-is and
 /// never disturbs the acquisition's state machine. The deeper, authoritative metadata pass (and children)
 /// still runs at import via auto-identify.
@@ -21,7 +21,7 @@ public sealed class AcquisitionEnrichJobHandler(
     public async Task HandleAsync(JobContext context, CancellationToken cancellationToken) {
         var payload = AcquisitionJobPayload.Parse(context.Job.PayloadJson);
         var import = await acquisitions.GetImportContextAsync(payload.AcquisitionId, cancellationToken);
-        if (import is null || string.IsNullOrWhiteSpace(import.PluginId) || string.IsNullOrWhiteSpace(import.PluginItemId)) {
+        if (import?.ExternalIdentity is not { } externalIdentity) {
             return; // nothing to enrich from
         }
 
@@ -30,7 +30,11 @@ public sealed class AcquisitionEnrichJobHandler(
             // Conservative SFW default: this background pass has no user session, and the request already
             // captured whatever the (already SFW-gated) search returned — so never pull NSFW-unrestricted
             // results here. An NSFW-flagged provider is skipped by the enricher.
-            enrichment = await enricher.LookupByIdAsync(import.Kind, import.PluginId, import.PluginItemId, hideNsfw: true, cancellationToken);
+            enrichment = await enricher.LookupByIdAsync(
+                import.Kind,
+                externalIdentity,
+                hideNsfw: true,
+                cancellationToken);
         } catch (OperationCanceledException) {
             throw;
         } catch (Exception ex) {

@@ -194,14 +194,14 @@ public sealed record IndexerSearchError(Guid IndexerId, string IndexerName, stri
 /// <param name="SeasonNumber">Season number for TV units (season pack or single episode); null elsewhere.</param>
 /// <param name="EpisodeNumber">Episode number for a single-episode acquisition; null elsewhere.</param>
 /// <param name="VolumeNumber">Volume number for a volume-scoped book/comic acquisition; null elsewhere.</param>
+/// <param name="ExternalIdentity">Optional persistent identity of the requested work in an external namespace.</param>
 public sealed record AcquisitionMetadata(
     string Title,
     string? Author,
     string? Series,
     int? Year,
     string? PosterUrl,
-    string? PluginId,
-    string? PluginItemId,
+    ExternalIdentity? ExternalIdentity,
     string? Description = null,
     EntityKind Kind = EntityKind.Book,
     Guid? EntityId = null,
@@ -212,7 +212,7 @@ public sealed record AcquisitionMetadata(
     int? VolumeNumber = null);
 
 /// <summary>The minimal input the background search job needs to query indexers for an acquisition.</summary>
-/// <param name="Kind">The media kind being acquired; picks the decision engine and the Torznab category range.</param>
+/// <param name="Kind">The media kind being acquired; selects its query, category, and decision policy module.</param>
 /// <param name="EntityId">The wanted library entity this acquisition fulfils; a wanted-linked search auto-grabs its best accepted release.</param>
 /// <param name="Year">Release year context for the query ladder (year-disambiguated movie searches).</param>
 /// <param name="ProfileId">The acquisition's chosen profile; its rules score the search (null = the kind's default).</param>
@@ -316,15 +316,16 @@ public sealed record AcquisitionCandidateRef(Guid CandidateId, string Title, str
 }
 
 /// <summary>
-/// A monitor whose periodic action is due. <see cref="IsUpgrade"/> marks an imported book due for an
+/// A monitor whose periodic action is due. <see cref="IsUpgrade"/> marks an imported Entity due for an
 /// upgrade re-search (a child acquisition is spawned to search). <see cref="EntityId"/> marks a
-/// container monitor due for a discovery sync (re-resolve the author/artist from its provider and
-/// request missing works); container dues carry no acquisition. <see cref="EpisodeFallback"/> marks an
-/// imported season pack that left episode phantoms wanted: <see cref="EntityId"/> then carries the
-/// season entity, and the handler requests each missing episode individually instead of fulfilling.
+/// Entity-only intent: containers run provider-backed child discovery, source-backed leaves remain
+/// active, and fileless leaves request themselves. Entity-only dues carry no acquisition; when both ids
+/// are present the acquisition lifecycle wins. <see cref="MissingChildFallback"/> marks an imported
+/// child-materializing acquisition unit that left direct child phantoms wanted: <see cref="EntityId"/>
+/// then carries the parent Entity and the handler requests each missing child through the shared flow.
 /// </summary>
 public sealed record DueMonitor(
-    Guid MonitorId, Guid? AcquisitionId, string Title, bool IsUpgrade = false, Guid? EntityId = null, bool EpisodeFallback = false);
+    Guid MonitorId, Guid? AcquisitionId, string Title, bool IsUpgrade = false, Guid? EntityId = null, bool MissingChildFallback = false);
 
 /// <summary>
 /// The owned quality an upgrade child must beat, expressed in the vocabulary of the child's kind. A book
@@ -352,6 +353,7 @@ public sealed record UpgradeOwnedQuality(Domain.Entities.BookQualityRank? BookRa
 /// payload lives, the current owned quality to re-confirm against, the new payload's download location, and
 /// the download-client item to clean up.
 /// </summary>
+/// <param name="ParentEntityId">Stable Entity whose active monitor owns the upgrade lifecycle.</param>
 /// <param name="ParentKind">The parent acquisition's media kind; routes the handler between the book and media replace paths.</param>
 /// <param name="ParentOwnedMediaQuality">The parent's owned ladder code for a media parent; null for a book parent.</param>
 /// <param name="ParentOwnedMediaRevision">The parent's owned revision for a media parent, so a same-quality higher-revision child is recognized as an upgrade at the pre-swap re-confirm gate. Defaults to 1; ignored on the book path.</param>
@@ -359,6 +361,7 @@ public sealed record UpgradeOwnedQuality(Domain.Entities.BookQualityRank? BookRa
 /// <param name="ParentOwnedFormatScore">The parent's owned custom-format score, re-confirmed against at the pre-swap gate for a same-quality format-score upgrade. Defaults to 0.</param>
 public sealed record UpgradeReplaceTarget(
     Guid ParentId,
+    Guid? ParentEntityId,
     string? ParentFinalSourcePath,
     Domain.Entities.BookQualityRank ParentOwnedQuality,
     string? ChildSelectedTitle,
@@ -408,6 +411,22 @@ public interface IOwnedFileReplacer {
         CancellationToken cancellationToken,
         Domain.Entities.EntityKind kind = Domain.Entities.EntityKind.Book,
         bool allowFormatChange = false);
+
+    /// <summary>
+    /// Performs the same swap while retaining the recoverable backup sidecar after success. Durable TV
+    /// checkpoints use this form with attempt-specific incoming-byte evidence so a process restart can
+    /// distinguish an installed same-path upgrade from the untouched old file before FinalPath is durable.
+    /// </summary>
+    Task<OwnedFileReplaceResult> ReplaceRetainingBackupAsync(
+        string ownedFolder,
+        string newContentPath,
+        Domain.Entities.BookFormatTier ownedFormatTier,
+        CancellationToken cancellationToken,
+        Domain.Entities.EntityKind kind = Domain.Entities.EntityKind.Book,
+        bool allowFormatChange = false,
+        string? recoveryBackupPath = null,
+        string? incomingEvidencePath = null) =>
+        ReplaceAsync(ownedFolder, newContentPath, ownedFormatTier, cancellationToken, kind, allowFormatChange);
 }
 
 /// <summary>Input for adding a release identity to the acquisition blocklist (idempotent on the identity).</summary>
@@ -437,12 +456,33 @@ public interface IReleaseLinkResolver {
     Task<string?> ResolveMagnetAsync(string infoUrl, CancellationToken cancellationToken);
 }
 
+/// <summary>
+/// Serializes one remote download-client Add with persistence of its transfer pointer. The production
+/// implementation holds the acquisition row lock until the pointer commits, so teardown either wins before
+/// Add starts or waits and then observes the exact remote item it must remove.
+/// </summary>
+public interface IAcquisitionTransferAddCoordinator {
+    /// <summary>
+    /// Acquires ownership only while the acquisition is still in the queue-preparation state; null means a
+    /// concurrent lifecycle operation won and no remote Add may be attempted.
+    /// </summary>
+    Task<IAcquisitionTransferAddLease?> AcquireAsync(Guid acquisitionId, CancellationToken cancellationToken);
+}
+
+/// <summary>One acquisition-row lock spanning remote Add through durable transfer-pointer commit.</summary>
+public interface IAcquisitionTransferAddLease : IAsyncDisposable {
+    /// <summary>Commits the transaction after the transfer pointer has been persisted.</summary>
+    Task CommitAsync(CancellationToken cancellationToken);
+}
+
 /// <summary>Minimal transfer wiring for an acquisition: its status, imported location, and download-client item.</summary>
 public sealed record AcquisitionTransferInfo(
     AcquisitionStatus Status,
     string? FinalSourcePath,
     string? ClientItemId,
-    Guid? DownloadClientConfigId);
+    Guid? DownloadClientConfigId,
+    string? Category = null,
+    string? State = null);
 
 /// <summary>Lists the files that landed on disk for an imported acquisition.</summary>
 public interface IImportedFilesReader {
@@ -468,12 +508,24 @@ public sealed record ActiveTransfer(
     /// </summary>
     DateTimeOffset? StalledSince = null);
 
+/// <summary>
+/// Durable completion ticket for an acquisition whose download finished before its import or replacement
+/// job was safely queued. <see cref="Kind"/> determines whether an ordinary acquisition has a registered
+/// import engine; <see cref="IsUpgrade"/> routes upgrade children to the in-place replacement workflow.
+/// </summary>
+public sealed record DownloadedAcquisitionCompletion(
+    Guid AcquisitionId,
+    EntityKind Kind,
+    bool IsUpgrade);
+
 /// <summary>Everything the import job needs: the captured metadata, the chosen profile, and the completed download's location.</summary>
 /// <param name="Kind">The media kind being acquired; drives per-kind enrichment and import dispatch.</param>
 /// <param name="TargetLibraryRootId">The request-time import-target choice; null uses the kind's default.</param>
 /// <param name="SeasonNumber">Season number for TV units; places files under the right season folder.</param>
 /// <param name="EpisodeNumber">Episode number for a single-episode acquisition; names files that carry no episode token.</param>
 /// <param name="EntityId">The wanted/monitored library entity this acquisition fulfills; an entity that already lives on disk redirects the import into its existing folder.</param>
+/// <param name="ExternalIdentity">Optional persistent identity carried from request through enrichment and import.</param>
+/// <param name="FinalSourcePath">Final imported source boundary, or a legacy placed-file recovery path from before typed checkpoints.</param>
 public sealed record AcquisitionImportContext(
     Guid Id,
     string Title,
@@ -481,8 +533,7 @@ public sealed record AcquisitionImportContext(
     string? Series,
     int? Year,
     string? PosterUrl,
-    string? PluginId,
-    string? PluginItemId,
+    ExternalIdentity? ExternalIdentity,
     Guid? ProfileId,
     string? ContentPath,
     string? ClientItemId,
@@ -492,11 +543,125 @@ public sealed record AcquisitionImportContext(
     Guid? TargetLibraryRootId = null,
     int? SeasonNumber = null,
     int? EpisodeNumber = null,
-    Guid? EntityId = null) {
+    Guid? EntityId = null,
+    string? FinalSourcePath = null,
+    TvImportCheckpoint? TvImportCheckpoint = null,
+    ImportPlacementCheckpoint? ImportPlacementCheckpoint = null) {
     /// <summary>
     /// The user's explicit "import anyway": an upgrade that changes the file extension — normally held
     /// for manual import — replaces the owned file across formats. Carried by the manual retry-import
     /// job payload only; automatic imports never set it.
     /// </summary>
     public bool AllowFormatChange { get; init; }
+}
+
+/// <summary>
+/// Durable, kind-neutral placement plan for a book, movie, or album import. The plan reserves every
+/// exact library target before the first filesystem mutation and advances one unit at a time. A retry
+/// therefore resumes the same paths even when Move consumed the payload, while Copy and Hardlink can
+/// recognize already-published bytes instead of producing a collision suffix.
+/// </summary>
+/// <param name="Kind">Entity kind whose import engine owns the plan.</param>
+/// <param name="LibraryRootId">Configured library root that owns every target.</param>
+/// <param name="LibraryRootPath">Absolute root boundary captured when the plan was created.</param>
+/// <param name="PayloadRootPath">Absolute completed-download boundary that owns every source.</param>
+/// <param name="ImportMode">Move/copy/hardlink behavior captured from the acquisition profile.</param>
+/// <param name="HintPath">Exact path-keyed identify hint boundary used by the kind's scanner.</param>
+/// <param name="FinalSourcePath">Exact source boundary published on the acquisition after placement.</param>
+/// <param name="SuccessMessage">Terminal user-facing import summary retained across retries.</param>
+/// <param name="Units">Every payload file the engine will mutate, including non-media companions.</param>
+/// <param name="TransferClientItemId">Download-client item this plan was built from; another transfer may never reuse it.</param>
+/// <param name="AttemptId">Opaque token identifying this exact placement attempt.</param>
+/// <param name="ClaimJobId">Queue job exclusively allowed to advance this attempt.</param>
+public sealed record ImportPlacementCheckpoint(
+    EntityKind Kind,
+    Guid LibraryRootId,
+    string LibraryRootPath,
+    string PayloadRootPath,
+    ImportMode ImportMode,
+    string HintPath,
+    string FinalSourcePath,
+    string SuccessMessage,
+    IReadOnlyList<ImportPlacementCheckpointUnit> Units,
+    string? TransferClientItemId = null,
+    Guid AttemptId = default,
+    Guid ClaimJobId = default);
+
+/// <summary>One exact payload-to-library placement in a kind-neutral durable import plan.</summary>
+/// <param name="SourceRelativePath">Download-payload-relative source path retained for diagnostics and validation.</param>
+/// <param name="SourceAbsolutePath">Exact original payload path used for placement and crash recovery.</param>
+/// <param name="TargetAbsolutePath">Exact collision-resolved target reserved before any mutation.</param>
+/// <param name="IsMedia">Whether this file participates in Entity materialization readiness.</param>
+/// <param name="FinalPath">Target path after the mutation is durably checkpointed; null while pending.</param>
+public sealed record ImportPlacementCheckpointUnit(
+    string SourceRelativePath,
+    string SourceAbsolutePath,
+    string TargetAbsolutePath,
+    bool IsMedia,
+    string? FinalPath = null);
+
+/// <summary>
+/// Durable execution plan for a TV import. It is written before the first filesystem mutation and
+/// updated after every placed file, so a retry can finish the original plan without guessing from
+/// whatever files remain in the download directory.
+/// </summary>
+/// <param name="LibraryRootId">Video root that owns every target.</param>
+/// <param name="SeriesFolderPath">Absolute series folder used by Entity hierarchy materialization.</param>
+/// <param name="ImportMode">Move/copy/hardlink behavior selected when the plan was created.</param>
+/// <param name="AllowFormatChange">The user's explicit cross-format replacement consent, retained for retries.</param>
+/// <param name="SuccessMessage">Terminal user-facing import summary retained across retries.</param>
+/// <param name="PreferSingleFileFinalSource">Whether a one-file result should checkpoint the file rather than its season folder.</param>
+/// <param name="Units">Every file mutation required for the successful import.</param>
+/// <param name="TransferClientItemId">Download-client item this plan was built from; a later transfer may never reuse it.</param>
+/// <param name="AttemptId">Opaque token that scopes recovery artifacts to this exact placement plan.</param>
+/// <param name="ClaimJobId">Queue job exclusively allowed to execute this attempt; reassigned only by an atomic retry claim.</param>
+public sealed record TvImportCheckpoint(
+    Guid LibraryRootId,
+    string SeriesFolderPath,
+    ImportMode ImportMode,
+    bool AllowFormatChange,
+    string SuccessMessage,
+    bool PreferSingleFileFinalSource,
+    IReadOnlyList<TvImportCheckpointUnit> Units,
+    string? TransferClientItemId = null,
+    Guid AttemptId = default,
+    Guid ClaimJobId = default);
+
+/// <summary>One durable TV file placement and its exact Entity position.</summary>
+/// <param name="SourceRelativePath">Download-payload-relative source path.</param>
+/// <param name="SourceAbsolutePath">Exact original payload path retained for replacement-stage recovery.</param>
+/// <param name="TargetAbsolutePath">Exact absolute library target, collision-resolved before any mutation.</param>
+/// <param name="SeasonNumber">Season position represented by the file.</param>
+/// <param name="EpisodeNumber">Primary episode position represented by the file.</param>
+/// <param name="CoveredEpisodeNumbers">Additional episode positions satisfied by the same file.</param>
+/// <param name="PreviousFilePath">Owned source replaced by an upgrade, or null for a new placement.</param>
+/// <param name="FinalPath">Actual placed path once the mutation completes; null while still pending.</param>
+/// <param name="ReplacementBackupPath">Attempt-specific retained copy of the pre-upgrade bytes.</param>
+/// <param name="ReplacementEvidencePath">Attempt-specific incoming-byte evidence retained until FinalPath is durable.</param>
+public sealed record TvImportCheckpointUnit(
+    string SourceRelativePath,
+    string TargetAbsolutePath,
+    int SeasonNumber,
+    int EpisodeNumber,
+    IReadOnlyList<int> CoveredEpisodeNumbers,
+    string? PreviousFilePath = null,
+    string? FinalPath = null,
+    string? SourceAbsolutePath = null,
+    string? ReplacementBackupPath = null,
+    string? ReplacementEvidencePath = null);
+
+/// <summary>
+/// Stable sidecar paths used by the crash-safe owned-file replacement protocol. They deliberately use
+/// non-media suffixes so scans never import an in-progress or recoverable copy as another Entity.
+/// </summary>
+public static class OwnedFileReplacementArtifacts {
+    public const string BackupSuffix = ".prismedia-bak";
+    public const string StagedSuffix = ".prismedia-new";
+
+    public static string BackupPath(string ownedPath) => Path.GetFullPath(ownedPath) + BackupSuffix;
+    public static string StagedPath(string ownedPath) => Path.GetFullPath(ownedPath) + StagedSuffix;
+    public static string CheckpointBackupPath(string ownedPath, Guid attemptId) =>
+        Path.GetFullPath(ownedPath) + $".prismedia-bak-{attemptId:N}";
+    public static string CheckpointEvidencePath(string ownedPath, Guid attemptId) =>
+        Path.GetFullPath(ownedPath) + $".prismedia-incoming-{attemptId:N}";
 }

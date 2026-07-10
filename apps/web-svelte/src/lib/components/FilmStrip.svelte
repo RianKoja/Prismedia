@@ -125,8 +125,8 @@
 
     const onWheel = (e: WheelEvent) => {
       if (!mq.matches) return;
-      const raw = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
-      if (raw === 0) return;
+      if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
+      const raw = e.deltaX;
       e.preventDefault();
       e.stopPropagation();
       const pixelsPerSecond = trackWidth / duration;
@@ -222,7 +222,7 @@
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div
       bind:this={containerEl}
-      class="relative flex-1 overflow-hidden select-none touch-none"
+      class="relative flex-1 overflow-hidden select-none touch-pan-y"
       style:height="{STRIP_HEIGHT}px"
       onpointerdown={handlePointerDown}
       onpointermove={handlePointerMove}

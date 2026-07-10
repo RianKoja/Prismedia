@@ -49,7 +49,7 @@
     return entityCardToDetailCard(studio);
   });
 
-  const identifyAction = useIdentifyDetailAction(() => card?.entity.id, () => card?.entity.kind);
+  const identifyAction = useIdentifyDetailAction(() => studio);
   const heroActions = $derived.by((): EntityDetailActionButton[] => identifyAction.action ? [identifyAction.action] : []);
 
   const dates = $derived(card?.dates ?? []);

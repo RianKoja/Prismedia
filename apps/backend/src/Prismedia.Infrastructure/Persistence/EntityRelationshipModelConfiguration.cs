@@ -55,7 +55,14 @@ internal static class EntityRelationshipModelConfiguration {
         });
 
         modelBuilder.Entity<EntityExternalIdRow>(entity => {
-            entity.ToTable("entity_external_ids");
+            entity.ToTable("entity_external_ids", table => {
+                table.HasCheckConstraint(
+                    "ck_entity_external_ids_provider_canonical",
+                    "provider = lower(btrim(provider)) AND provider <> ''");
+                table.HasCheckConstraint(
+                    "ck_entity_external_ids_value_canonical",
+                    "value = btrim(value) AND value <> ''");
+            });
             entity.HasKey(row => row.Id);
             entity.Property(row => row.Id).HasColumnName("id").ValueGeneratedNever();
             entity.Property(row => row.EntityId).HasColumnName("entity_id");
@@ -65,10 +72,35 @@ internal static class EntityRelationshipModelConfiguration {
             entity.Property(row => row.CreatedAt).HasColumnName("created_at");
             entity.Property(row => row.UpdatedAt).HasColumnName("updated_at");
             entity.HasIndex(row => new { row.EntityId, row.Provider }).IsUnique();
-            entity.HasIndex(row => row.Provider);
+            entity.HasIndex(row => new { row.Provider, row.Value, row.EntityId });
             entity.HasOne<EntityRow>()
                 .WithMany()
                 .HasForeignKey(row => row.EntityId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<EntityProviderIdentityRow>(entity => {
+            entity.ToTable("entity_provider_identities", table => {
+                table.HasCheckConstraint(
+                    "ck_entity_provider_identities_plugin_canonical",
+                    "plugin_id = lower(btrim(plugin_id)) AND plugin_id <> ''");
+                table.HasCheckConstraint(
+                    "ck_entity_provider_identities_namespace_canonical",
+                    "identity_namespace = lower(btrim(identity_namespace)) AND identity_namespace <> ''");
+                table.HasCheckConstraint(
+                    "ck_entity_provider_identities_value_canonical",
+                    "identity_value = btrim(identity_value) AND identity_value <> ''");
+            });
+            entity.HasKey(row => row.EntityId);
+            entity.Property(row => row.EntityId).HasColumnName("entity_id");
+            entity.Property(row => row.PluginId).HasColumnName("plugin_id").HasMaxLength(128).IsRequired();
+            entity.Property(row => row.IdentityNamespace).HasColumnName("identity_namespace").HasMaxLength(128).IsRequired();
+            entity.Property(row => row.IdentityValue).HasColumnName("identity_value").IsRequired();
+            entity.Property(row => row.CreatedAt).HasColumnName("created_at");
+            entity.Property(row => row.UpdatedAt).HasColumnName("updated_at");
+            entity.HasOne<EntityRow>()
+                .WithOne()
+                .HasForeignKey<EntityProviderIdentityRow>(row => row.EntityId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
     }

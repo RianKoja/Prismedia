@@ -267,6 +267,14 @@ export const IDENTIFY_APPLY_STATE = {
 
 export type IdentifyApplyStateCode = (typeof IDENTIFY_APPLY_STATE)[keyof typeof IDENTIFY_APPLY_STATE];
 
+export const PLUGIN_SEARCH_FIELD_TYPE = {
+  text: "text",
+  number: "number",
+  year: "year",
+} as const;
+
+export type PluginSearchFieldTypeCode = (typeof PLUGIN_SEARCH_FIELD_TYPE)[keyof typeof PLUGIN_SEARCH_FIELD_TYPE];
+
 export const FILE_SOURCE_KIND = {
   scan: "scan",
   custom: "custom",
@@ -328,14 +336,21 @@ export const REQUEST_MEDIA_KIND = {
 
 export type RequestMediaKindCode = (typeof REQUEST_MEDIA_KIND)[keyof typeof REQUEST_MEDIA_KIND];
 
-export const REQUEST_RATING_SOURCE = {
-  tmdb: "tmdb",
-  imdb: "imdb",
-  rottenTomatoes: "rotten-tomatoes",
-  metacritic: "metacritic",
+export const REQUEST_REVIEW_SELECTION = {
+  root: "root",
+  directChildren: "direct-children",
+  directChildrenWhenPresent: "direct-children-when-present",
 } as const;
 
-export type RequestRatingSourceCode = (typeof REQUEST_RATING_SOURCE)[keyof typeof REQUEST_RATING_SOURCE];
+export type RequestReviewSelectionCode = (typeof REQUEST_REVIEW_SELECTION)[keyof typeof REQUEST_REVIEW_SELECTION];
+
+export const LIBRARY_ROOT_MEDIA_CAPABILITY = {
+  scanBooks: "scanBooks",
+  scanVideos: "scanVideos",
+  scanAudio: "scanAudio",
+} as const;
+
+export type LibraryRootMediaCapabilityCode = (typeof LIBRARY_ROOT_MEDIA_CAPABILITY)[keyof typeof LIBRARY_ROOT_MEDIA_CAPABILITY];
 
 export const REQUEST_COMMIT_OUTCOME = {
   requested: "requested",
@@ -378,12 +393,26 @@ export const ACQUISITION_STATUS = {
   downloaded: "downloaded",
   importing: "importing",
   imported: "imported",
+  stopping: "stopping",
   failed: "failed",
   cancelled: "cancelled",
   manualImportRequired: "manual-import-required",
 } as const;
 
 export type AcquisitionStatusCode = (typeof ACQUISITION_STATUS)[keyof typeof ACQUISITION_STATUS];
+
+export const ACQUISITION_TEARDOWN_INTENT = {
+  remove: "remove",
+  reacquire: "reacquire",
+} as const;
+
+export type AcquisitionTeardownIntentCode = (typeof ACQUISITION_TEARDOWN_INTENT)[keyof typeof ACQUISITION_TEARDOWN_INTENT];
+
+export const ENTITY_LIFECYCLE_CLAIM_KIND = {
+  deletingFiles: "deleting-files",
+} as const;
+
+export type EntityLifecycleClaimKindCode = (typeof ENTITY_LIFECYCLE_CLAIM_KIND)[keyof typeof ENTITY_LIFECYCLE_CLAIM_KIND];
 
 export const ACQUISITION_HISTORY_EVENT = {
   grabbed: "grabbed",
@@ -415,6 +444,7 @@ export const RELEASE_REJECTION_REASON = {
   dangerousContent: "dangerous-content",
   titleMismatch: "title-mismatch",
   wrongYear: "wrong-year",
+  wrongVolume: "wrong-volume",
 } as const;
 
 export type ReleaseRejectionReasonCode = (typeof RELEASE_REJECTION_REASON)[keyof typeof RELEASE_REJECTION_REASON];
@@ -449,6 +479,8 @@ export type BlocklistReasonCode = (typeof BLOCKLIST_REASON)[keyof typeof BLOCKLI
 export const MONITOR_STATUS = {
   active: "active",
   paused: "paused",
+  deletingFiles: "deleting-files",
+  stopping: "stopping",
   fulfilled: "fulfilled",
 } as const;
 
@@ -458,9 +490,6 @@ export const MONITOR_PRESET = {
   all: "all",
   future: "future",
   missing: "missing",
-  firstSeason: "first-season",
-  latestSeason: "latest-season",
-  pilot: "pilot",
   none: "none",
 } as const;
 
@@ -502,6 +531,7 @@ export const CAPABILITY_KIND = {
   classification: "classification",
   dates: "dates",
   description: "description",
+  fileManagement: "file-management",
   files: "files",
   fingerprints: "fingerprints",
   flags: "flags",
@@ -512,6 +542,7 @@ export const CAPABILITY_KIND = {
   playback: "playback",
   position: "position",
   progress: "progress",
+  providerIdentity: "provider-identity",
   rating: "rating",
   source: "source",
   stats: "stats",
@@ -595,16 +626,19 @@ export const PROBLEM_CODE = {
   downloadClientInvalid: "download_client_invalid",
   downloadClientUnreachable: "download_client_unreachable",
   emptyBulkIdentify: "empty_bulk_identify",
+  entityDeletionConflict: "entity_deletion_conflict",
   entityFileNotFound: "entity_file_not_found",
   entityNotCreatable: "entity_not_creatable",
   entityNotDeletable: "entity_not_deletable",
   entityNotFound: "entity_not_found",
+  externalIdentityAmbiguous: "external_identity_ambiguous",
   fileConflict: "file_conflict",
   identifyApplyProgressNotFound: "identify_apply_progress_not_found",
   identifyFailed: "identify_failed",
   identifyQueueApplyInvalid: "identify_queue_apply_invalid",
   identifyQueueItemNotFound: "identify_queue_item_not_found",
   identifyQueueProposalInvalid: "identify_queue_proposal_invalid",
+  identifyTargetNotEligible: "identify_target_not_eligible",
   indexerInvalid: "indexer_invalid",
   indexerUnreachable: "indexer_unreachable",
   invalidCollection: "invalid_collection",
@@ -636,6 +670,7 @@ export const PROBLEM_CODE = {
   pluginNotFound: "plugin_not_found",
   pluginUpdateNotFound: "plugin_update_not_found",
   requestInvalid: "request_invalid",
+  requestProposalChanged: "request_proposal_changed",
   requestServiceInvalid: "request_service_invalid",
   rootNotFound: "root_not_found",
   sessionNotFound: "session_not_found",
@@ -677,3 +712,60 @@ export const ENTITY_KIND_LABELS: Record<EntityKindCode, string> = {
   "video-series": "Series",
   "video-season": "Seasons",
 };
+
+export interface RequestKindManifestEntry {
+  kind: RequestMediaKindCode;
+  label: string;
+  plural: string;
+  committable: boolean;
+  childNoun: string | null;
+  entityKind: EntityKindCode;
+  pluginEntityKind: EntityKindCode;
+  acquisitionKind: EntityKindCode;
+  profileKind: EntityKindCode | null;
+  rootFlag: LibraryRootMediaCapabilityCode | null;
+  discoverable: boolean;
+  reviewSelection: RequestReviewSelectionCode;
+}
+
+export const REQUEST_KIND_MANIFEST = [
+  { kind: "book", label: "Book", plural: "Books", committable: true, childNoun: "volume", entityKind: "book", pluginEntityKind: "book", acquisitionKind: "book", profileKind: "book", rootFlag: "scanBooks", discoverable: true, reviewSelection: "direct-children-when-present" },
+  { kind: "author", label: "Author", plural: "Authors", committable: true, childNoun: "book", entityKind: "book-author", pluginEntityKind: "person", acquisitionKind: "book", profileKind: "book", rootFlag: "scanBooks", discoverable: true, reviewSelection: "direct-children" },
+  { kind: "movie", label: "Movie", plural: "Movies", committable: true, childNoun: null, entityKind: "movie", pluginEntityKind: "movie", acquisitionKind: "movie", profileKind: "movie", rootFlag: "scanVideos", discoverable: true, reviewSelection: "root" },
+  { kind: "series", label: "Series", plural: "Series", committable: true, childNoun: "season", entityKind: "video-series", pluginEntityKind: "video-series", acquisitionKind: "video-season", profileKind: "video-series", rootFlag: "scanVideos", discoverable: true, reviewSelection: "direct-children" },
+  { kind: "season", label: "Season", plural: "Seasons", committable: true, childNoun: "episode", entityKind: "video-season", pluginEntityKind: "video-season", acquisitionKind: "video-season", profileKind: "video-series", rootFlag: "scanVideos", discoverable: false, reviewSelection: "root" },
+  { kind: "episode", label: "Episode", plural: "Episodes", committable: true, childNoun: null, entityKind: "video", pluginEntityKind: "video", acquisitionKind: "video", profileKind: "video-series", rootFlag: "scanVideos", discoverable: false, reviewSelection: "root" },
+  { kind: "artist", label: "Artist", plural: "Artists", committable: true, childNoun: "album", entityKind: "music-artist", pluginEntityKind: "music-artist", acquisitionKind: "audio-library", profileKind: "audio-library", rootFlag: "scanAudio", discoverable: true, reviewSelection: "direct-children" },
+  { kind: "album", label: "Album", plural: "Albums", committable: true, childNoun: null, entityKind: "audio-library", pluginEntityKind: "audio-library", acquisitionKind: "audio-library", profileKind: "audio-library", rootFlag: "scanAudio", discoverable: true, reviewSelection: "root" },
+] as const satisfies readonly RequestKindManifestEntry[];
+
+export const ENTITY_KINDS_SUPPORTING_FILE_DELETION = [
+  "audio",
+  "audio-library",
+  "audio-track",
+  "book",
+  "book-volume",
+  "gallery",
+  "image",
+  "music-artist",
+  "book-author",
+  "movie",
+  "video",
+  "video-series",
+  "video-season",
+] as const;
+
+export type FileDeletableEntityKindCode = (typeof ENTITY_KINDS_SUPPORTING_FILE_DELETION)[number];
+
+export const ENTITY_KINDS_SUPPORTING_REQUESTS = [
+  "audio-library",
+  "book",
+  "music-artist",
+  "book-author",
+  "movie",
+  "video",
+  "video-series",
+  "video-season",
+] as const;
+
+export type RequestableEntityKindCode = (typeof ENTITY_KINDS_SUPPORTING_REQUESTS)[number];

@@ -43,6 +43,7 @@ import type {
   CollectionWriteRequest,
   CommitEntityRequestParams,
   CommitRequestParams,
+  CommitReviewedRequestParams,
   CreateFileFolderParams,
   CreateFirstAdminRequest,
   CustomFormatSaveRequest,
@@ -69,6 +70,8 @@ import type {
   EntityMetadataProposal,
   EntityMetadataUpdateRequest,
   EntityMonitorCreateRequest,
+  EntityMonitorStateRequest,
+  EntityMonitorStateView,
   EntityProgressUpdateRequest,
   EntityRefreshResponse,
   EntityThumbnailBatchRequest,
@@ -120,7 +123,6 @@ import type {
   GetOrganizePlanParams,
   GetPersonParams,
   GetPlaybackStatisticsParams,
-  GetRequestDetailParams,
   GetSettingValuesParams,
   GetStudioParams,
   GetTagParams,
@@ -200,6 +202,7 @@ import type {
   MissingChildrenCommitResponse,
   MonitorCreateRequest,
   MonitorEligibilityView,
+  MonitorStopResponse,
   MonitorView,
   MoveFileParams,
   MovieDetail,
@@ -228,15 +231,21 @@ import type {
   RenameFileParams,
   RequestCommitRequest,
   RequestCommitResponse,
-  RequestDetailResponse,
   RequestEntityCommitRequest,
+  RequestEntityReviewRequest,
+  RequestPluginSearchRequest,
+  RequestReviewRequest,
+  RequestReviewResponse,
   RequestSearchResponse,
   RescanFileRootParams,
   ResolveIdentifyQueueCandidateParams,
+  ReviewEntityRequestParams,
+  ReviewRequestParams,
+  ReviewedRequestCommitRequest,
   SaveIdentifyQueueProposalRequest,
   SearchIdentifyQueueItemParams,
   SearchOpdsBooksParams,
-  SearchRequestsParams,
+  SearchRequestsByPluginParams,
   SettingDescriptor,
   SettingUpdateRequest,
   SettingsBatchUpdateRequest,
@@ -5113,10 +5122,20 @@ export type deleteEntityResponse404 = {
   status: 404
 }
 
+export type deleteEntityResponse409 = {
+  data: ApiProblem
+  status: 409
+}
+
+export type deleteEntityResponse422 = {
+  data: ApiProblem
+  status: 422
+}
+
 export type deleteEntityResponseSuccess = (deleteEntityResponse200) & {
   headers: Headers;
 };
-export type deleteEntityResponseError = (deleteEntityResponse404) & {
+export type deleteEntityResponseError = (deleteEntityResponse404 | deleteEntityResponse409 | deleteEntityResponse422) & {
   headers: Headers;
 };
 
@@ -5139,7 +5158,7 @@ export const getDeleteEntityUrl = (id: string,
 }
 
 /**
- * @summary Permanently deletes a media entity (and its descendants), optionally including its files on disk.
+ * @summary Permanently deletes a media entity, its descendants, and their files on disk (deleteFiles=true is required).
  */
 export const deleteEntity = async (id: string,
     params?: DeleteEntityParams, options?: RequestInit): Promise<deleteEntityResponse> => {
@@ -5796,12 +5815,19 @@ export type bulkDeleteEntitiesResponse200 = {
   status: 200
 }
 
+export type bulkDeleteEntitiesResponse422 = {
+  data: ApiProblem
+  status: 422
+}
+
 export type bulkDeleteEntitiesResponseSuccess = (bulkDeleteEntitiesResponse200) & {
   headers: Headers;
 };
-;
+export type bulkDeleteEntitiesResponseError = (bulkDeleteEntitiesResponse422) & {
+  headers: Headers;
+};
 
-export type bulkDeleteEntitiesResponse = (bulkDeleteEntitiesResponseSuccess)
+export type bulkDeleteEntitiesResponse = (bulkDeleteEntitiesResponseSuccess | bulkDeleteEntitiesResponseError)
 
 export const getBulkDeleteEntitiesUrl = () => {
 
@@ -5812,7 +5838,7 @@ export const getBulkDeleteEntitiesUrl = () => {
 }
 
 /**
- * @summary Permanently deletes the given media entities (and their descendants), optionally including their files on disk.
+ * @summary Permanently deletes the given media entities, their descendants, and their files on disk (DeleteFiles must be true).
  */
 export const bulkDeleteEntities = async (entityBulkDeleteRequest: EntityBulkDeleteRequest, options?: RequestInit): Promise<bulkDeleteEntitiesResponse> => {
 
@@ -10854,10 +10880,20 @@ export type identifyEntityResponse400 = {
   status: 400
 }
 
+export type identifyEntityResponse404 = {
+  data: ApiProblem
+  status: 404
+}
+
+export type identifyEntityResponse409 = {
+  data: ApiProblem
+  status: 409
+}
+
 export type identifyEntityResponseSuccess = (identifyEntityResponse200) & {
   headers: Headers;
 };
-export type identifyEntityResponseError = (identifyEntityResponse400) & {
+export type identifyEntityResponseError = (identifyEntityResponse400 | identifyEntityResponse404 | identifyEntityResponse409) & {
   headers: Headers;
 };
 
@@ -10908,10 +10944,15 @@ export type applyIdentifyProposalResponse404 = {
   status: 404
 }
 
+export type applyIdentifyProposalResponse409 = {
+  data: ApiProblem
+  status: 409
+}
+
 export type applyIdentifyProposalResponseSuccess = (applyIdentifyProposalResponse204) & {
   headers: Headers;
 };
-export type applyIdentifyProposalResponseError = (applyIdentifyProposalResponse404) & {
+export type applyIdentifyProposalResponseError = (applyIdentifyProposalResponse404 | applyIdentifyProposalResponse409) & {
   headers: Headers;
 };
 
@@ -10996,10 +11037,15 @@ export type addIdentifyQueueItemResponse404 = {
   status: 404
 }
 
+export type addIdentifyQueueItemResponse409 = {
+  data: ApiProblem
+  status: 409
+}
+
 export type addIdentifyQueueItemResponseSuccess = (addIdentifyQueueItemResponse200) & {
   headers: Headers;
 };
-export type addIdentifyQueueItemResponseError = (addIdentifyQueueItemResponse404) & {
+export type addIdentifyQueueItemResponseError = (addIdentifyQueueItemResponse404 | addIdentifyQueueItemResponse409) & {
   headers: Headers;
 };
 
@@ -11125,10 +11171,15 @@ export type searchIdentifyQueueItemResponse404 = {
   status: 404
 }
 
+export type searchIdentifyQueueItemResponse409 = {
+  data: ApiProblem
+  status: 409
+}
+
 export type searchIdentifyQueueItemResponseSuccess = (searchIdentifyQueueItemResponse200) & {
   headers: Headers;
 };
-export type searchIdentifyQueueItemResponseError = (searchIdentifyQueueItemResponse404) & {
+export type searchIdentifyQueueItemResponseError = (searchIdentifyQueueItemResponse404 | searchIdentifyQueueItemResponse409) & {
   headers: Headers;
 };
 
@@ -11184,10 +11235,15 @@ export type resolveIdentifyQueueCandidateResponse404 = {
   status: 404
 }
 
+export type resolveIdentifyQueueCandidateResponse409 = {
+  data: ApiProblem
+  status: 409
+}
+
 export type resolveIdentifyQueueCandidateResponseSuccess = (resolveIdentifyQueueCandidateResponse200) & {
   headers: Headers;
 };
-export type resolveIdentifyQueueCandidateResponseError = (resolveIdentifyQueueCandidateResponse400 | resolveIdentifyQueueCandidateResponse404) & {
+export type resolveIdentifyQueueCandidateResponseError = (resolveIdentifyQueueCandidateResponse400 | resolveIdentifyQueueCandidateResponse404 | resolveIdentifyQueueCandidateResponse409) & {
   headers: Headers;
 };
 
@@ -11243,10 +11299,15 @@ export type applyIdentifyQueueItemResponse404 = {
   status: 404
 }
 
+export type applyIdentifyQueueItemResponse409 = {
+  data: ApiProblem
+  status: 409
+}
+
 export type applyIdentifyQueueItemResponseSuccess = (applyIdentifyQueueItemResponse200) & {
   headers: Headers;
 };
-export type applyIdentifyQueueItemResponseError = (applyIdentifyQueueItemResponse400 | applyIdentifyQueueItemResponse404) & {
+export type applyIdentifyQueueItemResponseError = (applyIdentifyQueueItemResponse400 | applyIdentifyQueueItemResponse404 | applyIdentifyQueueItemResponse409) & {
   headers: Headers;
 };
 
@@ -11293,10 +11354,15 @@ export type saveIdentifyQueueProposalResponse404 = {
   status: 404
 }
 
+export type saveIdentifyQueueProposalResponse409 = {
+  data: ApiProblem
+  status: 409
+}
+
 export type saveIdentifyQueueProposalResponseSuccess = (saveIdentifyQueueProposalResponse200) & {
   headers: Headers;
 };
-export type saveIdentifyQueueProposalResponseError = (saveIdentifyQueueProposalResponse400 | saveIdentifyQueueProposalResponse404) & {
+export type saveIdentifyQueueProposalResponseError = (saveIdentifyQueueProposalResponse400 | saveIdentifyQueueProposalResponse404 | saveIdentifyQueueProposalResponse409) & {
   headers: Headers;
 };
 
@@ -11505,19 +11571,26 @@ export const applyOrganizePlan = async (organizePlanRequest: OrganizePlanRequest
 
 
 
-export type searchRequestsResponse200 = {
+export type searchRequestsByPluginResponse200 = {
   data: RequestSearchResponse
   status: 200
 }
 
-export type searchRequestsResponseSuccess = (searchRequestsResponse200) & {
+export type searchRequestsByPluginResponse400 = {
+  data: ApiProblem
+  status: 400
+}
+
+export type searchRequestsByPluginResponseSuccess = (searchRequestsByPluginResponse200) & {
   headers: Headers;
 };
-;
+export type searchRequestsByPluginResponseError = (searchRequestsByPluginResponse400) & {
+  headers: Headers;
+};
 
-export type searchRequestsResponse = (searchRequestsResponseSuccess)
+export type searchRequestsByPluginResponse = (searchRequestsByPluginResponseSuccess | searchRequestsByPluginResponseError)
 
-export const getSearchRequestsUrl = (params: SearchRequestsParams,) => {
+export const getSearchRequestsByPluginUrl = (params?: SearchRequestsByPluginParams,) => {
   const normalizedParams = new URLSearchParams();
 
   Object.entries(params || {}).forEach(([key, value]) => {
@@ -11533,44 +11606,48 @@ export const getSearchRequestsUrl = (params: SearchRequestsParams,) => {
 }
 
 /**
- * @summary Searches Prismedia's plugin metadata providers for requestable books and authors. Adults-only results are filtered out when hideNsfw is set.
+ * @summary Searches one selected metadata plugin using the fields declared by its manifest schema.
  */
-export const searchRequests = async (params: SearchRequestsParams, options?: RequestInit): Promise<searchRequestsResponse> => {
+export const searchRequestsByPlugin = async (requestPluginSearchRequest: RequestPluginSearchRequest,
+    params?: SearchRequestsByPluginParams, options?: RequestInit): Promise<searchRequestsByPluginResponse> => {
 
-  return orvalFetch<searchRequestsResponse>(getSearchRequestsUrl(params),
+  return orvalFetch<searchRequestsByPluginResponse>(getSearchRequestsByPluginUrl(params),
   {
     ...options,
-    method: 'GET'
-
-
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      requestPluginSearchRequest,)
   }
 );}
 
 
 
-export type getRequestDetailResponse200 = {
-  data: RequestDetailResponse
+export type reviewRequestResponse200 = {
+  data: RequestReviewResponse
   status: 200
 }
 
-export type getRequestDetailResponse404 = {
+export type reviewRequestResponse400 = {
+  data: ApiProblem
+  status: 400
+}
+
+export type reviewRequestResponse404 = {
   data: ApiProblem
   status: 404
 }
 
-export type getRequestDetailResponseSuccess = (getRequestDetailResponse200) & {
+export type reviewRequestResponseSuccess = (reviewRequestResponse200) & {
   headers: Headers;
 };
-export type getRequestDetailResponseError = (getRequestDetailResponse404) & {
+export type reviewRequestResponseError = (reviewRequestResponse400 | reviewRequestResponse404) & {
   headers: Headers;
 };
 
-export type getRequestDetailResponse = (getRequestDetailResponseSuccess | getRequestDetailResponseError)
+export type reviewRequestResponse = (reviewRequestResponseSuccess | reviewRequestResponseError)
 
-export const getGetRequestDetailUrl = (source: string,
-    kind: string,
-    externalId: string,
-    params?: GetRequestDetailParams,) => {
+export const getReviewRequestUrl = (params?: ReviewRequestParams,) => {
   const normalizedParams = new URLSearchParams();
 
   Object.entries(params || {}).forEach(([key, value]) => {
@@ -11582,23 +11659,79 @@ export const getGetRequestDetailUrl = (source: string,
 
   const stringifiedParams = normalizedParams.toString();
 
-  return stringifiedParams.length > 0 ? `/api/requests/details/${source}/${kind}/${externalId}?${stringifiedParams}` : `/api/requests/details/${source}/${kind}/${externalId}`
+  return stringifiedParams.length > 0 ? `/api/requests/review?${stringifiedParams}` : `/api/requests/review`
 }
 
 /**
- * @summary Gets rich detail metadata for a requestable external item, including its selectable child works.
+ * @summary Gets the complete plugin proposal and independently identifiable targets for request review.
  */
-export const getRequestDetail = async (source: string,
-    kind: string,
-    externalId: string,
-    params?: GetRequestDetailParams, options?: RequestInit): Promise<getRequestDetailResponse> => {
+export const reviewRequest = async (requestReviewRequest: RequestReviewRequest,
+    params?: ReviewRequestParams, options?: RequestInit): Promise<reviewRequestResponse> => {
 
-  return orvalFetch<getRequestDetailResponse>(getGetRequestDetailUrl(source,kind,externalId,params),
+  return orvalFetch<reviewRequestResponse>(getReviewRequestUrl(params),
   {
     ...options,
-    method: 'GET'
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      requestReviewRequest,)
+  }
+);}
 
 
+
+export type reviewEntityRequestResponse200 = {
+  data: RequestReviewResponse
+  status: 200
+}
+
+export type reviewEntityRequestResponse400 = {
+  data: ApiProblem
+  status: 400
+}
+
+export type reviewEntityRequestResponse404 = {
+  data: ApiProblem
+  status: 404
+}
+
+export type reviewEntityRequestResponseSuccess = (reviewEntityRequestResponse200) & {
+  headers: Headers;
+};
+export type reviewEntityRequestResponseError = (reviewEntityRequestResponse400 | reviewEntityRequestResponse404) & {
+  headers: Headers;
+};
+
+export type reviewEntityRequestResponse = (reviewEntityRequestResponseSuccess | reviewEntityRequestResponseError)
+
+export const getReviewEntityRequestUrl = (params?: ReviewEntityRequestParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/requests/review-entity?${stringifiedParams}` : `/api/requests/review-entity`
+}
+
+/**
+ * @summary Gets a canonical request proposal for an existing entity by routing its persistent identities through capable plugins.
+ */
+export const reviewEntityRequest = async (requestEntityReviewRequest: RequestEntityReviewRequest,
+    params?: ReviewEntityRequestParams, options?: RequestInit): Promise<reviewEntityRequestResponse> => {
+
+  return orvalFetch<reviewEntityRequestResponse>(getReviewEntityRequestUrl(params),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      requestEntityReviewRequest,)
   }
 );}
 
@@ -11619,10 +11752,15 @@ export type commitRequestResponse404 = {
   status: 404
 }
 
+export type commitRequestResponse409 = {
+  data: ApiProblem
+  status: 409
+}
+
 export type commitRequestResponseSuccess = (commitRequestResponse200) & {
   headers: Headers;
 };
-export type commitRequestResponseError = (commitRequestResponse400 | commitRequestResponse404) & {
+export type commitRequestResponseError = (commitRequestResponse400 | commitRequestResponse404 | commitRequestResponse409) & {
   headers: Headers;
 };
 
@@ -11661,6 +11799,68 @@ export const commitRequest = async (requestCommitRequest: RequestCommitRequest,
 
 
 
+export type commitReviewedRequestResponse200 = {
+  data: RequestCommitResponse
+  status: 200
+}
+
+export type commitReviewedRequestResponse400 = {
+  data: ApiProblem
+  status: 400
+}
+
+export type commitReviewedRequestResponse404 = {
+  data: ApiProblem
+  status: 404
+}
+
+export type commitReviewedRequestResponse409 = {
+  data: ApiProblem
+  status: 409
+}
+
+export type commitReviewedRequestResponseSuccess = (commitReviewedRequestResponse200) & {
+  headers: Headers;
+};
+export type commitReviewedRequestResponseError = (commitReviewedRequestResponse400 | commitReviewedRequestResponse404 | commitReviewedRequestResponse409) & {
+  headers: Headers;
+};
+
+export type commitReviewedRequestResponse = (commitReviewedRequestResponseSuccess | commitReviewedRequestResponseError)
+
+export const getCommitReviewedRequestUrl = (params?: CommitReviewedRequestParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/requests/commit-reviewed?${stringifiedParams}` : `/api/requests/commit-reviewed`
+}
+
+/**
+ * @summary Commits selected proposal ids after revalidating the exact plugin and reviewed proposal revision.
+ */
+export const commitReviewedRequest = async (reviewedRequestCommitRequest: ReviewedRequestCommitRequest,
+    params?: CommitReviewedRequestParams, options?: RequestInit): Promise<commitReviewedRequestResponse> => {
+
+  return orvalFetch<commitReviewedRequestResponse>(getCommitReviewedRequestUrl(params),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      reviewedRequestCommitRequest,)
+  }
+);}
+
+
+
 export type commitEntityRequestResponse200 = {
   data: RequestCommitResponse
   status: 200
@@ -11671,10 +11871,15 @@ export type commitEntityRequestResponse404 = {
   status: 404
 }
 
+export type commitEntityRequestResponse409 = {
+  data: ApiProblem
+  status: 409
+}
+
 export type commitEntityRequestResponseSuccess = (commitEntityRequestResponse200) & {
   headers: Headers;
 };
-export type commitEntityRequestResponseError = (commitEntityRequestResponse404) & {
+export type commitEntityRequestResponseError = (commitEntityRequestResponse404 | commitEntityRequestResponse409) & {
   headers: Headers;
 };
 
@@ -11718,12 +11923,19 @@ export type commitMissingChildrenRequestResponse200 = {
   status: 200
 }
 
+export type commitMissingChildrenRequestResponse409 = {
+  data: ApiProblem
+  status: 409
+}
+
 export type commitMissingChildrenRequestResponseSuccess = (commitMissingChildrenRequestResponse200) & {
   headers: Headers;
 };
-;
+export type commitMissingChildrenRequestResponseError = (commitMissingChildrenRequestResponse409) & {
+  headers: Headers;
+};
 
-export type commitMissingChildrenRequestResponse = (commitMissingChildrenRequestResponseSuccess)
+export type commitMissingChildrenRequestResponse = (commitMissingChildrenRequestResponseSuccess | commitMissingChildrenRequestResponseError)
 
 export const getCommitMissingChildrenRequestUrl = () => {
 
@@ -11760,10 +11972,15 @@ export type removeWantedResponse400 = {
   status: 400
 }
 
+export type removeWantedResponse409 = {
+  data: ApiProblem
+  status: 409
+}
+
 export type removeWantedResponseSuccess = (removeWantedResponse200) & {
   headers: Headers;
 };
-export type removeWantedResponseError = (removeWantedResponse400) & {
+export type removeWantedResponseError = (removeWantedResponse400 | removeWantedResponse409) & {
   headers: Headers;
 };
 
@@ -11804,10 +12021,15 @@ export type syncContainerRequestResponse404 = {
   status: 404
 }
 
+export type syncContainerRequestResponse409 = {
+  data: ApiProblem
+  status: 409
+}
+
 export type syncContainerRequestResponseSuccess = (syncContainerRequestResponse204) & {
   headers: Headers;
 };
-export type syncContainerRequestResponseError = (syncContainerRequestResponse404) & {
+export type syncContainerRequestResponseError = (syncContainerRequestResponse404 | syncContainerRequestResponse409) & {
   headers: Headers;
 };
 
@@ -11822,7 +12044,7 @@ export const getSyncContainerRequestUrl = () => {
 }
 
 /**
- * @summary Immediately re-syncs a followed author/artist from its provider, surfacing newly discovered works as wanted placeholders.
+ * @summary Immediately re-syncs a monitored container Entity from its provider, surfacing newly discovered children as wanted placeholders.
  */
 export const syncContainerRequest = async (requestEntityCommitRequest: RequestEntityCommitRequest, options?: RequestInit): Promise<syncContainerRequestResponse> => {
 
@@ -13444,10 +13666,15 @@ export type startMonitorResponse404 = {
   status: 404
 }
 
+export type startMonitorResponse409 = {
+  data: ApiProblem
+  status: 409
+}
+
 export type startMonitorResponseSuccess = (startMonitorResponse200) & {
   headers: Headers;
 };
-export type startMonitorResponseError = (startMonitorResponse404) & {
+export type startMonitorResponseError = (startMonitorResponse404 | startMonitorResponse409) & {
   headers: Headers;
 };
 
@@ -13588,10 +13815,15 @@ export type startEntityMonitorResponse400 = {
   status: 400
 }
 
+export type startEntityMonitorResponse409 = {
+  data: ApiProblem
+  status: 409
+}
+
 export type startEntityMonitorResponseSuccess = (startEntityMonitorResponse200) & {
   headers: Headers;
 };
-export type startEntityMonitorResponseError = (startEntityMonitorResponse400) & {
+export type startEntityMonitorResponseError = (startEntityMonitorResponse400 | startEntityMonitorResponse409) & {
   headers: Headers;
 };
 
@@ -13606,7 +13838,7 @@ export const getStartEntityMonitorUrl = () => {
 }
 
 /**
- * @summary Monitors a library container entity (author, artist) for new works; the daily sweep surfaces missing works as wanted placeholders.
+ * @summary Starts stable monitoring for any requestable Entity. Groupings discover children; leaves keep acquisition intent attached to the Entity id.
  */
 export const startEntityMonitor = async (entityMonitorCreateRequest: EntityMonitorCreateRequest, options?: RequestInit): Promise<startEntityMonitorResponse> => {
 
@@ -13650,7 +13882,7 @@ export const getGetEntityMonitorUrl = (entityId: string,) => {
 }
 
 /**
- * @summary Gets the container monitor watching a library entity, when one exists.
+ * @summary Gets the stable monitor targeting a library Entity, when one exists.
  */
 export const getEntityMonitor = async (entityId: string, options?: RequestInit): Promise<getEntityMonitorResponse> => {
 
@@ -13686,7 +13918,7 @@ export const getGetEntityMonitorEligibilityUrl = (entityId: string,) => {
 }
 
 /**
- * @summary Whether the entity can carry a standing container monitor: it must be a monitorable container kind holding a provider identity an enabled metadata plugin can track (re-resolve by id).
+ * @summary Whether the Entity can be monitored: its kind must support requests and its provider identity must be trackable by an enabled metadata plugin.
  */
 export const getEntityMonitorEligibility = async (entityId: string, options?: RequestInit): Promise<getEntityMonitorEligibilityResponse> => {
 
@@ -13701,9 +13933,53 @@ export const getEntityMonitorEligibility = async (entityId: string, options?: Re
 
 
 
-export type stopMonitorResponse204 = {
-  data: void
-  status: 204
+export type getEntityMonitorStatesResponse200 = {
+  data: EntityMonitorStateView[]
+  status: 200
+}
+
+export type getEntityMonitorStatesResponse400 = {
+  data: ApiProblem
+  status: 400
+}
+
+export type getEntityMonitorStatesResponseSuccess = (getEntityMonitorStatesResponse200) & {
+  headers: Headers;
+};
+export type getEntityMonitorStatesResponseError = (getEntityMonitorStatesResponse400) & {
+  headers: Headers;
+};
+
+export type getEntityMonitorStatesResponse = (getEntityMonitorStatesResponseSuccess | getEntityMonitorStatesResponseError)
+
+export const getGetEntityMonitorStatesUrl = () => {
+
+
+
+
+  return `/api/monitors/states`
+}
+
+/**
+ * @summary Returns bounded monitoring eligibility, direct monitor, and latest acquisition state for the requested Entities.
+ */
+export const getEntityMonitorStates = async (entityMonitorStateRequest: EntityMonitorStateRequest, options?: RequestInit): Promise<getEntityMonitorStatesResponse> => {
+
+  return orvalFetch<getEntityMonitorStatesResponse>(getGetEntityMonitorStatesUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      entityMonitorStateRequest,)
+  }
+);}
+
+
+
+export type stopMonitorResponse200 = {
+  data: MonitorStopResponse
+  status: 200
 }
 
 export type stopMonitorResponse404 = {
@@ -13711,10 +13987,15 @@ export type stopMonitorResponse404 = {
   status: 404
 }
 
-export type stopMonitorResponseSuccess = (stopMonitorResponse204) & {
+export type stopMonitorResponse409 = {
+  data: ApiProblem
+  status: 409
+}
+
+export type stopMonitorResponseSuccess = (stopMonitorResponse200) & {
   headers: Headers;
 };
-export type stopMonitorResponseError = (stopMonitorResponse404) & {
+export type stopMonitorResponseError = (stopMonitorResponse404 | stopMonitorResponse409) & {
   headers: Headers;
 };
 
@@ -13729,7 +14010,7 @@ export const getStopMonitorUrl = (id: string,) => {
 }
 
 /**
- * @summary Stops monitoring (the acquisition is left untouched).
+ * @summary Stops monitoring an Entity subtree, removes its acquisitions/downloads and fileless Wanted placeholders, and preserves source-backed Entities/files.
  */
 export const stopMonitor = async (id: string, options?: RequestInit): Promise<stopMonitorResponse> => {
 

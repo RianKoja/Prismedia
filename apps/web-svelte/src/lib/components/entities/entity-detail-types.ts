@@ -64,7 +64,7 @@ export interface EntityDetailProps {
   /**
    * Renders the favorite/NSFW/organized badge cluster in the hero. Off for
    * surfaces presenting external (non-library) items where those library
-   * flags have no meaning, e.g. request details.
+   * flags have no meaning, such as a read-only external preview.
    */
   showFlagActions?: boolean;
   tabs?: EntityDetailTab[];

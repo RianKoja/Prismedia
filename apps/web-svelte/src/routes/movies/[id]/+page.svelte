@@ -40,6 +40,7 @@
     toggleOptimisticEntityFlag,
     updateOptimisticEntityRating,
   } from "$lib/entities/entity-detail-state";
+  import { refreshAfterManagedFileRevert } from "$lib/entities/entity-file-management";
   import { useIdentifyDetailAction } from "$lib/components/identify/use-identify-detail-action.svelte";
   import type { EntityDetailCredit, EntityDetailTag } from "$lib/entities/entity-detail";
   import { entityCardToDetailCard, type EntityDetailCardFull } from "$lib/entities/entity-detail";
@@ -49,7 +50,7 @@
   } from "$lib/entities/entity-relationship-thumbnails";
   import { resolveEntityHref } from "$lib/entities/entity-routes";
   import { getChildIds } from "$lib/entities/entity-children";
-  import { CREDIT_ROLE, ENTITY_KIND, type EntityKindCode } from "$lib/entities/entity-codes";
+  import { CAPABILITY_KIND, CREDIT_ROLE, ENTITY_KIND, type EntityKindCode } from "$lib/entities/entity-codes";
   import { extractVideoPlayerProps, getPlaybackState } from "$lib/entities/video-capabilities";
   import { useNsfw } from "$lib/nsfw/store.svelte";
   import { useAppChrome } from "$lib/stores/app-chrome.svelte";
@@ -125,7 +126,7 @@
   const videoCard = $derived.by((): EntityDetailCardFull | null => (
     video ? entityCardToDetailCard(video) : null
   ));
-  const identifyAction = useIdentifyDetailAction(() => card?.entity.id, () => card?.entity.kind);
+  const identifyAction = useIdentifyDetailAction(() => movie);
   const heroActions = $derived.by((): EntityDetailActionButton[] =>
     identifyAction.action ? [identifyAction.action] : []);
 
@@ -134,8 +135,13 @@
   const acq = useEntityAcquisition({
     entityId: () => movie?.id,
     capabilities: () => movie?.capabilities,
-    onChanged: loadMovie,
+    onChanged: refreshMovie,
+    onPruned: () => goto("/movies"),
   });
+  const fileManagement = {
+    onDeleted: () => goto("/movies"),
+    onReverted: () => refreshAfterManagedFileRevert(acq, refreshMovie),
+  };
   const videoId = $derived(video?.id ?? "");
 
   const playerProps = $derived.by(() => {
@@ -233,7 +239,7 @@
 
   const flagsNsfw = $derived.by(() => {
     if (!movie) return false;
-    const cap = getCapability(movie.capabilities, "flags");
+    const cap = getCapability(movie.capabilities, CAPABILITY_KIND.flags);
     return cap?.isNsfw === true;
   });
 
@@ -244,7 +250,7 @@
 
   const durationSeconds = $derived.by(() => {
     if (!video) return 0;
-    return durationToSeconds(getCapability(video.capabilities, "technical")?.duration ?? null) ?? 0;
+    return durationToSeconds(getCapability(video.capabilities, CAPABILITY_KIND.technical)?.duration ?? null) ?? 0;
   });
 
   let playbackBusy = $state(false);
@@ -458,8 +464,14 @@
   async function refreshMovie() {
     try {
       const nextMovie = await fetchMovie(movie?.id ?? page.params.id ?? "");
-      const childVideoId = getChildIds(nextMovie, ENTITY_KIND.video)[0] ?? video?.id;
-      if (!childVideoId) return;
+      const childVideoId = getChildIds(nextMovie, ENTITY_KIND.video)[0];
+      if (!childVideoId) {
+        movie = nextMovie;
+        video = null;
+        playbackInfo = null;
+        await hydrateMovieRelationships(nextMovie);
+        return;
+      }
       const nextVideo = await fetchVideo(childVideoId);
       movie = nextMovie;
       video = nextVideo;
@@ -795,10 +807,10 @@
         {#if section.id === "acquisition"}
           <EntityAcquisitionCard
             {acq}
+            entity={movie}
+            {fileManagement}
             onCancelled={handleAcquisitionCancelled}
-            entity={movie ? { id: movie.id, kind: movie.kind, title: movie.title } : undefined}
-            onDeleted={() => void goto("/movies")}
-            onReverted={() => void refreshMovie()}
+            onImported={refreshMovie}
           />
         {:else}
           <VideoDetailSectionContent
@@ -860,10 +872,10 @@
         {#if section.id === "acquisition"}
           <EntityAcquisitionCard
             {acq}
+            entity={movie}
+            {fileManagement}
             onCancelled={handleAcquisitionCancelled}
-            entity={movie ? { id: movie.id, kind: movie.kind, title: movie.title } : undefined}
-            onDeleted={() => void goto("/movies")}
-            onReverted={() => void refreshMovie()}
+            onImported={refreshMovie}
           />
         {/if}
       {/snippet}

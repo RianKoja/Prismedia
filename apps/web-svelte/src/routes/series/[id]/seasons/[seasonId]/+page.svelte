@@ -16,6 +16,7 @@
     toggleOptimisticEntityFlag,
     updateOptimisticEntityRating,
   } from "$lib/entities/entity-detail-state";
+  import { refreshAfterManagedFileRevert } from "$lib/entities/entity-file-management";
   import { getChildIds } from "$lib/entities/entity-children";
   import type { EntityDetailCredit, EntityDetailTag } from "$lib/entities/entity-detail";
   import { entityCardToDetailCard, type EntityDetailCardFull } from "$lib/entities/entity-detail";
@@ -25,10 +26,13 @@
     thumbnailsToCards,
   } from "$lib/entities/entity-relationship-thumbnails";
   import type { EntityThumbnailCard } from "$lib/entities/entity-thumbnail";
-  import { ENTITY_KIND } from "$lib/entities/entity-codes";
+  import { CAPABILITY_KIND, ENTITY_KIND } from "$lib/entities/entity-codes";
   import EntityAcquisitionCard from "$lib/components/acquisitions/EntityAcquisitionCard.svelte";
   import { useEntityAcquisition } from "$lib/components/acquisitions/use-entity-acquisition.svelte";
+  import { requestableDirectChildCards } from "$lib/requests/requestable-entity-children";
+  import { useIdentifyDetailAction } from "$lib/components/identify/use-identify-detail-action.svelte";
   import EntityDetail, {
+    type EntityDetailActionButton,
     type EntityMetadataUpdateRequest,
     type EntityDetailSection,
     type EntityDetailTab,
@@ -69,12 +73,15 @@
 
   const seasonNumber = $derived.by(() => {
     if (!season) return null;
-    const pos = getCapability(season.capabilities, "position");
+    const pos = getCapability(season.capabilities, CAPABILITY_KIND.position);
     const item = pos?.items.find((p) => p.code === "season");
     return item ? Number(item.value) : null;
   });
 
   const dates = $derived(card?.dates ?? []);
+  const identifyAction = useIdentifyDetailAction(() => season);
+  const heroActions = $derived.by((): EntityDetailActionButton[] =>
+    identifyAction.action ? [identifyAction.action] : []);
 
   // A phantom season's "Search for release" (a season-pack acquisition) and its acquisition
   // management live in the Acquisition detail tab, exactly like a wanted movie. Episodes ride
@@ -83,9 +90,14 @@
   const acq = useEntityAcquisition({
     entityId: () => season?.id,
     capabilities: () => season?.capabilities,
-    childCards: () => episodeCards,
+    childCards: () => requestableDirectChildCards(season?.id, episodeCards),
     onChanged: () => loadSeason({ showLoading: false }),
+    onPruned: () => goto(`/series/${seriesId}`),
   });
+  const fileManagement = {
+    onDeleted: () => goto(`/series/${seriesId}`),
+    onReverted: () => refreshAfterManagedFileRevert(acq, () => loadSeason({ showLoading: false })),
+  };
 
   // Seasons are not relationship owners: tags, studio, and cast belong to the series and
   // are shown here as inherited context only. Editing them on a season would write through
@@ -237,7 +249,7 @@
       posterSize="large"
       tabs={detailTabs}
       sections={detailSections}
-      actionButtons={[]}
+      actionButtons={heroActions}
     >
       {#snippet heroMeta()}
         {#if parentSeries}
@@ -263,10 +275,10 @@
         {#if section.id === "acquisition"}
           <EntityAcquisitionCard
             {acq}
+            entity={season}
+            {fileManagement}
             onCancelled={() => void loadSeason({ showLoading: false })}
-            entity={season ? { id: season.id, kind: season.kind, title: season.title } : undefined}
-            onDeleted={() => void goto(`/series/${seriesId}`)}
-            onReverted={() => void loadSeason({ showLoading: false })}
+            onImported={() => loadSeason({ showLoading: false })}
           />
         {/if}
       {/snippet}

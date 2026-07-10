@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Prismedia.Application.Entities;
+using Prismedia.Application.Plugins;
 using Prismedia.Domain.Capabilities;
 using Prismedia.Domain.Entities;
 using Prismedia.Infrastructure.Entities.Mappers;
@@ -23,6 +25,10 @@ public sealed class EfEntityRepository : IEntityWriteRepository {
 
     private readonly PrismediaDbContext _db;
     private readonly Prismedia.Application.Security.ICurrentUserContext _currentUser;
+    private readonly IEntityExternalIdentityStore _externalIdentities;
+    private readonly IEntityProviderIdentityStore? _providerIdentities;
+    private readonly IPluginIdentityRouter? _identityRouter;
+    private readonly IPluginIdentityUrlResolver? _identityUrls;
     private readonly IReadOnlyDictionary<EntityKind, IEntityKindMapper> _kindMappers;
     private readonly IReadOnlyList<IEntityCapabilityMapper> _capabilityMappers;
 
@@ -30,12 +36,51 @@ public sealed class EfEntityRepository : IEntityWriteRepository {
         PrismediaDbContext db,
         Prismedia.Application.Security.ICurrentUserContext currentUser,
         IEnumerable<IEntityKindMapper> kindMappers,
-        IEnumerable<IEntityCapabilityMapper> capabilityMappers) {
+        IEnumerable<IEntityCapabilityMapper> capabilityMappers,
+        IEntityExternalIdentityStore externalIdentities)
+        : this(
+            db,
+            currentUser,
+            kindMappers,
+            capabilityMappers,
+            externalIdentities,
+            providerIdentities: null,
+            identityRouter: null,
+            identityUrls: null) { }
+
+    /// <summary>Production constructor with plugin identity binding and URL enrichment.</summary>
+    [ActivatorUtilitiesConstructor]
+    public EfEntityRepository(
+        PrismediaDbContext db,
+        Prismedia.Application.Security.ICurrentUserContext currentUser,
+        IEnumerable<IEntityKindMapper> kindMappers,
+        IEnumerable<IEntityCapabilityMapper> capabilityMappers,
+        IEntityExternalIdentityStore externalIdentities,
+        IEntityProviderIdentityStore? providerIdentities,
+        IPluginIdentityRouter? identityRouter,
+        IPluginIdentityUrlResolver? identityUrls) {
         _db = db;
         _currentUser = currentUser;
+        _externalIdentities = externalIdentities
+            ?? throw new ArgumentNullException(nameof(externalIdentities));
+        _providerIdentities = providerIdentities;
+        _identityRouter = identityRouter;
+        _identityUrls = identityUrls;
         _kindMappers = kindMappers.ToDictionary(mapper => mapper.Kind);
         _capabilityMappers = capabilityMappers.ToArray();
     }
+
+    internal EfEntityRepository(
+        PrismediaDbContext db,
+        Prismedia.Application.Security.ICurrentUserContext currentUser,
+        IEnumerable<IEntityKindMapper> kindMappers,
+        IEnumerable<IEntityCapabilityMapper> capabilityMappers)
+        : this(
+            db,
+            currentUser,
+            kindMappers,
+            capabilityMappers,
+            new EfEntityExternalIdentityStore(db, TimeProvider.System)) { }
 
     /// <summary>
     /// Finds an active entity and hydrates its domain relationships plus mutable state capabilities.
@@ -367,7 +412,7 @@ public sealed class EfEntityRepository : IEntityWriteRepository {
             relationshipIndex++;
         }
 
-        await PersistUniversalCollectionsAsync(entity);
+        await PersistUniversalCollectionsAsync(entity, cancellationToken);
         foreach (var mapper in _capabilityMappers) {
             await mapper.PersistAsync(entity, cancellationToken);
         }
@@ -446,10 +491,11 @@ public sealed class EfEntityRepository : IEntityWriteRepository {
             .OrderBy(r => r.SortOrder)
             .Select(r => new EntityUrl(r.Url, r.Label))
             .ToArrayAsync(cancellationToken);
-        var externalIds = await _db.EntityExternalIds.AsNoTracking()
-            .Where(r => r.EntityId == entity.Id)
-            .Select(r => new EntityExternalId(r.Provider, r.Value, r.Url))
-            .ToArrayAsync(cancellationToken);
+        var externalIds = await _externalIdentities.ListAsync(entity.Id, cancellationToken);
+        var providerIdentity = await ResolveProviderIdentityAsync(
+            entity,
+            externalIds,
+            cancellationToken);
         var files = await _db.EntityFiles.AsNoTracking()
             .Where(r => r.EntityId == entity.Id)
             .OrderBy(r => r.CreatedAt)
@@ -471,10 +517,56 @@ public sealed class EfEntityRepository : IEntityWriteRepository {
             urls,
             externalIds,
             files,
-            row.IsWanted);
+            row.IsWanted,
+            providerIdentity);
     }
 
-    private Task PersistUniversalCollectionsAsync(Entity entity) {
+    private async Task<EntityProviderIdentity?> ResolveProviderIdentityAsync(
+        Entity entity,
+        IReadOnlyList<EntityExternalId> externalIds,
+        CancellationToken cancellationToken) {
+        if (_providerIdentities is null || externalIds.Count == 0) {
+            return null;
+        }
+
+        var binding = await _providerIdentities.GetAsync(entity.Id, cancellationToken);
+        PluginIdentityRoute? route = binding is null
+            ? null
+            : new PluginIdentityRoute(binding.PluginId, binding.Identity);
+
+        // Compatibility/backfill path: older Entities predate persisted bindings. Only infer when the
+        // current manifest set yields exactly one route, which is also the route monitoring uses.
+        if (route is null && _identityRouter is not null) {
+            var routes = await _identityRouter.ResolveAsync(
+                entity.Kind.ToCode(),
+                IdentifyAction.LookupId,
+                externalIds.Select(value => value.Identity).ToArray(),
+                cancellationToken);
+            route = routes.Count == 1 ? routes[0] : null;
+        }
+
+        if (route is null) {
+            return null;
+        }
+
+        var association = externalIds.FirstOrDefault(value => value.Identity == route.Identity);
+        if (association is null) {
+            return null;
+        }
+
+        string? url = null;
+        if (_identityUrls is not null) {
+            url = await _identityUrls.ResolveAsync(
+                entity.Kind.ToCode(),
+                route,
+                cancellationToken);
+        }
+        url ??= association.Url;
+
+        return new EntityProviderIdentity(route.PluginId, route.Identity, url);
+    }
+
+    private async Task PersistUniversalCollectionsAsync(Entity entity, CancellationToken cancellationToken) {
         var now = DateTimeOffset.UtcNow;
         var order = 0;
         foreach (var url in entity.Urls) {
@@ -488,17 +580,11 @@ public sealed class EfEntityRepository : IEntityWriteRepository {
             });
         }
 
-        foreach (var externalId in entity.ExternalIds) {
-            _db.EntityExternalIds.Add(new EntityExternalIdRow {
-                Id = Guid.NewGuid(),
-                EntityId = entity.Id,
-                Provider = externalId.Provider,
-                Value = externalId.Value,
-                Url = externalId.Url,
-                CreatedAt = now,
-                UpdatedAt = now,
-            });
-        }
+        await _externalIdentities.WriteAsync(
+            entity.Id,
+            entity.ExternalIds,
+            ExternalIdentityWriteMode.ReplaceAll,
+            cancellationToken);
 
         foreach (var file in entity.EntityFiles) {
             _db.EntityFiles.Add(new EntityFileRow {
@@ -512,14 +598,11 @@ public sealed class EfEntityRepository : IEntityWriteRepository {
             });
         }
 
-        return Task.CompletedTask;
     }
 
     private void ClearUniversalCollections(Entity entity) {
         _db.EntityUrls.RemoveRange(
             _db.EntityUrls.Where(r => r.EntityId == entity.Id));
-        _db.EntityExternalIds.RemoveRange(
-            _db.EntityExternalIds.Where(r => r.EntityId == entity.Id));
         _db.EntityFiles.RemoveRange(
             _db.EntityFiles.Where(r => r.EntityId == entity.Id));
     }
