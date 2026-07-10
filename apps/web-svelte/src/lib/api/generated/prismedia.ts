@@ -9763,10 +9763,15 @@ export type createLibraryRootResponse403 = {
   status: 403
 }
 
+export type createLibraryRootResponse409 = {
+  data: ApiProblem
+  status: 409
+}
+
 export type createLibraryRootResponseSuccess = (createLibraryRootResponse200) & {
   headers: Headers;
 };
-export type createLibraryRootResponseError = (createLibraryRootResponse403) & {
+export type createLibraryRootResponseError = (createLibraryRootResponse403 | createLibraryRootResponse409) & {
   headers: Headers;
 };
 
@@ -9898,10 +9903,15 @@ export type updateLibraryRootResponse404 = {
   status: 404
 }
 
+export type updateLibraryRootResponse409 = {
+  data: ApiProblem
+  status: 409
+}
+
 export type updateLibraryRootResponseSuccess = (updateLibraryRootResponse200) & {
   headers: Headers;
 };
-export type updateLibraryRootResponseError = (updateLibraryRootResponse403 | updateLibraryRootResponse404) & {
+export type updateLibraryRootResponseError = (updateLibraryRootResponse403 | updateLibraryRootResponse404 | updateLibraryRootResponse409) & {
   headers: Headers;
 };
 
