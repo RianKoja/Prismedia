@@ -92,15 +92,15 @@ public sealed partial class EfEntityReadService : IEntityReadService {
         bool? wanted = null,
         AcquisitionStatus? acquisitionStatus = null) {
         var pageSize = Math.Clamp(limit ?? DefaultPageSize, 1, MaxPageSize);
+        var kindCodes = ParseKindCodes(kind);
         var normalizedRelationshipCode = string.IsNullOrWhiteSpace(relationshipCode)
             ? null
             : relationshipCode.Trim();
         var entityQuery = _db.Entities.AsNoTracking();
 
-        if (!string.IsNullOrWhiteSpace(kind)) {
-            var kindCode = kind.Trim();
-            entityQuery = entityQuery.Where(entity => entity.KindCode == kindCode);
-            entityQuery = ApplyBrowseHierarchyFilter(entityQuery, kindCode);
+        if (kindCodes.Length > 0) {
+            entityQuery = entityQuery.Where(entity => kindCodes.Contains(entity.KindCode));
+            entityQuery = ApplyBrowseHierarchyFilter(entityQuery, kindCodes);
         }
 
         if (!string.IsNullOrWhiteSpace(query)) {
@@ -116,13 +116,14 @@ public sealed partial class EfEntityReadService : IEntityReadService {
                     (normalizedRelationshipCode == null || link.RelationshipCode == normalizedRelationshipCode)));
         }
 
-        if (ShouldSuppressMovieChildVideos(kind, query, referencedBy)) {
+        if (ShouldSuppressMovieChildVideos(kindCodes, query, referencedBy)) {
             entityQuery = SuppressMovieChildVideos(entityQuery);
         }
 
         var enforceLibraryVisibility = await HasDisabledLibraryRootsAsync(cancellationToken);
         if (enforceLibraryVisibility) {
-            entityQuery = ApplyEnabledLibraryVisibility(entityQuery, kind);
+            var knownKindCode = kindCodes.Length == 1 ? kindCodes[0] : null;
+            entityQuery = ApplyEnabledLibraryVisibility(entityQuery, knownKindCode);
         }
         entityQuery = ApplyNsfwVisibility(entityQuery, hideNsfw == true);
         entityQuery = ApplyListFilters(entityQuery, favorite, organized, ratingMin, ratingMax, unrated, status, bookType, bookFormat, nsfw, played, orphaned, wanted);
@@ -212,6 +213,13 @@ public sealed partial class EfEntityReadService : IEntityReadService {
 
         return parsed;
     }
+
+    private static string[] ParseKindCodes(string? value) =>
+        string.IsNullOrWhiteSpace(value)
+            ? []
+            : value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
 
     private static ListSort ParseSort(string? sort) =>
         sort?.Trim().ToLowerInvariant() switch {
@@ -884,28 +892,34 @@ public sealed partial class EfEntityReadService : IEntityReadService {
                         rootParent.Id == grandparent.ParentEntityId &&
                         disabledRootedEntityIds.Contains(rootParent.Id)))));
 
-    private IQueryable<EntityRow> ApplyBrowseHierarchyFilter(IQueryable<EntityRow> query, string kind) {
-        if (kind.Equals(EntityKindRegistry.Gallery.Code, StringComparison.OrdinalIgnoreCase)) {
-            return query.Where(entity => entity.ParentEntityId == null);
+    private IQueryable<EntityRow> ApplyBrowseHierarchyFilter(
+        IQueryable<EntityRow> query,
+        IReadOnlyCollection<string> kindCodes) {
+        var includesGalleries = kindCodes.Contains(EntityKindRegistry.Gallery.Code, StringComparer.OrdinalIgnoreCase);
+        var includesBooks = kindCodes.Contains(EntityKindRegistry.Book.Code, StringComparer.OrdinalIgnoreCase);
+        if (!includesGalleries && !includesBooks) {
+            return query;
         }
 
-        if (kind.Equals(EntityKindRegistry.Book.Code, StringComparison.OrdinalIgnoreCase)) {
-            // Books parented to authors are still first-class browse rows, but same-kind book children
-            // represent nested series/volume structure and should stay under their parent detail page.
-            return query.Where(entity =>
-                entity.ParentEntityId == null ||
+        // Books parented to authors are still first-class browse rows, but same-kind book children
+        // represent nested series/volume structure and should stay under their parent detail page.
+        return query.Where(entity =>
+            (!includesGalleries || entity.KindCode != EntityKindRegistry.Gallery.Code || entity.ParentEntityId == null) &&
+            (!includesBooks || entity.KindCode != EntityKindRegistry.Book.Code || entity.ParentEntityId == null ||
                 !_db.Entities.Any(parent =>
                     parent.Id == entity.ParentEntityId &&
-                    parent.KindCode == EntityKindRegistry.Book.Code));
-        }
-
-        return query;
+                    parent.KindCode == EntityKindRegistry.Book.Code)));
     }
 
-    private static bool ShouldSuppressMovieChildVideos(string? kind, string? query, Guid? referencedBy) =>
-        kind is null ||
+    private static bool ShouldSuppressMovieChildVideos(
+        IReadOnlyCollection<string> kindCodes,
+        string? query,
+        Guid? referencedBy) =>
+        kindCodes.Count == 0 ||
         !string.IsNullOrWhiteSpace(query) ||
-        referencedBy is not null;
+        referencedBy is not null ||
+        (kindCodes.Contains(EntityKindRegistry.Movie.Code, StringComparer.OrdinalIgnoreCase) &&
+            kindCodes.Contains(EntityKindRegistry.Video.Code, StringComparer.OrdinalIgnoreCase));
 
     private IQueryable<EntityRow> SuppressMovieChildVideos(IQueryable<EntityRow> query) =>
         query.Where(entity =>

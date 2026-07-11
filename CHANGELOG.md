@@ -21,6 +21,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - Release operations are now ready for channel publishing: the root package version is the source of truth, Docker builds validate the release metadata, pushes to `main` publish only the dev image, and alpha/beta/release images are published manually.
 
 ### Added
+- Entity library queries can now request several kinds at once, allowing native clients to load one server-filtered movie and TV activity feed without duplicate movie file rows.
 - Video libraries now discover subtitle files beside their videos automatically. Same-name SRT, VTT, ASS, and SSA files — including language or descriptive filename tags — are normalized into app-owned playback assets, and rescans reconcile additions, edits, renames, and removals.
 - Added a first-run setup wizard: a fresh install (or an upgraded one, on its next visit) walks through creating the administrator account, and an upgraded install also reviews the accounts migrated from its former Jellyfin sign-in profiles — each keeps the previous server API key as its password so connected apps keep working, with an inline option to set a new password on the spot.
 - Added a login page and signed-in sessions for the web app: sign in once per browser and stay signed in (sessions slide forward for 90 days of use), with a user chip at the bottom of the navigation for Account, Manage users, and Sign out.

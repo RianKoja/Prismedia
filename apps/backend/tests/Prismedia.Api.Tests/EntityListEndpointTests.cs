@@ -9,6 +9,36 @@ using Prismedia.Domain.Entities;
 namespace Prismedia.Api.Tests;
 
 public sealed class EntityListEndpointTests {
+    [Fact]
+    public async Task KindQueryAcceptsMultipleCanonicalEntityKinds() {
+        var entityReadService = new CapturingEntityReadService();
+        using var factory = CreateFactory(entityReadService);
+        using var client = factory.CreateAuthenticatedClient();
+
+        using var response = await client.GetAsync(
+            "/api/entities?kind=movie%2Cvideo%2Cvideo-series%2Cvideo-season");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(
+            "movie,video,video-series,video-season",
+            entityReadService.Kind);
+    }
+
+    [Theory]
+    [InlineData("movie,unknown")]
+    [InlineData("unknown,movie")]
+    [InlineData("movie,,video")]
+    public async Task KindQueryRejectsTheWholeListWhenAnyTokenIsInvalid(string kind) {
+        var entityReadService = new CapturingEntityReadService();
+        using var factory = CreateFactory(entityReadService);
+        using var client = factory.CreateAuthenticatedClient();
+
+        using var response = await client.GetAsync($"/api/entities?kind={Uri.EscapeDataString(kind)}");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(0, entityReadService.ListCallCount);
+    }
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
@@ -49,6 +79,8 @@ public sealed class EntityListEndpointTests {
             .WithTestAuth();
 
     private sealed class CapturingEntityReadService : IEntityReadService {
+        public string? Kind { get; private set; }
+        public int ListCallCount { get; private set; }
         public bool? Wanted { get; private set; }
         public AcquisitionStatus? AcquisitionStatus { get; private set; }
 
@@ -78,6 +110,8 @@ public sealed class EntityListEndpointTests {
             bool? orphaned = null,
             bool? wanted = null,
             AcquisitionStatus? acquisitionStatus = null) {
+            Kind = kind;
+            ListCallCount++;
             Wanted = wanted;
             AcquisitionStatus = acquisitionStatus;
             return Task.FromResult(new EntityListResponse([], null, 0));

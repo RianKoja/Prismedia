@@ -260,6 +260,66 @@ public sealed class EfEntityReadServiceTests {
     }
 
     [Fact]
+    public async Task ListAsyncFiltersMultipleVideoKindsWithoutMovieChildDuplicatesOrHiddenLibraries() {
+        await using var db = CreateContext();
+        var now = DateTimeOffset.UtcNow;
+        var enabledRootId = Guid.Parse("11111111-aaaa-4444-8888-111111111111");
+        var disabledRootId = Guid.Parse("22222222-aaaa-4444-8888-222222222222");
+        var movieId = Guid.Parse("33333333-aaaa-4444-8888-333333333333");
+        var movieVideoId = Guid.Parse("44444444-aaaa-4444-8888-444444444444");
+        var videoId = Guid.Parse("55555555-aaaa-4444-8888-555555555555");
+        var seriesId = Guid.Parse("66666666-aaaa-4444-8888-666666666666");
+        var seasonId = Guid.Parse("77777777-aaaa-4444-8888-777777777777");
+        var hiddenVideoId = Guid.Parse("88888888-aaaa-4444-8888-888888888888");
+        var bookId = Guid.Parse("99999999-aaaa-4444-8888-999999999999");
+        db.LibraryRoots.AddRange(
+            Root(enabledRootId, enabled: true, now),
+            Root(disabledRootId, enabled: false, now));
+        db.Entities.AddRange(
+            new EntityRow { Id = movieId, KindCode = EntityKindRegistry.Movie.Code, Title = "Movie", CreatedAt = now, UpdatedAt = now },
+            new EntityRow { Id = movieVideoId, KindCode = EntityKindRegistry.Video.Code, Title = "Movie File", ParentEntityId = movieId, CreatedAt = now, UpdatedAt = now },
+            new EntityRow { Id = videoId, KindCode = EntityKindRegistry.Video.Code, Title = "Episode", CreatedAt = now, UpdatedAt = now },
+            new EntityRow { Id = seriesId, KindCode = EntityKindRegistry.VideoSeries.Code, Title = "Series", CreatedAt = now, UpdatedAt = now },
+            new EntityRow { Id = seasonId, KindCode = EntityKindRegistry.VideoSeason.Code, Title = "Season", ParentEntityId = seriesId, CreatedAt = now, UpdatedAt = now },
+            new EntityRow { Id = hiddenVideoId, KindCode = EntityKindRegistry.Video.Code, Title = "Hidden", CreatedAt = now, UpdatedAt = now },
+            new EntityRow { Id = bookId, KindCode = EntityKindRegistry.Book.Code, Title = "Book", CreatedAt = now, UpdatedAt = now });
+        db.VideoDetails.AddRange(
+            new VideoDetailRow { EntityId = movieVideoId, LibraryRootId = enabledRootId },
+            new VideoDetailRow { EntityId = videoId, LibraryRootId = enabledRootId },
+            new VideoDetailRow { EntityId = hiddenVideoId, LibraryRootId = disabledRootId });
+        db.UserEntityStates.AddRange(
+            new UserEntityStateRow { UserId = TestUserContext.UserId, EntityId = movieVideoId, ResumeSeconds = 10, UpdatedAt = now },
+            new UserEntityStateRow { UserId = TestUserContext.UserId, EntityId = videoId, ResumeSeconds = 20, UpdatedAt = now },
+            new UserEntityStateRow { UserId = TestUserContext.UserId, EntityId = seriesId, ResumeSeconds = 30, UpdatedAt = now },
+            new UserEntityStateRow { UserId = TestUserContext.UserId, EntityId = seasonId, ResumeSeconds = 40, UpdatedAt = now },
+            new UserEntityStateRow { UserId = TestUserContext.UserId, EntityId = hiddenVideoId, ResumeSeconds = 50, UpdatedAt = now },
+            new UserEntityStateRow { UserId = TestUserContext.UserId, EntityId = bookId, ProgressIndex = 1, ProgressTotal = 10, UpdatedAt = now });
+        await db.SaveChangesAsync();
+
+        var result = await CreateService(db).ListAsync(
+            string.Join(',', [
+                EntityKindRegistry.Movie.Code,
+                EntityKindRegistry.Video.Code,
+                EntityKindRegistry.VideoSeries.Code,
+                EntityKindRegistry.VideoSeason.Code,
+            ]),
+            null,
+            null,
+            null,
+            null,
+            CancellationToken.None,
+            status: "in-progress");
+
+        Assert.Equal(4, result.TotalCount);
+        Assert.Equal(
+            [movieId, videoId, seriesId, seasonId],
+            result.Items.Select(item => item.Id).Order().ToArray());
+        Assert.DoesNotContain(result.Items, item => item.Id == movieVideoId);
+        Assert.DoesNotContain(result.Items, item => item.Id == hiddenVideoId);
+        Assert.DoesNotContain(result.Items, item => item.Id == bookId);
+    }
+
+    [Fact]
     public async Task ListAsyncRelatedGridSuppressesMovieChildVideo() {
         await using var db = CreateContext();
         var tagId = Guid.Parse("11111111-aaaa-4444-8888-111111111111");

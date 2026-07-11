@@ -15,6 +15,7 @@ public interface IEntityReadService {
     /// shuffle, and the library filters are all applied server-side so that they
     /// span the entire matching set rather than a single loaded page.
     /// </summary>
+    /// <param name="kind">One entity kind code, or a comma-separated list matched with OR semantics.</param>
     /// <param name="sort">
     /// Sort key: <c>title</c> (default), <c>added</c>/<c>date</c> (creation time),
     /// <c>rating</c>, or <c>random</c> for a seeded shuffle of the whole result set.

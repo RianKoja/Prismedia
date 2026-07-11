@@ -13,7 +13,7 @@ internal static class EntityListEndpoint {
             HttpContext httpContext,
             IEntityReadService entities,
             CancellationToken cancellationToken) => {
-                if (!TryGetKind(request.Kind, out var resolvedKind, out var error)) {
+                if (!TryGetKinds(request.Kind, out var resolvedKinds, out var error)) {
                     return error;
                 }
 
@@ -23,7 +23,7 @@ internal static class EntityListEndpoint {
 
                 return Results.Ok(await entities.ListAsync(
                     request.ToQuery(
-                        resolvedKind,
+                        resolvedKinds,
                         NsfwVisibility.ShouldHide(request.HideNsfw, httpContext),
                         acquisitionStatus),
                     cancellationToken));
@@ -36,20 +36,31 @@ internal static class EntityListEndpoint {
         return group;
     }
 
-    private static bool TryGetKind(string? value, out string? kind, out IResult error) {
-        kind = null;
+    private static bool TryGetKinds(string? value, out string? kinds, out IResult error) {
+        kinds = null;
         error = Results.Empty;
         if (string.IsNullOrWhiteSpace(value)) {
             return true;
         }
 
-        if (EntityKindRegistry.TryGet(value, out var resolved)) {
-            kind = resolved.ToCode();
-            return true;
+        var resolvedKinds = new List<string>();
+        foreach (var token in value.Split(',', StringSplitOptions.TrimEntries)) {
+            if (!string.IsNullOrEmpty(token) && EntityKindRegistry.TryGet(token, out var resolved)) {
+                var code = resolved.ToCode();
+                if (!resolvedKinds.Contains(code, StringComparer.OrdinalIgnoreCase)) {
+                    resolvedKinds.Add(code);
+                }
+                continue;
+            }
+
+            error = Results.BadRequest(new ApiProblem(
+                ApiProblemCodes.InvalidEntityKind,
+                $"Entity kind '{token}' is not recognized."));
+            return false;
         }
 
-        error = Results.BadRequest(new ApiProblem(ApiProblemCodes.InvalidEntityKind, $"Entity kind '{value}' is not recognized."));
-        return false;
+        kinds = string.Join(',', resolvedKinds);
+        return true;
     }
 
     private static bool TryGetAcquisitionStatus(
