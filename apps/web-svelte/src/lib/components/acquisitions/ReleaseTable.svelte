@@ -1,8 +1,8 @@
 <script lang="ts">
   import { ArrowDown, ArrowUp, Ban, BookOpen, ChevronsUpDown, Download, ExternalLink, FileText, Film, Headphones, Tag } from "@lucide/svelte";
-  import { Button, Select, Toggle, cn } from "@prismedia/ui-svelte";
+  import { Badge, Button, Select, Toggle, cn } from "@prismedia/ui-svelte";
   import type { Component } from "svelte";
-  import { RELEASE_REJECTION_REASON } from "$lib/api/generated/codes";
+  import { DOWNLOAD_PROTOCOL, RELEASE_REJECTION_REASON } from "$lib/api/generated/codes";
   import type { ReleaseCandidateView } from "$lib/api/generated/model";
 
   interface Props {
@@ -52,6 +52,7 @@
   // Rejected releases (wrong unit, below min seeders, etc.) are noise most of the time, so they're
   // hidden by default; the user can reveal every candidate to override a scoring decision by hand.
   let showOnlyRelevant = $state(true);
+  let visibleCount = $state(10);
 
   const acceptedCount = $derived(candidates.filter((candidate) => candidate.accepted).length);
   const hiddenCount = $derived(candidates.length - acceptedCount);
@@ -81,6 +82,17 @@
       }
     }),
   );
+  const visibleRows = $derived(sorted.slice(0, visibleCount));
+  const remainingCount = $derived(Math.max(0, sorted.length - visibleCount));
+  const nextPageCount = $derived(Math.min(10, remainingCount));
+
+  function loadMore() {
+    visibleCount += 10;
+  }
+
+  function protocolLabel(protocol: ReleaseCandidateView["protocol"]): string {
+    return protocol === DOWNLOAD_PROTOCOL.usenet ? "Usenet" : "Torrent";
+  }
 
   // Text keys default to A→Z; numeric keys default to high→low (best first).
   function toggleSort(key: SortKey) {
@@ -206,7 +218,7 @@
       </tr>
     </thead>
     <tbody>
-      {#each sorted as row (row.candidate.id)}
+      {#each visibleRows as row (row.candidate.id)}
         {@const c = row.candidate}
         {@const CatIcon = categoryIcon(row.category)}
         <tr class={cn("border-t border-border-subtle", !c.accepted && !canManuallyQueue(c) && "opacity-55")}>
@@ -216,7 +228,10 @@
             </span>
           </td>
           <td class="px-3 py-2">
-            <div class="truncate text-text-primary" title={row.title}>{row.title}</div>
+            <div class="flex min-w-0 items-center gap-2">
+              <div class="min-w-0 flex-1 truncate text-text-primary" title={row.title}>{row.title}</div>
+              <Badge variant={c.protocol === DOWNLOAD_PROTOCOL.usenet ? "info" : "default"} class="shrink-0">{protocolLabel(c.protocol)}</Badge>
+            </div>
             {#if !c.accepted && c.rejections.length > 0}
               <div class="truncate text-[0.7rem] text-warning-text" title={rejectionText(c)}>{rejectionText(c)}</div>
             {/if}
@@ -249,11 +264,18 @@
       {/each}
     </tbody>
   </table>
+  {#if remainingCount > 0}
+    <div class="flex justify-center border-t border-border-subtle p-2.5">
+      <Button size="sm" variant="secondary" onclick={loadMore} aria-label={`Load ${nextPageCount} more releases`}>
+        Load more
+      </Button>
+    </div>
+  {/if}
 </div>
 
 <!-- ── Narrow container: stacked cards (type+title, info, actions) ── -->
 <div class="release-cards space-y-2">
-  {#each sorted as row (row.candidate.id)}
+  {#each visibleRows as row (row.candidate.id)}
     {@const c = row.candidate}
     {@const CatIcon = categoryIcon(row.category)}
     <div class={cn("rounded-sm border border-border-subtle bg-surface-1 p-3", !c.accepted && !canManuallyQueue(c) && "opacity-55")}>
@@ -262,7 +284,10 @@
           <CatIcon class="h-4 w-4" />
         </span>
         <div class="min-w-0 flex-1">
-          <div class="text-sm text-text-primary">{row.title}</div>
+          <div class="flex flex-wrap items-center gap-2">
+            <div class="min-w-0 flex-1 text-sm text-text-primary">{row.title}</div>
+            <Badge variant={c.protocol === DOWNLOAD_PROTOCOL.usenet ? "info" : "default"} class="shrink-0">{protocolLabel(c.protocol)}</Badge>
+          </div>
           {#if row.category}<div class="mt-0.5 font-mono text-[0.62rem] text-text-muted">{row.category}</div>{/if}
           {#if !c.accepted && c.rejections.length > 0}
             <div class="mt-0.5 text-[0.7rem] text-warning-text">{rejectionText(c)}</div>
@@ -299,6 +324,13 @@
       {/if}
     </div>
   {/each}
+  {#if remainingCount > 0}
+    <div class="flex justify-center pt-1">
+      <Button size="sm" variant="secondary" onclick={loadMore} aria-label={`Load ${nextPageCount} more releases`}>
+        Load more
+      </Button>
+    </div>
+  {/if}
 </div>
 </div>
 

@@ -5,6 +5,7 @@ import {
   getLibraryConfig,
   getSetting as getSettingRequest,
   getSettings,
+  listAccessibleLibraryRoots as listAccessibleLibraryRootsRequest,
   listLibraryRoots as listLibraryRootsRequest,
   resetSetting as resetSettingRequest,
   updateLibraryRoot as updateLibraryRootRequest,
@@ -15,6 +16,7 @@ import type {
   LibraryBrowseResponse as GeneratedLibraryBrowseResponse,
   LibraryConfigResponse as GeneratedLibraryConfigResponse,
   LibraryRoot as GeneratedLibraryRoot,
+  LibraryRootSummary as GeneratedLibraryRootSummary,
   SettingConstraints as GeneratedSettingConstraints,
   SettingDescriptor as GeneratedSettingDescriptor,
   SettingsCatalogResponse as GeneratedSettingsCatalogResponse,
@@ -95,6 +97,7 @@ export interface LibrarySettings {
 }
 
 export type LibraryRoot = GeneratedLibraryRoot;
+export type LibraryRootSummary = GeneratedLibraryRootSummary;
 export type LibraryBrowse = GeneratedLibraryBrowseResponse;
 
 export interface LibraryConfigResponse {
@@ -313,6 +316,13 @@ export async function fetchLibraryRoots(options?: RequestOptions): Promise<Libra
   return unwrapGenerated(
     await listLibraryRootsRequest(requestInit(options)),
     "Failed to load library roots",
+  );
+}
+
+export async function fetchAccessibleLibraryRoots(options?: RequestOptions): Promise<LibraryRootSummary[]> {
+  return unwrapGenerated(
+    await listAccessibleLibraryRootsRequest(requestInit(options)),
+    "Failed to load accessible library roots",
   );
 }
 

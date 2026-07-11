@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using Prismedia.Application.Acquisition;
+using Prismedia.Application.Settings;
 using Prismedia.Domain.Entities;
 
 namespace Prismedia.Application.Jobs.Handlers;
@@ -17,6 +18,8 @@ public sealed class AcquisitionSearchJobHandler(
     AcquisitionSearchRunner runner,
     IBookAcquisitionProfileStore profiles,
     AcquisitionQueueService queue,
+    IDownloadClientConfigStore downloadClients,
+    SettingsService settings,
     ILogger<AcquisitionSearchJobHandler> logger) : IJobHandler {
     public JobType Type => JobType.AcquisitionSearch;
 
@@ -111,11 +114,16 @@ public sealed class AcquisitionSearchJobHandler(
     /// </summary>
     private async Task TryAutoQueueAsync(Guid acquisitionId, CancellationToken cancellationToken) {
         var detail = await store.GetAsync(acquisitionId, cancellationToken);
-        var accepted = detail?.Candidates
-            .Where(candidate => candidate.Accepted)
-            .OrderByDescending(candidate => candidate.Score)
-            .Take(MaxAutoQueueAttempts)
-            .ToArray() ?? [];
+        var preferredProtocol = await AcquisitionProtocolPreference.ResolveAsync(downloadClients, settings, cancellationToken);
+        var accepted = detail is null
+            ? []
+            : AcquisitionProtocolPreference.Order(
+                    detail.Candidates.Where(candidate => candidate.Accepted),
+                    preferredProtocol,
+                    candidate => candidate.Protocol,
+                    candidate => candidate.Score)
+                .Take(MaxAutoQueueAttempts)
+                .ToArray();
 
         foreach (var candidate in accepted) {
             try {

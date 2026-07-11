@@ -121,7 +121,14 @@ public interface IBookAcquisitionProfileStore {
     /// <summary>The resolved profile's download-client category override, or null to use the client's own category.</summary>
     Task<string?> GetDownloadCategoryAsync(Guid? profileId, EntityKind kind, CancellationToken cancellationToken);
 
-    Task<IReadOnlyList<BookAcquisitionProfileView>> ListAsync(CancellationToken cancellationToken);
+    /// <summary>
+    /// Lists profiles visible to the caller. A profile inherits NSFW visibility from its target library;
+    /// member access is restricted to the supplied root ids, while null means unrestricted.
+    /// </summary>
+    Task<IReadOnlyList<BookAcquisitionProfileView>> ListAsync(
+        bool hideNsfw,
+        IReadOnlySet<Guid>? allowedRootIds,
+        CancellationToken cancellationToken);
     Task<BookAcquisitionProfileView?> GetAsync(Guid id, CancellationToken cancellationToken);
     Task<BookAcquisitionProfileView> SaveAsync(BookAcquisitionProfileSaveCommand command, CancellationToken cancellationToken);
     Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken);

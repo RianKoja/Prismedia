@@ -50,12 +50,27 @@ public sealed record IdentifyStructuralContext(
 /// Optional plugin-defined search form values keyed by <see cref="PluginSearchField.Key"/>. Values
 /// remain strings on the wire and are interpreted according to the selected support's field schema.
 /// </param>
+/// <param name="Limit">
+/// Maximum search candidates requested from the plugin. Defaults above the historical ten-result cap
+/// so manual Identify and Discover searches can surface deeper matches without a protocol migration.
+/// Plugins should clamp this to <see cref="PluginSearchPaging.MaxLimit"/>.
+/// </param>
 public sealed record IdentifyQuery(
     string? Title,
     string? Url,
     IReadOnlyDictionary<string, string>? ExternalIds,
     bool? RequireChoice = null,
-    IReadOnlyDictionary<string, string>? Fields = null);
+    IReadOnlyDictionary<string, string>? Fields = null,
+    int Limit = PluginSearchPaging.DefaultLimit);
+
+/// <summary>Shared bounds for plugin-backed manual search result counts.</summary>
+public static class PluginSearchPaging {
+    /// <summary>Candidate count requested by Identify and Discover searches when the caller does not choose one.</summary>
+    public const int DefaultLimit = 25;
+
+    /// <summary>Largest candidate count a plugin should accept from one interactive search.</summary>
+    public const int MaxLimit = 100;
+}
 
 /// <summary>
 /// Request envelope sent to short-lived plugin processes.

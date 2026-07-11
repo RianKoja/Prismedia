@@ -209,6 +209,17 @@ public sealed partial class SettingsService {
     }
 
     /// <summary>
+    /// Returns the preferred acquisition transfer protocol, defaulting safely to Usenet when the
+    /// persisted value is missing or unknown. Capability resolution remains the search runner's job.
+    /// </summary>
+    public async Task<PreferredDownloadProtocolSettings> GetPreferredDownloadProtocolSettingsAsync(CancellationToken cancellationToken) {
+        var values = await GetValueMapAsync([AppSettingKeys.AcquisitionPreferredProtocol], cancellationToken);
+        var code = GetString(values, AppSettingKeys.AcquisitionPreferredProtocol);
+        var protocol = code.TryDecodeAs<DownloadProtocol>(out var decoded) ? decoded : DownloadProtocol.Usenet;
+        return new PreferredDownloadProtocolSettings(protocol);
+    }
+
+    /// <summary>
     /// Returns recurring collection refresh settings.
     /// </summary>
     public async Task<CollectionRefreshSettings> GetCollectionRefreshSettingsAsync(CancellationToken cancellationToken) {

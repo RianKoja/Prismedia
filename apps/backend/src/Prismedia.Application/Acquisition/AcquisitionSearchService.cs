@@ -1,4 +1,5 @@
 using Prismedia.Application.Settings;
+using Prismedia.Domain.Entities;
 
 namespace Prismedia.Application.Acquisition;
 
@@ -73,12 +74,17 @@ public sealed class AcquisitionSearchRunner(
             };
         }
 
-        // A release protocol is acceptable when an enabled download client can acquire it. With no
-        // client configured yet the torrent-only default stands, so candidates still surface for review.
-        var protocols = await downloadClients.GetEnabledProtocolsAsync(cancellationToken);
-        if (protocols.Count > 0) {
-            rules = rules with { AllowedProtocols = protocols };
+        // Results are actionable only when an enabled download client speaks their protocol. An empty
+        // capability set therefore produces no results rather than advertising releases that cannot be
+        // queued. A sole protocol also overrides any stale preference automatically.
+        var protocols = (await downloadClients.GetEnabledProtocolsAsync(cancellationToken)).Distinct().ToArray();
+        if (protocols.Length == 0) {
+            return new AcquisitionSearchOutcome([], []);
         }
+        rules = rules with { AllowedProtocols = protocols };
+        var preferredProtocol = await AcquisitionProtocolPreference.ResolveAsync(downloadClients, settings, cancellationToken)
+            ?? protocols[0];
+        var hasFallbackProtocol = protocols.Length > 1;
 
         // TV unit context rides the rules the same way the upgrade fields do: set per search from the
         // acquisition, never by a profile, so the unit-match specification knows what is sought.
@@ -99,6 +105,7 @@ public sealed class AcquisitionSearchRunner(
         // outcome (candidates and all) is returned regardless, so the review UI always has something
         // transparent to show.
         AcquisitionSearchOutcome outcome = new([], []);
+        AcquisitionSearchOutcome? fallbackOutcome = null;
         foreach (var text in queries) {
             var searches = await Task.WhenAll(configs.Select(config => SearchIndexerAsync(config, text, policy, cancellationToken)));
             await RecordHealthAsync(searches, cancellationToken);
@@ -115,14 +122,37 @@ public sealed class AcquisitionSearchRunner(
                 }
             }
 
-            outcome = new AcquisitionSearchOutcome(WithIndexerPriorityTieBreak(engine.Evaluate(releases, rules, blocklisted), configs), errors);
-            if (outcome.Candidates.Any(candidate => candidate.Accepted)) {
+            var supported = releases.Where(candidate => protocols.Contains(candidate.Release.Protocol)).ToArray();
+            var candidates = WithIndexerPriorityTieBreak(engine.Evaluate(supported, rules, blocklisted), configs);
+            outcome = new AcquisitionSearchOutcome(PrioritizeProtocol(candidates, preferredProtocol), errors);
+            if (outcome.Candidates.Any(candidate => candidate.Accepted && candidate.Release.Protocol == preferredProtocol)) {
                 return outcome;
+            }
+
+            if (!hasFallbackProtocol && outcome.Candidates.Any(candidate => candidate.Accepted)) {
+                return outcome;
+            }
+
+            if (fallbackOutcome is null && outcome.Candidates.Any(candidate => candidate.Accepted)) {
+                fallbackOutcome = outcome;
             }
         }
 
-        return outcome;
+        return fallbackOutcome ?? outcome;
     }
+
+    /// <summary>
+    /// Keeps every supported result visible for manual review while putting the preferred protocol first
+    /// in the in-memory outcome. Job handlers reapply the same preference after persistence.
+    /// </summary>
+    private static IReadOnlyList<ScoredRelease> PrioritizeProtocol(
+        IReadOnlyList<ScoredRelease> candidates,
+        DownloadProtocol preferredProtocol) =>
+        candidates
+            .OrderByDescending(candidate => candidate.Accepted)
+            .ThenByDescending(candidate => candidate.Release.Protocol == preferredProtocol)
+            .ThenByDescending(candidate => candidate.Score)
+            .ToArray();
 
     /// <summary>
     /// Folds indexer priority into the scalar score as an exact-tie break: identical releases from two

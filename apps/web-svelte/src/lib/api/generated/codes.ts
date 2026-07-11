@@ -564,6 +564,7 @@ export type ExternalIdProviderCode = (typeof EXTERNAL_ID_PROVIDER)[keyof typeof 
 
 export const SETTING_KEYS = {
   acquisitionDownloadPropers: "acquisition.downloadPropers",
+  acquisitionPreferredProtocol: "acquisition.preferredProtocol",
   acquisitionRecycleBinCleanupDays: "acquisition.recycleBinCleanupDays",
   acquisitionRecycleBinPath: "acquisition.recycleBinPath",
   autoIdentifyConfidenceThreshold: "autoIdentify.confidenceThreshold",

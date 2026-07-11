@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Prismedia.Contracts.Settings;
+using Prismedia.Domain.Entities;
 
 namespace Prismedia.Application.Settings;
 
@@ -152,6 +153,20 @@ public static class AppSettingsRegistry {
                     new SettingOption("prefer-and-upgrade", "Prefer and upgrade", "Rank revisions higher and upgrade an owned copy to a better same-quality revision."),
                     new SettingOption("do-not-upgrade", "Prefer, do not upgrade", "Rank revisions higher on first grab, but never upgrade an owned copy for revision alone."),
                     new SettingOption("do-not-prefer", "Do not prefer", "Ignore revisions entirely; only the quality ladder decides.")
+                ]),
+            Select(
+                AppSettingKeys.AcquisitionPreferredProtocol,
+                Monitoring,
+                "Monitoring",
+                "Keep searching for monitored items until they are acquired.",
+                22,
+                "Preferred download type",
+                "When both Usenet and torrent clients are enabled, search the preferred type first and use the other type only when no acceptable preferred release is found.",
+                DownloadProtocol.Usenet.ToCode(),
+                60,
+                [
+                    new SettingOption(DownloadProtocol.Usenet.ToCode(), "Usenet", "Prefer NZB releases handled by an enabled Usenet client."),
+                    new SettingOption(DownloadProtocol.Torrent.ToCode(), "Torrent", "Prefer torrent releases handled by an enabled torrent client.")
                 ]),
 
             Boolean(

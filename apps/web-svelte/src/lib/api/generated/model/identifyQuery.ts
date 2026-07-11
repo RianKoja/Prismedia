@@ -18,4 +18,6 @@ export interface IdentifyQuery {
   requireChoice?: boolean | null;
   /** @nullable */
   fields?: IdentifyQueryFields;
+  /** @pattern ^-?(?:0|[1-9]\d*)$ */
+  limit?: number | string;
 }

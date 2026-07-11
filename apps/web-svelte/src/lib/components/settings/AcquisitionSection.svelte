@@ -2,7 +2,7 @@
   import { onMount } from "svelte";
   import { Boxes, CircleAlert, CircleCheck, Loader2, Pencil, PlugZap, Plus, Trash2 } from "@lucide/svelte";
   import { Badge, Button, Checkbox, Panel, Select, StatusLed, TextInput } from "@prismedia/ui-svelte";
-  import { INDEXER_KIND, DOWNLOAD_CLIENT_KIND, IMPORT_MODE, BLOCKLIST_REASON, BOOK_SOURCE_TIER, BOOK_FORMAT_TIER, ENTITY_KIND, VIDEO_QUALITY, AUDIO_QUALITY, CUSTOM_FORMAT_CONDITION_TYPE } from "$lib/api/generated/codes";
+  import { INDEXER_KIND, DOWNLOAD_CLIENT_KIND, DOWNLOAD_PROTOCOL, IMPORT_MODE, BLOCKLIST_REASON, BOOK_SOURCE_TIER, BOOK_FORMAT_TIER, ENTITY_KIND, VIDEO_QUALITY, AUDIO_QUALITY, CUSTOM_FORMAT_CONDITION_TYPE, type DownloadProtocolCode } from "$lib/api/generated/codes";
   import { cn } from "@prismedia/ui-svelte";
   import type {
     AcquisitionBlocklistEntry,
@@ -39,8 +39,10 @@
     testDownloadClientConnection,
     testIndexerConnection,
   } from "$lib/api/acquisitions";
-  import { fetchLibraryConfig, updateSetting, type LibraryRoot } from "$lib/api/settings";
-  import { findSetting, settingKeys, valueAsStringList } from "$lib/settings/app-settings";
+  import { fetchAccessibleLibraryRoots, fetchSettings, updateSetting, type LibraryRootSummary } from "$lib/api/settings";
+  import { findSetting, settingKeys } from "$lib/settings/app-settings";
+  import AcquisitionProtocolPreference from "$lib/components/settings/AcquisitionProtocolPreference.svelte";
+  import { availableDownloadProtocols } from "$lib/components/settings/acquisition-protocol-preference";
 
   interface Props {
     onError: (msg: string) => void;
@@ -76,9 +78,13 @@
   let profiles = $state<BookAcquisitionProfileView[]>([]);
   let customFormats = $state<CustomFormatView[]>([]);
   let blocklist = $state<AcquisitionBlocklistEntry[]>([]);
-  let allRoots = $state<LibraryRoot[]>([]);
+  let allRoots = $state<LibraryRootSummary[]>([]);
   let loading = $state(true);
   let busy = $state(false);
+  let protocolBusy = $state(false);
+  let preferredProtocol = $state<DownloadProtocolCode>(DOWNLOAD_PROTOCOL.usenet);
+
+  const availableProtocols = $derived(availableDownloadProtocols(downloadClients));
 
   // Inline edit forms (null = closed).
   let indexerForm = $state<IndexerConfigSaveRequest | null>(null);
@@ -139,7 +145,7 @@
   const profileKindLabels: Record<string, string> = Object.fromEntries(
     profileKindOptions.map((option) => [option.value, option.label]),
   );
-  function rootsForKind(kind: string): LibraryRoot[] {
+  function rootsForKind(kind: string): LibraryRootSummary[] {
     return allRoots.filter((r) =>
       kind === ENTITY_KIND.movie || kind === ENTITY_KIND.videoSeries
         ? r.scanVideos
@@ -149,7 +155,7 @@
   }
   const bookRoots = $derived(rootsForKind(ENTITY_KIND.book));
   const formRoots = $derived(profileForm ? rootsForKind(profileForm.kind) : []);
-  const rootOptions = $derived(formRoots.map((r) => ({ value: r.id, label: r.label || r.path })));
+  const rootOptions = $derived(formRoots.map((r) => ({ value: r.id, label: r.label })));
   const formIsBookKind = $derived(profileForm?.kind === ENTITY_KIND.book);
   // Custom formats matching the profile form's current kind — the scorable set for this profile.
   const formatsForKind = $derived.by(() => {
@@ -171,23 +177,28 @@
 
   async function load() {
     try {
-      const [idx, clients, profs, bl, config, mappings, formats] = await Promise.all([
+      const [idx, clients, profs, bl, roots, mappings, formats, settings] = await Promise.all([
         fetchIndexers(),
         fetchDownloadClients(),
         fetchAcquisitionProfiles(),
         // Secondary surface: a blocklist failure must not take down indexers/clients/profiles/config.
         fetchBlocklist().catch(() => [] as AcquisitionBlocklistEntry[]),
-        fetchLibraryConfig(),
+        fetchAccessibleLibraryRoots(),
         fetchRemotePathMappings().catch(() => [] as RemotePathMappingView[]),
         fetchCustomFormats().catch(() => [] as CustomFormatView[]),
+        fetchSettings(),
       ]);
       indexers = idx;
       downloadClients = clients;
       profiles = profs;
       pathMappings = mappings;
       blocklist = bl;
-      allRoots = config.roots;
+      allRoots = roots;
       customFormats = formats;
+      const configuredProtocol = findSetting(settings, settingKeys.acquisitionPreferredProtocol)?.value;
+      preferredProtocol = configuredProtocol === DOWNLOAD_PROTOCOL.torrent
+        ? DOWNLOAD_PROTOCOL.torrent
+        : DOWNLOAD_PROTOCOL.usenet;
     } catch (err) {
       onError(err instanceof Error ? err.message : "Failed to load acquisition settings");
     } finally {
@@ -330,6 +341,22 @@
       onError(err instanceof Error ? err.message : "Failed to delete download client");
     } finally {
       busy = false;
+    }
+  }
+
+  async function savePreferredProtocol(protocol: DownloadProtocolCode) {
+    if (availableProtocols.length !== 2 || protocol === preferredProtocol) return;
+    protocolBusy = true;
+    try {
+      const updated = await updateSetting(settingKeys.acquisitionPreferredProtocol, protocol);
+      preferredProtocol = updated.value === DOWNLOAD_PROTOCOL.torrent
+        ? DOWNLOAD_PROTOCOL.torrent
+        : DOWNLOAD_PROTOCOL.usenet;
+      onMessage("Preferred download type saved");
+    } catch (err) {
+      onError(err instanceof Error ? err.message : "Failed to save preferred download type");
+    } finally {
+      protocolBusy = false;
     }
   }
 
@@ -718,6 +745,13 @@
           {@render clientEditor()}
         {/if}
       </section>
+
+      <AcquisitionProtocolPreference
+        {availableProtocols}
+        value={preferredProtocol}
+        busy={protocolBusy}
+        onchange={(protocol) => void savePreferredProtocol(protocol)}
+      />
 
       <!-- Remote path mappings -->
       {#if downloadClients.length > 0}

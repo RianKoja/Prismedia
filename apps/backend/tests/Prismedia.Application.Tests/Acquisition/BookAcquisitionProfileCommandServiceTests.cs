@@ -2,6 +2,7 @@ using Prismedia.Application.Acquisition;
 using Prismedia.Contracts.Acquisition;
 using Prismedia.Contracts.System;
 using Prismedia.Domain.Entities;
+using Prismedia.Application.Security;
 
 namespace Prismedia.Application.Tests.Acquisition;
 
@@ -31,7 +32,7 @@ public sealed class BookAcquisitionProfileCommandServiceTests {
 
     [Fact]
     public async Task InvalidTvTemplateIsRejected() {
-        var service = new BookAcquisitionProfileCommandService(new CapturingStore());
+        var service = CreateService(new CapturingStore());
 
         var ex = await Assert.ThrowsAsync<AcquisitionConfigurationException>(
             () => service.SaveAsync(Request(EntityKind.VideoSeries, "{Series} S{Season:00}E{Episode:00}.{ext}"), CancellationToken.None));
@@ -42,7 +43,7 @@ public sealed class BookAcquisitionProfileCommandServiceTests {
     [Fact]
     public async Task BlankMediaTemplateIsStoredAsTheKindDefault() {
         var store = new CapturingStore();
-        var service = new BookAcquisitionProfileCommandService(store);
+        var service = CreateService(store);
 
         await service.SaveAsync(Request(EntityKind.Movie, "   "), CancellationToken.None);
 
@@ -52,7 +53,7 @@ public sealed class BookAcquisitionProfileCommandServiceTests {
     [Fact]
     public async Task ValidCustomMovieTemplateIsStoredTrimmed() {
         var store = new CapturingStore();
-        var service = new BookAcquisitionProfileCommandService(store);
+        var service = CreateService(store);
 
         await service.SaveAsync(Request(EntityKind.Movie, "  {Title} [{Quality}]/{Title}.{ext}  "), CancellationToken.None);
 
@@ -61,13 +62,16 @@ public sealed class BookAcquisitionProfileCommandServiceTests {
 
     [Fact]
     public async Task BlankBookTemplateStillRequiresATemplate() {
-        var service = new BookAcquisitionProfileCommandService(new CapturingStore());
+        var service = CreateService(new CapturingStore());
 
         var ex = await Assert.ThrowsAsync<AcquisitionConfigurationException>(
             () => service.SaveAsync(Request(EntityKind.Book, ""), CancellationToken.None));
 
         Assert.Equal(ApiProblemCodes.AcquisitionProfileInvalid, ex.Code);
     }
+
+    private static BookAcquisitionProfileCommandService CreateService(IBookAcquisitionProfileStore store) =>
+        new(store, new CurrentUserContextHolder());
 
     /// <summary>A profile store that only records the command it is handed, for asserting the resolved template.</summary>
     private sealed class CapturingStore : IBookAcquisitionProfileStore {
@@ -88,7 +92,10 @@ public sealed class BookAcquisitionProfileCommandServiceTests {
         public Task<bool> GetAutoPickAsync(Guid? profileId, EntityKind kind, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<bool> GetAutoRedownloadAsync(Guid? profileId, EntityKind kind, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<string?> GetDownloadCategoryAsync(Guid? profileId, EntityKind kind, CancellationToken cancellationToken) => throw new NotSupportedException();
-        public Task<IReadOnlyList<BookAcquisitionProfileView>> ListAsync(CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<IReadOnlyList<BookAcquisitionProfileView>> ListAsync(
+            bool hideNsfw,
+            IReadOnlySet<Guid>? allowedRootIds,
+            CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<BookAcquisitionProfileView?> GetAsync(Guid id, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken) => throw new NotSupportedException();
     }

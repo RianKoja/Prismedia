@@ -13115,7 +13115,7 @@ export const getListAcquisitionProfilesUrl = () => {
 }
 
 /**
- * @summary Lists book acquisition profiles (matching rules and import target).
+ * @summary Lists acquisition profiles whose import targets are visible to the current viewer.
  */
 export const listAcquisitionProfiles = async ( options?: RequestInit): Promise<listAcquisitionProfilesResponse> => {
 

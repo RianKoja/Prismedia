@@ -49,6 +49,7 @@
     size?: SelectSize;
     variant?: SelectVariant;
     class?: string;
+    ariaLabel?: string;
     onchange?: (value: string) => void;
   }
 
@@ -60,6 +61,7 @@
     size = "md",
     variant = "default",
     class: className,
+    ariaLabel,
     onchange,
   }: Props = $props();
 
@@ -181,6 +183,7 @@
     {disabled}
     aria-haspopup="listbox"
     aria-expanded={open}
+    aria-label={ariaLabel}
     onclick={toggle}
     onkeydown={(e) => {
       if (e.key === "ArrowDown" || e.key === "ArrowUp") {

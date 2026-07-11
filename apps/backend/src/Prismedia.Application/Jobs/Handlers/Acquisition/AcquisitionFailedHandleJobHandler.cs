@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using Prismedia.Application.Acquisition;
+using Prismedia.Application.Settings;
 using Prismedia.Domain.Entities;
 
 namespace Prismedia.Application.Jobs.Handlers;
@@ -16,6 +17,8 @@ public sealed class AcquisitionFailedHandleJobHandler(
     IBookAcquisitionProfileStore profiles,
     IAcquisitionQueueService queueService,
     IAcquisitionHistoryStore history,
+    IDownloadClientConfigStore downloadClients,
+    SettingsService settings,
     ILogger<AcquisitionFailedHandleJobHandler> logger) : IJobHandler {
     public JobType Type => JobType.AcquisitionFailedHandle;
 
@@ -67,7 +70,13 @@ public sealed class AcquisitionFailedHandleJobHandler(
 
         var blocklisted = await blocklist.GetIdentitiesAsync(cancellationToken);
         var candidates = await acquisitions.ListAcceptedCandidatesAsync(acquisitionId, cancellationToken);
-        var next = candidates.FirstOrDefault(candidate => !blocklisted.Contains(candidate.Identity));
+        var preferredProtocol = await AcquisitionProtocolPreference.ResolveAsync(downloadClients, settings, cancellationToken);
+        var next = AcquisitionProtocolPreference.Order(
+                candidates.Where(candidate => !blocklisted.Contains(candidate.Identity)),
+                preferredProtocol,
+                candidate => candidate.Protocol,
+                candidate => candidate.Score)
+            .FirstOrDefault();
         if (next is null) {
             await KeepFailedIfOwnedAsync(
                 acquisitionId,

@@ -1,13 +1,21 @@
 using Prismedia.Contracts.Acquisition;
 using Prismedia.Contracts.System;
 using Prismedia.Domain.Entities;
+using Prismedia.Application.Security;
 
 namespace Prismedia.Application.Acquisition;
 
 /// <summary>Application use case for listing, saving, and deleting book acquisition profiles.</summary>
-public sealed class BookAcquisitionProfileCommandService(IBookAcquisitionProfileStore store) {
-    public Task<IReadOnlyList<BookAcquisitionProfileView>> ListAsync(CancellationToken cancellationToken) =>
-        store.ListAsync(cancellationToken);
+public sealed class BookAcquisitionProfileCommandService(
+    IBookAcquisitionProfileStore store,
+    ICurrentUserContext currentUser) {
+    /// <summary>Lists profiles whose import libraries are visible in the current user and NSFW context.</summary>
+    public async Task<IReadOnlyList<BookAcquisitionProfileView>> ListAsync(
+        bool hideNsfw,
+        CancellationToken cancellationToken) {
+        var allowedRootIds = await currentUser.GetAllowedLibraryRootIdsAsync(cancellationToken);
+        return await store.ListAsync(hideNsfw, allowedRootIds, cancellationToken);
+    }
 
     public Task<BookAcquisitionProfileView> SaveAsync(BookAcquisitionProfileSaveRequest request, CancellationToken cancellationToken) =>
         store.SaveAsync(ToCommand(request), cancellationToken);

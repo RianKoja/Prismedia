@@ -1,5 +1,6 @@
 using Prismedia.Application.Requests;
 using Prismedia.Contracts.Requests;
+using Prismedia.Contracts.Plugins;
 using Prismedia.Domain.Entities;
 
 namespace Prismedia.Application.Tests.Requests;
@@ -9,6 +10,14 @@ namespace Prismedia.Application.Tests.Requests;
 /// invariants shared by Discover, proposal review, and acquisition.
 /// </summary>
 public sealed class RequestServicesTests {
+    [Fact]
+    public void InteractivePluginSearchDefaultsBeyondTheHistoricalTenResultCap() {
+        var query = new IdentifyQuery("Dune", null, null);
+
+        Assert.True(query.Limit > 10);
+        Assert.Equal(PluginSearchPaging.DefaultLimit, query.Limit);
+    }
+
     [Fact]
     public async Task PluginSearchRoutesOneDiscoverableKindAndExactPluginFields() {
         var source = new FakePluginSearchSource();

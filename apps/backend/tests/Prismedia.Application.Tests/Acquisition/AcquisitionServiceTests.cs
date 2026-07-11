@@ -677,6 +677,8 @@ public sealed class AcquisitionServiceTests {
             runner: null!,
             profiles: null!,
             queue: null!,
+            downloadClients: null!,
+            settings: null!,
             NullLogger<AcquisitionSearchJobHandler>.Instance);
 
         await handler.HandleAsync(
@@ -1443,7 +1445,10 @@ public sealed class AcquisitionServiceTests {
         public Task<BookImportProfile?> GetImportProfileAsync(Guid? profileId, EntityKind kind, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<bool> GetAutoPickAsync(Guid? profileId, EntityKind kind, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<bool> GetAutoRedownloadAsync(Guid? profileId, EntityKind kind, CancellationToken cancellationToken) => throw new NotSupportedException();
-        public Task<IReadOnlyList<BookAcquisitionProfileView>> ListAsync(CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<IReadOnlyList<BookAcquisitionProfileView>> ListAsync(
+            bool hideNsfw,
+            IReadOnlySet<Guid>? allowedRootIds,
+            CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<BookAcquisitionProfileView?> GetAsync(Guid id, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<BookAcquisitionProfileView> SaveAsync(BookAcquisitionProfileSaveCommand command, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken) => throw new NotSupportedException();

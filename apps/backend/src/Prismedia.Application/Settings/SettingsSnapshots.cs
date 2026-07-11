@@ -29,6 +29,12 @@ public sealed record RecycleBinSettings(string? Path, int CleanupDays);
 public sealed record ProperDownloadSettings(Prismedia.Domain.Entities.ProperDownloadPolicy Policy);
 
 /// <summary>
+/// Preferred transfer protocol when both Usenet and torrent clients are enabled. A sole enabled
+/// protocol always wins over this preference so a stale setting cannot suppress usable results.
+/// </summary>
+public sealed record PreferredDownloadProtocolSettings(Prismedia.Domain.Entities.DownloadProtocol Protocol);
+
+/// <summary>
 /// Auto-identify settings that drive plugin-based identification during library scans.
 /// </summary>
 /// <param name="Enabled">Whether scanned media is auto-identified through enabled plugins.</param>

@@ -3,11 +3,13 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Prismedia.Application.Acquisition;
 using Prismedia.Application.Jobs;
 using Prismedia.Application.Jobs.Handlers;
+using Prismedia.Application.Settings;
 using Prismedia.Contracts.Acquisition;
 using Prismedia.Domain.Entities;
 using Prismedia.Infrastructure.Acquisition;
 using Prismedia.Infrastructure.Persistence;
 using Prismedia.Infrastructure.Persistence.Entities;
+using Prismedia.Infrastructure.Settings;
 
 namespace Prismedia.Infrastructure.Tests;
 
@@ -217,6 +219,8 @@ public sealed class AcquisitionFailedHandleJobHandlerTests {
             new EfBookAcquisitionProfileStore(db),
             queue,
             new EfAcquisitionHistoryStore(db),
+            new EfDownloadClientConfigStore(db),
+            new SettingsService(new EfSettingsPersistence(db)),
             NullLogger<AcquisitionFailedHandleJobHandler>.Instance);
         await handler.HandleAsync(new JobContext(Job(acquisitionId, selected), new ThrowingJobQueue()), CancellationToken.None);
     }
@@ -257,10 +261,10 @@ public sealed class AcquisitionFailedHandleJobHandlerTests {
 
         await db.SaveChangesAsync();
 
-        var refA = new AcquisitionCandidateRef(a.Id, a.Title, a.IndexerName, a.InfoHash);
+        var refA = new AcquisitionCandidateRef(a.Id, a.Title, a.IndexerName, a.InfoHash, a.Protocol, a.Score);
         var refB = b is null
-            ? new AcquisitionCandidateRef(Guid.Empty, "", "", null)
-            : new AcquisitionCandidateRef(b.Id, b.Title, b.IndexerName, b.InfoHash);
+            ? new AcquisitionCandidateRef(Guid.Empty, "", "", null, DownloadProtocol.Torrent, 0)
+            : new AcquisitionCandidateRef(b.Id, b.Title, b.IndexerName, b.InfoHash, b.Protocol, b.Score);
         return (acquisitionId, refA, refB);
     }
 

@@ -21,6 +21,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - Release operations are now ready for channel publishing: the root package version is the source of truth, Docker builds validate the release metadata, pushes to `main` publish only the dev image, and alpha/beta/release images are published manually.
 
 ### Added
+- Acquisition searches now label Usenet and torrent releases, prefer the configured download type before falling back, filter results to enabled download-client capabilities, and let Identify, Request, and release review reveal more than ten matches.
 - Entity library queries can now request several kinds at once, allowing native clients to load one server-filtered movie and TV activity feed without duplicate movie file rows.
 - Video libraries now discover subtitle files beside their videos automatically. Same-name SRT, VTT, ASS, and SSA files — including language or descriptive filename tags — are normalized into app-owned playback assets, and rescans reconcile additions, edits, renames, and removals.
 - Added a first-run setup wizard: a fresh install (or an upgraded one, on its next visit) walks through creating the administrator account, and an upgraded install also reviews the accounts migrated from its former Jellyfin sign-in profiles — each keeps the previous server API key as its password so connected apps keep working, with an inline option to set a new password on the spot.
@@ -137,6 +138,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - Updated documentation, README screenshots, branding assets, install metadata, and app copy to match the current Prismedia v1 surface.
 
 ### Fixed
+- Download profile settings now respect the viewer's library access and current SFW/NSFW mode; profiles targeting an NSFW library are hidden whenever NSFW content is hidden.
 - Library scans no longer remove wanted or actively monitored movies, seasons, and series while they are waiting for files.
 - Adding or updating a library with a folder that is already watched now returns a clear conflict instead of failing with an internal server error.
 - Video seek bars now span the same full player width as the playback controls, regardless of the media artwork or source aspect ratio.

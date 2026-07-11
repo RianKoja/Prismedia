@@ -53,8 +53,12 @@ public static class LibraryEndpoints {
             CancellationToken cancellationToken) => {
             var roots = await settings.ListLibraryRootsAsync(cancellationToken);
             var allowed = await currentUser.GetAllowedLibraryRootIdsAsync(cancellationToken);
+            var hideNsfw = NsfwVisibility.ShouldHide(null, httpContext);
             return Results.Ok(roots
-                .Where(root => root.Enabled && (allowed is null || allowed.Contains(root.Id)))
+                .Where(root =>
+                    root.Enabled &&
+                    (!hideNsfw || !root.IsNsfw) &&
+                    (allowed is null || allowed.Contains(root.Id)))
                 .Select(root => new LibraryRootSummary(
                     root.Id,
                     root.Label,

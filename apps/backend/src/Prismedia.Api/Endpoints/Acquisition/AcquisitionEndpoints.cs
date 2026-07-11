@@ -328,11 +328,12 @@ public static class AcquisitionEndpoints {
             .Produces<ApiProblem>(StatusCodes.Status400BadRequest);
 
         group.MapGet("/profiles", (
+            HttpContext httpContext,
             BookAcquisitionProfileCommandService profiles,
             CancellationToken cancellationToken) =>
-            profiles.ListAsync(cancellationToken))
+            profiles.ListAsync(NsfwVisibility.ShouldHide(null, httpContext), cancellationToken))
             .WithName("ListAcquisitionProfiles")
-            .WithSummary("Lists book acquisition profiles (matching rules and import target).")
+            .WithSummary("Lists acquisition profiles whose import targets are visible to the current viewer.")
             .Produces<IReadOnlyList<BookAcquisitionProfileView>>();
 
         group.MapPost("/profiles", async (

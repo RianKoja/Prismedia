@@ -310,7 +310,7 @@ public sealed record SelectedRelease(string Title, string? IndexerName, string? 
 /// Server-side reference to an accepted candidate the failed-handler may re-queue, carrying the fields
 /// needed to compute its blocklist <see cref="Identity"/> and skip it when it is itself blocklisted.
 /// </summary>
-public sealed record AcquisitionCandidateRef(Guid CandidateId, string Title, string IndexerName, string? InfoHash) {
+public sealed record AcquisitionCandidateRef(Guid CandidateId, string Title, string IndexerName, string? InfoHash, DownloadProtocol Protocol, double Score) {
     /// <summary>The normalized blocklist identity for this candidate.</summary>
     public string Identity => ReleaseIdentity.For(InfoHash, IndexerName, Title);
 }

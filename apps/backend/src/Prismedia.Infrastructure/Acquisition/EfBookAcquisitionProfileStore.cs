@@ -39,9 +39,17 @@ public sealed class EfBookAcquisitionProfileStore(PrismediaDbContext db) : IBook
         return string.IsNullOrWhiteSpace(row?.DownloadCategory) ? null : row.DownloadCategory;
     }
 
-    public async Task<IReadOnlyList<BookAcquisitionProfileView>> ListAsync(CancellationToken cancellationToken) {
-        var rows = await db.BookAcquisitionProfiles
+    public async Task<IReadOnlyList<BookAcquisitionProfileView>> ListAsync(
+        bool hideNsfw,
+        IReadOnlySet<Guid>? allowedRootIds,
+        CancellationToken cancellationToken) {
+        var query = db.BookAcquisitionProfiles
             .AsNoTracking()
+            .Where(profile =>
+                (!hideNsfw || !db.LibraryRoots.Any(root =>
+                    root.Id == profile.TargetLibraryRootId && root.IsNsfw)) &&
+                (allowedRootIds == null || allowedRootIds.Contains(profile.TargetLibraryRootId)));
+        var rows = await query
             .OrderBy(profile => profile.Kind)
             .ThenByDescending(profile => profile.IsDefault)
             .ThenBy(profile => profile.DisplayName)

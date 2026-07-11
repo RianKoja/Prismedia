@@ -173,6 +173,46 @@ public sealed class SettingsEndpointServiceTests {
     }
 
     [Fact]
+    public async Task AccessibleLibrarySummariesHideNsfwRootsForASfwViewer() {
+        using var factory = CreateFactory();
+        using var client = factory.CreateAuthenticatedClient();
+        using var create = await client.PostAsJsonAsync(
+            "/api/libraries",
+            new LibraryRootCreateRequest(
+                "/media/hidden",
+                "Hidden",
+                Enabled: false,
+                Recursive: null,
+                ScanVideos: null,
+                ScanImages: null,
+                ScanAudio: null,
+                ScanBooks: true,
+                IsNsfw: true));
+        create.EnsureSuccessStatusCode();
+        var created = await create.Content.ReadFromJsonAsync<LibraryRoot>();
+        Assert.NotNull(created);
+        using var enable = await client.PatchAsJsonAsync(
+            $"/api/libraries/{created.Id}",
+            new LibraryRootUpdateRequest(
+                Path: null,
+                Label: null,
+                Enabled: true,
+                Recursive: null,
+                ScanVideos: null,
+                ScanImages: null,
+                ScanAudio: null,
+                ScanBooks: null,
+                IsNsfw: null));
+        enable.EnsureSuccessStatusCode();
+
+        var roots = await client.GetFromJsonAsync<IReadOnlyList<LibraryRootSummary>>("/api/libraries/accessible");
+
+        var visible = Assert.Single(roots!);
+        Assert.Equal("Videos", visible.Label);
+        Assert.False(visible.IsNsfw);
+    }
+
+    [Fact]
     public async Task LibraryCreatorsListOnlyTheRootsTheyCreated() {
         using var factory = CreateFactory();
         using var admin = factory.CreateAuthenticatedClient();

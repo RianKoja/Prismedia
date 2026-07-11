@@ -13,6 +13,22 @@ namespace Prismedia.Application.Tests.Acquisition;
 /// </summary>
 public sealed class AcquisitionSearchRunnerTests {
     [Fact]
+    public void PersistedCandidatesAreReorderedByProtocolBeforeQualityScoreForAutomation() {
+        var torrent = new AcquisitionCandidateRef(Guid.NewGuid(), "Torrent", "Indexer", "torrent", DownloadProtocol.Torrent, 100);
+        var usenet = new AcquisitionCandidateRef(Guid.NewGuid(), "Usenet", "Indexer", null, DownloadProtocol.Usenet, 1);
+
+        var ordered = AcquisitionProtocolPreference.Order(
+                [torrent, usenet],
+                DownloadProtocol.Usenet,
+                candidate => candidate.Protocol,
+                candidate => candidate.Score)
+            .ToArray();
+
+        Assert.Equal([usenet.CandidateId, torrent.CandidateId], ordered.Select(candidate => candidate.CandidateId));
+        Assert.Equal(100, torrent.Score); // Preference ordering must not distort the user-visible score.
+    }
+
+    [Fact]
     public async Task RejectsBlocklistedReleaseAndKeepsCleanOneAccepted() {
         var blocked = new IndexerRelease("Blocked Book (epub)", 5_000_000, 80, 4, DownloadProtocol.Torrent, "http://dl", "magnet:?b", "blockedhash", "http://info", null, null);
         var clean = new IndexerRelease("Clean Book (epub)", 5_000_000, 60, 3, DownloadProtocol.Torrent, "http://dl", "magnet:?c", "cleanhash", "http://info", null, null);
@@ -38,13 +54,14 @@ public sealed class AcquisitionSearchRunnerTests {
     }
 
     [Fact]
-    public async Task UsenetReleasesAreAcceptedOnlyWhenAUsenetClientIsEnabled() {
+    public async Task ResultsIncludeOnlyProtocolsBackedByEnabledDownloadClients() {
         var usenet = new IndexerRelease("Usenet Book (epub)", 5_000_000, null, null, DownloadProtocol.Usenet, "http://dl/nzb", null, null, null, null, null);
+        var torrent = new IndexerRelease("Torrent Book (epub)", 5_000_000, 20, 2, DownloadProtocol.Torrent, "http://dl/torrent", "magnet:?x", "hash", null, null, null);
 
-        async Task<ScoredRelease> SearchWith(params DownloadProtocol[] protocols) {
+        async Task<IReadOnlyList<ScoredRelease>> SearchWith(params DownloadProtocol[] protocols) {
             var runner = new AcquisitionSearchRunner(
                 new FakeIndexerConfigStore(),
-                new FakeClientFactory(new FakeIndexerSearchClient([usenet])),
+                new FakeClientFactory(new FakeIndexerSearchClient([usenet, torrent])),
                 new FakeProfileStore(),
                 new FakeBlocklistStore("unrelated"),
                 new FakeDownloadClientConfigStore(protocols),
@@ -53,21 +70,67 @@ public sealed class AcquisitionSearchRunnerTests {
                 Policies(new BookAcquisitionPolicyModule()),
                 Settings());
             var outcome = await runner.RunAsync(new AcquisitionSearchInput(Guid.NewGuid(), "Book", null), CancellationToken.None);
-            return outcome.Candidates.Single();
+            return outcome.Candidates;
         }
 
-        // Torrent-only setup: the usenet release is visible but rejected as the wrong protocol.
         var torrentOnly = await SearchWith(DownloadProtocol.Torrent);
-        Assert.False(torrentOnly.Accepted);
-        Assert.Contains(ReleaseRejectionReason.WrongProtocol, torrentOnly.Rejections);
+        Assert.Equal([DownloadProtocol.Torrent], torrentOnly.Select(candidate => candidate.Release.Protocol));
 
-        // A usenet client (e.g. SABnzbd) makes the same release acceptable.
-        var withUsenet = await SearchWith(DownloadProtocol.Torrent, DownloadProtocol.Usenet);
-        Assert.True(withUsenet.Accepted);
+        var usenetOnly = await SearchWith(DownloadProtocol.Usenet);
+        Assert.Equal([DownloadProtocol.Usenet], usenetOnly.Select(candidate => candidate.Release.Protocol));
 
-        // No clients configured at all keeps the permissive torrent-only default (candidates still surface).
+        var both = await SearchWith(DownloadProtocol.Torrent, DownloadProtocol.Usenet);
+        Assert.Equal(2, both.Count);
+        Assert.Contains(both, candidate => candidate.Release.Protocol == DownloadProtocol.Torrent);
+        Assert.Contains(both, candidate => candidate.Release.Protocol == DownloadProtocol.Usenet);
+
         var noClients = await SearchWith();
-        Assert.Contains(ReleaseRejectionReason.WrongProtocol, noClients.Rejections);
+        Assert.Empty(noClients);
+    }
+
+    [Fact]
+    public async Task DefaultUsenetPreferenceSearchesBroaderRungsBeforeFallingBackToTorrent() {
+        var torrent = new IndexerRelease("Author - Book (epub)", 5_000_000, 20, 2, DownloadProtocol.Torrent, "http://dl/torrent", "magnet:?x", "hash", null, null, null);
+        var usenet = new IndexerRelease("Author - Book (epub)", 5_000_000, null, null, DownloadProtocol.Usenet, "http://dl/nzb", null, null, null, null, null);
+        var client = new QueryAwareIndexerSearchClient(new Dictionary<string, IReadOnlyList<IndexerRelease>>(StringComparer.OrdinalIgnoreCase) {
+            ["Book Author"] = [torrent],
+            ["Book"] = [usenet]
+        });
+        var runner = Runner(client, Settings(), DownloadProtocol.Torrent, DownloadProtocol.Usenet);
+
+        var outcome = await runner.RunAsync(new AcquisitionSearchInput(Guid.NewGuid(), "Book", "Author"), CancellationToken.None);
+
+        Assert.Equal(["Book Author", "Book"], client.Queries);
+        Assert.Equal(DownloadProtocol.Usenet, outcome.Candidates.First(candidate => candidate.Accepted).Release.Protocol);
+    }
+
+    [Fact]
+    public async Task PreferredProtocolFallsBackOnlyAfterItsQueryLadderHasNoAcceptableRelease() {
+        var torrent = new IndexerRelease("Author - Book (epub)", 5_000_000, 20, 2, DownloadProtocol.Torrent, "http://dl/torrent", "magnet:?x", "hash", null, null, null);
+        var client = new QueryAwareIndexerSearchClient(new Dictionary<string, IReadOnlyList<IndexerRelease>>(StringComparer.OrdinalIgnoreCase) {
+            ["Book Author"] = [torrent],
+            ["Book"] = []
+        });
+        var runner = Runner(client, Settings(), DownloadProtocol.Torrent, DownloadProtocol.Usenet);
+
+        var outcome = await runner.RunAsync(new AcquisitionSearchInput(Guid.NewGuid(), "Book", "Author"), CancellationToken.None);
+
+        Assert.Equal(["Book Author", "Book"], client.Queries);
+        Assert.Equal(DownloadProtocol.Torrent, outcome.Candidates.First(candidate => candidate.Accepted).Release.Protocol);
+    }
+
+    [Fact]
+    public async Task SoleEnabledProtocolOverridesAnUnavailableStoredPreference() {
+        var torrent = new IndexerRelease("Author - Book (epub)", 5_000_000, 20, 2, DownloadProtocol.Torrent, "http://dl/torrent", "magnet:?x", "hash", null, null, null);
+        var client = new QueryAwareIndexerSearchClient(new Dictionary<string, IReadOnlyList<IndexerRelease>>(StringComparer.OrdinalIgnoreCase) {
+            ["Book Author"] = [torrent]
+        });
+        var runner = Runner(client, Settings(DownloadProtocol.Usenet), DownloadProtocol.Torrent);
+
+        var outcome = await runner.RunAsync(new AcquisitionSearchInput(Guid.NewGuid(), "Book", "Author"), CancellationToken.None);
+
+        Assert.Equal(["Book Author"], client.Queries);
+        Assert.Equal(DownloadProtocol.Torrent, Assert.Single(outcome.Candidates).Release.Protocol);
     }
 
     [Fact]
@@ -199,14 +262,37 @@ public sealed class AcquisitionSearchRunnerTests {
     }
 
     /// <summary>Builds a real SettingsService over an in-memory override map; an unset AcquisitionDownloadPropers defaults to prefer-and-upgrade.</summary>
-    private static SettingsService Settings(ProperDownloadPolicy? policy = null) {
+    private static SettingsService Settings(ProperDownloadPolicy? policy = null) => Settings(null, policy);
+
+    private static SettingsService Settings(DownloadProtocol preferredProtocol, ProperDownloadPolicy? policy = null) =>
+        Settings((DownloadProtocol?)preferredProtocol, policy);
+
+    private static SettingsService Settings(DownloadProtocol? preferredProtocol, ProperDownloadPolicy? policy) {
         var overrides = new Dictionary<string, string>(StringComparer.Ordinal);
         if (policy is { } chosen) {
             overrides[AppSettingKeys.AcquisitionDownloadPropers] = System.Text.Json.JsonSerializer.Serialize(chosen.ToCode());
         }
+        if (preferredProtocol is { } preferred) {
+            overrides[AppSettingKeys.AcquisitionPreferredProtocol] = System.Text.Json.JsonSerializer.Serialize(preferred.ToCode());
+        }
 
         return new SettingsService(new FakeSettingsPersistence(overrides));
     }
+
+    private static AcquisitionSearchRunner Runner(
+        IIndexerSearchClient client,
+        SettingsService settings,
+        params DownloadProtocol[] protocols) =>
+        new(
+            new FakeIndexerConfigStore(),
+            new FakeClientFactory(client),
+            new FakeProfileStore(),
+            new FakeBlocklistStore("unrelated"),
+            new FakeDownloadClientConfigStore(protocols),
+            new FakeIndexerStatusStore(),
+            new IndexerQueryWindow(),
+            Policies(new BookAcquisitionPolicyModule()),
+            settings);
 
     private static AcquisitionPolicyRegistry Policies(params IAcquisitionPolicyModule[] modules) =>
         new(modules);
@@ -263,7 +349,10 @@ public sealed class AcquisitionSearchRunnerTests {
         public Task<bool> GetAutoPickAsync(Guid? profileId, EntityKind kind, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<bool> GetAutoRedownloadAsync(Guid? profileId, EntityKind kind, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<string?> GetDownloadCategoryAsync(Guid? profileId, EntityKind kind, CancellationToken cancellationToken) => Task.FromResult<string?>(null);
-        public Task<IReadOnlyList<BookAcquisitionProfileView>> ListAsync(CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<IReadOnlyList<BookAcquisitionProfileView>> ListAsync(
+            bool hideNsfw,
+            IReadOnlySet<Guid>? allowedRootIds,
+            CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<BookAcquisitionProfileView?> GetAsync(Guid id, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<BookAcquisitionProfileView> SaveAsync(BookAcquisitionProfileSaveCommand command, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken) => throw new NotSupportedException();
