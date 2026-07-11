@@ -193,23 +193,28 @@ public sealed class VideoSourceService : IVideoSourceService {
         }
 
         if (string.Equals(kind, EntityKindRegistry.VideoSeries.Code, StringComparison.Ordinal)) {
-            var firstChild = await _db.Entities.AsNoTracking()
+            var children = await _db.Entities.AsNoTracking()
                 .Where(child => child.ParentEntityId == id)
                 .OrderBy(child => child.SortOrder ?? int.MaxValue)
                 .ThenBy(child => child.Id)
                 .Select(child => new { child.Id, child.KindCode })
-                .FirstOrDefaultAsync(cancellationToken);
-
-            if (firstChild is null) {
-                return null;
-            }
+                .ToListAsync(cancellationToken);
 
             // A series' direct children are videos when it's a flat, unnumbered folder of loose
             // clips, or season containers when the release is season-structured, so both shapes
-            // need to be resolved to reach an actual playable video.
-            return string.Equals(firstChild.KindCode, EntityKindRegistry.Video.Code, StringComparison.Ordinal)
-                ? firstChild.Id
-                : await FirstChildVideoIdAsync(firstChild.Id, cancellationToken);
+            // need to be resolved to reach an actual playable video. Keep walking past a season
+            // that turns out to hold no videos (e.g. a partially scanned library) instead of
+            // dead-ending on it, since a later season may still be playable.
+            foreach (var child in children) {
+                var videoId = string.Equals(child.KindCode, EntityKindRegistry.Video.Code, StringComparison.Ordinal)
+                    ? child.Id
+                    : await FirstChildVideoIdAsync(child.Id, cancellationToken);
+                if (videoId is not null) {
+                    return videoId;
+                }
+            }
+
+            return null;
         }
 
         return null;

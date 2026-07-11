@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Prismedia.Contracts.Media;
 using Prismedia.Domain.Entities;
 using Prismedia.Infrastructure.Media.Processing;
 using Prismedia.Infrastructure.Persistence;
@@ -301,7 +302,7 @@ public sealed class VideoSourceServiceTests : IDisposable {
             CreatedAt = DateTimeOffset.UtcNow,
             UpdatedAt = DateTimeOffset.UtcNow
         });
-        SeedVideoSource(db, videoId, filePath, "video/mp4", parentId: movieId);
+        SeedVideoSource(db, videoId, filePath, MediaContentTypes.VideoMp4, parentId: movieId);
         await db.SaveChangesAsync();
 
         var service = new VideoSourceService(db);
@@ -333,7 +334,7 @@ public sealed class VideoSourceServiceTests : IDisposable {
             CreatedAt = DateTimeOffset.UtcNow,
             UpdatedAt = DateTimeOffset.UtcNow
         });
-        SeedVideoSource(db, videoId, filePath, "video/mp4", parentId: seriesId, sortOrder: 0);
+        SeedVideoSource(db, videoId, filePath, MediaContentTypes.VideoMp4, parentId: seriesId, sortOrder: 0);
         await db.SaveChangesAsync();
 
         var service = new VideoSourceService(db);
@@ -367,7 +368,7 @@ public sealed class VideoSourceServiceTests : IDisposable {
             CreatedAt = DateTimeOffset.UtcNow,
             UpdatedAt = DateTimeOffset.UtcNow
         });
-        SeedVideoSource(db, videoId, filePath, "video/mp4", parentId: seasonId, sortOrder: 0);
+        SeedVideoSource(db, videoId, filePath, MediaContentTypes.VideoMp4, parentId: seasonId, sortOrder: 0);
         await db.SaveChangesAsync();
 
         var service = new VideoSourceService(db);
@@ -391,7 +392,7 @@ public sealed class VideoSourceServiceTests : IDisposable {
             CreatedAt = DateTimeOffset.UtcNow,
             UpdatedAt = DateTimeOffset.UtcNow
         });
-        SeedVideoSource(db, videoId, filePath, "video/mp4", parentId: seasonId, sortOrder: 0);
+        SeedVideoSource(db, videoId, filePath, MediaContentTypes.VideoMp4, parentId: seasonId, sortOrder: 0);
         await db.SaveChangesAsync();
 
         var service = new VideoSourceService(db);
@@ -418,6 +419,50 @@ public sealed class VideoSourceServiceTests : IDisposable {
         var source = await service.GetSourceAsync(seriesId, CancellationToken.None);
 
         Assert.Null(source);
+    }
+
+    [Fact]
+    public async Task SkipsEmptySeasonToResolveALaterPlayableSeason() {
+        await using var db = CreateContext();
+        var seriesId = Guid.Parse("55566677-5556-6667-7778-889990011223");
+        var emptySeasonId = Guid.Parse("55566677-5556-6667-7778-889990011224");
+        var playableSeasonId = Guid.Parse("55566677-5556-6667-7778-889990011225");
+        var videoId = Guid.Parse("55566677-5556-6667-7778-889990011226");
+        var filePath = Path.Combine(_tempDir, "s02e01.mp4");
+        await File.WriteAllTextAsync(filePath, "video-bytes");
+        db.Entities.Add(new EntityRow {
+            Id = seriesId,
+            KindCode = EntityKindRegistry.VideoSeries.Code,
+            Title = "Series folder",
+            CreatedAt = DateTimeOffset.UtcNow,
+            UpdatedAt = DateTimeOffset.UtcNow
+        });
+        db.Entities.Add(new EntityRow {
+            Id = emptySeasonId,
+            KindCode = EntityKindRegistry.VideoSeason.Code,
+            Title = "Season 1 (not yet scanned)",
+            ParentEntityId = seriesId,
+            SortOrder = 0,
+            CreatedAt = DateTimeOffset.UtcNow,
+            UpdatedAt = DateTimeOffset.UtcNow
+        });
+        db.Entities.Add(new EntityRow {
+            Id = playableSeasonId,
+            KindCode = EntityKindRegistry.VideoSeason.Code,
+            Title = "Season 2",
+            ParentEntityId = seriesId,
+            SortOrder = 1,
+            CreatedAt = DateTimeOffset.UtcNow,
+            UpdatedAt = DateTimeOffset.UtcNow
+        });
+        SeedVideoSource(db, videoId, filePath, MediaContentTypes.VideoMp4, parentId: playableSeasonId, sortOrder: 0);
+        await db.SaveChangesAsync();
+
+        var service = new VideoSourceService(db);
+        var source = await service.GetSourceAsync(seriesId, CancellationToken.None);
+
+        Assert.NotNull(source);
+        Assert.Equal(filePath, source.Path);
     }
 
     public void Dispose() {
