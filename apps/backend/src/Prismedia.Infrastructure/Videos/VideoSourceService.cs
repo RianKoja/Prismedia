@@ -171,8 +171,11 @@ public sealed class VideoSourceService : IVideoSourceService {
     }
 
     /// <summary>
-    /// Resolves the id whose source file should be streamed: a video id maps to itself, a movie id
-    /// maps to its single playable video child, and anything else (or a missing entity) yields null.
+    /// Resolves the id whose source file should be streamed: a video id maps to itself; a movie,
+    /// series, or season id maps to its first playable video descendant (walking through a series'
+    /// season folder when it has one); anything else (or a missing entity) yields null. Series and
+    /// season containers get the same fallback as movies so clicking into one never dead-ends just
+    /// because it groups several loose video files instead of a single one.
     /// </summary>
     private async Task<Guid?> ResolvePlayableVideoIdAsync(Guid id, CancellationToken cancellationToken) {
         var kind = await _db.Entities.AsNoTracking()
@@ -184,17 +187,42 @@ public sealed class VideoSourceService : IVideoSourceService {
             return id;
         }
 
-        if (string.Equals(kind, EntityKindRegistry.Movie.Code, StringComparison.Ordinal)) {
-            return await _db.Entities.AsNoTracking()
-                .Where(child => child.ParentEntityId == id &&
-                    child.KindCode == EntityKindRegistry.Video.Code)
+        if (string.Equals(kind, EntityKindRegistry.Movie.Code, StringComparison.Ordinal) ||
+            string.Equals(kind, EntityKindRegistry.VideoSeason.Code, StringComparison.Ordinal)) {
+            return await FirstChildVideoIdAsync(id, cancellationToken);
+        }
+
+        if (string.Equals(kind, EntityKindRegistry.VideoSeries.Code, StringComparison.Ordinal)) {
+            var firstChild = await _db.Entities.AsNoTracking()
+                .Where(child => child.ParentEntityId == id)
                 .OrderBy(child => child.SortOrder ?? int.MaxValue)
                 .ThenBy(child => child.Id)
-                .Select(child => (Guid?)child.Id)
+                .Select(child => new { child.Id, child.KindCode })
                 .FirstOrDefaultAsync(cancellationToken);
+
+            if (firstChild is null) {
+                return null;
+            }
+
+            // A series' direct children are videos when it's a flat, unnumbered folder of loose
+            // clips, or season containers when the release is season-structured, so both shapes
+            // need to be resolved to reach an actual playable video.
+            return string.Equals(firstChild.KindCode, EntityKindRegistry.Video.Code, StringComparison.Ordinal)
+                ? firstChild.Id
+                : await FirstChildVideoIdAsync(firstChild.Id, cancellationToken);
         }
 
         return null;
+    }
+
+    private async Task<Guid?> FirstChildVideoIdAsync(Guid parentId, CancellationToken cancellationToken) {
+        return await _db.Entities.AsNoTracking()
+            .Where(child => child.ParentEntityId == parentId &&
+                child.KindCode == EntityKindRegistry.Video.Code)
+            .OrderBy(child => child.SortOrder ?? int.MaxValue)
+            .ThenBy(child => child.Id)
+            .Select(child => (Guid?)child.Id)
+            .FirstOrDefaultAsync(cancellationToken);
     }
 
     private static string MimeForExtension(string extension) {
